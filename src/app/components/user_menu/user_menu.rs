@@ -67,6 +67,7 @@ impl UserMenu {
         menu.append(Some(&gettext("About")), Some("menu.about"));
         // translators: This is a menu entry.
         menu.append(Some(&gettext("Quit")), Some("app.quit"));
+        menu.append(Some(&gettext("Log out")), Some("menu.logout"));
 
         if let Some(username) = self.model.username() {
             let user_menu = gio::Menu::new();
