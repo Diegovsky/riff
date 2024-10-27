@@ -184,7 +184,7 @@ pub fn get_access_token(
         auth_url,
         Some(token_url),
     )
-        .set_redirect_uri(redirect_url);
+    .set_redirect_uri(redirect_url);
 
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
@@ -203,7 +203,11 @@ pub fn get_access_token(
 
     println!("Browse to: {}", auth_url);
     if let Err(err) = open::that(auth_url.to_string()) {
-        eprintln!("An error occurred when opening '{}': {}", auth_url.to_string(), err)
+        eprintln!(
+            "An error occurred when opening '{}': {}",
+            auth_url.to_string(),
+            err
+        )
     }
 
     let code = match get_socket_address(redirect_uri) {
@@ -240,8 +244,8 @@ pub fn get_access_token(
         refresh_token,
         expires_at: Instant::now()
             + token
-            .expires_in()
-            .unwrap_or_else(|| Duration::from_secs(3600)),
+                .expires_in()
+                .unwrap_or_else(|| Duration::from_secs(3600)),
         token_type: format!("{:?}", token.token_type()).to_string(), // Urgh!?
         scopes: token_scopes,
     })
