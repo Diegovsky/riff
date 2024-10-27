@@ -62,9 +62,9 @@ impl AppModel {
                 self.services.spotify_api.update_token(creds.token.clone());
             }
             AppAction::LoginAction(LoginAction::SetLoginSuccess(
-                SetLoginSuccessAction::Token { token, .. },
+                SetLoginSuccessAction::Token(creds),
             )) => {
-                self.services.spotify_api.update_token(token.clone());
+                self.services.spotify_api.update_token(creds.token.clone());
             }
             AppAction::LoginAction(LoginAction::SetRefreshedToken { token, .. }) => {
                 self.services.spotify_api.update_token(token.clone());
