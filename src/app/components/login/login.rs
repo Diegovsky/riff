@@ -105,11 +105,11 @@ impl LoginWindow {
     where
         F: Fn() + 'static,
     {
-        self.imp()
-            .login_with_spotify_button
-            .connect_clicked(clone!(@weak self as _self => move |_| {
+        self.imp().login_with_spotify_button.connect_clicked(
+            clone!(@weak self as _self => move |_| {
                 _self.login_with_spotify(&on_login_with_spotify_button);
-            }));
+            }),
+        );
     }
 
     fn show_auth_error(&self, shown: bool) {

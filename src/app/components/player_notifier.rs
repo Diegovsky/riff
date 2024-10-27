@@ -78,7 +78,7 @@ impl PlayerNotifier {
         Some(result)
     }
 
-    fn device(&self) -> impl Deref<Target=Device> + '_ {
+    fn device(&self) -> impl Deref<Target = Device> + '_ {
         self.app_model.map_state(|s| s.playback.current_device())
     }
 
@@ -97,7 +97,7 @@ impl PlayerNotifier {
                     token: token.to_owned(),
                 })
             }
-            LoginEvent::LoginStarted(LoginStartedEvent::OAuthSpotify{}) => {
+            LoginEvent::LoginStarted(LoginStartedEvent::OAuthSpotify {}) => {
                 Some(Command::OAuthLogin)
             }
             LoginEvent::FreshTokenRequested => Some(Command::RefreshToken),
@@ -117,10 +117,10 @@ impl PlayerNotifier {
             PlaybackEvent::TrackChanged(_) | PlaybackEvent::SourceChanged => {
                 match currently_playing {
                     Some(CurrentlyPlaying::WithSource {
-                             source,
-                             offset,
-                             song,
-                         }) => Some(ConnectCommand::PlayerLoadInContext {
+                        source,
+                        offset,
+                        song,
+                    }) => Some(ConnectCommand::PlayerLoadInContext {
                         source,
                         offset,
                         song,
@@ -159,15 +159,13 @@ impl PlayerNotifier {
             PlaybackEvent::VolumeSet(volume) => Some(Command::PlayerSetVolume(*volume)),
             PlaybackEvent::TrackChanged(id) => {
                 info!("track changed: {}", id);
-                SpotifyId::from_base62(id)
-                    .ok()
-                    .map(|mut track| {
-                        track.item_type = SpotifyItemType::Track;
-                        Command::PlayerLoad {
-                            track,
-                            resume: true,
-                        }
-                    })
+                SpotifyId::from_base62(id).ok().map(|mut track| {
+                    track.item_type = SpotifyItemType::Track;
+                    Command::PlayerLoad {
+                        track,
+                        resume: true,
+                    }
+                })
             }
             PlaybackEvent::SourceChanged => {
                 let resume = self.is_playing();
@@ -179,12 +177,13 @@ impl PlayerNotifier {
                     })
             }
             PlaybackEvent::TrackSeeked(position) => Some(Command::PlayerSeek(*position)),
-            PlaybackEvent::Preload(id) => {
-                SpotifyId::from_base62(id).ok().map(|mut track| {
+            PlaybackEvent::Preload(id) => SpotifyId::from_base62(id)
+                .ok()
+                .map(|mut track| {
                     track.item_type = SpotifyItemType::Track;
                     track
-                }).map(Command::PlayerPreload)
-            }
+                })
+                .map(Command::PlayerPreload),
             _ => None,
         };
 

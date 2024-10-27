@@ -14,6 +14,11 @@ use librespot::playback::audio_backend;
 use librespot::playback::config::{AudioFormat, Bitrate, PlayerConfig, VolumeCtrl};
 use librespot::playback::player::{Player, PlayerEvent, PlayerEventChannel};
 
+use super::Command;
+use crate::api::oauth2::get_access_token;
+use crate::app::credentials;
+use crate::settings::SpotSettings;
+use librespot::core::token::Token;
 use std::cell::RefCell;
 use std::env;
 use std::error::Error;
@@ -21,11 +26,6 @@ use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
-use librespot::core::token::Token;
-use crate::api::oauth2::get_access_token;
-use super::Command;
-use crate::app::credentials;
-use crate::settings::SpotSettings;
 
 #[derive(Debug)]
 pub enum SpotifyError {
@@ -183,7 +183,10 @@ impl SpotifyPlayer {
                 self.delegate.password_login_successful(credentials);
 
                 let new_player = self.create_player(new_session.clone());
-                tokio::task::spawn_local(player_setup_delegate(new_player.get_player_event_channel(), Rc::clone(&self.delegate)));
+                tokio::task::spawn_local(player_setup_delegate(
+                    new_player.get_player_event_channel(),
+                    Rc::clone(&self.delegate),
+                ));
                 self.player.replace(new_player);
                 self.session.replace(new_session);
 
@@ -199,19 +202,20 @@ impl SpotifyPlayer {
                     token,
                     token_expiry_time: None,
                 };
-                self.delegate
-                    .token_login_successful(credentials);
+                self.delegate.token_login_successful(credentials);
 
-                let new_player= self.create_player(new_session.clone());
-                tokio::task::spawn_local(player_setup_delegate(new_player.get_player_event_channel(), Rc::clone(&self.delegate)));
+                let new_player = self.create_player(new_session.clone());
+                tokio::task::spawn_local(player_setup_delegate(
+                    new_player.get_player_event_channel(),
+                    Rc::clone(&self.delegate),
+                ));
                 self.player.replace(new_player);
                 self.session.replace(new_session);
 
                 Ok(())
             }
             Command::OAuthLogin => {
-                let (token, token_expiry_time) =
-                    get_access_token_oauth()?;
+                let (token, token_expiry_time) = get_access_token_oauth()?;
                 info!("Login with OAuth2");
                 let credentials = Credentials::with_access_token(token.clone());
                 let new_session = create_session(&credentials, self.settings.ap_port).await?;
@@ -221,11 +225,13 @@ impl SpotifyPlayer {
                     token,
                     token_expiry_time: Some(token_expiry_time),
                 };
-                self.delegate
-                    .token_login_successful(credentials);
+                self.delegate.token_login_successful(credentials);
 
                 let new_player = self.create_player(new_session.clone());
-                tokio::task::spawn_local(player_setup_delegate(new_player.get_player_event_channel(), Rc::clone(&self.delegate)));
+                tokio::task::spawn_local(player_setup_delegate(
+                    new_player.get_player_event_channel(),
+                    Rc::clone(&self.delegate),
+                ));
                 self.player.replace(new_player);
                 self.session.replace(new_session);
 
@@ -237,7 +243,10 @@ impl SpotifyPlayer {
 
                 let session = self.session.take().ok_or(SpotifyError::PlayerNotReady)?;
                 let new_player = self.create_player(session);
-                tokio::task::spawn_local(player_setup_delegate(new_player.get_player_event_channel(), Rc::clone(&self.delegate)));
+                tokio::task::spawn_local(player_setup_delegate(
+                    new_player.get_player_event_channel(),
+                    Rc::clone(&self.delegate),
+                ));
                 self.player.replace(new_player);
 
                 Ok(())
@@ -326,7 +335,9 @@ const KNOWN_AP_PORTS: [Option<u16>; 4] = [None, Some(80), Some(443), Some(4070)]
 async fn get_access_token_and_expiry_time(
     session: &Session,
 ) -> Result<(String, SystemTime), SpotifyError> {
-    let token = session.token_provider().get_token(SCOPES)
+    let token = session
+        .token_provider()
+        .get_token(SCOPES)
         .await
         .map_err(|_e| SpotifyError::TokenFailed)?;
     let expiry_time = SystemTime::now() + token.expires_in;
@@ -334,19 +345,32 @@ async fn get_access_token_and_expiry_time(
 }
 
 fn get_access_token_oauth() -> Result<(String, SystemTime), SpotifyError> {
-
-    let scopes: Vec<&str> = vec!["user-read-private", "playlist-read-private", "playlist-read-collaborative", "user-library-read", "user-library-modify", "user-top-read", "user-read-recently-played", "user-read-playback-state", "playlist-modify-public", "playlist-modify-private", "user-modify-playback-state", "streaming", "playlist-modify-public"];
+    let scopes: Vec<&str> = vec![
+        "user-read-private",
+        "playlist-read-private",
+        "playlist-read-collaborative",
+        "user-library-read",
+        "user-library-modify",
+        "user-top-read",
+        "user-read-recently-played",
+        "user-read-playback-state",
+        "playlist-modify-public",
+        "playlist-modify-private",
+        "user-modify-playback-state",
+        "streaming",
+        "playlist-modify-public",
+    ];
 
     match get_access_token(SPOTIFY_CLIENT_ID, REDIRECT_URI, scopes) {
         Ok(token) => {
             info!("Success: {token:#?}");
             let duration = token.expires_at.duration_since(Instant::now());
             Ok((token.access_token, SystemTime::now() + duration))
-        },
+        }
         Err(e) => {
             error!("Failed: {e}");
             Err(SpotifyError::TokenFailed)
-        },
+        }
     }
 }
 
@@ -365,8 +389,8 @@ async fn create_session_with_port(
         Some(root.join("audio")),
         None,
     )
-        .map_err(|e| dbg!(e))
-        .ok();
+    .map_err(|e| dbg!(e))
+    .ok();
     let session = Session::new(session_config, cache);
     match session.connect(credentials.clone(), true).await {
         Ok(_) => Ok(session),

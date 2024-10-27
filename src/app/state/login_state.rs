@@ -146,7 +146,7 @@ impl UpdatableState for LoginState {
                 vec![LoginEvent::UserPlaylistsLoaded.into()]
             }
             LoginAction::TryLogin(TryLoginAction::OAuthSpotify { .. }) => {
-                vec![LoginEvent::LoginStarted(LoginStartedEvent::OAuthSpotify{}).into()]
+                vec![LoginEvent::LoginStarted(LoginStartedEvent::OAuthSpotify {}).into()]
             }
         }
     }
