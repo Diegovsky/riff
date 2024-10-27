@@ -28,6 +28,9 @@ mod imp {
         pub login_button: TemplateChild<gtk::Button>,
 
         #[template_child]
+        pub login_with_spotify_button: TemplateChild<gtk::Button>,
+
+        #[template_child]
         pub auth_error_container: TemplateChild<gtk::Revealer>,
     }
 
@@ -98,6 +101,17 @@ impl LoginWindow {
             }));
     }
 
+    fn connect_login_oauth_spotify<F>(&self, on_login_with_spotify_button: F)
+    where
+        F: Fn() + 'static,
+    {
+        self.imp()
+            .login_with_spotify_button
+            .connect_clicked(clone!(@weak self as _self => move |_| {
+                _self.login_with_spotify(&on_login_with_spotify_button);
+            }));
+    }
+
     fn show_auth_error(&self, shown: bool) {
         let error_class = "error";
         let widget = self.imp();
@@ -130,6 +144,14 @@ impl LoginWindow {
             on_submit(username_text.as_str(), password_text.as_str());
         }
     }
+
+    fn login_with_spotify<F>(&self, on_login_with_spotify: &F)
+    where
+        F: Fn(),
+    {
+        self.show_auth_error(false);
+        on_login_with_spotify()
+    }
 }
 
 pub struct Login {
@@ -152,6 +174,10 @@ impl Login {
 
         login_window.connect_submit(clone!(@weak model => move |username, password| {
             model.login(username.to_string(), password.to_string());
+        }));
+
+        login_window.connect_login_oauth_spotify(clone!(@weak model => move || {
+            model.login_with_spotify();
         }));
 
         Self {

@@ -16,6 +16,7 @@ pub use player::*;
 pub enum Command {
     PasswordLogin { username: String, password: String },
     TokenLogin { username: String, token: String },
+    OAuthLogin,
     Logout,
     PlayerLoad { track: SpotifyId, resume: bool },
     PlayerResume,

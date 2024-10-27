@@ -74,4 +74,9 @@ impl LoginModel {
         self.dispatcher
             .dispatch(LoginAction::TryLogin(TryLoginAction::Password { username, password }).into())
     }
+
+    pub fn login_with_spotify(&self) {
+        self.dispatcher
+            .dispatch(LoginAction::TryLogin(TryLoginAction::OAuthSpotify{}).into())
+    }
 }

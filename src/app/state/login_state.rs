@@ -10,6 +10,7 @@ use crate::app::state::{AppAction, AppEvent, UpdatableState};
 pub enum TryLoginAction {
     Password { username: String, password: String },
     Token { username: String, token: String },
+    OAuthSpotify {},
 }
 
 #[derive(Clone, Debug)]
@@ -45,6 +46,7 @@ impl From<LoginAction> for AppAction {
 pub enum LoginStartedEvent {
     Password { username: String, password: String },
     Token { username: String, token: String },
+    OAuthSpotify {},
 }
 
 #[derive(Clone, Debug)]
@@ -88,6 +90,7 @@ impl UpdatableState for LoginState {
 
     // The login state has a lot of actions that just translate to events
     fn update_with(&mut self, action: Cow<Self::Action>) -> Vec<Self::Event> {
+        info!("update_with({:?})", action);
         match action.into_owned() {
             LoginAction::ShowLogin => vec![LoginEvent::LoginShown.into()],
             LoginAction::TryLogin(TryLoginAction::Password { username, password }) => {
@@ -141,6 +144,9 @@ impl UpdatableState for LoginState {
                 summaries.append(&mut self.playlists);
                 self.playlists = summaries;
                 vec![LoginEvent::UserPlaylistsLoaded.into()]
+            }
+            LoginAction::TryLogin(TryLoginAction::OAuthSpotify { .. }) => {
+                vec![LoginEvent::LoginStarted(LoginStartedEvent::OAuthSpotify{}).into()]
             }
         }
     }

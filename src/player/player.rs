@@ -22,7 +22,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use librespot::core::token::Token;
-use librespot::oauth::get_access_token;
+use crate::api::oauth2::get_access_token;
 use super::Command;
 use crate::app::credentials;
 use crate::settings::SpotSettings;
@@ -170,19 +170,17 @@ impl SpotifyPlayer {
                 Ok(())
             }
             Command::PasswordLogin { username, password } => {
-                let (token, token_expiry_time) =
-                    get_access_token_oauth()?;
-                info!("Login with username {}", username);
-                let credentials = Credentials::with_access_token(token.clone());
+                let credentials = Credentials::with_password(username, password.clone());
                 let new_session = create_session(&credentials, self.settings.ap_port).await?;
+                let (token, token_expiry_time) =
+                    get_access_token_and_expiry_time(&new_session).await?;
                 let credentials = credentials::Credentials {
                     username: new_session.username(),
                     password,
                     token,
                     token_expiry_time: Some(token_expiry_time),
                 };
-                self.delegate
-                    .token_login_successful(credentials);
+                self.delegate.password_login_successful(credentials);
 
                 let new_player = self.create_player(new_session.clone());
                 tokio::task::spawn_local(player_setup_delegate(new_player.get_player_event_channel(), Rc::clone(&self.delegate)));
@@ -205,6 +203,28 @@ impl SpotifyPlayer {
                     .token_login_successful(credentials);
 
                 let new_player= self.create_player(new_session.clone());
+                tokio::task::spawn_local(player_setup_delegate(new_player.get_player_event_channel(), Rc::clone(&self.delegate)));
+                self.player.replace(new_player);
+                self.session.replace(new_session);
+
+                Ok(())
+            }
+            Command::OAuthLogin => {
+                let (token, token_expiry_time) =
+                    get_access_token_oauth()?;
+                info!("Login with OAuth2");
+                let credentials = Credentials::with_access_token(token.clone());
+                let new_session = create_session(&credentials, self.settings.ap_port).await?;
+                let credentials = credentials::Credentials {
+                    username: new_session.username(),
+                    password: "".to_string(),
+                    token,
+                    token_expiry_time: Some(token_expiry_time),
+                };
+                self.delegate
+                    .token_login_successful(credentials);
+
+                let new_player = self.create_player(new_session.clone());
                 tokio::task::spawn_local(player_setup_delegate(new_player.get_player_event_channel(), Rc::clone(&self.delegate)));
                 self.player.replace(new_player);
                 self.session.replace(new_session);
