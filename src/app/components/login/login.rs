@@ -183,11 +183,15 @@ impl Login {
 
 impl EventListener for Login {
     fn on_event(&mut self, event: &AppEvent) {
+        info!("received login event {:?}", event);
         match event {
             AppEvent::LoginEvent(LoginEvent::LoginCompleted(LoginCompletedEvent::Password(
                 creds,
             ))) => {
                 self.hide_and_save_creds(creds.clone());
+            }
+            AppEvent::LoginEvent(LoginEvent::LoginCompleted(LoginCompletedEvent::Token(token))) => {
+                self.hide_and_save_creds(token.clone());
             }
             AppEvent::LoginEvent(LoginEvent::LoginFailed) => {
                 self.model.clear_saved_credentials();

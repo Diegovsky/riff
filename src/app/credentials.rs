@@ -18,7 +18,6 @@ pub struct Credentials {
     pub password: String,
     pub token: String,
     pub token_expiry_time: Option<SystemTime>,
-    pub country: String,
 }
 
 impl Credentials {
@@ -61,6 +60,7 @@ impl Credentials {
             collection.unlock().await?;
         }
         // We simply write our stuct as JSON and send it
+        info!("Saving credentials");
         let encoded = serde_json::to_vec(&self).unwrap();
         collection
             .create_item(
@@ -71,6 +71,7 @@ impl Credentials {
                 "text/plain",
             )
             .await?;
+        info!("Saved credentials");
         Ok(())
     }
 }

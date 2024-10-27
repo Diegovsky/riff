@@ -15,7 +15,7 @@ pub enum TryLoginAction {
 #[derive(Clone, Debug)]
 pub enum SetLoginSuccessAction {
     Password(Credentials),
-    Token { username: String, token: String },
+    Token(Credentials),
 }
 
 #[derive(Clone, Debug)]
@@ -50,7 +50,7 @@ pub enum LoginStartedEvent {
 #[derive(Clone, Debug)]
 pub enum LoginCompletedEvent {
     Password(Credentials),
-    Token,
+    Token(Credentials),
 }
 
 #[derive(Clone, Debug)]
@@ -103,9 +103,9 @@ impl UpdatableState for LoginState {
                 self.user = Some(creds.username.clone());
                 vec![LoginEvent::LoginCompleted(LoginCompletedEvent::Password(creds)).into()]
             }
-            LoginAction::SetLoginSuccess(SetLoginSuccessAction::Token { username, .. }) => {
-                self.user = Some(username);
-                vec![LoginEvent::LoginCompleted(LoginCompletedEvent::Token).into()]
+            LoginAction::SetLoginSuccess(SetLoginSuccessAction::Token(creds)) => {
+                self.user = Some(creds.username.clone());
+                vec![LoginEvent::LoginCompleted(LoginCompletedEvent::Token(creds)).into()]
             }
             LoginAction::SetLoginFailure => vec![LoginEvent::LoginFailed.into()],
             LoginAction::RefreshToken => vec![LoginEvent::FreshTokenRequested.into()],
