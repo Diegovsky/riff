@@ -42,6 +42,12 @@ glib::wrapper! {
     pub struct CreatePlaylistPopover(ObjectSubclass<imp::CreatePlaylistPopover>) @extends gtk::Widget, gtk::Popover;
 }
 
+impl Default for CreatePlaylistPopover {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CreatePlaylistPopover {
     pub fn new() -> Self {
         glib::Object::new()

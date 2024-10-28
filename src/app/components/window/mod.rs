@@ -7,9 +7,9 @@ use crate::app::{AppEvent, AppModel};
 use crate::settings::WindowGeometry;
 
 thread_local! {
-    static WINDOW_GEOMETRY: RefCell<WindowGeometry> = RefCell::new(WindowGeometry {
+    static WINDOW_GEOMETRY: RefCell<WindowGeometry> = const { RefCell::new(WindowGeometry {
         width: 0, height: 0, is_maximized: false
-    });
+    }) };
 }
 
 pub struct MainWindow {

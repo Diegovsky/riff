@@ -47,6 +47,12 @@ glib::wrapper! {
     pub struct ArtistWidget(ObjectSubclass<imp::ArtistWidget>) @extends gtk::Widget, gtk::Box;
 }
 
+impl Default for ArtistWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ArtistWidget {
     pub fn new() -> Self {
         glib::Object::new()

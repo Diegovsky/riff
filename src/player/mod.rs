@@ -8,7 +8,7 @@ use tokio::task;
 use crate::app::credentials::Credentials;
 use crate::app::state::{LoginAction, PlaybackAction, SetLoginSuccessAction};
 use crate::app::AppAction;
-
+#[allow(clippy::module_inception)]
 mod player;
 pub use player::*;
 

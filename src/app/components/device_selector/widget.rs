@@ -158,7 +158,7 @@ impl DeviceSelectorWidget {
 
         for device in devices {
             let check = gtk::CheckButton::builder()
-                .action_name(&format!("{}.{}", ACTIONS, CONNECT_ACTION))
+                .action_name(format!("{}.{}", ACTIONS, CONNECT_ACTION))
                 .action_target(&Some(&device.id).to_variant())
                 .group(&*widget.this_device_button)
                 .label(&device.label)

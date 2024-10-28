@@ -256,6 +256,7 @@ pub enum RepeatMode {
 #[derive(Clone, Debug)]
 pub struct ConnectPlayerState {
     pub is_playing: bool,
+    #[allow(dead_code)]
     pub source: Option<SongsSource>,
     pub current_song_id: Option<String>,
     pub progress_ms: u32,

@@ -84,6 +84,12 @@ glib::wrapper! {
     pub struct PlaylistHeaderWidget(ObjectSubclass<imp::PlaylistHeaderWidget>) @extends gtk::Widget, gtk::Box;
 }
 
+impl Default for PlaylistHeaderWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PlaylistHeaderWidget {
     pub fn new() -> Self {
         glib::Object::new()

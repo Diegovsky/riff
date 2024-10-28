@@ -120,6 +120,12 @@ glib::wrapper! {
     pub struct SongWidget(ObjectSubclass<imp::SongWidget>) @extends gtk::Widget, gtk::Grid;
 }
 
+impl Default for SongWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SongWidget {
     pub fn new() -> Self {
         display_add_css_provider(resource!("/components/song.css"));

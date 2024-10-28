@@ -4,11 +4,10 @@ use futures::stream::StreamExt;
 use librespot::core::authentication::Credentials;
 use librespot::core::cache::Cache;
 use librespot::core::config::SessionConfig;
-use librespot::core::session::{Session, SessionError};
+use librespot::core::session::Session;
 
 use librespot::playback::mixer::softmixer::SoftMixer;
 use librespot::playback::mixer::{Mixer, MixerConfig};
-use librespot::protocol::authentication::AuthenticationType;
 
 use librespot::playback::audio_backend;
 use librespot::playback::config::{AudioFormat, Bitrate, PlayerConfig, VolumeCtrl};
@@ -18,14 +17,13 @@ use super::Command;
 use crate::api::oauth2::get_access_token;
 use crate::app::credentials;
 use crate::settings::SpotSettings;
-use librespot::core::token::Token;
 use std::cell::RefCell;
 use std::env;
 use std::error::Error;
 use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Instant, SystemTime};
 
 #[derive(Debug)]
 pub enum SpotifyError {
@@ -297,6 +295,7 @@ impl SpotifyPlayer {
         })
     }
 
+    #[allow(clippy::await_holding_refcell_ref)]
     pub async fn start(self, receiver: UnboundedReceiver<Command>) -> Result<(), ()> {
         let _self = RefCell::new(self);
         receiver
@@ -312,7 +311,6 @@ impl SpotifyPlayer {
     }
 }
 
-const CLIENT_ID: &str = "782ae96ea60f4cdf986a766049607005";
 const REDIRECT_URI: &str = "http://127.0.0.1:8898/login";
 const SPOTIFY_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
 

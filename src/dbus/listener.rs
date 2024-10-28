@@ -11,6 +11,7 @@ use crate::app::{
 use super::types::{LoopStatus, PlaybackStatus, TrackMetadata};
 
 #[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum MprisStateUpdate {
     SetVolume(f64),
     SetCurrentTrack {
