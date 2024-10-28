@@ -57,6 +57,12 @@ glib::wrapper! {
     pub struct ReleaseDetailsWindow(ObjectSubclass<imp::ReleaseDetailsWindow>) @extends gtk::Widget, libadwaita::Window, libadwaita::PreferencesWindow;
 }
 
+impl Default for ReleaseDetailsWindow {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ReleaseDetailsWindow {
     pub fn new() -> Self {
         glib::Object::new()

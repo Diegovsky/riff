@@ -30,7 +30,7 @@ pub enum CacheError {
 pub type ETag = String;
 
 pub enum CacheFile {
-    Fresh(Vec<u8>, Option<ETag>),
+    Fresh(Vec<u8>),
     Expired(Vec<u8>, Option<ETag>),
     None,
 }
@@ -138,7 +138,7 @@ impl CacheManager {
         let (file, expiry) = join!(fs::read(&path), self.read_expiry_file(resource));
 
         match (file, policy) {
-            (Ok(buf), CachePolicy::IgnoreExpiry) => Ok(CacheFile::Fresh(buf, None)),
+            (Ok(buf), CachePolicy::IgnoreExpiry) => Ok(CacheFile::Fresh(buf)),
             (Ok(buf), CachePolicy::Revalidate) => {
                 let expiry = expiry.unwrap_or(CacheExpiry::Never);
                 let etag = expiry.etag().cloned();
@@ -150,7 +150,7 @@ impl CacheManager {
                 Ok(if expiry.is_expired() {
                     CacheFile::Expired(buf, etag)
                 } else {
-                    CacheFile::Fresh(buf, etag)
+                    CacheFile::Fresh(buf)
                 })
             }
             (_, CachePolicy::IgnoreCached) => Ok(CacheFile::None),
@@ -260,7 +260,7 @@ impl CacheManager {
     {
         let file = self.read_cache_file(resource, policy).await?;
         match file {
-            CacheFile::Fresh(buf, _) => Ok(buf),
+            CacheFile::Fresh(buf) => Ok(buf),
             CacheFile::Expired(buf, etag) => match fetch(etag).await? {
                 FetchResult::NotModified(expiry) => {
                     let meta = self.cache_meta_path(resource);

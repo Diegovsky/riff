@@ -50,6 +50,12 @@ glib::wrapper! {
     pub struct SavedPlaylistsWidget(ObjectSubclass<imp::SavedPlaylistsWidget>) @extends gtk::Widget, gtk::Box;
 }
 
+impl Default for SavedPlaylistsWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SavedPlaylistsWidget {
     pub fn new() -> Self {
         glib::Object::new()

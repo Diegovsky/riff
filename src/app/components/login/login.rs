@@ -59,6 +59,12 @@ glib::wrapper! {
     pub struct LoginWindow(ObjectSubclass<imp::LoginWindow>) @extends gtk::Widget, libadwaita::Window;
 }
 
+impl Default for LoginWindow {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LoginWindow {
     pub fn new() -> Self {
         glib::Object::new()

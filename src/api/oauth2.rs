@@ -68,9 +68,12 @@ pub enum OAuthError {
 #[derive(Debug)]
 pub struct OAuthToken {
     pub access_token: String,
+    #[allow(dead_code)]
     pub refresh_token: String,
     pub expires_at: Instant,
+    #[allow(dead_code)]
     pub token_type: String,
+    #[allow(dead_code)]
     pub scopes: Vec<String>,
 }
 
@@ -205,7 +208,7 @@ pub fn get_access_token(
     if let Err(err) = open::that(auth_url.to_string()) {
         eprintln!(
             "An error occurred when opening '{}': {}",
-            auth_url.to_string(),
+            auth_url,
             err
         )
     }

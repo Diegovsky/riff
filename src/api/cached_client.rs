@@ -100,6 +100,7 @@ pub trait SpotifyApiClient {
 
     fn player_resume(&self, device_id: String) -> BoxFuture<SpotifyResult<()>>;
 
+    #[allow(dead_code)]
     fn player_next(&self, device_id: String) -> BoxFuture<SpotifyResult<()>>;
 
     fn player_seek(&self, device_id: String, pos: usize) -> BoxFuture<SpotifyResult<()>>;

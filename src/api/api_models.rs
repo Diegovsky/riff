@@ -274,6 +274,7 @@ pub struct Artist {
 
 impl WithImages for Artist {
     fn images(&self) -> &[Image] {
+        #[allow(clippy::manual_unwrap_or_default)]
         if let Some(ref images) = self.images {
             images
         } else {

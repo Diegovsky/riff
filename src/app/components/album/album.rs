@@ -55,6 +55,12 @@ glib::wrapper! {
     pub struct AlbumWidget(ObjectSubclass<imp::AlbumWidget>) @extends gtk::Widget, libadwaita::Bin;
 }
 
+impl Default for AlbumWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AlbumWidget {
     pub fn new() -> Self {
         display_add_css_provider(resource!("/components/album.css"));

@@ -35,7 +35,7 @@ impl Credentials {
             collection.unlock().await?;
         }
         let items = collection.search_items(make_attributes()).await?;
-        let item = items.get(0).ok_or(Error::NoResult)?.get_secret().await?;
+        let item = items.first().ok_or(Error::NoResult)?.get_secret().await?;
         serde_json::from_slice(&item).map_err(|_| Error::Unavailable)
     }
 
@@ -45,7 +45,7 @@ impl Credentials {
         let collection = service.get_default_collection().await?;
         if !collection.is_locked().await? {
             let result = collection.search_items(make_attributes()).await?;
-            let item = result.get(0).ok_or(Error::NoResult)?;
+            let item = result.first().ok_or(Error::NoResult)?;
             item.delete().await
         } else {
             warn!("Keyring is locked -- not clearing credentials");

@@ -78,6 +78,12 @@ glib::wrapper! {
     pub struct HeaderBarWidget(ObjectSubclass<imp::HeaderBarWidget>) @extends gtk::Widget, libadwaita::Bin;
 }
 
+impl Default for HeaderBarWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HeaderBarWidget {
     pub fn new() -> Self {
         glib::Object::new()
