@@ -206,11 +206,7 @@ pub fn get_access_token(
 
     println!("Browse to: {}", auth_url);
     if let Err(err) = open::that(auth_url.to_string()) {
-        eprintln!(
-            "An error occurred when opening '{}': {}",
-            auth_url,
-            err
-        )
+        eprintln!("An error occurred when opening '{}': {}", auth_url, err)
     }
 
     let code = match get_socket_address(redirect_uri) {
