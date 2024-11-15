@@ -19,15 +19,6 @@ mod imp {
     #[template(resource = "/dev/alextren/Spot/components/login.ui")]
     pub struct LoginWindow {
         #[template_child]
-        pub username: TemplateChild<libadwaita::EntryRow>,
-
-        #[template_child]
-        pub password: TemplateChild<libadwaita::PasswordEntryRow>,
-
-        #[template_child]
-        pub login_button: TemplateChild<gtk::Button>,
-
-        #[template_child]
         pub login_with_spotify_button: TemplateChild<gtk::Button>,
 
         #[template_child]
@@ -81,82 +72,20 @@ impl LoginWindow {
         });
     }
 
-    fn connect_submit<SubmitFn>(&self, on_submit: SubmitFn)
-    where
-        SubmitFn: Fn(&str, &str) + Clone + 'static,
-    {
-        let on_submit_clone = on_submit.clone();
-        let controller = gtk::EventControllerKey::new();
-        controller.set_propagation_phase(gtk::PropagationPhase::Capture);
-        controller.connect_key_pressed(
-            clone!(@weak self as _self => @default-return gtk::Inhibit(false), move |_, key, _, _| {
-                if key == gdk::Key::Return {
-                    _self.submit(&on_submit_clone);
-                    gtk::Inhibit(true)
-                } else {
-                    gtk::Inhibit(false)
-                }
-            }),
-        );
-        self.add_controller(controller);
-
-        self.imp()
-            .login_button
-            .connect_clicked(clone!(@weak self as _self => move |_| {
-                _self.submit(&on_submit);
-            }));
-    }
-
     fn connect_login_oauth_spotify<F>(&self, on_login_with_spotify_button: F)
     where
         F: Fn() + 'static,
     {
         self.imp().login_with_spotify_button.connect_clicked(
             clone!(@weak self as _self => move |_| {
-                _self.login_with_spotify(&on_login_with_spotify_button);
+                on_login_with_spotify_button()
             }),
         );
     }
 
     fn show_auth_error(&self, shown: bool) {
-        let error_class = "error";
         let widget = self.imp();
-        if shown {
-            widget.username.add_css_class(error_class);
-            widget.password.add_css_class(error_class);
-        } else {
-            widget.username.remove_css_class(error_class);
-            widget.password.remove_css_class(error_class);
-        }
         widget.auth_error_container.set_reveal_child(shown);
-    }
-
-    fn submit<SubmitFn>(&self, on_submit: &SubmitFn)
-    where
-        SubmitFn: Fn(&str, &str),
-    {
-        let widget = self.imp();
-
-        self.show_auth_error(false);
-
-        let username_text = widget.username.text();
-        let password_text = widget.password.text();
-
-        if username_text.is_empty() {
-            widget.username.grab_focus();
-        } else if password_text.is_empty() {
-            widget.password.grab_focus();
-        } else {
-            on_submit(username_text.as_str(), password_text.as_str());
-        }
-    }
-
-    fn login_with_spotify<F>(&self, on_login_with_spotify: &F)
-    where
-        F: Fn(),
-    {
-        self.show_auth_error(false);
-        on_login_with_spotify()
     }
 }
 
@@ -177,11 +106,7 @@ impl Login {
                 app.quit();
             }
         }));
-
-        login_window.connect_submit(clone!(@weak model => move |username, password| {
-            model.login(username.to_string(), password.to_string());
-        }));
-
+        
         login_window.connect_login_oauth_spotify(clone!(@weak model => move || {
             model.login_with_spotify();
         }));

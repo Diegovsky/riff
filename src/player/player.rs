@@ -50,7 +50,6 @@ impl fmt::Display for SpotifyError {
 
 pub trait SpotifyPlayerDelegate {
     fn end_of_track_reached(&self);
-    fn password_login_successful(&self, credentials: credentials::Credentials);
     fn token_login_successful(&self, credentials: credentials::Credentials);
     fn refresh_successful(&self, token: String, token_expiry_time: SystemTime);
     fn report_error(&self, error: SpotifyError);
@@ -165,29 +164,6 @@ impl SpotifyPlayer {
                     .ok_or(SpotifyError::PlayerNotReady)?
                     .shutdown();
                 let _ = self.player.take();
-                Ok(())
-            }
-            Command::PasswordLogin { username, password } => {
-                let credentials = Credentials::with_password(username, password.clone());
-                let new_session = create_session(&credentials, self.settings.ap_port).await?;
-                let (token, token_expiry_time) =
-                    get_access_token_and_expiry_time(&new_session).await?;
-                let credentials = credentials::Credentials {
-                    username: new_session.username(),
-                    password,
-                    token,
-                    token_expiry_time: Some(token_expiry_time),
-                };
-                self.delegate.password_login_successful(credentials);
-
-                let new_player = self.create_player(new_session.clone());
-                tokio::task::spawn_local(player_setup_delegate(
-                    new_player.get_player_event_channel(),
-                    Rc::clone(&self.delegate),
-                ));
-                self.player.replace(new_player);
-                self.session.replace(new_session);
-
                 Ok(())
             }
             Command::TokenLogin { username, token } => {
@@ -312,7 +288,7 @@ impl SpotifyPlayer {
 }
 
 const REDIRECT_URI: &str = "http://127.0.0.1:8898/login";
-const SPOTIFY_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
+const SPOTIFY_CLIENT_ID: &str = "782ae96ea60f4cdf986a766049607005";
 
 const SCOPES: &str = "user-read-private,\
 playlist-read-private,\
@@ -343,22 +319,7 @@ async fn get_access_token_and_expiry_time(
 }
 
 fn get_access_token_oauth() -> Result<(String, SystemTime), SpotifyError> {
-    let scopes: Vec<&str> = vec![
-        "user-read-private",
-        "playlist-read-private",
-        "playlist-read-collaborative",
-        "user-library-read",
-        "user-library-modify",
-        "user-top-read",
-        "user-read-recently-played",
-        "user-read-playback-state",
-        "playlist-modify-public",
-        "playlist-modify-private",
-        "user-modify-playback-state",
-        "streaming",
-        "playlist-modify-public",
-    ];
-
+    let scopes = SCOPES.split(",").collect();
     match get_access_token(SPOTIFY_CLIENT_ID, REDIRECT_URI, scopes) {
         Ok(token) => {
             info!("Success: {token:#?}");

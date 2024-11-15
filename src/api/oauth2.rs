@@ -133,7 +133,7 @@ fn get_authcode_listener(socket_address: SocketAddr) -> Result<AuthorizationCode
         .ok_or(OAuthError::AuthCodeListenerParse)?;
     let code = get_code(&("http://localhost".to_string() + redirect_url));
 
-    let message = "Go back to your terminal :)";
+    let message = include_str!("./login.html");
     let response = format!(
         "HTTP/1.1 200 OK\r\ncontent-length: {}\r\n\r\n{}",
         message.len(),

@@ -14,7 +14,6 @@ pub use player::*;
 
 #[derive(Debug, Clone)]
 pub enum Command {
-    PasswordLogin { username: String, password: String },
     TokenLogin { username: String, token: String },
     OAuthLogin,
     Logout,
@@ -45,15 +44,6 @@ impl SpotifyPlayerDelegate for AppPlayerDelegate {
         self.sender
             .borrow_mut()
             .unbounded_send(PlaybackAction::Next.into())
-            .unwrap();
-    }
-
-    fn password_login_successful(&self, credentials: Credentials) {
-        self.sender
-            .borrow_mut()
-            .unbounded_send(
-                LoginAction::SetLoginSuccess(SetLoginSuccessAction::Password(credentials)).into(),
-            )
             .unwrap();
     }
 
