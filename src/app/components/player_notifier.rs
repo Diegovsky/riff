@@ -85,12 +85,6 @@ impl PlayerNotifier {
     fn notify_login(&self, event: &LoginEvent) {
         info!("notify_login: {:?}", event);
         let command = match event {
-            LoginEvent::LoginStarted(LoginStartedEvent::Password { username, password }) => {
-                Some(Command::PasswordLogin {
-                    username: username.to_owned(),
-                    password: password.to_owned(),
-                })
-            }
             LoginEvent::LoginStarted(LoginStartedEvent::Token { username, token }) => {
                 Some(Command::TokenLogin {
                     username: username.to_owned(),

@@ -19,17 +19,11 @@ impl LoginModel {
     pub fn try_autologin(&self) {
         self.dispatcher.dispatch_async(Box::pin(async {
             let action = match Credentials::retrieve().await {
-                Ok(creds) => LoginAction::TryLogin(if creds.token_expired() {
-                    TryLoginAction::Password {
-                        username: creds.username,
-                        password: creds.password,
-                    }
-                } else {
+                Ok(creds) => LoginAction::TryLogin(
                     TryLoginAction::Token {
                         username: creds.username,
                         token: creds.token,
-                    }
-                }),
+                    }),
                 Err(err) => {
                     warn!("Could not retrieve credentials: {}", err);
                     LoginAction::ShowLogin
@@ -68,11 +62,6 @@ impl LoginModel {
                 "Could not save password. Make sure the session keyring is unlocked.",
             )))
         }));
-    }
-
-    pub fn login(&self, username: String, password: String) {
-        self.dispatcher
-            .dispatch(LoginAction::TryLogin(TryLoginAction::Password { username, password }).into())
     }
 
     pub fn login_with_spotify(&self) {

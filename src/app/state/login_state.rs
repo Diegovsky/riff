@@ -8,7 +8,6 @@ use crate::app::state::{AppAction, AppEvent, UpdatableState};
 
 #[derive(Clone, Debug)]
 pub enum TryLoginAction {
-    Password { username: String, password: String },
     Token { username: String, token: String },
     OAuthSpotify {},
 }
@@ -44,7 +43,6 @@ impl From<LoginAction> for AppAction {
 
 #[derive(Clone, Debug)]
 pub enum LoginStartedEvent {
-    Password { username: String, password: String },
     Token { username: String, token: String },
     OAuthSpotify {},
 }
@@ -93,12 +91,6 @@ impl UpdatableState for LoginState {
         info!("update_with({:?})", action);
         match action.into_owned() {
             LoginAction::ShowLogin => vec![LoginEvent::LoginShown.into()],
-            LoginAction::TryLogin(TryLoginAction::Password { username, password }) => {
-                vec![
-                    LoginEvent::LoginStarted(LoginStartedEvent::Password { username, password })
-                        .into(),
-                ]
-            }
             LoginAction::TryLogin(TryLoginAction::Token { username, token }) => {
                 vec![LoginEvent::LoginStarted(LoginStartedEvent::Token { username, token }).into()]
             }
