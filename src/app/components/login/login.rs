@@ -106,7 +106,7 @@ impl Login {
                 app.quit();
             }
         }));
-        
+
         login_window.connect_login_oauth_spotify(clone!(@weak model => move || {
             model.login_with_spotify();
         }));

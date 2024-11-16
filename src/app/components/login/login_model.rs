@@ -19,11 +19,10 @@ impl LoginModel {
     pub fn try_autologin(&self) {
         self.dispatcher.dispatch_async(Box::pin(async {
             let action = match Credentials::retrieve().await {
-                Ok(creds) => LoginAction::TryLogin(
-                    TryLoginAction::Token {
-                        username: creds.username,
-                        token: creds.token,
-                    }),
+                Ok(creds) => LoginAction::TryLogin(TryLoginAction::Token {
+                    username: creds.username,
+                    token: creds.token,
+                }),
                 Err(err) => {
                     warn!("Could not retrieve credentials: {}", err);
                     LoginAction::ShowLogin
