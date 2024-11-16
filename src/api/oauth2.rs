@@ -34,6 +34,9 @@ pub enum OAuthError {
     #[error("Auth code param not found in URI {uri}")]
     AuthCodeNotFound { uri: String },
 
+    #[error("CSRF token param not found in URI {uri}")]
+    CsrfTokenNotFound { uri: String },
+
     #[error("Failed to read redirect URI from stdin")]
     AuthCodeStdinRead,
 
@@ -63,6 +66,12 @@ pub enum OAuthError {
 
     #[error("Failed to exchange code for access token ({e})")]
     ExchangeCode { e: String },
+
+    #[error("Spotify did not provide a refresh token")]
+    NoRefreshToken,
+
+    #[error("Spotify did not return the token scopes")]
+    NoTokenScopes,
 }
 
 #[derive(Debug)]
@@ -75,6 +84,23 @@ pub struct OAuthToken {
     pub token_type: String,
     #[allow(dead_code)]
     pub scopes: Vec<String>,
+}
+
+/// Return state query-string parameter from the redirect URI (CSRF token).
+fn get_state(redirect_url: &str) -> Result<String, OAuthError> {
+    let url = Url::parse(redirect_url).map_err(|e| OAuthError::AuthCodeBadUri {
+        uri: redirect_url.to_string(),
+        e,
+    })?;
+    let code = url
+        .query_pairs()
+        .find(|(key, _)| key == "state")
+        .map(|(_, state)| state.into_owned())
+        .ok_or(OAuthError::CsrfTokenNotFound {
+            uri: redirect_url.to_string(),
+        })?;
+
+    Ok(code)
 }
 
 /// Return code query-string parameter from the redirect URI.
@@ -107,7 +133,7 @@ fn get_authcode_stdin() -> Result<AuthorizationCode, OAuthError> {
 }
 
 /// Spawn HTTP server at provided socket address to accept OAuth callback and return auth code.
-fn get_authcode_listener(socket_address: SocketAddr) -> Result<AuthorizationCode, OAuthError> {
+fn get_authcode_listener(socket_address: SocketAddr, csrf_token: CsrfToken) -> Result<AuthorizationCode, OAuthError> {
     let listener =
         TcpListener::bind(socket_address).map_err(|e| OAuthError::AuthCodeListenerBind {
             addr: socket_address,
@@ -131,6 +157,15 @@ fn get_authcode_listener(socket_address: SocketAddr) -> Result<AuthorizationCode
         .split_whitespace()
         .nth(1)
         .ok_or(OAuthError::AuthCodeListenerParse)?;
+
+    let token = get_state(&("http://localhost".to_string() + redirect_url));
+    if token.is_err() {
+        return Err(token.err().unwrap())
+    }
+    let token = token.ok().unwrap();
+    if !token.eq(csrf_token.secret()) {
+        return Err(OAuthError::CsrfTokenNotFound { uri: redirect_url.to_string() });
+    }
     let code = get_code(&("http://localhost".to_string() + redirect_url));
 
     let message = include_str!("./login.html");
@@ -198,7 +233,7 @@ pub fn get_access_token(
         .into_iter()
         .map(|s| Scope::new(s.into()))
         .collect();
-    let (auth_url, _) = client
+    let (auth_url, csrf_token) = client
         .authorize_url(CsrfToken::new_random)
         .add_scopes(request_scopes)
         .set_pkce_challenge(pkce_challenge)
@@ -210,7 +245,7 @@ pub fn get_access_token(
     }
 
     let code = match get_socket_address(redirect_uri) {
-        Some(addr) => get_authcode_listener(addr),
+        Some(addr) => get_authcode_listener(addr, csrf_token),
         _ => get_authcode_stdin(),
     }?;
     trace!("Exchange {code:?} for access token");
@@ -232,11 +267,17 @@ pub fn get_access_token(
 
     let token_scopes: Vec<String> = match token.scopes() {
         Some(s) => s.iter().map(|s| s.to_string()).collect(),
-        _ => scopes.into_iter().map(|s| s.to_string()).collect(),
+        None => {
+            error!("Spotify did not return the token scopes.");
+            return Err(OAuthError::NoTokenScopes)
+        },
     };
     let refresh_token = match token.refresh_token() {
         Some(t) => t.secret().to_string(),
-        _ => "".to_string(), // Spotify always provides a refresh token.
+        None => {
+            error!("Spotify did not provide a refresh token.");
+            return Err(OAuthError::NoRefreshToken)
+        },
     };
     Ok(OAuthToken {
         access_token: token.access_token().secret().to_string(),
