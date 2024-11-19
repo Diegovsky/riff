@@ -8,14 +8,14 @@ use tokio::task;
 use crate::app::credentials::Credentials;
 use crate::app::state::{LoginAction, PlaybackAction, SetLoginSuccessAction};
 use crate::app::AppAction;
-
+#[allow(clippy::module_inception)]
 mod player;
 pub use player::*;
 
 #[derive(Debug, Clone)]
 pub enum Command {
-    PasswordLogin { username: String, password: String },
     TokenLogin { username: String, token: String },
+    OAuthLogin,
     Logout,
     PlayerLoad { track: SpotifyId, resume: bool },
     PlayerResume,
@@ -47,21 +47,11 @@ impl SpotifyPlayerDelegate for AppPlayerDelegate {
             .unwrap();
     }
 
-    fn password_login_successful(&self, credentials: Credentials) {
+    fn token_login_successful(&self, credentials: Credentials) {
         self.sender
             .borrow_mut()
             .unbounded_send(
-                LoginAction::SetLoginSuccess(SetLoginSuccessAction::Password(credentials)).into(),
-            )
-            .unwrap();
-    }
-
-    fn token_login_successful(&self, username: String, token: String) {
-        self.sender
-            .borrow_mut()
-            .unbounded_send(
-                LoginAction::SetLoginSuccess(SetLoginSuccessAction::Token { username, token })
-                    .into(),
+                LoginAction::SetLoginSuccess(SetLoginSuccessAction::Token(credentials)).into(),
             )
             .unwrap();
     }

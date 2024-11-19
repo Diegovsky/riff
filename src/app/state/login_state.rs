@@ -8,14 +8,14 @@ use crate::app::state::{AppAction, AppEvent, UpdatableState};
 
 #[derive(Clone, Debug)]
 pub enum TryLoginAction {
-    Password { username: String, password: String },
     Token { username: String, token: String },
+    OAuthSpotify {},
 }
 
 #[derive(Clone, Debug)]
 pub enum SetLoginSuccessAction {
     Password(Credentials),
-    Token { username: String, token: String },
+    Token(Credentials),
 }
 
 #[derive(Clone, Debug)]
@@ -43,14 +43,14 @@ impl From<LoginAction> for AppAction {
 
 #[derive(Clone, Debug)]
 pub enum LoginStartedEvent {
-    Password { username: String, password: String },
     Token { username: String, token: String },
+    OAuthSpotify {},
 }
 
 #[derive(Clone, Debug)]
 pub enum LoginCompletedEvent {
     Password(Credentials),
-    Token,
+    Token(Credentials),
 }
 
 #[derive(Clone, Debug)]
@@ -88,14 +88,9 @@ impl UpdatableState for LoginState {
 
     // The login state has a lot of actions that just translate to events
     fn update_with(&mut self, action: Cow<Self::Action>) -> Vec<Self::Event> {
+        info!("update_with({:?})", action);
         match action.into_owned() {
             LoginAction::ShowLogin => vec![LoginEvent::LoginShown.into()],
-            LoginAction::TryLogin(TryLoginAction::Password { username, password }) => {
-                vec![
-                    LoginEvent::LoginStarted(LoginStartedEvent::Password { username, password })
-                        .into(),
-                ]
-            }
             LoginAction::TryLogin(TryLoginAction::Token { username, token }) => {
                 vec![LoginEvent::LoginStarted(LoginStartedEvent::Token { username, token }).into()]
             }
@@ -103,9 +98,9 @@ impl UpdatableState for LoginState {
                 self.user = Some(creds.username.clone());
                 vec![LoginEvent::LoginCompleted(LoginCompletedEvent::Password(creds)).into()]
             }
-            LoginAction::SetLoginSuccess(SetLoginSuccessAction::Token { username, .. }) => {
-                self.user = Some(username);
-                vec![LoginEvent::LoginCompleted(LoginCompletedEvent::Token).into()]
+            LoginAction::SetLoginSuccess(SetLoginSuccessAction::Token(creds)) => {
+                self.user = Some(creds.username.clone());
+                vec![LoginEvent::LoginCompleted(LoginCompletedEvent::Token(creds)).into()]
             }
             LoginAction::SetLoginFailure => vec![LoginEvent::LoginFailed.into()],
             LoginAction::RefreshToken => vec![LoginEvent::FreshTokenRequested.into()],
@@ -141,6 +136,9 @@ impl UpdatableState for LoginState {
                 summaries.append(&mut self.playlists);
                 self.playlists = summaries;
                 vec![LoginEvent::UserPlaylistsLoaded.into()]
+            }
+            LoginAction::TryLogin(TryLoginAction::OAuthSpotify { .. }) => {
+                vec![LoginEvent::LoginStarted(LoginStartedEvent::OAuthSpotify {}).into()]
             }
         }
     }

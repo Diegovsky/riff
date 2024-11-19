@@ -73,6 +73,12 @@ glib::wrapper! {
     pub struct PlaylistHeaderBarWidget(ObjectSubclass<imp::PlaylistHeaderBarWidget>) @extends gtk::Widget, libadwaita::Bin;
 }
 
+impl Default for PlaylistHeaderBarWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PlaylistHeaderBarWidget {
     pub fn new() -> Self {
         glib::Object::new()

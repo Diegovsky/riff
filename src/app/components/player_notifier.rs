@@ -2,7 +2,7 @@ use std::ops::Deref;
 use std::rc::Rc;
 
 use futures::channel::mpsc::UnboundedSender;
-use librespot::core::spotify_id::SpotifyId;
+use librespot::core::spotify_id::{SpotifyId, SpotifyItemType};
 
 use crate::app::components::EventListener;
 use crate::app::state::{
@@ -83,18 +83,16 @@ impl PlayerNotifier {
     }
 
     fn notify_login(&self, event: &LoginEvent) {
+        info!("notify_login: {:?}", event);
         let command = match event {
-            LoginEvent::LoginStarted(LoginStartedEvent::Password { username, password }) => {
-                Some(Command::PasswordLogin {
-                    username: username.to_owned(),
-                    password: password.to_owned(),
-                })
-            }
             LoginEvent::LoginStarted(LoginStartedEvent::Token { username, token }) => {
                 Some(Command::TokenLogin {
                     username: username.to_owned(),
                     token: token.to_owned(),
                 })
+            }
+            LoginEvent::LoginStarted(LoginStartedEvent::OAuthSpotify {}) => {
+                Some(Command::OAuthLogin)
             }
             LoginEvent::FreshTokenRequested => Some(Command::RefreshToken),
             LoginEvent::LogoutCompleted => Some(Command::Logout),
@@ -154,23 +152,32 @@ impl PlayerNotifier {
             PlaybackEvent::PlaybackStopped => Some(Command::PlayerStop),
             PlaybackEvent::VolumeSet(volume) => Some(Command::PlayerSetVolume(*volume)),
             PlaybackEvent::TrackChanged(id) => {
-                SpotifyId::from_base62(id)
-                    .ok()
-                    .map(|track| Command::PlayerLoad {
+                info!("track changed: {}", id);
+                SpotifyId::from_base62(id).ok().map(|mut track| {
+                    track.item_type = SpotifyItemType::Track;
+                    Command::PlayerLoad {
                         track,
                         resume: true,
-                    })
+                    }
+                })
             }
             PlaybackEvent::SourceChanged => {
                 let resume = self.is_playing();
                 self.currently_playing()
                     .and_then(|c| SpotifyId::from_base62(c.song_id()).ok())
-                    .map(|track| Command::PlayerLoad { track, resume })
+                    .map(|mut track| {
+                        track.item_type = SpotifyItemType::Track;
+                        Command::PlayerLoad { track, resume }
+                    })
             }
             PlaybackEvent::TrackSeeked(position) => Some(Command::PlayerSeek(*position)),
-            PlaybackEvent::Preload(id) => {
-                SpotifyId::from_base62(id).ok().map(Command::PlayerPreload)
-            }
+            PlaybackEvent::Preload(id) => SpotifyId::from_base62(id)
+                .ok()
+                .map(|mut track| {
+                    track.item_type = SpotifyItemType::Track;
+                    track
+                })
+                .map(Command::PlayerPreload),
             _ => None,
         };
 

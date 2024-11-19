@@ -67,6 +67,12 @@ glib::wrapper! {
     pub struct SettingsWindow(ObjectSubclass<imp::SettingsWindow>) @extends gtk::Widget, gtk::Window, libadwaita::Window, libadwaita::PreferencesWindow;
 }
 
+impl Default for SettingsWindow {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SettingsWindow {
     pub fn new() -> Self {
         let window: Self = glib::Object::new();

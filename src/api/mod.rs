@@ -3,6 +3,7 @@ mod cached_client;
 mod client;
 
 pub mod cache;
+pub(crate) mod oauth2;
 
 pub use cached_client::{CachedSpotifyClient, SpotifyApiClient, SpotifyResult};
 pub use client::SpotifyApiError;

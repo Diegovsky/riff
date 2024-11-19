@@ -68,7 +68,7 @@ impl SidebarItem {
         };
         glib::Object::builder()
             .property("id", id)
-            .property("data", &data.unwrap_or_default())
+            .property("data", data.unwrap_or_default())
             .property("title", &title)
             .property("navigatable", true)
             .build()
@@ -77,8 +77,8 @@ impl SidebarItem {
     pub fn playlists_section() -> Self {
         glib::Object::builder()
             .property("id", SAVED_PLAYLISTS_SECTION)
-            .property("data", &String::new())
-            .property("title", &gettext("All Playlists"))
+            .property("data", String::new())
+            .property("title", gettext("All Playlists"))
             .property("navigatable", false)
             .build()
     }
@@ -86,8 +86,8 @@ impl SidebarItem {
     pub fn create_playlist_item() -> Self {
         glib::Object::builder()
             .property("id", CREATE_PLAYLIST_ITEM)
-            .property("data", &String::new())
-            .property("title", &gettext("New Playlist"))
+            .property("data", String::new())
+            .property("title", gettext("New Playlist"))
             .property("navigatable", false)
             .build()
     }

@@ -70,6 +70,12 @@ glib::wrapper! {
     pub struct AlbumHeaderWidget(ObjectSubclass<imp::AlbumHeaderWidget>) @extends gtk::Widget, gtk::Box;
 }
 
+impl Default for AlbumHeaderWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AlbumHeaderWidget {
     pub fn new() -> Self {
         glib::Object::new()

@@ -68,6 +68,12 @@ glib::wrapper! {
     pub struct SearchResultsWidget(ObjectSubclass<imp::SearchResultsWidget>) @extends gtk::Widget, gtk::Box;
 }
 
+impl Default for SearchResultsWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SearchResultsWidget {
     pub fn new() -> Self {
         glib::Object::new()

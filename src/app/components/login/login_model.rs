@@ -19,16 +19,9 @@ impl LoginModel {
     pub fn try_autologin(&self) {
         self.dispatcher.dispatch_async(Box::pin(async {
             let action = match Credentials::retrieve().await {
-                Ok(creds) => LoginAction::TryLogin(if creds.token_expired() {
-                    TryLoginAction::Password {
-                        username: creds.username,
-                        password: creds.password,
-                    }
-                } else {
-                    TryLoginAction::Token {
-                        username: creds.username,
-                        token: creds.token,
-                    }
+                Ok(creds) => LoginAction::TryLogin(TryLoginAction::Token {
+                    username: creds.username,
+                    token: creds.token,
                 }),
                 Err(err) => {
                     warn!("Could not retrieve credentials: {}", err);
@@ -70,8 +63,8 @@ impl LoginModel {
         }));
     }
 
-    pub fn login(&self, username: String, password: String) {
+    pub fn login_with_spotify(&self) {
         self.dispatcher
-            .dispatch(LoginAction::TryLogin(TryLoginAction::Password { username, password }).into())
+            .dispatch(LoginAction::TryLogin(TryLoginAction::OAuthSpotify {}).into())
     }
 }

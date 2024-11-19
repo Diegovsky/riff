@@ -52,6 +52,12 @@ glib::wrapper! {
     pub struct LibraryWidget(ObjectSubclass<imp::LibraryWidget>) @extends gtk::Widget, gtk::Box;
 }
 
+impl Default for LibraryWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LibraryWidget {
     pub fn new() -> Self {
         glib::Object::new()

@@ -74,7 +74,7 @@ impl ImageLoader {
             .await
         {
             // Write content of cache file to the pixbuf loader if the cache contained something
-            Ok(CacheFile::Fresh(buffer, _)) => {
+            Ok(CacheFile::Fresh(buffer)) => {
                 loader.write_all(&buffer[..]).ok()?;
             }
             // Otherwise, get image over HTTP
