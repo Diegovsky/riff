@@ -13,22 +13,19 @@ use librespot::playback::audio_backend;
 use librespot::playback::config::{AudioFormat, Bitrate, PlayerConfig, VolumeCtrl};
 use librespot::playback::player::{Player, PlayerEvent, PlayerEventChannel};
 
+use super::oauth2::SpotOauthClient;
 use super::Command;
-use crate::api::oauth2::get_access_token;
 use crate::app::credentials;
 use crate::settings::SpotSettings;
-use std::cell::RefCell;
 use std::env;
 use std::error::Error;
 use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::time::{Instant, SystemTime};
 
 #[derive(Debug)]
 pub enum SpotifyError {
     LoginFailed,
-    TokenFailed,
     PlayerNotReady,
     TechnicalError,
 }
@@ -39,7 +36,6 @@ impl fmt::Display for SpotifyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::LoginFailed => write!(f, "Login failed!"),
-            Self::TokenFailed => write!(f, "Token retrieval failed!"),
             Self::PlayerNotReady => write!(f, "Player is not responding."),
             Self::TechnicalError => {
                 write!(f, "A technical error occured. Check your connectivity.")
@@ -51,7 +47,7 @@ impl fmt::Display for SpotifyError {
 pub trait SpotifyPlayerDelegate {
     fn end_of_track_reached(&self);
     fn token_login_successful(&self, credentials: credentials::Credentials);
-    fn refresh_successful(&self, token: String, token_expiry_time: SystemTime);
+    fn refresh_successful(&self, credentials: credentials::Credentials);
     fn report_error(&self, error: SpotifyError);
     fn notify_playback_state(&self, position: u32);
     fn preload_next_track(&self);
@@ -88,6 +84,7 @@ pub struct SpotifyPlayer {
     player: Option<Arc<Player>>,
     mixer: Option<Box<dyn Mixer>>,
     session: Option<Session>,
+    oauth_client: SpotOauthClient,
     delegate: Rc<dyn SpotifyPlayerDelegate>,
 }
 
@@ -98,7 +95,15 @@ impl SpotifyPlayer {
             mixer: None,
             player: None,
             session: None,
+            oauth_client: SpotOauthClient::new(),
             delegate,
+        }
+    }
+
+    async fn handle_and_notify(&mut self, action: Command) {
+        match self.handle(action).await {
+            Ok(_) => {}
+            Err(e) => self.delegate.report_error(e),
         }
     }
 
@@ -152,10 +157,19 @@ impl SpotifyPlayer {
                     .preload(track);
                 Ok(())
             }
-            Command::RefreshToken => {
+            Command::RefreshToken(credentials) => {
                 let session = self.session.as_ref().ok_or(SpotifyError::PlayerNotReady)?;
-                let (token, token_expiry_time) = get_access_token_and_expiry_time(session).await?;
-                self.delegate.refresh_successful(token, token_expiry_time);
+                let token = self
+                    .oauth_client
+                    .refresh_token(credentials)
+                    .await
+                    .map_err(|_| SpotifyError::LoginFailed)?;
+                let credentials = Credentials::with_access_token(token.access_token.clone());
+                session
+                    .connect(credentials, true)
+                    .await
+                    .map_err(|_| SpotifyError::LoginFailed)?;
+                self.delegate.refresh_successful(token);
                 Ok(())
             }
             Command::Logout => {
@@ -166,16 +180,17 @@ impl SpotifyPlayer {
                 let _ = self.player.take();
                 Ok(())
             }
-            Command::TokenLogin { username, token } => {
-                info!("Login with token, username {}", username);
-                let credentials = Credentials::with_access_token(token.clone());
-                let new_session = create_session(&credentials, self.settings.ap_port).await?;
-                let credentials = credentials::Credentials {
-                    username: new_session.username(),
-                    password: "".to_string(),
-                    token,
-                    token_expiry_time: None,
-                };
+            Command::Reconnect(mut credentials) => {
+                info!("Login with token, username {}", &credentials.username);
+                if credentials.token_expired() {
+                    credentials = self
+                        .oauth_client
+                        .refresh_token(credentials)
+                        .await
+                        .map_err(|_| SpotifyError::LoginFailed)?;
+                }
+                let creds = Credentials::with_access_token(credentials.access_token.clone());
+                let new_session = create_session(&creds, self.settings.ap_port).await?;
                 self.delegate.token_login_successful(credentials);
 
                 let new_player = self.create_player(new_session.clone());
@@ -188,17 +203,19 @@ impl SpotifyPlayer {
 
                 Ok(())
             }
-            Command::OAuthLogin => {
-                let (token, token_expiry_time) = get_access_token_oauth()?;
+            Command::NewLogin => {
+                let mut credentials = self
+                    .oauth_client
+                    .get_token()
+                    .await
+                    .map_err(|_| SpotifyError::LoginFailed)?;
                 info!("Login with OAuth2");
-                let credentials = Credentials::with_access_token(token.clone());
-                let new_session = create_session(&credentials, self.settings.ap_port).await?;
-                let credentials = credentials::Credentials {
-                    username: new_session.username(),
-                    password: "".to_string(),
-                    token,
-                    token_expiry_time: Some(token_expiry_time),
-                };
+                let new_session = create_session(
+                    &Credentials::with_access_token(&credentials.access_token),
+                    self.settings.ap_port,
+                )
+                .await?;
+                credentials.username = new_session.username();
                 self.delegate.token_login_successful(credentials);
 
                 let new_player = self.create_player(new_session.clone());
@@ -271,67 +288,18 @@ impl SpotifyPlayer {
         })
     }
 
-    #[allow(clippy::await_holding_refcell_ref)]
     pub async fn start(self, receiver: UnboundedReceiver<Command>) -> Result<(), ()> {
-        let _self = RefCell::new(self);
         receiver
-            .for_each(|action| async {
-                let mut _self = _self.borrow_mut();
-                match _self.handle(action).await {
-                    Ok(_) => {}
-                    Err(err) => _self.delegate.report_error(err),
-                }
+            .fold(self, |mut player, action| async {
+                player.handle_and_notify(action).await;
+                player
             })
             .await;
         Ok(())
     }
 }
 
-const REDIRECT_URI: &str = "http://127.0.0.1:8898/login";
-const SPOTIFY_CLIENT_ID: &str = "782ae96ea60f4cdf986a766049607005";
-
-const SCOPES: &str = "user-read-private,\
-playlist-read-private,\
-playlist-read-collaborative,\
-user-library-read,\
-user-library-modify,\
-user-top-read,\
-user-read-recently-played,\
-user-read-playback-state,\
-playlist-modify-public,\
-playlist-modify-private,\
-user-modify-playback-state,\
-streaming,\
-playlist-modify-public";
-
 const KNOWN_AP_PORTS: [Option<u16>; 4] = [None, Some(80), Some(443), Some(4070)];
-
-async fn get_access_token_and_expiry_time(
-    session: &Session,
-) -> Result<(String, SystemTime), SpotifyError> {
-    let token = session
-        .token_provider()
-        .get_token(SCOPES)
-        .await
-        .map_err(|_e| SpotifyError::TokenFailed)?;
-    let expiry_time = SystemTime::now() + token.expires_in;
-    Ok((token.access_token, expiry_time))
-}
-
-fn get_access_token_oauth() -> Result<(String, SystemTime), SpotifyError> {
-    let scopes = SCOPES.split(",").collect();
-    match get_access_token(SPOTIFY_CLIENT_ID, REDIRECT_URI, scopes) {
-        Ok(token) => {
-            info!("Success: {token:#?}");
-            let duration = token.expires_at.duration_since(Instant::now());
-            Ok((token.access_token, SystemTime::now() + duration))
-        }
-        Err(e) => {
-            error!("Failed: {e}");
-            Err(SpotifyError::TokenFailed)
-        }
-    }
-}
 
 async fn create_session_with_port(
     credentials: &Credentials,

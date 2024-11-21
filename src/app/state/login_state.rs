@@ -8,13 +8,12 @@ use crate::app::state::{AppAction, AppEvent, UpdatableState};
 
 #[derive(Clone, Debug)]
 pub enum TryLoginAction {
-    Token { username: String, token: String },
-    OAuthSpotify {},
+    Reconnect(Credentials),
+    NewLogin,
 }
 
 #[derive(Clone, Debug)]
 pub enum SetLoginSuccessAction {
-    Password(Credentials),
     Token(Credentials),
 }
 
@@ -27,11 +26,8 @@ pub enum LoginAction {
     UpdateUserPlaylist(PlaylistSummary),
     PrependUserPlaylist(Vec<PlaylistSummary>),
     SetLoginFailure,
-    RefreshToken,
-    SetRefreshedToken {
-        token: String,
-        token_expiry_time: SystemTime,
-    },
+    RefreshToken(Credentials),
+    SetRefreshedToken(Credentials),
     Logout,
 }
 
@@ -43,13 +39,12 @@ impl From<LoginAction> for AppAction {
 
 #[derive(Clone, Debug)]
 pub enum LoginStartedEvent {
-    Token { username: String, token: String },
-    OAuthSpotify {},
+    Reconnect(Credentials),
+    NewLogin,
 }
 
 #[derive(Clone, Debug)]
 pub enum LoginCompletedEvent {
-    Password(Credentials),
     Token(Credentials),
 }
 
@@ -60,11 +55,8 @@ pub enum LoginEvent {
     LoginCompleted(LoginCompletedEvent),
     UserPlaylistsLoaded,
     LoginFailed,
-    FreshTokenRequested,
-    RefreshTokenCompleted {
-        token: String,
-        token_expiry_time: SystemTime,
-    },
+    FreshTokenRequested(Credentials),
+    RefreshTokenCompleted(Credentials),
     LogoutCompleted,
 }
 
@@ -91,30 +83,20 @@ impl UpdatableState for LoginState {
         info!("update_with({:?})", action);
         match action.into_owned() {
             LoginAction::ShowLogin => vec![LoginEvent::LoginShown.into()],
-            LoginAction::TryLogin(TryLoginAction::Token { username, token }) => {
-                vec![LoginEvent::LoginStarted(LoginStartedEvent::Token { username, token }).into()]
-            }
-            LoginAction::SetLoginSuccess(SetLoginSuccessAction::Password(creds)) => {
-                self.user = Some(creds.username.clone());
-                vec![LoginEvent::LoginCompleted(LoginCompletedEvent::Password(creds)).into()]
+            LoginAction::TryLogin(TryLoginAction::Reconnect(creds)) => {
+                vec![LoginEvent::LoginStarted(LoginStartedEvent::Reconnect(creds)).into()]
             }
             LoginAction::SetLoginSuccess(SetLoginSuccessAction::Token(creds)) => {
                 self.user = Some(creds.username.clone());
                 vec![LoginEvent::LoginCompleted(LoginCompletedEvent::Token(creds)).into()]
             }
             LoginAction::SetLoginFailure => vec![LoginEvent::LoginFailed.into()],
-            LoginAction::RefreshToken => vec![LoginEvent::FreshTokenRequested.into()],
-            LoginAction::SetRefreshedToken {
-                token,
-                token_expiry_time,
-            } => {
+            LoginAction::RefreshToken(creds) => vec![LoginEvent::FreshTokenRequested(creds).into()],
+            LoginAction::SetRefreshedToken(creds) => {
                 // translators: This notification is shown when, after some inactivity, the session is successfully restored. The user might have to repeat its last action.
                 vec![
                     AppEvent::NotificationShown(gettext("Connection restored")),
-                    LoginEvent::RefreshTokenCompleted {
-                        token,
-                        token_expiry_time,
-                    }
+                    LoginEvent::RefreshTokenCompleted(creds)
                     .into(),
                 ]
             }
@@ -137,8 +119,8 @@ impl UpdatableState for LoginState {
                 self.playlists = summaries;
                 vec![LoginEvent::UserPlaylistsLoaded.into()]
             }
-            LoginAction::TryLogin(TryLoginAction::OAuthSpotify { .. }) => {
-                vec![LoginEvent::LoginStarted(LoginStartedEvent::OAuthSpotify {}).into()]
+            LoginAction::TryLogin(TryLoginAction::NewLogin) => {
+                vec![LoginEvent::LoginStarted(LoginStartedEvent::NewLogin).into()]
             }
         }
     }

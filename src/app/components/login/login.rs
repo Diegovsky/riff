@@ -4,7 +4,7 @@ use gtk::CompositeTemplate;
 use std::rc::Rc;
 
 use crate::app::components::EventListener;
-use crate::app::credentials::Credentials;
+use crate::app::credentials::{self, Credentials};
 use crate::app::state::{LoginCompletedEvent, LoginEvent};
 use crate::app::AppEvent;
 
@@ -134,24 +134,19 @@ impl Login {
     }
 
     fn reveal_error(&self) {
+        self.show_self();
         self.login_window.show_auth_error(true);
     }
 }
 
 impl EventListener for Login {
     fn on_event(&mut self, event: &AppEvent) {
-        info!("received login event {:?}", event);
         match event {
-            AppEvent::LoginEvent(LoginEvent::LoginCompleted(LoginCompletedEvent::Password(
-                creds,
-            ))) => {
-                self.hide_and_save_creds(creds.clone());
-            }
             AppEvent::LoginEvent(LoginEvent::LoginCompleted(LoginCompletedEvent::Token(token))) => {
                 self.hide_and_save_creds(token.clone());
             }
             AppEvent::LoginEvent(LoginEvent::LoginFailed) => {
-                self.model.clear_saved_credentials();
+                //self.model.clear_saved_credentials();
                 self.reveal_error();
             }
             AppEvent::Started => {
@@ -160,11 +155,8 @@ impl EventListener for Login {
             AppEvent::LoginEvent(LoginEvent::LogoutCompleted | LoginEvent::LoginShown) => {
                 self.show_self();
             }
-            AppEvent::LoginEvent(LoginEvent::RefreshTokenCompleted {
-                token,
-                token_expiry_time,
-            }) => {
-                self.model.save_token(token.clone(), *token_expiry_time);
+            AppEvent::LoginEvent(LoginEvent::RefreshTokenCompleted(credentials)) => {
+                self.model.save_token(credentials.clone());
             }
             _ => {}
         }

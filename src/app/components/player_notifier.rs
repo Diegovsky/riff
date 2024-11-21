@@ -85,16 +85,13 @@ impl PlayerNotifier {
     fn notify_login(&self, event: &LoginEvent) {
         info!("notify_login: {:?}", event);
         let command = match event {
-            LoginEvent::LoginStarted(LoginStartedEvent::Token { username, token }) => {
-                Some(Command::TokenLogin {
-                    username: username.to_owned(),
-                    token: token.to_owned(),
-                })
+            LoginEvent::LoginStarted(LoginStartedEvent::Reconnect(creds)) => {
+                Some(Command::Reconnect(creds.clone()))
             }
-            LoginEvent::LoginStarted(LoginStartedEvent::OAuthSpotify {}) => {
-                Some(Command::OAuthLogin)
+            LoginEvent::LoginStarted(LoginStartedEvent::NewLogin) => {
+                Some(Command::NewLogin)
             }
-            LoginEvent::FreshTokenRequested => Some(Command::RefreshToken),
+            LoginEvent::FreshTokenRequested(creds) => Some(Command::RefreshToken(creds.clone())),
             LoginEvent::LogoutCompleted => Some(Command::Logout),
             _ => None,
         };

@@ -19,10 +19,7 @@ impl LoginModel {
     pub fn try_autologin(&self) {
         self.dispatcher.dispatch_async(Box::pin(async {
             let action = match Credentials::retrieve().await {
-                Ok(creds) => LoginAction::TryLogin(TryLoginAction::Token {
-                    username: creds.username,
-                    token: creds.token,
-                }),
+                Ok(creds) => LoginAction::TryLogin(TryLoginAction::Reconnect(creds)),
                 Err(err) => {
                     warn!("Could not retrieve credentials: {}", err);
                     LoginAction::ShowLogin
@@ -38,14 +35,10 @@ impl LoginModel {
         });
     }
 
-    pub fn save_token(&self, token: String, token_expiry_time: SystemTime) {
+    pub fn save_token(&self, credentials: Credentials) {
         self.worker.send_task(async move {
-            if let Ok(mut credentials) = Credentials::retrieve().await {
-                credentials.token = token;
-                credentials.token_expiry_time = Some(token_expiry_time);
-                if let Err(err) = credentials.save().await {
-                    warn!("Could not save credentials: {}", err);
-                }
+            if let Err(err) = credentials.save().await {
+                warn!("Could not save credentials: {}", err);
             }
         });
     }
@@ -65,6 +58,6 @@ impl LoginModel {
 
     pub fn login_with_spotify(&self) {
         self.dispatcher
-            .dispatch(LoginAction::TryLogin(TryLoginAction::OAuthSpotify {}).into())
+            .dispatch(LoginAction::TryLogin(TryLoginAction::NewLogin).into())
     }
 }

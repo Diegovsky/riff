@@ -56,18 +56,13 @@ impl AppModel {
         // The LoginActions are a bit special, we intercept them to grab the Spotify token
         // and save it in our Arc'd API client
         match &action {
-            AppAction::LoginAction(LoginAction::SetLoginSuccess(
-                SetLoginSuccessAction::Password(creds),
-            )) => {
-                self.services.spotify_api.update_token(creds.token.clone());
-            }
             AppAction::LoginAction(LoginAction::SetLoginSuccess(SetLoginSuccessAction::Token(
                 creds,
             ))) => {
-                self.services.spotify_api.update_token(creds.token.clone());
+                self.services.spotify_api.update_token(creds.access_token.clone());
             }
-            AppAction::LoginAction(LoginAction::SetRefreshedToken { token, .. }) => {
-                self.services.spotify_api.update_token(token.clone());
+            AppAction::LoginAction(LoginAction::SetRefreshedToken(creds)) => {
+                self.services.spotify_api.update_token(creds.access_token.clone());
             }
             _ => {}
         }
