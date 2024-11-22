@@ -5,10 +5,12 @@ use serde::de::DeserializeOwned;
 use serde_json::from_slice;
 use std::convert::Into;
 use std::future::Future;
+use std::sync::Arc;
 
 use super::cache::{CacheExpiry, CacheManager, CachePolicy, FetchResult};
 use super::client::*;
 use crate::app::models::*;
+use crate::player::TokenStore;
 
 pub type SpotifyResult<T> = Result<T, SpotifyApiError>;
 
@@ -93,8 +95,6 @@ pub trait SpotifyApiClient {
     fn list_available_devices(&self) -> BoxFuture<SpotifyResult<Vec<ConnectDevice>>>;
 
     fn get_player_queue(&self) -> BoxFuture<SpotifyResult<Vec<SongDescription>>>;
-
-    fn update_token(&self, token: String);
 
     fn player_pause(&self, device_id: String) -> BoxFuture<SpotifyResult<()>>;
 
@@ -189,9 +189,9 @@ pub struct CachedSpotifyClient {
 }
 
 impl CachedSpotifyClient {
-    pub fn new() -> CachedSpotifyClient {
+    pub fn new(token_store: Arc<TokenStore>) -> CachedSpotifyClient {
         CachedSpotifyClient {
-            client: SpotifyClient::new(),
+            client: SpotifyClient::new(token_store),
             cache: CacheManager::for_dir("spot/net").unwrap(),
         }
     }
@@ -200,6 +200,7 @@ impl CachedSpotifyClient {
         if self.client.has_token() {
             CachePolicy::Default
         } else {
+            debug!("Forcing cache");
             CachePolicy::IgnoreExpiry
         }
     }
@@ -219,6 +220,7 @@ impl CachedSpotifyClient {
                 let expiry = CacheExpiry::expire_in_seconds(max_age, etag);
                 SpotifyResult::Ok(match kind {
                     SpotifyResponseKind::Ok(content, _) => {
+                        debug!("Did not hit cache");
                         FetchResult::Modified(content.into_bytes(), expiry)
                     }
                     SpotifyResponseKind::NotModified => FetchResult::NotModified(expiry),
@@ -268,9 +270,6 @@ impl CachedSpotifyClient {
 }
 
 impl SpotifyApiClient for CachedSpotifyClient {
-    fn update_token(&self, new_token: String) {
-        self.client.update_token(new_token)
-    }
 
     fn get_saved_albums(
         &self,

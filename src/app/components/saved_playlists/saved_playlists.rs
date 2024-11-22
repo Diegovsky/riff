@@ -140,7 +140,7 @@ impl EventListener for SavedPlaylists {
                 let _ = self.model.refresh_saved_playlists();
                 self.bind_flowbox();
             }
-            AppEvent::LoginEvent(LoginEvent::LoginCompleted(_)) => {
+            AppEvent::LoginEvent(LoginEvent::LoginCompleted) => {
                 let _ = self.model.refresh_saved_playlists();
             }
             AppEvent::BrowserEvent(BrowserEvent::SavedPlaylistsUpdated) => {

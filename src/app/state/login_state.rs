@@ -1,6 +1,5 @@
 use gettextrs::*;
 use std::borrow::Cow;
-use std::time::SystemTime;
 
 use crate::app::credentials::Credentials;
 use crate::app::models::PlaylistSummary;
@@ -8,26 +7,21 @@ use crate::app::state::{AppAction, AppEvent, UpdatableState};
 
 #[derive(Clone, Debug)]
 pub enum TryLoginAction {
-    Reconnect(Credentials),
+    Reconnect,
     NewLogin,
-}
-
-#[derive(Clone, Debug)]
-pub enum SetLoginSuccessAction {
-    Token(Credentials),
 }
 
 #[derive(Clone, Debug)]
 pub enum LoginAction {
     ShowLogin,
     TryLogin(TryLoginAction),
-    SetLoginSuccess(SetLoginSuccessAction),
+    SetLoginSuccess(String),
     SetUserPlaylists(Vec<PlaylistSummary>),
     UpdateUserPlaylist(PlaylistSummary),
     PrependUserPlaylist(Vec<PlaylistSummary>),
     SetLoginFailure,
-    RefreshToken(Credentials),
-    SetRefreshedToken(Credentials),
+    RefreshToken,
+    TokenRefreshed,
     Logout,
 }
 
@@ -39,24 +33,19 @@ impl From<LoginAction> for AppAction {
 
 #[derive(Clone, Debug)]
 pub enum LoginStartedEvent {
-    Reconnect(Credentials),
+    Reconnect,
     NewLogin,
-}
-
-#[derive(Clone, Debug)]
-pub enum LoginCompletedEvent {
-    Token(Credentials),
 }
 
 #[derive(Clone, Debug)]
 pub enum LoginEvent {
     LoginShown,
     LoginStarted(LoginStartedEvent),
-    LoginCompleted(LoginCompletedEvent),
+    LoginCompleted,
     UserPlaylistsLoaded,
     LoginFailed,
-    FreshTokenRequested(Credentials),
-    RefreshTokenCompleted(Credentials),
+    FreshTokenRequested,
+    RefreshTokenCompleted,
     LogoutCompleted,
 }
 
@@ -83,21 +72,20 @@ impl UpdatableState for LoginState {
         info!("update_with({:?})", action);
         match action.into_owned() {
             LoginAction::ShowLogin => vec![LoginEvent::LoginShown.into()],
-            LoginAction::TryLogin(TryLoginAction::Reconnect(creds)) => {
-                vec![LoginEvent::LoginStarted(LoginStartedEvent::Reconnect(creds)).into()]
+            LoginAction::TryLogin(TryLoginAction::Reconnect) => {
+                vec![LoginEvent::LoginStarted(LoginStartedEvent::Reconnect).into()]
             }
-            LoginAction::SetLoginSuccess(SetLoginSuccessAction::Token(creds)) => {
-                self.user = Some(creds.username.clone());
-                vec![LoginEvent::LoginCompleted(LoginCompletedEvent::Token(creds)).into()]
+            LoginAction::SetLoginSuccess(username) => {
+                self.user = Some(username);
+                vec![LoginEvent::LoginCompleted.into()]
             }
             LoginAction::SetLoginFailure => vec![LoginEvent::LoginFailed.into()],
-            LoginAction::RefreshToken(creds) => vec![LoginEvent::FreshTokenRequested(creds).into()],
-            LoginAction::SetRefreshedToken(creds) => {
+            LoginAction::RefreshToken => vec![LoginEvent::FreshTokenRequested.into()],
+            LoginAction::TokenRefreshed => {
                 // translators: This notification is shown when, after some inactivity, the session is successfully restored. The user might have to repeat its last action.
                 vec![
                     AppEvent::NotificationShown(gettext("Connection restored")),
-                    LoginEvent::RefreshTokenCompleted(creds)
-                    .into(),
+                    LoginEvent::RefreshTokenCompleted.into(),
                 ]
             }
             LoginAction::Logout => {

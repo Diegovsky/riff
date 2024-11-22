@@ -11,6 +11,7 @@
 //! is appropriate for headless systems.
 
 use crate::app::credentials::Credentials;
+use librespot::protocol::credentials;
 use log::{error, info, trace};
 use oauth2::reqwest::async_http_client;
 use oauth2::{
@@ -18,16 +19,20 @@ use oauth2::{
     RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
 use oauth2::{RefreshToken, RequestTokenError};
-use tokio::time;
+use std::alloc::System;
 use std::io;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{
     io::{BufRead, BufReader, Write},
     net::{SocketAddr, TcpListener},
 };
 use thiserror::Error;
+use tokio::task::JoinHandle;
+use tokio::time;
 use url::Url;
 
+use super::TokenStore;
 
 pub const CLIENT_ID: &str = "782ae96ea60f4cdf986a766049607005";
 pub const REDIRECT_URI: &str = "http://127.0.0.1:8898/login";
@@ -47,10 +52,11 @@ playlist-modify-public";
 
 pub struct SpotOauthClient {
     client: BasicClient,
+    token_store: Arc<TokenStore>,
 }
 
 impl SpotOauthClient {
-    pub fn new() -> Self {
+    pub fn new(token_store: Arc<TokenStore>) -> Self {
         let auth_url = AuthUrl::new("https://accounts.spotify.com/authorize".to_string())
             .expect("Malformed URL");
         let token_url = TokenUrl::new("https://accounts.spotify.com/api/token".to_string())
@@ -63,7 +69,10 @@ impl SpotOauthClient {
             Some(token_url),
         )
         .set_redirect_uri(redirect_url);
-        Self { client }
+        Self {
+            client,
+            token_store,
+        }
     }
 
     /// Obtain a Spotify access token using the authorization code with PKCE OAuth flow.
@@ -118,8 +127,7 @@ impl SpotOauthClient {
             .secret()
             .to_string();
 
-        Ok(Credentials {
-            username: "<unknown>".to_string(),
+        let token = Credentials {
             access_token: token.access_token().secret().to_string(),
             refresh_token,
             token_expiry_time: Some(
@@ -128,25 +136,43 @@ impl SpotOauthClient {
                         .expires_in()
                         .unwrap_or_else(|| Duration::from_secs(3600)),
             ),
-        })
+        };
+
+        self.token_store.set_async(token.clone()).await;
+        Ok(token)
+    }
+
+    pub async fn get_refreshed_token(&self) -> Result<Credentials, OAuthError> {
+        let token = self
+            .token_store
+            .get_async()
+            .await
+            .ok_or(OAuthError::LoggedOut)?;
+        if token.token_expired() {
+            self.refresh_token(token).await
+        } else {
+            Ok(token)
+        }
     }
 
     pub async fn refresh_token(&self, old_token: Credentials) -> Result<Credentials, OAuthError> {
-        let token = self
+        let Ok(token) = self
             .client
             .exchange_refresh_token(&RefreshToken::new(old_token.refresh_token))
             .request_async(async_http_client)
             .await
-            .map_err(|e| match e {
-                RequestTokenError::ServerResponse(res) => {
+            .inspect_err(|e| {
+                if let RequestTokenError::ServerResponse(res) = e {
                     error!(
                         "An error occured while refreshing the token: {}",
                         res.to_string()
                     );
-                    OAuthError::NoRefreshToken
                 }
-                _ => OAuthError::NoRefreshToken,
-            })?;
+            })
+        else {
+            self.token_store.async_clear().await;
+            return Err(OAuthError::NoRefreshToken);
+        };
 
         let refresh_token = token
             .refresh_token()
@@ -154,8 +180,7 @@ impl SpotOauthClient {
             .secret()
             .to_string();
 
-        Ok(Credentials {
-            username: old_token.username,
+        let new_token = Credentials {
             access_token: token.access_token().secret().to_string(),
             refresh_token,
             token_expiry_time: Some(
@@ -164,18 +189,29 @@ impl SpotOauthClient {
                         .expires_in()
                         .unwrap_or_else(|| Duration::from_secs(3600)),
             ),
-        })
+        };
+
+        self.token_store.set_async(new_token.clone()).await;
+        Ok(new_token)
     }
 
-    pub async fn _interval_refresh(&self, interval: Duration) {
-        let interval = interval.saturating_sub(Duration::from_secs(60));
-        tokio::task::spawn_local(async move {
-            let mut interval = time::interval(interval);
-            // loop {
-            //     interval.tick().await;
-            //     self.client.refre
-            // }
-        });
+    pub async fn continuously_refresh(&self) {
+        let mut token = self.token_store.get_async().await;
+
+        loop {
+            let Some(old_token) = token.take() else {
+                break;
+            };
+
+            let duration = old_token
+                .token_expiry_time
+                .and_then(|d| d.duration_since(SystemTime::now()).ok())
+                .unwrap_or(Duration::from_secs(120));
+            time::sleep(duration.saturating_sub(Duration::from_secs(10))).await;
+
+            info!("Refreshing token...");
+            token = self.refresh_token(old_token).await.ok();
+        }
     }
 }
 
@@ -210,6 +246,9 @@ pub enum OAuthError {
 
     #[error("Spotify did not provide a refresh token")]
     NoRefreshToken,
+
+    #[error("No saved token")]
+    LoggedOut,
 }
 
 /// Return state query-string parameter from the redirect URI (CSRF token).

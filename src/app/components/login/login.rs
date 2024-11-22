@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::app::components::EventListener;
 use crate::app::credentials::{self, Credentials};
-use crate::app::state::{LoginCompletedEvent, LoginEvent};
+use crate::app::state::LoginEvent;
 use crate::app::AppEvent;
 
 use super::LoginModel;
@@ -128,9 +128,8 @@ impl Login {
         self.window().set_visible(true);
     }
 
-    fn hide_and_save_creds(&self, credentials: Credentials) {
+    fn hide(&self) {
         self.window().set_visible(false);
-        self.model.save_for_autologin(credentials);
     }
 
     fn reveal_error(&self) {
@@ -142,11 +141,10 @@ impl Login {
 impl EventListener for Login {
     fn on_event(&mut self, event: &AppEvent) {
         match event {
-            AppEvent::LoginEvent(LoginEvent::LoginCompleted(LoginCompletedEvent::Token(token))) => {
-                self.hide_and_save_creds(token.clone());
+            AppEvent::LoginEvent(LoginEvent::LoginCompleted) => {
+                self.hide();
             }
             AppEvent::LoginEvent(LoginEvent::LoginFailed) => {
-                //self.model.clear_saved_credentials();
                 self.reveal_error();
             }
             AppEvent::Started => {
@@ -154,9 +152,6 @@ impl EventListener for Login {
             }
             AppEvent::LoginEvent(LoginEvent::LogoutCompleted | LoginEvent::LoginShown) => {
                 self.show_self();
-            }
-            AppEvent::LoginEvent(LoginEvent::RefreshTokenCompleted(credentials)) => {
-                self.model.save_token(credentials.clone());
             }
             _ => {}
         }
