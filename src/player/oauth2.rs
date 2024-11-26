@@ -11,7 +11,7 @@
 //! is appropriate for headless systems.
 
 use crate::app::credentials::Credentials;
-use librespot::protocol::credentials;
+
 use log::{error, info, trace};
 use oauth2::reqwest::async_http_client;
 use oauth2::{
@@ -19,16 +19,13 @@ use oauth2::{
     RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
 use oauth2::{RefreshToken, RequestTokenError};
-use std::alloc::System;
+use std::collections::HashMap;
 use std::io;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use std::{
-    io::{BufRead, BufReader, Write},
-    net::{SocketAddr, TcpListener},
-};
 use thiserror::Error;
-use tokio::task::JoinHandle;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::time;
 use url::Url;
 
@@ -87,6 +84,7 @@ impl SpotOauthClient {
             .into_iter()
             .map(|s| Scope::new(s.into()))
             .collect();
+
         let (auth_url, csrf_token) = self
             .client
             .authorize_url(CsrfToken::new_random)
@@ -94,17 +92,18 @@ impl SpotOauthClient {
             .set_pkce_challenge(pkce_challenge)
             .url();
 
-        println!("Browse to: {}", auth_url);
         if let Err(err) = open::that(auth_url.to_string()) {
             error!("An error occurred when opening '{auth_url}': {err}")
         }
 
-        let addr = get_socket_address(REDIRECT_URI).expect("Invalid redirect uri");
-        let code = get_authcode_listener(addr, csrf_token)?;
+        let res = wait_for_authcode().await?;
+        if *csrf_token.secret() != *res.csrf_token.secret() {
+            return Err(OAuthError::InvalidState);
+        }
 
         let token = self
             .client
-            .exchange_code(code)
+            .exchange_code(res.code)
             .set_pkce_verifier(pkce_verifier)
             .request_async(async_http_client)
             .await
@@ -138,16 +137,12 @@ impl SpotOauthClient {
             ),
         };
 
-        self.token_store.set_async(token.clone()).await;
+        self.token_store.set(token.clone()).await;
         Ok(token)
     }
 
-    pub async fn get_refreshed_token(&self) -> Result<Credentials, OAuthError> {
-        let token = self
-            .token_store
-            .get_async()
-            .await
-            .ok_or(OAuthError::LoggedOut)?;
+    pub async fn get_valid_token(&self) -> Result<Credentials, OAuthError> {
+        let token = self.token_store.get().await.ok_or(OAuthError::LoggedOut)?;
         if token.token_expired() {
             self.refresh_token(token).await
         } else {
@@ -170,7 +165,7 @@ impl SpotOauthClient {
                 }
             })
         else {
-            self.token_store.async_clear().await;
+            self.token_store.clear().await;
             return Err(OAuthError::NoRefreshToken);
         };
 
@@ -191,49 +186,44 @@ impl SpotOauthClient {
             ),
         };
 
-        self.token_store.set_async(new_token.clone()).await;
+        self.token_store.set(new_token.clone()).await;
         Ok(new_token)
     }
 
-    pub async fn continuously_refresh(&self) {
-        let mut token = self.token_store.get_async().await;
+    pub async fn refresh_token_at_expiry(&self) -> Result<Credentials, OAuthError> {
+        let Some(old_token) = self.token_store.get_cached().await.take() else {
+            return Err(OAuthError::NoRefreshToken);
+        };
 
-        loop {
-            let Some(old_token) = token.take() else {
-                break;
-            };
+        let duration = old_token
+            .token_expiry_time
+            .and_then(|d| d.duration_since(SystemTime::now()).ok())
+            .unwrap_or(Duration::from_secs(120));
 
-            let duration = old_token
-                .token_expiry_time
-                .and_then(|d| d.duration_since(SystemTime::now()).ok())
-                .unwrap_or(Duration::from_secs(120));
-            time::sleep(duration.saturating_sub(Duration::from_secs(10))).await;
+        info!(
+            "Refreshing token in approx {}min",
+            duration.as_secs().div_euclid(60)
+        );
+        time::sleep(duration.saturating_sub(Duration::from_secs(10))).await;
 
-            info!("Refreshing token...");
-            token = self.refresh_token(old_token).await.ok();
-        }
+        info!("Refreshing token...");
+        self.refresh_token(old_token).await
     }
 }
 
 #[derive(Debug, Error)]
 pub enum OAuthError {
-    #[error("Unable to parse redirect URI {uri} ({e})")]
-    AuthCodeBadUri { uri: String, e: url::ParseError },
+    #[error("Auth code param not found in URI")]
+    AuthCodeNotFound,
 
-    #[error("Auth code param not found in URI {uri}")]
-    AuthCodeNotFound { uri: String },
-
-    #[error("CSRF token param not found in URI {uri}")]
-    CsrfTokenNotFound { uri: String },
+    #[error("CSRF token param not found in URI")]
+    CsrfTokenNotFound,
 
     #[error("Failed to bind server to {addr} ({e})")]
     AuthCodeListenerBind { addr: SocketAddr, e: io::Error },
 
     #[error("Listener terminated without accepting a connection")]
     AuthCodeListenerTerminated,
-
-    #[error("Failed to read redirect URI from HTTP request")]
-    AuthCodeListenerRead,
 
     #[error("Failed to parse redirect URI from HTTP request")]
     AuthCodeListenerParse,
@@ -249,82 +239,28 @@ pub enum OAuthError {
 
     #[error("No saved token")]
     LoggedOut,
+
+    #[error("Mismatched state during auth code exchange")]
+    InvalidState,
 }
 
-/// Return state query-string parameter from the redirect URI (CSRF token).
-fn get_state(redirect_url: &str) -> Result<String, OAuthError> {
-    let url = Url::parse(redirect_url).map_err(|e| OAuthError::AuthCodeBadUri {
-        uri: redirect_url.to_string(),
-        e,
-    })?;
-    let code = url
-        .query_pairs()
-        .find(|(key, _)| key == "state")
-        .map(|(_, state)| state.into_owned())
-        .ok_or(OAuthError::CsrfTokenNotFound {
-            uri: redirect_url.to_string(),
-        })?;
-
-    Ok(code)
-}
-
-/// Return code query-string parameter from the redirect URI.
-fn get_code(redirect_url: &str) -> Result<AuthorizationCode, OAuthError> {
-    let url = Url::parse(redirect_url).map_err(|e| OAuthError::AuthCodeBadUri {
-        uri: redirect_url.to_string(),
-        e,
-    })?;
-    let code = url
-        .query_pairs()
-        .find(|(key, _)| key == "code")
-        .map(|(_, code)| AuthorizationCode::new(code.into_owned()))
-        .ok_or(OAuthError::AuthCodeNotFound {
-            uri: redirect_url.to_string(),
-        })?;
-
-    Ok(code)
+struct OAuthResult {
+    csrf_token: CsrfToken,
+    code: AuthorizationCode,
 }
 
 /// Spawn HTTP server at provided socket address to accept OAuth callback and return auth code.
-fn get_authcode_listener(
-    socket_address: SocketAddr,
-    csrf_token: CsrfToken,
-) -> Result<AuthorizationCode, OAuthError> {
-    let listener =
-        TcpListener::bind(socket_address).map_err(|e| OAuthError::AuthCodeListenerBind {
-            addr: socket_address,
-            e,
-        })?;
-    info!("OAuth server listening on {:?}", socket_address);
+async fn wait_for_authcode() -> Result<OAuthResult, OAuthError> {
+    let addr = get_socket_address(REDIRECT_URI).expect("Invalid redirect uri");
 
-    // The server will terminate itself after collecting the first code.
-    let mut stream = listener
-        .incoming()
-        .flatten()
-        .next()
-        .ok_or(OAuthError::AuthCodeListenerTerminated)?;
-    let mut reader = BufReader::new(&stream);
-    let mut request_line = String::new();
-    reader
-        .read_line(&mut request_line)
-        .map_err(|_| OAuthError::AuthCodeListenerRead)?;
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .map_err(|e| OAuthError::AuthCodeListenerBind { addr, e })?;
 
-    let redirect_url = request_line
-        .split_whitespace()
-        .nth(1)
-        .ok_or(OAuthError::AuthCodeListenerParse)?;
-
-    let token = get_state(&("http://localhost".to_string() + redirect_url));
-    if token.is_err() {
-        return Err(token.err().unwrap());
-    }
-    let token = token.ok().unwrap();
-    if !token.eq(csrf_token.secret()) {
-        return Err(OAuthError::CsrfTokenNotFound {
-            uri: redirect_url.to_string(),
-        });
-    }
-    let code = get_code(&("http://localhost".to_string() + redirect_url));
+    let (mut stream, _) = listener
+        .accept()
+        .await
+        .map_err(|_| OAuthError::AuthCodeListenerTerminated)?;
 
     let message = include_str!("./login.html");
     let response = format!(
@@ -334,9 +270,42 @@ fn get_authcode_listener(
     );
     stream
         .write_all(response.as_bytes())
+        .await
         .map_err(|_| OAuthError::AuthCodeListenerWrite)?;
 
-    code
+    let mut request_line = String::new();
+    let mut reader = BufReader::new(stream);
+    reader
+        .read_line(&mut request_line)
+        .await
+        .map_err(|_| OAuthError::AuthCodeListenerParse)?;
+
+    parse_query(&request_line)
+}
+
+fn parse_query(request_line: &str) -> Result<OAuthResult, OAuthError> {
+    let query = request_line
+        .split_whitespace()
+        .nth(1)
+        .ok_or(OAuthError::AuthCodeListenerParse)?
+        .split("?")
+        .nth(1)
+        .ok_or(OAuthError::AuthCodeListenerParse)?;
+
+    let mut query_params: HashMap<String, String> = url::form_urlencoded::parse(query.as_bytes())
+        .into_owned()
+        .collect();
+
+    let csrf_token = query_params
+        .remove("state")
+        .map(CsrfToken::new)
+        .ok_or(OAuthError::CsrfTokenNotFound)?;
+    let code = query_params
+        .remove("code")
+        .map(AuthorizationCode::new)
+        .ok_or(OAuthError::AuthCodeNotFound)?;
+
+    Ok(OAuthResult { csrf_token, code })
 }
 
 // If the specified `redirect_uri` is HTTP, loopback, and contains a port,

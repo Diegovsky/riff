@@ -4,7 +4,6 @@ use gtk::CompositeTemplate;
 use std::rc::Rc;
 
 use crate::app::components::EventListener;
-use crate::app::credentials::{self, Credentials};
 use crate::app::state::LoginEvent;
 use crate::app::AppEvent;
 

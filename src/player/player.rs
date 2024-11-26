@@ -158,7 +158,7 @@ impl SpotifyPlayer {
                 let session = self.session.as_ref().ok_or(SpotifyError::PlayerNotReady)?;
                 let token = self
                     .oauth_client
-                    .get_refreshed_token()
+                    .get_valid_token()
                     .await
                     .map_err(|_| SpotifyError::LoginFailed)?;
                 let credentials = Credentials::with_access_token(token.access_token.clone());
@@ -180,7 +180,7 @@ impl SpotifyPlayer {
             Command::Reconnect => {
                 let credentials =
                     self.oauth_client
-                        .get_refreshed_token()
+                        .get_valid_token()
                         .await
                         .map_err(|e| match e {
                             OAuthError::LoggedOut => SpotifyError::LoggedOut,
@@ -221,14 +221,21 @@ impl SpotifyPlayer {
         &mut self,
         credentials: credentials::Credentials,
     ) -> Result<(), SpotifyError> {
-        let client = Arc::clone(&self.oauth_client);
-        tokio::task::spawn_local(async move {
-            client.continuously_refresh().await;
-        });
-
         let creds = Credentials::with_access_token(&credentials.access_token);
         let new_session = create_session(&creds, self.settings.ap_port).await?;
         let username = new_session.username();
+
+        let oauth_client = Arc::clone(&self.oauth_client);
+        let session = new_session.clone();
+        tokio::task::spawn_local(async move {
+            loop {
+                if let Ok(token) = oauth_client.refresh_token_at_expiry().await {
+                    _ = session
+                        .connect(Credentials::with_access_token(token.access_token), true)
+                        .await;
+                }
+            }
+        });
 
         let new_player = self.create_player(new_session.clone());
         tokio::task::spawn_local(player_setup_delegate(

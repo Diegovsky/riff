@@ -13,11 +13,15 @@ impl TokenStore {
         }
     }
 
-    pub fn get_cached(&self) -> Option<Credentials> {
+    pub fn get_cached_blocking(&self) -> Option<Credentials> {
         self.storage.blocking_read().clone()
     }
 
-    pub async fn get_async(&self) -> Option<Credentials> {
+    pub async fn get_cached(&self) -> Option<Credentials> {
+        self.storage.read().await.clone()
+    }
+
+    pub async fn get(&self) -> Option<Credentials> {
         let local = self.storage.read().await.clone();
         if local.is_some() {
             return local;
@@ -35,7 +39,7 @@ impl TokenStore {
         }
     }
 
-    pub async fn set_async(&self, creds: Credentials) {
+    pub async fn set(&self, creds: Credentials) {
         debug!("Saving token to store...");
         if let Err(e) = creds.save().await {
             warn!("Couldnt save token to secrets service: {e}");
@@ -43,14 +47,10 @@ impl TokenStore {
         self.storage.write().await.replace(creds);
     }
 
-    pub async fn async_clear(&self) {
+    pub async fn clear(&self) {
         if let Err(e) = Credentials::logout().await {
             warn!("Couldnt save token to secrets service: {e}");
         }
         self.storage.write().await.take();
-    }
-
-    pub fn clear(&self) {
-        self.storage.blocking_write().take();
     }
 }

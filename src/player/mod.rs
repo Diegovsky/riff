@@ -1,12 +1,10 @@
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use librespot::core::spotify_id::SpotifyId;
-use log::Log;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 use tokio::task;
 
-use crate::app::credentials::Credentials;
 use crate::app::state::{LoginAction, PlaybackAction};
 use crate::app::AppAction;
 #[allow(clippy::module_inception)]

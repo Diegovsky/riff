@@ -11,7 +11,7 @@ use std::collections::HashSet;
 use std::future::Future;
 
 use crate::api::SpotifyApiError;
-use crate::app::{state::LoginAction, ActionDispatcher, AppAction, AppEvent};
+use crate::app::{ActionDispatcher, AppAction, AppEvent};
 
 mod navigation;
 pub use navigation::*;
@@ -121,11 +121,7 @@ impl dyn ActionDispatcher {
             match result {
                 Ok(actions) => actions,
                 Err(SpotifyApiError::NoToken) => vec![],
-                Err(SpotifyApiError::InvalidToken) => {
-                    let mut retried = call().await.unwrap_or_else(|_| Vec::new());
-                    retried.insert(0, LoginAction::RefreshToken.into());
-                    retried
-                }
+                Err(SpotifyApiError::InvalidToken) => call().await.unwrap_or_else(|_| Vec::new()),
                 Err(err) => {
                     error!("Spotify API error: {}", err);
                     vec![AppAction::ShowNotification(gettext(

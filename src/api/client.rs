@@ -8,7 +8,7 @@ use serde_json::from_str;
 use std::convert::Into;
 use std::marker::PhantomData;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use thiserror::Error;
 
 use crate::player::TokenStore;
@@ -66,7 +66,7 @@ where
     }
 
     fn authenticated(mut self) -> Result<Self, SpotifyApiError> {
-        let token = self.client.token_store.get_cached();
+        let token = self.client.token_store.get_cached_blocking();
         let token = token.as_ref().ok_or(SpotifyApiError::NoToken)?;
         self.request = self
             .request
@@ -200,7 +200,7 @@ impl SpotifyClient {
     }
 
     pub(crate) fn has_token(&self) -> bool {
-        self.token_store.get_cached().is_some()
+        self.token_store.get_cached_blocking().is_some()
     }
 
     fn parse_cache_control(cache_control: &str) -> Option<u64> {

@@ -1,7 +1,6 @@
 use gettextrs::*;
 use std::borrow::Cow;
 
-use crate::app::credentials::Credentials;
 use crate::app::models::PlaylistSummary;
 use crate::app::state::{AppAction, AppEvent, UpdatableState};
 
