@@ -6,7 +6,7 @@ use url::Url;
 
 use crate::app::components::EventListener;
 use crate::app::state::{LoginEvent, LoginStartedEvent};
-use crate::app::{AppEvent, Worker};
+use crate::app::AppEvent;
 
 use super::LoginModel;
 mod imp {
@@ -93,11 +93,10 @@ pub struct Login {
     parent: gtk::Window,
     login_window: LoginWindow,
     model: Rc<LoginModel>,
-    worker: Worker,
 }
 
 impl Login {
-    pub fn new(parent: gtk::Window, model: LoginModel, worker: Worker) -> Self {
+    pub fn new(parent: gtk::Window, model: LoginModel) -> Self {
         let model = Rc::new(model);
 
         let login_window = LoginWindow::new();
@@ -116,7 +115,6 @@ impl Login {
             parent,
             login_window,
             model,
-            worker,
         }
     }
 
@@ -140,7 +138,7 @@ impl Login {
     }
 
     fn open_login_url(&self, url: Url) {
-        if let Err(_) = open::that(url.as_str()) {
+        if open::that(url.as_str()).is_err() {
             warn!("Could not open login page");
         }
     }

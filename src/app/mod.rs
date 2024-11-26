@@ -98,7 +98,7 @@ impl App {
                 dispatcher.box_clone(),
                 worker.clone(),
             ),
-            App::make_login(builder, dispatcher.box_clone(), worker.clone()),
+            App::make_login(builder, dispatcher.box_clone()),
             App::make_navigation(
                 builder,
                 Rc::clone(model),
@@ -179,14 +179,10 @@ impl App {
         ))
     }
 
-    fn make_login(
-        builder: &gtk::Builder,
-        dispatcher: Box<dyn ActionDispatcher>,
-        worker: Worker,
-    ) -> Box<Login> {
+    fn make_login(builder: &gtk::Builder, dispatcher: Box<dyn ActionDispatcher>) -> Box<Login> {
         let parent: gtk::Window = builder.object("window").unwrap();
         let model = LoginModel::new(dispatcher);
-        Box::new(Login::new(parent, model, worker))
+        Box::new(Login::new(parent, model))
     }
 
     fn make_selection_toolbar(

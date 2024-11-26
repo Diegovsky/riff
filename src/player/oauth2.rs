@@ -80,17 +80,14 @@ impl SpotOauthClient {
 
     pub async fn spawn_authcode_listener(
         &self,
-        notify_complete: impl FnOnce() -> () + 'static,
+        notify_complete: impl FnOnce() + 'static,
     ) -> Result<AuthcodeChallenge, OAuthError> {
         let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
         // Generate the full authorization URL.
         // Some of these scopes are unavailable for custom client IDs. Which?
-        let request_scopes: Vec<oauth2::Scope> = SCOPES
-            .split(",")
-            .into_iter()
-            .map(|s| Scope::new(s.into()))
-            .collect();
+        let request_scopes: Vec<oauth2::Scope> =
+            SCOPES.split(",").map(|s| Scope::new(s.into())).collect();
 
         let (auth_url, csrf_token) = self
             .client
