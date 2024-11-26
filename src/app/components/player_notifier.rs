@@ -5,7 +5,9 @@ use futures::channel::mpsc::UnboundedSender;
 use librespot::core::spotify_id::{SpotifyId, SpotifyItemType};
 
 use crate::app::components::EventListener;
-use crate::app::state::{Device, LoginAction, LoginEvent, LoginStartedEvent, PlaybackEvent, SettingsEvent};
+use crate::app::state::{
+    Device, LoginAction, LoginEvent, LoginStartedEvent, PlaybackEvent, SettingsEvent,
+};
 use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, SongsSource};
 use crate::connect::ConnectCommand;
 use crate::player::Command;
@@ -85,7 +87,9 @@ impl PlayerNotifier {
         let command = match event {
             LoginEvent::LoginStarted(LoginStartedEvent::Restore) => Some(Command::Restore),
             LoginEvent::LoginStarted(LoginStartedEvent::InitLogin) => Some(Command::InitLogin),
-            LoginEvent::LoginStarted(LoginStartedEvent::CompleteLogin) => Some(Command::CompleteLogin),
+            LoginEvent::LoginStarted(LoginStartedEvent::CompleteLogin) => {
+                Some(Command::CompleteLogin)
+            }
             LoginEvent::FreshTokenRequested => Some(Command::RefreshToken),
             LoginEvent::LogoutCompleted => Some(Command::Logout),
             _ => None,

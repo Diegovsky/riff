@@ -9,7 +9,7 @@ use crate::app::state::{AppAction, AppEvent, UpdatableState};
 pub enum TryLoginAction {
     Restore,
     InitLogin,
-    CompleteLogin
+    CompleteLogin,
 }
 
 #[derive(Clone, Debug)]

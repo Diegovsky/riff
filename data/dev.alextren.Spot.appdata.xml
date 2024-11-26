@@ -47,6 +47,13 @@
     </screenshot>
   </screenshots>
   <releases>
+   <release version="0.5.0" date="2024-11-28">
+      <description>
+        <p>
+          This release overhauls authentication in the app (thanks @stevenleadbeater) to restore basic functionality.
+        </p>
+      </description>
+    </release>
     <release version="0.4.1" date="2024-02-01">
       <description>
         <p>

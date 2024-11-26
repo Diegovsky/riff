@@ -129,7 +129,13 @@ pub fn start_player_service(
     let (sender, receiver) = unbounded::<Command>();
     let sender_clone = sender.clone();
     std::thread::spawn(move || {
-        player_main(player_settings, appaction_sender, token_store, sender_clone, receiver)
+        player_main(
+            player_settings,
+            appaction_sender,
+            token_store,
+            sender_clone,
+            receiver,
+        )
     });
     sender
 }
