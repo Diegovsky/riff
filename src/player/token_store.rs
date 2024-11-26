@@ -31,7 +31,7 @@ impl TokenStore {
             Ok(token) => {
                 self.storage.write().await.replace(token.clone());
                 Some(token)
-            },
+            }
             Err(e) => {
                 error!("Couldnt get token from secrets service: {e}");
                 None

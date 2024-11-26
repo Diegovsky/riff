@@ -270,7 +270,6 @@ impl CachedSpotifyClient {
 }
 
 impl SpotifyApiClient for CachedSpotifyClient {
-
     fn get_saved_albums(
         &self,
         offset: usize,

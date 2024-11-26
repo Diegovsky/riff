@@ -54,9 +54,7 @@ impl SpotifyPlayerDelegate for AppPlayerDelegate {
     fn token_login_successful(&self, username: String) {
         self.sender
             .borrow_mut()
-            .unbounded_send(
-                LoginAction::SetLoginSuccess(username).into(),
-            )
+            .unbounded_send(LoginAction::SetLoginSuccess(username).into())
             .unwrap();
     }
 

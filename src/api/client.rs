@@ -239,9 +239,7 @@ impl SpotifyClient {
                 max_age: cache_control.unwrap_or(10),
                 etag,
             }),
-            StatusCode::UNAUTHORIZED => {
-                Err(SpotifyApiError::InvalidToken)
-            }
+            StatusCode::UNAUTHORIZED => Err(SpotifyApiError::InvalidToken),
             StatusCode::TOO_MANY_REQUESTS => Err(SpotifyApiError::TooManyRequests),
             StatusCode::NOT_MODIFIED => Ok(SpotifyResponse {
                 kind: SpotifyResponseKind::NotModified,
@@ -264,9 +262,7 @@ impl SpotifyClient {
     {
         let mut result = self.client.send_async(request).await?;
         match result.status() {
-            StatusCode::UNAUTHORIZED => {
-                Err(SpotifyApiError::InvalidToken)
-            }
+            StatusCode::UNAUTHORIZED => Err(SpotifyApiError::InvalidToken),
             StatusCode::TOO_MANY_REQUESTS => Err(SpotifyApiError::TooManyRequests),
             StatusCode::NOT_MODIFIED => Ok(()),
             s if s.is_success() => Ok(()),

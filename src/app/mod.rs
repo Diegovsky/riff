@@ -179,10 +179,7 @@ impl App {
         ))
     }
 
-    fn make_login(
-        builder: &gtk::Builder,
-        dispatcher: Box<dyn ActionDispatcher>,
-    ) -> Box<Login> {
+    fn make_login(builder: &gtk::Builder, dispatcher: Box<dyn ActionDispatcher>) -> Box<Login> {
         let parent: gtk::Window = builder.object("window").unwrap();
         let model = LoginModel::new(dispatcher);
         Box::new(Login::new(parent, model))

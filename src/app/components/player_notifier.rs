@@ -85,12 +85,8 @@ impl PlayerNotifier {
     fn notify_login(&self, event: &LoginEvent) {
         info!("notify_login: {:?}", event);
         let command = match event {
-            LoginEvent::LoginStarted(LoginStartedEvent::Reconnect) => {
-                Some(Command::Reconnect)
-            }
-            LoginEvent::LoginStarted(LoginStartedEvent::NewLogin) => {
-                Some(Command::NewLogin)
-            }
+            LoginEvent::LoginStarted(LoginStartedEvent::Reconnect) => Some(Command::Reconnect),
+            LoginEvent::LoginStarted(LoginStartedEvent::NewLogin) => Some(Command::NewLogin),
             LoginEvent::FreshTokenRequested => Some(Command::RefreshToken),
             LoginEvent::LogoutCompleted => Some(Command::Logout),
             _ => None,
