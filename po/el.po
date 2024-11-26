@@ -5,366 +5,366 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: POEditor.com\n"
 "Project-Id-Version: Spot\n"
-"Language: es\n"
+"Language: el\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #. translators: This is part of a contextual menu attached to a single track; this entry allows viewing the album containing a specific track.
 #: src/app/components/labels.rs:5
 msgid "View album"
-msgstr "Ver álbum"
+msgstr "Προβολή δίσκων"
 
 #. translators: This is part of a contextual menu attached to a single track; the intent is to copy the link (public URL) to a specific track.
 #: src/app/components/labels.rs:8
 msgid "Copy link"
-msgstr "Copiar enlace"
+msgstr "Αντιγραφή συνδέσμου"
 
 #. translators: This is part of a contextual menu attached to a single track; this entry adds a track at the end of the play queue.
 #: src/app/components/labels.rs:11
 #: src/app/components/selection/selection_toolbar.blp:36
 msgid "Add to queue"
-msgstr "Añadir a la cola"
+msgstr "Προσθήκη στην ουρά"
 
 #. translators: This is part of a contextual menu attached to a single track; this entry removes a track from the play queue.
 #: src/app/components/labels.rs:14
 msgid "Remove from queue"
-msgstr "Borrar de la lista"
+msgstr "Αφαίρεση απ'την ουρά"
 
 #. translators: This is part of a larger text that says "Add to <playlist name>". This text should be as short as possible.
 #: src/app/components/labels.rs:21
 msgid "Add to {}"
-msgstr "Añadir a {}"
+msgstr "Προσθήκη στο {}"
 
 #. translators: This notification shows up right after login if the password could not be stored in the keyring (that is, GNOME's keyring aka seahorse, or any other libsecret compliant secret store).
 #: src/app/components/login/login_model.rs:68
 msgid "Could not save password. Make sure the session keyring is unlocked."
-msgstr "No se pudo guardar la contraseña. Asegúrate de que el anillo de claves esta desbloqueado."
+msgstr "Αδυναμία αποθήκευσης κωδικού. Βεβαιωθείτε ότι το session keyring είναι ξεκλείδωτο."
 
 #. translators: This notification is the default message for unhandled errors. Logs refer to console output.
 #: src/app/batch_loader.rs:100 src/app/components/mod.rs:129
 msgid "An error occured. Check logs for details!"
-msgstr "Ha ocurrido un error. ¡Revisa los logs para más detalles!"
+msgstr "Παρουσιάστηκε σφάλμα. Για πληροφορίες, ελέγξτε το αρχείο καταγραφής!"
 
 #. translators: This is a sidebar entry to browse to saved albums.
 #: src/app/components/navigation/factory.rs:33
 #: src/app/components/sidebar/sidebar_item.rs:39
 msgid "Library"
-msgstr "Biblioteca"
+msgstr "Βιβλιοθήκη"
 
 #. translators: This is a sidebar entry to browse to saved playlists.
 #: src/app/components/navigation/factory.rs:54
 #: src/app/components/sidebar/sidebar_item.rs:45
 msgid "Playlists"
-msgstr "Lista de reproducción"
+msgstr "Λίστες"
 
 #. This is the visible name for the play queue. It appears in the sidebar as well.
 #: src/app/components/sidebar/sidebar_item.rs:43
 msgid "Now playing"
-msgstr "Reproduciendo ahora"
+msgstr "Τώρα παίζει"
 
 #. translators: Short text displayed instead of a song title when nothing plays
 #. Short text displayed instead of a song title when nothing plays
 #: src/app/components/playback/playback_info.rs:58
 #: src/app/components/playback/playback_info.blp:33
 msgid "No song playing"
-msgstr "Ninguna canción en reproducción"
+msgstr "Δεν παίζει τίποτα"
 
 #. translators: This is a menu entry.
 #: src/app/components/user_menu/user_menu.rs:67
 msgid "About"
-msgstr "Acerca de"
+msgstr "Σχετικά"
 
 #. translators: This is a menu entry.
 #: src/app/components/user_menu/user_menu.rs:69
 msgid "Quit"
-msgstr "Salir"
+msgstr "Κλείσιμο"
 
 #. translators: This is a menu entry.
 #: src/app/components/user_menu/user_menu.rs:74
 msgid "Log out"
-msgstr "Cerrar sesión"
+msgstr "Αποσύνδεση"
 
 #: src/app/state/login_state.rs:97
 msgid "Connection restored"
-msgstr "Conexión restaurada"
+msgstr "Η σύνδεση αποκαταστάθηκε"
 
 #. Title of the section that shows 5 of the top tracks for an artist, as defined by Spotify.
 #: src/app/components/artist_details/artist_details.blp:26
 msgid "Top tracks"
-msgstr "Mejores canciones"
+msgstr "Δημοφιλή τραγούδια"
 
 #. Title of the sections that contains all releases from an artist (both singles and albums).
 #: src/app/components/artist_details/artist_details.blp:54
 msgid "Releases"
-msgstr "Lanzamientos"
+msgstr "Κυκλοφορίες"
 
 #. Login window title -- shouldn't be too long, but must mention Premium (a premium account is required).
 #: src/app/components/login/login.blp:49
 msgid "Login to Spotify Premium"
-msgstr "Iniciar sesión en Spotify Premium"
+msgstr "Συνδεθείτε στο Spotify Premium"
 
 #. Log in button label
 #: src/app/components/login/login.blp:131
 msgid "Log in"
-msgstr "Iniciar sesión"
+msgstr "Σύνδεση"
 
 #. This is the title of a section of the search results
 #: src/app/components/search/search.blp:69
 msgid "Albums"
-msgstr "Álbumes"
+msgstr "Δίσκοι"
 
 #. This is the title of a section of the search results
 #: src/app/components/search/search.blp:100
 msgid "Artists"
-msgstr "Artistas"
+msgstr "Καλλιτέχνες"
 
 #: src/app/components/navigation/factory.rs:76
 #: src/app/components/sidebar/sidebar_item.rs:41
 msgid "Saved tracks"
-msgstr "Pistas guardadas"
+msgstr "Αποθηκευμένα τραγούδια"
 
 #: src/app/components/playback/playback_controls.rs:64
 msgid "Pause"
-msgstr "Pausa"
+msgstr "Παύση"
 
 #: src/app/components/playback/playback_controls.rs:66
 msgid "Play"
-msgstr "Reproducir"
+msgstr "Αναπαραγωγή"
 
 #: src/app/components/playback/playback_controls.blp:15
 msgid "Shuffle"
-msgstr "Activar aleatorio"
+msgstr "Ανακάτεμα"
 
 #: src/app/components/playback/playback_controls.blp:24
 msgid "Previous"
-msgstr "Anterior"
+msgstr "Προηγούμενο"
 
 #: src/app/components/playback/playback_controls.blp:46
 msgid "Next"
-msgstr "Siguiente"
+msgstr "Επόμενο"
 
 #: src/app/components/playback/playback_controls.blp:55
 msgid "Repeat"
-msgstr "Activar repetir"
+msgstr "Επανάληψη"
 
 #. A title that is shown when the user has not saved any playlists.
 #: src/app/components/saved_playlists/saved_playlists.blp:26
 msgid "You have no saved playlists."
-msgstr "No tienes listas de reproducción guardadas."
+msgstr "Δεν έχετε αποθηκευμένες λίστες."
 
 #. A description of what happens when the user has saved playlists.
 #: src/app/components/saved_playlists/saved_playlists.blp:30
 msgid "Your playlists will be shown here."
-msgstr "Tus listas de reproducción se mostrarán aquí."
+msgstr "Οι λίστες σας θα εμφανίζονται εδώ."
 
 #. A title that is shown when the user has not saved any albums.
 #: src/app/components/library/library.blp:25
 msgid "You have no saved albums."
-msgstr "No tienes álbumes guardados."
+msgstr "Δεν έχετε αποθηκευμένους δίσκους."
 
 #. A description of what happens when the user has saved albums.
 #: src/app/components/library/library.blp:29
 msgid "Your library will be shown here."
-msgstr "Tu biblioteca se mostrará aquí."
+msgstr "Η βιβλιοθήκη σας θα εμφανίζεται εδώ."
 
 #. translators: This shows up when in selection mode. This text should be as short as possible.
 #: src/app/components/labels.rs:30
 msgid "{} song selected"
 msgid_plural "{} songs selected"
-msgstr[0] "{} canción seleccionada"
-msgstr[1] "{} canciones seleccionadas"
+msgstr[0] "{} επιλεγμένο τραγούδι"
+msgstr[1] "{} επιλεγμένα τραγούδια"
 
 #. Title for the empty search page (initial state).
 #: src/app/components/search/search.blp:110
 msgid "Search Spotify."
-msgstr "Buscar en Spotify."
+msgstr "Αναζητήστε στο Spotify."
 
 #. Subtitle for the empty search page (initial state).
 #: src/app/components/search/search.blp:114
 msgid "Type to search."
-msgstr "Escribe para buscar."
+msgstr "Πληκτρολογήστε για να αναζητήσετε."
 
 #: src/app/components/selection/selection_toolbar.blp:61
 msgid "Remove"
-msgstr "Retirar"
+msgstr "Αφαίρεση"
 
 #. <property name="icon-name">playlist2-symbolic</property>
 #: src/app/components/selection/selection_toolbar.blp:49
 msgid "Add to playlist..."
-msgstr "Añadir a la lista de reproducción..."
+msgstr "Προσθήκη σε λίστα..."
 
 #. Button label. Exits selection mode.
 #: src/app/components/playlist_details/playlist_headerbar.blp:53
 #: src/app/components/headerbar/headerbar.blp:49
 msgid "Cancel"
-msgstr "Cancelar"
+msgstr "Ακύρωση"
 
 #. Button label. Selects all visible songs.
 #: src/app/components/headerbar/headerbar.blp:63
 msgid "Select all"
-msgstr "Seleccionar todo"
+msgstr "Επιλογή όλων"
 
 #. translators: This is part of a contextual menu attached to a single track; the full text is "More from <artist>".
 #: src/app/components/labels.rs:39
 msgid "More from {}"
-msgstr "Más de {}"
+msgstr "Περισσότερα από {}"
 
 #. This refers to a music label
 #: src/app/components/details/release_details.blp:41
 msgid "Label"
-msgstr "Etiqueta"
+msgstr "Δισκογραφική εταιρία"
 
 #. This refers to a release date
 #: src/app/components/details/release_details.blp:52
 msgid "Released"
-msgstr "Lanzado"
+msgstr "Κυκλοφόρησε"
 
 #. This refers to a number of tracks
 #: src/app/components/details/release_details.blp:63
 msgid "Tracks"
-msgstr "Canciones"
+msgstr "Τραγούδια"
 
 #: src/app/components/details/release_details.blp:72
 msgid "Copyright"
-msgstr "Copyright"
+msgstr "Πνευματικά δικαιώματα"
 
 #. translators: This is part of a larger label that reads "<Album> by <Artist>"
 #: src/app/components/labels.rs:48
 msgid "{} by {}"
-msgstr "{} de {}"
+msgstr "{} από {}"
 
 #: src/app/components/sidebar/sidebar.rs:49
 msgid "Unnamed playlist"
-msgstr "Lista de reproducción sin nombre"
+msgstr "Ανώνυμη λίστα"
 
 #. translators: This is a sidebar entry to browse to saved playlists.
 #: src/app/components/sidebar/sidebar_item.rs:81
 msgid "All Playlists"
-msgstr "Todas las listas de reproducción"
+msgstr "Όλες οι λίστες"
 
 #: src/app/components/selection/component.rs:66
 msgid "Tracks saved!"
-msgstr "¡Pistas guardadas!"
+msgstr "Τα τραγούδια αποθηκεύτηκαν!"
 
 #. translators: This is a menu entry.
 #: src/app/components/user_menu/user_menu.rs:65
 msgid "Preferences"
-msgstr "Preferencias"
+msgstr "Προτιμήσεις"
 
 #: src/main.rs:85
 msgid "Failed to open link!"
-msgstr "¡No se ha podido abrir el enlace!"
+msgstr "Αδυναμία άνοιγμα συνδέσμου!"
 
 #. Header for a group of preference items regarding audio
 #: src/app/components/settings/settings.blp:13
 msgid "Audio"
-msgstr "Sonido"
+msgstr "Ήχος"
 
 #. Title for an item in preferences
 #: src/app/components/settings/settings.blp:18
 msgid "Audio Backend"
-msgstr "Backend de audio"
+msgstr "Backend ήχου"
 
 #. Title for an item in preferences
 #: src/app/components/settings/settings.blp:31
 msgid "ALSA Device"
-msgstr "Dispositivo ALSA"
+msgstr "ALSA Device"
 
 #. Description for the item (ALSA Device) in preferences
 #: src/app/components/settings/settings.blp:35
 msgid "Applied only if audio backend is ALSA"
-msgstr "Sólo se aplica si el backend de audio es ALSA"
+msgstr "Εφαρμόζεται μόνο μέσω ALSA ως backend ήχου"
 
 #. Title for an item in preferences
 #: src/app/components/settings/settings.blp:45
 msgid "Audio Quality"
-msgstr "Calidad de sonido"
+msgstr "Ποιότητα ήχου"
 
 #: src/app/components/settings/settings.blp:48
 msgid "Normal"
-msgstr "Normal"
+msgstr "Μεσαία"
 
 #: src/app/components/settings/settings.blp:49
 msgid "High"
-msgstr "Alta"
+msgstr "Υψηλή"
 
 #: src/app/components/settings/settings.blp:50
 msgid "Very high"
-msgstr "Muy alta"
+msgstr "Πολύ υψηλή"
 
 #. Header for a group of preference items regarding the application's appearance
 #: src/app/components/settings/settings.blp:73
 msgid "Appearance"
-msgstr "Apariencia"
+msgstr "Εμφάνιση"
 
 #. Title for an item in preferences
 #: src/app/components/settings/settings.blp:78
 msgid "Theme"
-msgstr "Tema"
+msgstr "Θέμα"
 
 #: src/app/components/settings/settings.blp:81
 msgid "Light"
-msgstr "Claro"
+msgstr "Φωτεινό"
 
 #: src/app/components/settings/settings.blp:82
 msgid "Dark"
-msgstr "Oscuro"
+msgstr "Σκοτεινό"
 
 #. Header for a group of preference items regarding network
 #: src/app/components/settings/settings.blp:92
 msgid "Network"
-msgstr "Red"
+msgstr "Δίκτυο"
 
 #. Title for an item in preferences
 #: src/app/components/settings/settings.blp:97
 msgid "Access Point Port"
-msgstr "Puerto del punto de acceso"
+msgstr "Θύρα Access Point"
 
 #. Longer description for an item (Access Point Port) in preferences
 #: src/app/components/settings/settings.blp:101
 msgid "Port used for connections to Spotify's Access Point. Set to 0 if any port is fine."
-msgstr "Puerto utilizado para las conexiones con el punto de acceso de Spotify. Poner a 0 si cualquier puerto está bien."
+msgstr "Χρησιμοποιημένες θύρες για σύνδεση με το Access Point του Spotify. Επιλέξτε 0 για οποιαδήποτε θύρα."
 
 #: src/app/components/selection/selection_toolbar.blp:78
 msgid "Save to library"
-msgstr "Guardar en la biblioteca"
+msgstr "Αποθήκευση σε λίστα"
 
 #. translators: This is a notification that pop ups when a new playlist is created. It includes the name of that playlist.
 #: src/app/components/notification/mod.rs:25
 msgid "New playlist created."
-msgstr "Nueva lista de reproducción creada."
+msgstr "Δημιουργήθηκε νέα λίστα."
 
 #. translators: This is a label in the notification shown after creating a new playlist. If it is clicked, the new playlist will be opened.
 #: src/app/components/notification/mod.rs:27
 msgid "View"
-msgstr "Vista"
+msgstr "Προβολή"
 
 #: src/app/components/sidebar/sidebar_item.rs:90
 msgid "New Playlist"
-msgstr "Nueva lista de reproducción"
+msgstr "Νέα Λίστα"
 
 #. Title for an item in preferences
 #: src/app/components/settings/settings.blp:58
 msgid "Gapless playback"
-msgstr "Reproducción sin pausas"
+msgstr "Gapless playback"
 
 #: src/app/components/settings/settings.blp:83
 msgid "System"
-msgstr "Sistema"
+msgstr "Σύστημα"
 
 #. Finish playlist edition
 #: src/app/components/playlist_details/playlist_headerbar.blp:69
 msgid "Done"
-msgstr "Listo"
+msgstr "Τέλος"
 
 #. label for the entry containing the name of a new playlist
 #: src/app/components/sidebar/create_playlist.blp:10
 msgid "Name"
-msgstr "Nombre"
+msgstr "Όνομα"
 
 #. Button that creates a new playlist
 #: src/app/components/sidebar/create_playlist.blp:30
 msgid "Create"
-msgstr "Crear"
+msgstr "Δημιουργία"
 
 #: src/app/components/device_selector/widget.rs:135
 #: src/app/components/device_selector/device_selector.blp:9

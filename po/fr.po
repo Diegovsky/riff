@@ -40,7 +40,7 @@ msgid "Could not save password. Make sure the session keyring is unlocked."
 msgstr "Le mot de passe n'a pu être enregistré, assurez-vous que le Trousseau de session est déverouillé."
 
 #. translators: This notification is the default message for unhandled errors. Logs refer to console output.
-#: src/app/batch_loader.rs:91 src/app/components/mod.rs:129
+#: src/app/batch_loader.rs:100 src/app/components/mod.rs:129
 msgid "An error occured. Check logs for details!"
 msgstr "Une erreur est survenue. Consultez les journaux de débogage pour plus d'information."
 
@@ -57,7 +57,6 @@ msgid "Playlists"
 msgstr "Listes de lecture"
 
 #. This is the visible name for the play queue. It appears in the sidebar as well.
-#: src/app/components/now_playing/now_playing_model.rs:134
 #: src/app/components/sidebar/sidebar_item.rs:43
 msgid "Now playing"
 msgstr "En cours de lecture"
@@ -84,7 +83,7 @@ msgstr "Quitter"
 msgid "Log out"
 msgstr "Déconnexion"
 
-#: src/app/state/login_state.rs:115
+#: src/app/state/login_state.rs:97
 msgid "Connection restored"
 msgstr "Connexion rétablie"
 
@@ -103,21 +102,6 @@ msgstr "Discographie"
 msgid "Login to Spotify Premium"
 msgstr "Connexion à Spotify Premium"
 
-#. Placeholder for the username field
-#: src/app/components/login/login.blp:76
-msgid "Username"
-msgstr "Nom d'utilisateur"
-
-#. Placeholder for the password field
-#: src/app/components/login/login.blp:94
-msgid "Password"
-msgstr "Mot de passe"
-
-#. This error is shown when authentication fails.
-#: src/app/components/login/login.blp:116
-msgid "Authentication failed!"
-msgstr "L'authentification a échoué !"
-
 #. Log in button label
 #: src/app/components/login/login.blp:131
 msgid "Log in"
@@ -133,7 +117,7 @@ msgstr "Albums"
 msgid "Artists"
 msgstr "Artistes"
 
-#: src/app/components/navigation/factory.rs:85
+#: src/app/components/navigation/factory.rs:76
 #: src/app/components/sidebar/sidebar_item.rs:41
 msgid "Saved tracks"
 msgstr "Titres aimés"
@@ -239,11 +223,6 @@ msgstr "Date de publication"
 msgid "Tracks"
 msgstr "Morceaux"
 
-#. This refers to the duration of a release
-#: src/app/components/details/release_details.ui:68
-msgid "Duration"
-msgstr "Durée"
-
 #: src/app/components/details/release_details.blp:72
 msgid "Copyright"
 msgstr "Copyright"
@@ -271,7 +250,7 @@ msgstr "Pistes enregistrées !"
 msgid "Preferences"
 msgstr "Préférences"
 
-#: src/main.rs:75
+#: src/main.rs:85
 msgid "Failed to open link!"
 msgstr "Échec de l'ouverture du lien."
 
@@ -286,62 +265,62 @@ msgid "Audio Backend"
 msgstr "Gestionnaire de l'audio"
 
 #. Title for an item in preferences
-#: src/app/components/settings/settings.blp:30
+#: src/app/components/settings/settings.blp:31
 msgid "ALSA Device"
 msgstr "Appareil ALSA"
 
 #. Description for the item (ALSA Device) in preferences
-#: src/app/components/settings/settings.blp:34
+#: src/app/components/settings/settings.blp:35
 msgid "Applied only if audio backend is ALSA"
 msgstr "Ne s'applique que si ALSA est sélectionné"
 
 #. Title for an item in preferences
-#: src/app/components/settings/settings.blp:44
+#: src/app/components/settings/settings.blp:45
 msgid "Audio Quality"
 msgstr "Qualité du flux audio"
 
-#: src/app/components/settings/settings.blp:47
+#: src/app/components/settings/settings.blp:48
 msgid "Normal"
 msgstr "Normale"
 
-#: src/app/components/settings/settings.blp:48
+#: src/app/components/settings/settings.blp:49
 msgid "High"
 msgstr "Élevée"
 
-#: src/app/components/settings/settings.blp:49
+#: src/app/components/settings/settings.blp:50
 msgid "Very high"
 msgstr "Très élevée"
 
 #. Header for a group of preference items regarding the application's appearance
-#: src/app/components/settings/settings.blp:72
+#: src/app/components/settings/settings.blp:73
 msgid "Appearance"
 msgstr "Apparence"
 
 #. Title for an item in preferences
-#: src/app/components/settings/settings.blp:77
+#: src/app/components/settings/settings.blp:78
 msgid "Theme"
 msgstr "Thème"
 
-#: src/app/components/settings/settings.blp:80
+#: src/app/components/settings/settings.blp:81
 msgid "Light"
 msgstr "Clair"
 
-#: src/app/components/settings/settings.blp:81
+#: src/app/components/settings/settings.blp:82
 msgid "Dark"
 msgstr "Sombre"
 
 #. Header for a group of preference items regarding network
-#: src/app/components/settings/settings.blp:91
+#: src/app/components/settings/settings.blp:92
 msgid "Network"
 msgstr "Réseau"
 
 #. Title for an item in preferences
-#: src/app/components/settings/settings.blp:96
+#: src/app/components/settings/settings.blp:97
 msgid "Access Point Port"
 msgstr "Port du point d'accès"
 
 #. Longer description for an item (Access Point Port) in preferences
-#: src/app/components/settings/settings.blp:100
+#: src/app/components/settings/settings.blp:101
 msgid "Port used for connections to Spotify's Access Point. Set to 0 if any port is fine."
 msgstr "Port utilisé pour se connecter au point d'accès de Spotify. Laisser la valeur à 0 pour gérer ce paramètre automatiquement. "
 
@@ -364,11 +343,11 @@ msgid "New Playlist"
 msgstr "Nouvelle liste de lecture"
 
 #. Title for an item in preferences
-#: src/app/components/settings/settings.blp:57
+#: src/app/components/settings/settings.blp:58
 msgid "Gapless playback"
 msgstr "Lecture continue"
 
-#: src/app/components/settings/settings.blp:82
+#: src/app/components/settings/settings.blp:83
 msgid "System"
 msgstr "Valeur système"
 
@@ -386,4 +365,41 @@ msgstr "Nom"
 #: src/app/components/sidebar/create_playlist.blp:30
 msgid "Create"
 msgstr "Créer"
+
+#: src/app/components/device_selector/widget.rs:135
+#: src/app/components/device_selector/device_selector.blp:9
+#: src/app/components/device_selector/device_selector.blp:37
+msgid "This device"
+msgstr ""
+
+#: src/connect/player.rs:65
+msgid "Connection to device lost!"
+msgstr ""
+
+#: src/app/components/login/login.blp:46
+msgid "Welcome to Spot"
+msgstr ""
+
+#. Translators: Login window title, must mention Premium (a premium account is required).
+#: src/app/components/login/login.blp:53
+msgid "Log in with your Spotify Account. A Spotify Premium subscription is required to use the app."
+msgstr ""
+
+#. Translators: This error is shown when authentication fails.
+#: src/app/components/login/login.blp:68
+msgid "An error occured when trying to connect."
+msgstr ""
+
+#. Translators: Log in button label
+#: src/app/components/login/login.blp:79
+msgid "Log in with Spotify..."
+msgstr ""
+
+#: src/app/components/device_selector/device_selector.blp:15
+msgid "Playing on"
+msgstr ""
+
+#: src/app/components/device_selector/device_selector.blp:24
+msgid "Refresh devices"
+msgstr ""
 

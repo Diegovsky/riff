@@ -138,7 +138,7 @@ impl EventListener for Library {
                 let _ = self.model.refresh_saved_albums();
                 self.bind_flowbox();
             }
-            AppEvent::LoginEvent(LoginEvent::LoginCompleted(_)) => {
+            AppEvent::LoginEvent(LoginEvent::LoginCompleted) => {
                 let _ = self.model.refresh_saved_albums();
             }
             AppEvent::BrowserEvent(BrowserEvent::LibraryUpdated) => {

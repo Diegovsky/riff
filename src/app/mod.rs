@@ -1,5 +1,5 @@
-use crate::api::CachedSpotifyClient;
 use crate::settings::SpotSettings;
+use crate::{api::CachedSpotifyClient, player::TokenStore};
 use futures::channel::mpsc::UnboundedSender;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -49,7 +49,8 @@ impl App {
         worker: Worker,
     ) -> Self {
         let state = AppState::new();
-        let spotify_client = Arc::new(CachedSpotifyClient::new());
+        let token_store = Arc::new(TokenStore::new());
+        let spotify_client = Arc::new(CachedSpotifyClient::new(Arc::clone(&token_store)));
         let model = Rc::new(AppModel::new(state, spotify_client));
 
         // Non widget components
@@ -59,6 +60,7 @@ impl App {
                 &settings,
                 Box::new(ActionDispatcherImpl::new(sender.clone(), worker.clone())),
                 sender.clone(),
+                token_store,
             ),
             App::make_dbus(Rc::clone(&model), sender.clone()),
         ];
@@ -96,7 +98,7 @@ impl App {
                 dispatcher.box_clone(),
                 worker.clone(),
             ),
-            App::make_login(builder, dispatcher.box_clone(), worker.clone()),
+            App::make_login(builder, dispatcher.box_clone()),
             App::make_navigation(
                 builder,
                 Rc::clone(model),
@@ -117,13 +119,18 @@ impl App {
         settings: &SpotSettings,
         dispatcher: Box<dyn ActionDispatcher>,
         sender: UnboundedSender<AppAction>,
+        token_store: Arc<TokenStore>,
     ) -> Box<impl EventListener> {
         let api = app_model.get_spotify();
         Box::new(PlayerNotifier::new(
             app_model,
             dispatcher,
             // Either communications with the librespot player
-            crate::player::start_player_service(settings.player_settings.clone(), sender.clone()),
+            crate::player::start_player_service(
+                settings.player_settings.clone(),
+                sender.clone(),
+                token_store,
+            ),
             // or with a Spotify Connect device
             crate::connect::start_connect_server(api, sender),
         ))
@@ -172,13 +179,9 @@ impl App {
         ))
     }
 
-    fn make_login(
-        builder: &gtk::Builder,
-        dispatcher: Box<dyn ActionDispatcher>,
-        worker: Worker,
-    ) -> Box<Login> {
+    fn make_login(builder: &gtk::Builder, dispatcher: Box<dyn ActionDispatcher>) -> Box<Login> {
         let parent: gtk::Window = builder.object("window").unwrap();
-        let model = LoginModel::new(dispatcher, worker);
+        let model = LoginModel::new(dispatcher);
         Box::new(Login::new(parent, model))
     }
 

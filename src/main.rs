@@ -4,6 +4,7 @@ extern crate glib;
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
+extern crate gettextrs;
 
 use app::state::ScreenName;
 use futures::channel::mpsc::UnboundedSender;

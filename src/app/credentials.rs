@@ -14,9 +14,8 @@ fn make_attributes() -> HashMap<&'static str, &'static str> {
 // A (statically accessed) wrapper around the DBUS Secret Service
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Credentials {
-    pub username: String,
-    pub password: String,
-    pub token: String,
+    pub access_token: String,
+    pub refresh_token: String,
     pub token_expiry_time: Option<SystemTime>,
 }
 

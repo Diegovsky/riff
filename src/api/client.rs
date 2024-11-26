@@ -8,8 +8,10 @@ use serde_json::from_str;
 use std::convert::Into;
 use std::marker::PhantomData;
 use std::str::FromStr;
-use std::sync::Mutex;
+use std::sync::Arc;
 use thiserror::Error;
+
+use crate::player::TokenStore;
 
 pub use super::api_models::*;
 use super::cache::CacheError;
@@ -64,11 +66,11 @@ where
     }
 
     fn authenticated(mut self) -> Result<Self, SpotifyApiError> {
-        let token = self.client.token.lock().unwrap();
+        let token = self.client.token_store.get_cached_blocking();
         let token = token.as_ref().ok_or(SpotifyApiError::NoToken)?;
         self.request = self
             .request
-            .header("Authorization", format!("Bearer {token}"));
+            .header("Authorization", format!("Bearer {}", token.access_token));
         Ok(self)
     }
 
@@ -171,19 +173,19 @@ pub enum SpotifyApiError {
 }
 
 pub(crate) struct SpotifyClient {
-    token: Mutex<Option<String>>,
+    token_store: Arc<TokenStore>,
     client: HttpClient,
 }
 
 impl SpotifyClient {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(token_store: Arc<TokenStore>) -> Self {
         let mut builder = HttpClient::builder();
         if cfg!(debug_assertions) {
             builder = builder.ssl_options(isahc::config::SslOption::DANGER_ACCEPT_INVALID_CERTS);
         }
         let client = builder.build().unwrap();
         Self {
-            token: Mutex::new(None),
+            token_store,
             client,
         }
     }
@@ -198,19 +200,7 @@ impl SpotifyClient {
     }
 
     pub(crate) fn has_token(&self) -> bool {
-        self.token.lock().unwrap().is_some()
-    }
-
-    pub(crate) fn update_token(&self, new_token: String) {
-        if let Ok(mut token) = self.token.lock() {
-            *token = Some(new_token)
-        }
-    }
-
-    fn clear_token(&self) {
-        if let Ok(mut token) = self.token.lock() {
-            *token = None
-        }
+        self.token_store.get_cached_blocking().is_some()
     }
 
     fn parse_cache_control(cache_control: &str) -> Option<u64> {
@@ -249,10 +239,7 @@ impl SpotifyClient {
                 max_age: cache_control.unwrap_or(10),
                 etag,
             }),
-            StatusCode::UNAUTHORIZED => {
-                self.clear_token();
-                Err(SpotifyApiError::InvalidToken)
-            }
+            StatusCode::UNAUTHORIZED => Err(SpotifyApiError::InvalidToken),
             StatusCode::TOO_MANY_REQUESTS => Err(SpotifyApiError::TooManyRequests),
             StatusCode::NOT_MODIFIED => Ok(SpotifyResponse {
                 kind: SpotifyResponseKind::NotModified,
@@ -275,10 +262,7 @@ impl SpotifyClient {
     {
         let mut result = self.client.send_async(request).await?;
         match result.status() {
-            StatusCode::UNAUTHORIZED => {
-                self.clear_token();
-                Err(SpotifyApiError::InvalidToken)
-            }
+            StatusCode::UNAUTHORIZED => Err(SpotifyApiError::InvalidToken),
             StatusCode::TOO_MANY_REQUESTS => Err(SpotifyApiError::TooManyRequests),
             StatusCode::NOT_MODIFIED => Ok(()),
             s if s.is_success() => Ok(()),
@@ -661,7 +645,7 @@ pub mod tests {
     #[test]
     fn test_username_encoding() {
         let username = "anna.lafuente❤";
-        let client = SpotifyClient::new();
+        let client = SpotifyClient::new(Arc::new(TokenStore::new()));
         let req = client.get_user(username);
         assert_eq!(
             req.request

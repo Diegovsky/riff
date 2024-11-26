@@ -2,10 +2,10 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
 use std::rc::Rc;
+use url::Url;
 
 use crate::app::components::EventListener;
-use crate::app::credentials::Credentials;
-use crate::app::state::{LoginCompletedEvent, LoginEvent};
+use crate::app::state::{LoginEvent, LoginStartedEvent};
 use crate::app::AppEvent;
 
 use super::LoginModel;
@@ -128,43 +128,39 @@ impl Login {
         self.window().set_visible(true);
     }
 
-    fn hide_and_save_creds(&self, credentials: Credentials) {
+    fn hide(&self) {
         self.window().set_visible(false);
-        self.model.save_for_autologin(credentials);
     }
 
     fn reveal_error(&self) {
+        self.show_self();
         self.login_window.show_auth_error(true);
+    }
+
+    fn open_login_url(&self, url: Url) {
+        if open::that(url.as_str()).is_err() {
+            warn!("Could not open login page");
+        }
     }
 }
 
 impl EventListener for Login {
     fn on_event(&mut self, event: &AppEvent) {
-        info!("received login event {:?}", event);
         match event {
-            AppEvent::LoginEvent(LoginEvent::LoginCompleted(LoginCompletedEvent::Password(
-                creds,
-            ))) => {
-                self.hide_and_save_creds(creds.clone());
-            }
-            AppEvent::LoginEvent(LoginEvent::LoginCompleted(LoginCompletedEvent::Token(token))) => {
-                self.hide_and_save_creds(token.clone());
+            AppEvent::LoginEvent(LoginEvent::LoginCompleted) => {
+                self.hide();
             }
             AppEvent::LoginEvent(LoginEvent::LoginFailed) => {
-                self.model.clear_saved_credentials();
                 self.reveal_error();
+            }
+            AppEvent::LoginEvent(LoginEvent::LoginStarted(LoginStartedEvent::OpenUrl(url))) => {
+                self.open_login_url(url.clone());
             }
             AppEvent::Started => {
                 self.model.try_autologin();
             }
             AppEvent::LoginEvent(LoginEvent::LogoutCompleted | LoginEvent::LoginShown) => {
                 self.show_self();
-            }
-            AppEvent::LoginEvent(LoginEvent::RefreshTokenCompleted {
-                token,
-                token_expiry_time,
-            }) => {
-                self.model.save_token(token.clone(), *token_expiry_time);
             }
             _ => {}
         }

@@ -1,6 +1,6 @@
 [package]
 name = "spot"
-version = "0.6.0"
+version = "0.5.0"
 edition = "2018"
 license = "MIT"
 
@@ -53,7 +53,7 @@ version = "^0.8.5"
 features = ["small_rng"]
 
 [dependencies.gettext-rs]
-version = "0.7.0"
+version = "=0.7.0"
 features = ["gettext-system"]
 
 [dependencies.secret-service]

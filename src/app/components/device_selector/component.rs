@@ -83,7 +83,7 @@ impl Component for DeviceSelector {
 impl EventListener for DeviceSelector {
     fn on_event(&mut self, event: &AppEvent) {
         match event {
-            AppEvent::LoginEvent(LoginEvent::LoginCompleted(_)) => {
+            AppEvent::LoginEvent(LoginEvent::LoginCompleted) => {
                 self.model.refresh_available_devices();
             }
             AppEvent::PlaybackEvent(PlaybackEvent::AvailableDevicesChanged) => {

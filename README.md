@@ -26,35 +26,6 @@ Bear special attention to the fact that to enable automatic login, you might hav
 
 See [this comment](https://github.com/xou816/spot/issues/92#issuecomment-801852593) for more details!
 
-### Login in with Facebook
-
-...is not supported. However, you can update your account in order to be able to log in with a username and password [as explained in this issue](https://github.com/xou816/spot/issues/373).
-
-
-### Settings
-
-Spot can also be configured via `gsettings` if you want to change the audio backend, the song bitrate, etc.
-
-### Seek bar warping
-It is possible to click on the seek bar to navigate to that position in a song. If you are having issues with this not working you may have [gtk-primary-button-warps-slider](https://docs.gtk.org/gtk3/property.Settings.gtk-primary-button-warps-slider.html) set to false.
-In order to fix this issue set the value to true in your gtk configuration.
-
-### Scrobbling
-
-Scrobbling is not supported directly by Spot. However, you can use a tool such a [rescrobbled](https://github.com/InputUsername/rescrobbled) ([see #85](https://github.com/xou816/spot/issues/85)).
-
-### Lyrics
-
-Similarly, Spot does not display lyrics for songs, but you can use [osdlyrics](https://github.com/osdlyrics/osdlyrics) ([see #226](https://github.com/xou816/spot/issues/226)).
-
-### Gtk theme
-
-Spot uses the dark theme variant by default; this can be changed in the settings.
-
-If you are using the flatpak version, don't forget to install your theme with flatpak as well. See [this comment](https://github.com/xou816/spot/issues/209#issuecomment-860180537) for details.
-
-Similarly, snap also requires that you install the corresponding snap for your theme. See [this comment](https://github.com/xou816/spot/issues/338#issuecomment-975543476) for details.
-
 ## Features
 
 **Only works with premium accounts!**
@@ -70,12 +41,6 @@ Similarly, snap also requires that you install the corresponding snap for your t
 - MPRIS integration
 - playlist management (creation and edition)
 - liked tracks
-
-### Planned
-
-- GNOME search provider?
-- improved search? (track results)
-- recommendations?
 
 ## Contributing
 
