@@ -1,18 +1,21 @@
 use gettextrs::*;
 use std::borrow::Cow;
+use url::Url;
 
 use crate::app::models::PlaylistSummary;
 use crate::app::state::{AppAction, AppEvent, UpdatableState};
 
 #[derive(Clone, Debug)]
 pub enum TryLoginAction {
-    Reconnect,
-    NewLogin,
+    Restore,
+    InitLogin,
+    CompleteLogin
 }
 
 #[derive(Clone, Debug)]
 pub enum LoginAction {
     ShowLogin,
+    OpenLoginUrl(Url),
     TryLogin(TryLoginAction),
     SetLoginSuccess(String),
     SetUserPlaylists(Vec<PlaylistSummary>),
@@ -32,8 +35,10 @@ impl From<LoginAction> for AppAction {
 
 #[derive(Clone, Debug)]
 pub enum LoginStartedEvent {
-    Reconnect,
-    NewLogin,
+    Restore,
+    InitLogin,
+    CompleteLogin,
+    OpenUrl(Url),
 }
 
 #[derive(Clone, Debug)]
@@ -71,8 +76,14 @@ impl UpdatableState for LoginState {
         info!("update_with({:?})", action);
         match action.into_owned() {
             LoginAction::ShowLogin => vec![LoginEvent::LoginShown.into()],
-            LoginAction::TryLogin(TryLoginAction::Reconnect) => {
-                vec![LoginEvent::LoginStarted(LoginStartedEvent::Reconnect).into()]
+            LoginAction::OpenLoginUrl(url) => {
+                vec![LoginEvent::LoginStarted(LoginStartedEvent::OpenUrl(url)).into()]
+            }
+            LoginAction::TryLogin(TryLoginAction::Restore) => {
+                vec![LoginEvent::LoginStarted(LoginStartedEvent::Restore).into()]
+            }
+            LoginAction::TryLogin(TryLoginAction::CompleteLogin) => {
+                vec![LoginEvent::LoginStarted(LoginStartedEvent::CompleteLogin).into()]
             }
             LoginAction::SetLoginSuccess(username) => {
                 self.user = Some(username);
@@ -106,8 +117,8 @@ impl UpdatableState for LoginState {
                 self.playlists = summaries;
                 vec![LoginEvent::UserPlaylistsLoaded.into()]
             }
-            LoginAction::TryLogin(TryLoginAction::NewLogin) => {
-                vec![LoginEvent::LoginStarted(LoginStartedEvent::NewLogin).into()]
+            LoginAction::TryLogin(TryLoginAction::InitLogin) => {
+                vec![LoginEvent::LoginStarted(LoginStartedEvent::InitLogin).into()]
             }
         }
     }

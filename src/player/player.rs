@@ -1,6 +1,7 @@
-use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures::stream::StreamExt;
 
+use futures::SinkExt;
 use librespot::core::authentication::Credentials;
 use librespot::core::cache::Cache;
 use librespot::core::config::SessionConfig;
@@ -12,8 +13,9 @@ use librespot::playback::mixer::{Mixer, MixerConfig};
 use librespot::playback::audio_backend;
 use librespot::playback::config::{AudioFormat, Bitrate, PlayerConfig, VolumeCtrl};
 use librespot::playback::player::{Player, PlayerEvent, PlayerEventChannel};
+use url::Url;
 
-use super::oauth2::SpotOauthClient;
+use super::oauth2::{AuthcodeChallenge, SpotOauthClient};
 use super::{Command, TokenStore};
 use crate::app::credentials;
 use crate::player::oauth2::OAuthError;
@@ -49,6 +51,7 @@ impl fmt::Display for SpotifyError {
 
 pub trait SpotifyPlayerDelegate {
     fn end_of_track_reached(&self);
+    fn login_challenge_started(&self, url: Url);
     fn token_login_successful(&self, username: String);
     fn refresh_successful(&self);
     fn report_error(&self, error: SpotifyError);
@@ -87,7 +90,13 @@ pub struct SpotifyPlayer {
     player: Option<Arc<Player>>,
     mixer: Option<Box<dyn Mixer>>,
     session: Option<Session>,
+
+    // Auth related stuff
     oauth_client: Arc<SpotOauthClient>,
+    auth_challenge: Option<AuthcodeChallenge>,
+    command_sender: UnboundedSender<Command>,
+
+    // Receives feedback from commands or various events in the player
     delegate: Rc<dyn SpotifyPlayerDelegate>,
 }
 
@@ -96,6 +105,7 @@ impl SpotifyPlayer {
         settings: SpotifyPlayerSettings,
         delegate: Rc<dyn SpotifyPlayerDelegate>,
         token_store: Arc<TokenStore>,
+        command_sender: UnboundedSender<Command>,
     ) -> Self {
         Self {
             settings,
@@ -103,6 +113,8 @@ impl SpotifyPlayer {
             player: None,
             session: None,
             oauth_client: Arc::new(SpotOauthClient::new(token_store)),
+            auth_challenge: None,
+            command_sender,
             delegate,
         }
     }
@@ -177,7 +189,7 @@ impl SpotifyPlayer {
                 let _ = self.player.take();
                 Ok(())
             }
-            Command::Reconnect => {
+            Command::Restore => {
                 let credentials =
                     self.oauth_client
                         .get_valid_token()
@@ -190,10 +202,34 @@ impl SpotifyPlayer {
                 info!("Restoring session");
                 self.initial_login(credentials).await
             }
-            Command::NewLogin => {
+            Command::InitLogin => {
+                let auth_url = match self.auth_challenge.as_ref() {
+                    Some(challenge) => challenge.auth_url.clone(),
+                    None => {
+                        let cmd = self.command_sender.clone();
+                        let challenge = self
+                            .oauth_client
+                            .spawn_authcode_listener(move || {
+                                cmd.unbounded_send(Command::CompleteLogin).unwrap();
+                            })
+                            .await
+                            .map_err(|_| SpotifyError::LoginFailed)?;
+                        let auth_url = challenge.auth_url.clone();
+                        self.auth_challenge = Some(challenge);
+                        auth_url
+                    }
+                };
+                self.delegate.login_challenge_started(auth_url);
+                Ok(())
+            }
+            Command::CompleteLogin => {
+                let Some(challenge) = self.auth_challenge.take() else {
+                    return Err(SpotifyError::LoginFailed);
+                };
+
                 let credentials = self
                     .oauth_client
-                    .get_token()
+                    .exchange_authcode(challenge)
                     .await
                     .map_err(|_| SpotifyError::LoginFailed)?;
 

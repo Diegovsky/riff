@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 use tokio::task;
+use url::Url;
 
 use crate::app::state::{LoginAction, PlaybackAction};
 use crate::app::AppAction;
@@ -18,8 +19,9 @@ pub use token_store::*;
 
 #[derive(Debug, Clone)]
 pub enum Command {
-    Reconnect,
-    NewLogin,
+    Restore,
+    InitLogin,
+    CompleteLogin,
     RefreshToken,
     Logout,
     PlayerLoad { track: SpotifyId, resume: bool },
@@ -89,6 +91,13 @@ impl SpotifyPlayerDelegate for AppPlayerDelegate {
             .unbounded_send(PlaybackAction::Preload.into())
             .unwrap();
     }
+
+    fn login_challenge_started(&self, url: Url) {
+        self.sender
+            .borrow_mut()
+            .unbounded_send(LoginAction::OpenLoginUrl(url).into())
+            .unwrap();
+    }
 }
 
 #[tokio::main]
@@ -96,13 +105,14 @@ async fn player_main(
     player_settings: SpotifyPlayerSettings,
     appaction_sender: UnboundedSender<AppAction>,
     token_store: Arc<TokenStore>,
+    sender: UnboundedSender<Command>,
     receiver: UnboundedReceiver<Command>,
 ) {
     task::LocalSet::new()
         .run_until(async move {
             task::spawn_local(async move {
                 let delegate = Rc::new(AppPlayerDelegate::new(appaction_sender.clone()));
-                let player = SpotifyPlayer::new(player_settings, delegate, token_store);
+                let player = SpotifyPlayer::new(player_settings, delegate, token_store, sender);
                 player.start(receiver).await.unwrap();
             })
             .await
@@ -117,8 +127,9 @@ pub fn start_player_service(
     token_store: Arc<TokenStore>,
 ) -> UnboundedSender<Command> {
     let (sender, receiver) = unbounded::<Command>();
+    let sender_clone = sender.clone();
     std::thread::spawn(move || {
-        player_main(player_settings, appaction_sender, token_store, receiver)
+        player_main(player_settings, appaction_sender, token_store, sender_clone, receiver)
     });
     sender
 }

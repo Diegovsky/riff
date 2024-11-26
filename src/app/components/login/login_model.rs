@@ -12,11 +12,11 @@ impl LoginModel {
 
     pub fn try_autologin(&self) {
         self.dispatcher
-            .dispatch(LoginAction::TryLogin(TryLoginAction::Reconnect).into());
+            .dispatch(LoginAction::TryLogin(TryLoginAction::Restore).into());
     }
 
     pub fn login_with_spotify(&self) {
         self.dispatcher
-            .dispatch(LoginAction::TryLogin(TryLoginAction::NewLogin).into())
+            .dispatch(LoginAction::TryLogin(TryLoginAction::InitLogin).into())
     }
 }

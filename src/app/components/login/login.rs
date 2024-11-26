@@ -2,10 +2,11 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
 use std::rc::Rc;
+use url::Url;
 
 use crate::app::components::EventListener;
-use crate::app::state::LoginEvent;
-use crate::app::AppEvent;
+use crate::app::state::{LoginEvent, LoginStartedEvent};
+use crate::app::{AppEvent, Worker};
 
 use super::LoginModel;
 mod imp {
@@ -92,10 +93,11 @@ pub struct Login {
     parent: gtk::Window,
     login_window: LoginWindow,
     model: Rc<LoginModel>,
+    worker: Worker,
 }
 
 impl Login {
-    pub fn new(parent: gtk::Window, model: LoginModel) -> Self {
+    pub fn new(parent: gtk::Window, model: LoginModel, worker: Worker) -> Self {
         let model = Rc::new(model);
 
         let login_window = LoginWindow::new();
@@ -114,6 +116,7 @@ impl Login {
             parent,
             login_window,
             model,
+            worker,
         }
     }
 
@@ -135,6 +138,12 @@ impl Login {
         self.show_self();
         self.login_window.show_auth_error(true);
     }
+
+    fn open_login_url(&self, url: Url) {
+        if let Err(_) = open::that(url.as_str()) {
+            warn!("Could not open login page");
+        }
+    }
 }
 
 impl EventListener for Login {
@@ -145,6 +154,9 @@ impl EventListener for Login {
             }
             AppEvent::LoginEvent(LoginEvent::LoginFailed) => {
                 self.reveal_error();
+            }
+            AppEvent::LoginEvent(LoginEvent::LoginStarted(LoginStartedEvent::OpenUrl(url))) => {
+                self.open_login_url(url.clone());
             }
             AppEvent::Started => {
                 self.model.try_autologin();

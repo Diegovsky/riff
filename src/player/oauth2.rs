@@ -18,7 +18,7 @@ use oauth2::{
     basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, CsrfToken, PkceCodeChallenge,
     RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
-use oauth2::{RefreshToken, RequestTokenError};
+use oauth2::{PkceCodeVerifier, RefreshToken, RequestTokenError};
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::time;
+use tokio::task::JoinHandle;
 use url::Url;
 
 use super::TokenStore;
@@ -52,6 +52,12 @@ pub struct SpotOauthClient {
     token_store: Arc<TokenStore>,
 }
 
+pub struct AuthcodeChallenge {
+    pkce_verifier: PkceCodeVerifier,
+    pub auth_url: Url,
+    listener: JoinHandle<Result<AuthorizationCode, OAuthError>>,
+}
+
 impl SpotOauthClient {
     pub fn new(token_store: Arc<TokenStore>) -> Self {
         let auth_url = AuthUrl::new("https://accounts.spotify.com/authorize".to_string())
@@ -72,9 +78,10 @@ impl SpotOauthClient {
         }
     }
 
-    /// Obtain a Spotify access token using the authorization code with PKCE OAuth flow.
-    /// The redirect_uri must match what is registered to the client ID.
-    pub async fn get_token(&self) -> Result<Credentials, OAuthError> {
+    pub async fn spawn_authcode_listener(
+        &self,
+        notify_complete: impl FnOnce() -> () + 'static,
+    ) -> Result<AuthcodeChallenge, OAuthError> {
         let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
         // Generate the full authorization URL.
@@ -92,19 +99,32 @@ impl SpotOauthClient {
             .set_pkce_challenge(pkce_challenge)
             .url();
 
-        if let Err(err) = open::that(auth_url.to_string()) {
-            error!("An error occurred when opening '{auth_url}': {err}")
-        }
+        Ok(AuthcodeChallenge {
+            pkce_verifier,
+            auth_url,
+            listener: tokio::task::spawn_local(async move {
+                let result = wait_for_authcode(csrf_token).await;
+                notify_complete();
+                result
+            }),
+        })
+    }
 
-        let res = wait_for_authcode().await?;
-        if *csrf_token.secret() != *res.csrf_token.secret() {
-            return Err(OAuthError::InvalidState);
-        }
+    /// Obtain a Spotify access token using the authorization code with PKCE OAuth flow.
+    /// The redirect_uri must match what is registered to the client ID.
+    pub async fn exchange_authcode(
+        &self,
+        challenge: AuthcodeChallenge,
+    ) -> Result<Credentials, OAuthError> {
+        let code = challenge
+            .listener
+            .await
+            .map_err(|_| OAuthError::AuthCodeListenerTerminated)??;
 
         let token = self
             .client
-            .exchange_code(res.code)
-            .set_pkce_verifier(pkce_verifier)
+            .exchange_code(code)
+            .set_pkce_verifier(challenge.pkce_verifier)
             .request_async(async_http_client)
             .await
             .map_err(|e| match e {
@@ -204,7 +224,7 @@ impl SpotOauthClient {
             "Refreshing token in approx {}min",
             duration.as_secs().div_euclid(60)
         );
-        time::sleep(duration.saturating_sub(Duration::from_secs(10))).await;
+        tokio::time::sleep(duration.saturating_sub(Duration::from_secs(10))).await;
 
         info!("Refreshing token...");
         self.refresh_token(old_token).await
@@ -244,13 +264,8 @@ pub enum OAuthError {
     InvalidState,
 }
 
-struct OAuthResult {
-    csrf_token: CsrfToken,
-    code: AuthorizationCode,
-}
-
 /// Spawn HTTP server at provided socket address to accept OAuth callback and return auth code.
-async fn wait_for_authcode() -> Result<OAuthResult, OAuthError> {
+async fn wait_for_authcode(expected_state: CsrfToken) -> Result<AuthorizationCode, OAuthError> {
     let addr = get_socket_address(REDIRECT_URI).expect("Invalid redirect uri");
 
     let listener = tokio::net::TcpListener::bind(addr)
@@ -261,6 +276,18 @@ async fn wait_for_authcode() -> Result<OAuthResult, OAuthError> {
         .accept()
         .await
         .map_err(|_| OAuthError::AuthCodeListenerTerminated)?;
+
+    let mut request_line = String::new();
+    let mut reader = BufReader::new(&mut stream);
+    reader
+        .read_line(&mut request_line)
+        .await
+        .map_err(|_| OAuthError::AuthCodeListenerParse)?;
+
+    let (state, code) = parse_query(&request_line)?;
+    if *expected_state.secret() != *state.secret() {
+        return Err(OAuthError::InvalidState);
+    }
 
     let message = include_str!("./login.html");
     let response = format!(
@@ -273,17 +300,10 @@ async fn wait_for_authcode() -> Result<OAuthResult, OAuthError> {
         .await
         .map_err(|_| OAuthError::AuthCodeListenerWrite)?;
 
-    let mut request_line = String::new();
-    let mut reader = BufReader::new(stream);
-    reader
-        .read_line(&mut request_line)
-        .await
-        .map_err(|_| OAuthError::AuthCodeListenerParse)?;
-
-    parse_query(&request_line)
+    Ok(code)
 }
 
-fn parse_query(request_line: &str) -> Result<OAuthResult, OAuthError> {
+fn parse_query(request_line: &str) -> Result<(CsrfToken, AuthorizationCode), OAuthError> {
     let query = request_line
         .split_whitespace()
         .nth(1)
@@ -305,7 +325,7 @@ fn parse_query(request_line: &str) -> Result<OAuthResult, OAuthError> {
         .map(AuthorizationCode::new)
         .ok_or(OAuthError::AuthCodeNotFound)?;
 
-    Ok(OAuthResult { csrf_token, code })
+    Ok((csrf_token, code))
 }
 
 // If the specified `redirect_uri` is HTTP, loopback, and contains a port,
