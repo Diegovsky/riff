@@ -92,7 +92,7 @@ impl Sidebar {
         let popover = CreatePlaylistPopover::new();
         popover.connect_create(clone!(@weak model => move |t| model.create_new_playlist(t)));
 
-        let list_store = gio::ListStore::new(SidebarItem::static_type());
+        let list_store = gio::ListStore::new::<SidebarItem>();
 
         list_store.append(&SidebarItem::from_destination(SidebarDestination::Library));
         list_store.append(&SidebarItem::from_destination(

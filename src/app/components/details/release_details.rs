@@ -42,12 +42,7 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for ReleaseDetailsWindow {
-        fn constructed(&self) {
-            self.parent_constructed();
-        }
-    }
-
+    impl ObjectImpl for ReleaseDetailsWindow {}
     impl WidgetImpl for ReleaseDetailsWindow {}
     impl AdwWindowImpl for ReleaseDetailsWindow {}
     impl WindowImpl for ReleaseDetailsWindow {}

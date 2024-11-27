@@ -33,9 +33,6 @@ mod imp {
         pub header_widget: TemplateChild<PlaylistHeaderWidget>,
 
         #[template_child]
-        pub header_mobile: TemplateChild<PlaylistHeaderWidget>,
-
-        #[template_child]
         pub tracks: TemplateChild<gtk::ListView>,
     }
 
@@ -57,13 +54,7 @@ mod imp {
     impl ObjectImpl for PlaylistDetailsWidget {
         fn constructed(&self) {
             self.parent_constructed();
-            self.header_mobile.set_centered();
             self.header_widget.set_grows_automatically();
-            self.header_widget
-                .entry()
-                .bind_property("text", self.header_mobile.entry(), "text")
-                .flags(glib::BindingFlags::BIDIRECTIONAL)
-                .build();
         }
     }
 
@@ -118,7 +109,6 @@ impl PlaylistDetailsWidget {
 
     fn set_editing(&self, editing: bool) {
         self.imp().header_widget.set_editing(editing);
-        self.imp().header_mobile.set_editing(editing);
         self.imp().headerbar.set_editing(editing);
     }
 
@@ -128,26 +118,22 @@ impl PlaylistDetailsWidget {
 
     fn set_info(&self, playlist: &str, owner: &str) {
         self.imp().header_widget.set_info(playlist, owner);
-        self.imp().header_mobile.set_info(playlist, owner);
         self.imp().headerbar.set_title(Some(playlist));
     }
 
     fn set_playing(&self, is_playing: bool) {
         self.imp().header_widget.set_playing(is_playing);
-        self.imp().header_mobile.set_playing(is_playing);
     }
 
     fn set_artwork(&self, art: &gdk_pixbuf::Pixbuf) {
         self.imp().header_widget.set_artwork(art);
-        self.imp().header_mobile.set_artwork(art);
     }
 
     fn connect_owner_clicked<F>(&self, f: F)
     where
-        F: Fn() + Clone + 'static,
+        F: Fn() + 'static,
     {
-        self.imp().header_widget.connect_owner_clicked(f.clone());
-        self.imp().header_mobile.connect_owner_clicked(f);
+        self.imp().header_widget.connect_owner_clicked(f);
     }
 
     pub fn connect_edit<F>(&self, f: F)
@@ -165,17 +151,15 @@ impl PlaylistDetailsWidget {
             .headerbar
             .connect_cancel(clone!(@weak self as _self => move || {
                 _self.imp().header_widget.reset_playlist_name();
-                _self.imp().header_mobile.reset_playlist_name();
                 f();
             }));
     }
 
     pub fn connect_play<F>(&self, f: F)
     where
-        F: Fn() + Clone + 'static,
+        F: Fn() + 'static,
     {
-        self.imp().header_widget.connect_play(f.clone());
-        self.imp().header_mobile.connect_play(f);
+        self.imp().header_widget.connect_play(f);
     }
 
     pub fn connect_done<F>(&self, f: F)

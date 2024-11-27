@@ -159,7 +159,7 @@ impl App {
         dispatcher: Box<dyn ActionDispatcher>,
         worker: Worker,
     ) -> Box<Navigation> {
-        let leaflet: libadwaita::Leaflet = builder.object("leaflet").unwrap();
+        let split_view: libadwaita::NavigationSplitView = builder.object("split_view").unwrap();
         let navigation_stack: gtk::Stack = builder.object("navigation_stack").unwrap();
         let home_listbox: gtk::ListBox = builder.object("home_listbox").unwrap();
         let model = NavigationModel::new(Rc::clone(&app_model), dispatcher.box_clone());
@@ -168,11 +168,10 @@ impl App {
             Rc::clone(&app_model),
             dispatcher.box_clone(),
             worker,
-            leaflet.clone(),
         );
         Box::new(Navigation::new(
             model,
-            leaflet,
+            split_view,
             navigation_stack,
             home_listbox,
             screen_factory,

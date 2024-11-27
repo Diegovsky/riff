@@ -78,18 +78,7 @@ impl SearchResultsWidget {
     pub fn new() -> Self {
         glib::Object::new()
     }
-
-    pub fn bind_to_leaflet(&self, leaflet: &libadwaita::Leaflet) {
-        leaflet
-            .bind_property(
-                "folded",
-                &*self.imp().main_header,
-                "show-start-title-buttons",
-            )
-            .build();
-        leaflet.notify("folded");
-    }
-
+    
     pub fn connect_go_back<F>(&self, f: F)
     where
         F: Fn() + 'static,
@@ -160,14 +149,17 @@ pub struct SearchResults {
 }
 
 impl SearchResults {
-    pub fn new(model: SearchResultsModel, worker: Worker, leaflet: &libadwaita::Leaflet) -> Self {
+    pub fn new(
+        model: SearchResultsModel,
+        worker: Worker, //, leaflet: &libadwaita::Leaflet
+    ) -> Self {
         let model = Rc::new(model);
         let widget = SearchResultsWidget::new();
 
-        let album_results_model = gio::ListStore::new(AlbumModel::static_type());
-        let artist_results_model = gio::ListStore::new(ArtistModel::static_type());
+        let album_results_model = gio::ListStore::new::<AlbumModel>();
+        let artist_results_model = gio::ListStore::new::<ArtistModel>();
 
-        widget.bind_to_leaflet(leaflet);
+        // widget.bind_to_leaflet(leaflet);
 
         widget.connect_go_back(clone!(@weak model => move || {
             model.go_back();

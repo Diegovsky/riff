@@ -68,7 +68,7 @@ impl LoginWindow {
         let window = self.upcast_ref::<libadwaita::Window>();
         window.connect_close_request(move |_| {
             on_close();
-            gtk::Inhibit(false)
+            glib::Propagation::Stop
         });
     }
 

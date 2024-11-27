@@ -34,9 +34,6 @@ mod imp {
         pub header_widget: TemplateChild<AlbumHeaderWidget>,
 
         #[template_child]
-        pub header_mobile: TemplateChild<AlbumHeaderWidget>,
-
-        #[template_child]
         pub album_tracks: TemplateChild<gtk::ListView>,
     }
 
@@ -58,7 +55,7 @@ mod imp {
     impl ObjectImpl for AlbumDetailsWidget {
         fn constructed(&self) {
             self.parent_constructed();
-            self.header_mobile.set_centered();
+            // self.header_mobile.set_centered();
             self.headerbar.add_classes(&["details__headerbar"]);
         }
     }
@@ -118,59 +115,49 @@ impl AlbumDetailsWidget {
 
     fn connect_liked<F>(&self, f: F)
     where
-        F: Fn() + Clone + 'static,
+        F: Fn() + 'static,
     {
-        self.imp().header_widget.connect_liked(f.clone());
-        self.imp().header_mobile.connect_liked(f);
+        self.imp().header_widget.connect_liked(f);
     }
 
     fn connect_play<F>(&self, f: F)
     where
-        F: Fn() + Clone + 'static,
+        F: Fn() + 'static,
     {
-        self.imp().header_widget.connect_play(f.clone());
-        self.imp().header_mobile.connect_play(f);
+        self.imp().header_widget.connect_play(f);
     }
 
     fn connect_info<F>(&self, f: F)
     where
-        F: Fn() + Clone + 'static,
+        F: Fn() + 'static,
     {
-        self.imp().header_widget.connect_info(f.clone());
-        self.imp().header_mobile.connect_info(f);
+        self.imp().header_widget.connect_info(f);
     }
 
     fn set_liked(&self, is_liked: bool) {
         self.imp().header_widget.set_liked(is_liked);
-        self.imp().header_mobile.set_liked(is_liked);
     }
 
     fn set_playing(&self, is_playing: bool) {
         self.imp().header_widget.set_playing(is_playing);
-        self.imp().header_mobile.set_playing(is_playing);
     }
 
     fn set_album_and_artist_and_year(&self, album: &str, artist: &str, year: Option<u32>) {
         self.imp()
             .header_widget
             .set_album_and_artist_and_year(album, artist, year);
-        self.imp()
-            .header_mobile
-            .set_album_and_artist_and_year(album, artist, year);
         self.imp().headerbar.set_title_and_subtitle(album, artist);
     }
 
     fn set_artwork(&self, art: &gdk_pixbuf::Pixbuf) {
         self.imp().header_widget.set_artwork(art);
-        self.imp().header_mobile.set_artwork(art);
     }
 
     fn connect_artist_clicked<F>(&self, f: F)
     where
-        F: Fn() + Clone + 'static,
+        F: Fn() + 'static,
     {
-        self.imp().header_widget.connect_artist_clicked(f.clone());
-        self.imp().header_mobile.connect_artist_clicked(f);
+        self.imp().header_widget.connect_artist_clicked(f);
     }
 }
 
@@ -183,7 +170,10 @@ pub struct Details {
 }
 
 impl Details {
-    pub fn new(model: Rc<DetailsModel>, worker: Worker, leaflet: &libadwaita::Leaflet) -> Self {
+    pub fn new(
+        model: Rc<DetailsModel>,
+        worker: Worker,
+    ) -> Self {
         if model.get_album_info().is_none() {
             model.load_album_info();
         }
@@ -197,7 +187,6 @@ impl Details {
         ));
 
         let headerbar_widget = widget.headerbar_widget();
-        headerbar_widget.bind_to_leaflet(leaflet);
         let headerbar = Box::new(HeaderBarComponent::new(
             headerbar_widget.clone(),
             model.to_headerbar_model(),

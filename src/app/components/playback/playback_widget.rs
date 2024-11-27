@@ -154,13 +154,13 @@ impl PlaybackWidget {
         let widget = self.imp();
         widget.seek_bar.set_increments(5_000.0, 10_000.0);
         widget.seek_bar.connect_change_value(
-            clone!(@weak self as _self => @default-return glib::signal::Inhibit(false), move |_, _, requested| {
+            clone!(@weak self as _self => @default-return glib::Propagation::Proceed, move |_, _, requested| {
                 _self.imp()
                     .track_position
                     .set_text(&format_duration(requested));
                 let seek = seek.clone();
                 debouncer.debounce(200, move || seek(requested as u32));
-                glib::signal::Inhibit(false)
+                glib::Propagation::Proceed
             }),
         );
     }

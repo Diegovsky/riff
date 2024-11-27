@@ -41,7 +41,7 @@ fn main() {
     // In debug mode, the app id is different (see meson config) so we fix the resource path (and add a distinctive style)
     // Having a different app id allows running both the stable and development version at the same time
     if cfg!(debug_assertions) {
-        window.add_css_class("devel");
+        // window.add_css_class("devel");
         gtk_app.set_resource_base_path(Some("/dev/alextren/Spot"));
     }
 

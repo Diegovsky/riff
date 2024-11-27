@@ -36,7 +36,7 @@ impl Clock {
             Duration::from_millis(self.interval_ms.into()),
             move || {
                 tick();
-                glib::Continue(true)
+                glib::ControlFlow::Continue
             },
         ));
         if let Some(previous_source) = self.source.replace(new_source) {
@@ -68,7 +68,7 @@ impl Debouncer {
                 if let Some(cell) = source_clone.upgrade() {
                     cell.set(None);
                 }
-                glib::Continue(false)
+                glib::ControlFlow::Break
             });
         if let Some(previous_source) = self.0.replace(Some(new_source)) {
             previous_source.remove();
@@ -119,7 +119,11 @@ where
                     continue_ = f(p);
                 }
             }
-            glib::Continue(continue_)
+            if continue_ {
+                glib::ControlFlow::Continue
+            } else {
+                glib::ControlFlow::Break
+            }
         });
     }
 }

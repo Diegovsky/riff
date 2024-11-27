@@ -6,9 +6,12 @@ use gtk::{glib, CompositeTemplate};
 
 mod imp {
 
+    use std::cell::Cell;
+
     use super::*;
 
-    #[derive(Debug, Default, CompositeTemplate)]
+    #[derive(Debug, Default, CompositeTemplate, glib::Properties)]
+    #[properties(wrapper_type = super::AlbumHeaderWidget)]
     #[template(resource = "/dev/alextren/Spot/components/album_header.ui")]
     pub struct AlbumHeaderWidget {
         #[template_child]
@@ -43,6 +46,39 @@ mod imp {
 
         #[template_child]
         pub year_label: TemplateChild<gtk::Label>,
+
+        #[property(get, set = Self::set_vertical, name = "vertical-layout")]
+        pub vertical_layout: Cell<bool>,
+    }
+
+    impl AlbumHeaderWidget {
+        pub fn set_vertical(&self, vertical: bool) {
+            let self_ = self.obj();
+            let box_ = self_.upcast_ref::<gtk::Box>();
+            if vertical {
+                box_.set_orientation(gtk::Orientation::Vertical);
+                box_.set_spacing(12);
+                self.album_label.set_halign(gtk::Align::Center);
+                self.album_label.set_justify(gtk::Justification::Center);
+                self.artist_button.set_halign(gtk::Align::Center);
+                self.year_label.set_halign(gtk::Align::Center);
+                self.button_box.set_halign(gtk::Align::Center);
+                self.album_overlay.set_margin_start(0);
+                self.button_box.set_margin_end(0);
+                self.album_info.set_margin_start(0);
+            } else {
+                box_.set_orientation(gtk::Orientation::Horizontal);
+                box_.set_spacing(0);
+                self.album_label.set_halign(gtk::Align::Start);
+                self.album_label.set_justify(gtk::Justification::Left);
+                self.artist_button.set_halign(gtk::Align::Start);
+                self.year_label.set_halign(gtk::Align::Start);
+                self.button_box.set_halign(gtk::Align::Start);
+                self.album_overlay.set_margin_start(6);
+                self.button_box.set_margin_end(6);
+                self.album_info.set_margin_start(18);
+            }
+        }
     }
 
     #[glib::object_subclass]
@@ -61,6 +97,7 @@ mod imp {
         }
     }
 
+    #[glib::derived_properties]
     impl ObjectImpl for AlbumHeaderWidget {}
     impl WidgetImpl for AlbumHeaderWidget {}
     impl BoxImpl for AlbumHeaderWidget {}
@@ -108,7 +145,7 @@ impl AlbumHeaderWidget {
     {
         self.imp().artist_button.connect_activate_link(move |_| {
             f();
-            glib::signal::Inhibit(true)
+            glib::Propagation::Stop
         });
     }
 
@@ -138,8 +175,9 @@ impl AlbumHeaderWidget {
         self.imp().play_button.set_tooltip_text(tooltip_text);
     }
 
-    pub fn set_artwork(&self, art: &gdk_pixbuf::Pixbuf) {
-        self.imp().album_art.set_from_pixbuf(Some(art));
+    pub fn set_artwork(&self, pixbuf: &gdk_pixbuf::Pixbuf) {
+        let texture = gdk::Texture::for_pixbuf(pixbuf);
+        self.imp().album_art.set_from_paintable(Some(&texture));
     }
 
     pub fn set_album_and_artist_and_year(&self, album: &str, artist: &str, year: Option<u32>) {
@@ -150,17 +188,5 @@ impl AlbumHeaderWidget {
             Some(year) => widget.year_label.set_label(&year.to_string()),
             None => widget.year_label.set_visible(false),
         }
-    }
-
-    pub fn set_centered(&self) {
-        let widget = self.imp();
-        widget.album_label.set_halign(gtk::Align::Center);
-        widget.album_label.set_justify(gtk::Justification::Center);
-        widget.artist_button.set_halign(gtk::Align::Center);
-        widget.year_label.set_halign(gtk::Align::Center);
-        widget.button_box.set_halign(gtk::Align::Center);
-        widget.album_overlay.set_margin_start(0);
-        widget.button_box.set_margin_end(0);
-        widget.album_info.set_margin_start(0);
     }
 }

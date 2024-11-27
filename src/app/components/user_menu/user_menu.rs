@@ -22,9 +22,9 @@ impl UserMenu {
         let model = Rc::new(model);
 
         about.connect_close_request(
-            clone!(@weak about => @default-return gtk::Inhibit(false), move |_| {
+            clone!(@weak about => @default-return glib::Propagation::Proceed, move |_| {
                 about.set_visible(false);
-                gtk::Inhibit(true)
+                glib::Propagation::Stop
             }),
         );
 

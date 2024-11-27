@@ -82,7 +82,7 @@ impl LibraryWidget {
     {
         self.imp()
             .flowbox
-            .bind_model(Some(store.unsafe_store()), move |item| {
+            .bind_model(Some(store.inner()), move |item| {
                 wrap_flowbox_item(item, |album_model| {
                     let f = on_album_pressed.clone();
                     let album = AlbumWidget::for_model(album_model, worker.clone());

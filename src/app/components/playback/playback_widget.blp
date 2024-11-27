@@ -16,85 +16,114 @@ template $PlaybackWidget : Box {
     ]
   }
 
-  Adw.Squeezer {
-    margin-top: 4;
-    margin-bottom: 4;
-    margin-start: 8;
-    margin-end: 8;
+  Adw.BreakpointBin {
+    width-request: 1;
+    height-request: 1;
 
-    Grid {
-      hexpand: true;
-      column-homogeneous: true;
+    Adw.Breakpoint {
+      condition("max-width:700sp")
 
-      $PlaybackInfoWidget now_playing {
-        receives-default: "1";
-        halign: "start";
-        valign: "center";
-        has-frame: "0";
-
-        layout {
-          column-span: "1";
-          column: "0";
-          row: "0";
-        }
-      }
-
-      $PlaybackControlsWidget controls {
-        layout {
-          column-span: "1";
-          column: "1";
-          row: "0";
-        }
-      }
-
-      Box {
-        margin-top: 4;
-        margin-bottom: 4;
-        margin-start: 4;
-        margin-end: 4;
-
-        layout {
-          column-span: "1";
-          column: "2";
-          row: "0";
-        }
-
-        Label track_position {
-          sensitive: false;
-          label: "0∶00";
-          halign: end;
-          hexpand: true;
-
-          styles [
-            "numeric",
-          ]
-        }
-
-        Label track_duration {
-          sensitive: false;
-          label: " / 0∶00";
-          halign: end;
-
-          styles [
-            "numeric",
-          ]
-        }
+      setters {
+        stack.visible-child-name: "mobile";
       }
     }
 
-    Box {
-      halign: fill;
-      hexpand: true;
+    Stack stack {
+      visible-child-name: "desktop";
+      hhomogeneous: false;
 
-      $PlaybackInfoWidget now_playing_mobile {
-        receives-default: "1";
-        halign: "start";
-        valign: "center";
-        has-frame: "0";
+      StackPage {
+        name: "desktop";
+        child: Grid {
+          halign: fill;
+          hexpand: true;
+          column-homogeneous: true;
+
+          $PlaybackInfoWidget now_playing {
+            receives-default: "1";
+            halign: "start";
+            valign: "center";
+            has-frame: "0";
+
+            layout {
+              column-span: "1";
+              column: "0";
+              row: "0";
+            }
+          }
+
+          $PlaybackControlsWidget controls {
+            layout {
+              column-span: "1";
+              column: "1";
+              row: "0";
+            }
+          }
+
+          Box {
+            margin-top: 4;
+            margin-bottom: 4;
+            margin-start: 4;
+            margin-end: 4;
+
+            layout {
+              column-span: "1";
+              column: "2";
+              row: "0";
+            }
+
+            Label track_position {
+              sensitive: false;
+              label: "0∶00";
+              halign: end;
+              hexpand: true;
+
+              styles [
+                "numeric",
+              ]
+            }
+
+            Label track_duration {
+              sensitive: false;
+              label: " / 0∶00";
+              halign: end;
+
+              styles [
+                "numeric",
+              ]
+            }
+          }
+        };
       }
+      
+      StackPage {
+        name: "mobile";
+        child: Grid {
+          halign: fill;
+          hexpand: true;
+          column-homogeneous: false;
 
-      $PlaybackControlsWidget controls_mobile {
-        halign: "center";
+          $PlaybackInfoWidget now_playing_mobile {
+            receives-default: "1";
+            halign: "start";
+            valign: "center";
+            has-frame: "0";
+
+            layout {
+              column-span: "1";
+              column: "0";
+              row: "0";
+            }
+          }
+
+          $PlaybackControlsWidget controls_mobile {
+            layout {
+              column-span: "1";
+              column: "1";
+              row: "0";
+            }
+          }
+        };
       }
     }
   }

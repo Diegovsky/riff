@@ -15,25 +15,24 @@ template $PlaylistDetailsWidget : Adw.Bin {
       WindowHandle {
         Adw.Clamp {
           maximum-size: 900;
-
-          Adw.Squeezer {
-            valign: center;
-            homogeneous: false;
-            transition-type: crossfade;
-            switch-threshold-policy: natural;
-
-            $PlaylistHeaderWidget header_widget {
-            }
-
-            $PlaylistHeaderWidget header_mobile {
-              orientation: "vertical";
-              spacing: "12";
-            }
-          }
-
           styles [
             "playlist_details__clamp",
           ]
+
+          Adw.BreakpointBin {
+            width-request: 1;
+            height-request: 1;
+
+            Adw.Breakpoint {
+              condition("max-width:500sp")
+
+              setters {
+                header_widget.vertical-layout: true;
+              }
+            }
+
+            $PlaylistHeaderWidget header_widget {}
+          }
         }
       }
 

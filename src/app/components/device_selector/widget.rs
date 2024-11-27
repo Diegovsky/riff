@@ -111,7 +111,7 @@ impl DeviceSelectorWidget {
             let connect = SimpleAction::new_stateful(
                 CONNECT_ACTION,
                 Some(Option::<String>::static_variant_type().as_ref()),
-                Option::<String>::None.to_variant(),
+                &Option::<String>::None.to_variant(),
             );
             connect.connect_activate(move |action, device_id| {
                 if let Some(device_id) = device_id {

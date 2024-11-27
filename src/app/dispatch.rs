@@ -96,13 +96,13 @@ pub type FutureLocalTask = Pin<Box<dyn Future<Output = ()>>>;
 pub fn spawn_task_handler(context: &glib::MainContext) -> Worker {
     let (future_local_sender, future_local_receiver) = unbounded::<FutureLocalTask>();
     context.spawn_local_with_priority(
-        glib::source::PRIORITY_DEFAULT_IDLE,
+        glib::Priority::DEFAULT_IDLE,
         future_local_receiver.for_each(|t| t),
     );
 
     let (future_sender, future_receiver) = unbounded::<FutureTask>();
     context.spawn_with_priority(
-        glib::source::PRIORITY_DEFAULT_IDLE,
+        glib::Priority::DEFAULT_IDLE,
         future_receiver.for_each(|t| t),
     );
 

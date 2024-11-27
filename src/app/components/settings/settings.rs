@@ -243,9 +243,9 @@ impl SettingsWindow {
         let window = self.upcast_ref::<libadwaita::Window>();
 
         window.connect_close_request(
-            clone!(@weak self as _self => @default-return gtk::Inhibit(false), move |_| {
+            clone!(@weak self as _self => @default-return glib::Propagation::Proceed, move |_| {
                 on_close();
-                gtk::Inhibit(false)
+                glib::Propagation::Proceed
             }),
         );
     }

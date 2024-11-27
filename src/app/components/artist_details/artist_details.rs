@@ -89,7 +89,7 @@ impl ArtistDetailsWidget {
     {
         self.imp()
             .artist_releases
-            .bind_model(Some(store.unsafe_store()), move |item| {
+            .bind_model(Some(store.inner()), move |item| {
                 let item = item.downcast_ref::<AlbumModel>().unwrap();
                 let child = gtk::FlowBoxChild::new();
                 let album = AlbumWidget::for_model(item, worker.clone());

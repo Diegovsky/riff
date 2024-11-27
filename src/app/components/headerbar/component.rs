@@ -250,12 +250,12 @@ where
 {
     pub fn new(
         wrapped: impl ListenerComponent + 'static,
-        leaflet: &libadwaita::Leaflet,
+        // leaflet: &libadwaita::Leaflet,
         model: Rc<Model>,
     ) -> Self {
         let widget = HeaderBarWidget::new();
         common::bind_headerbar(&widget, &model);
-        widget.bind_to_leaflet(leaflet);
+        // widget.bind_to_leaflet(leaflet);
 
         let root = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)

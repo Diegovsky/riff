@@ -81,7 +81,7 @@ impl UserDetailsWidget {
     {
         self.imp()
             .user_playlists
-            .bind_model(Some(store.unsafe_store()), move |item| {
+            .bind_model(Some(store.inner()), move |item| {
                 wrap_flowbox_item(item, |item: &AlbumModel| {
                     let f = on_pressed.clone();
                     let album = AlbumWidget::for_model(item, worker.clone());

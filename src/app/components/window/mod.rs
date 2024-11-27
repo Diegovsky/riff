@@ -24,13 +24,13 @@ impl MainWindow {
         window: libadwaita::ApplicationWindow,
     ) -> Self {
         window.connect_close_request(
-            clone!(@weak app_model => @default-return gtk::Inhibit(false), move |window| {
+            clone!(@weak app_model => @default-return glib::Propagation::Proceed, move |window| {
                 let state = app_model.get_state();
                 if state.playback.is_playing() {
                     window.set_visible(false);
-                    gtk::Inhibit(true)
+                    glib::Propagation::Stop
                 } else {
-                    gtk::Inhibit(false)
+                    glib::Propagation::Proceed
                 }
             }),
         );

@@ -30,7 +30,7 @@ endif
 blueprints = custom_target('blueprints',
   build_always_stale: true,
   input: files(
-    'app/components/album/album.blp',
+    # 'app/components/album/album.blp',
     'app/components/artist/artist.blp',
     'app/components/artist_details/artist_details.blp',
     'app/components/details/album_header.blp',

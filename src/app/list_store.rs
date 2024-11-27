@@ -3,7 +3,8 @@ use glib::clone::{Downgrade, Upgrade};
 use std::iter::Iterator;
 use std::marker::PhantomData;
 
-// A typed wrapper around a GIO ListStore
+// A wrapper around a GIO ListStore
+// DEPRECATED
 pub struct ListStore<GType> {
     store: gio::ListStore,
     _marker: PhantomData<GType>,
@@ -20,12 +21,12 @@ where
 {
     pub fn new() -> Self {
         Self {
-            store: gio::ListStore::new(GType::static_type()),
+            store: gio::ListStore::new::<GType>(),
             _marker: PhantomData,
         }
     }
 
-    pub fn unsafe_store(&self) -> &gio::ListStore {
+    pub fn inner(&self) -> &gio::ListStore {
         &self.store
     }
 

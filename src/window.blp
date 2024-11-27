@@ -5,6 +5,14 @@ Adw.ApplicationWindow window {
   default-width: 1080;
   default-height: 720;
 
+  Adw.Breakpoint {
+    condition("max-width:550sp")
+
+    setters {
+      split_view.collapsed: true;
+    }
+  }
+
   Box {
     orientation: vertical;
 
@@ -42,16 +50,17 @@ Adw.ApplicationWindow window {
       }
     }
 
-    Adw.Leaflet leaflet {
+    Adw.NavigationSplitView split_view {
       vexpand: true;
 
-      Adw.LeafletPage {
-        navigatable: false;
+      sidebar: Adw.NavigationPage {
+        title: "Sidebar";
+
         child: Box {
           orientation: vertical;
 
           Adw.HeaderBar {
-            show-end-title-buttons: bind leaflet.folded;
+            styles ["flat"]
 
             Button search_button {
               icon-name: "system-search-symbolic";
@@ -80,17 +89,12 @@ Adw.ApplicationWindow window {
             }
           }
         };
-      }
+      };
 
-      Adw.LeafletPage {
-        navigatable: false;
-        child: Separator {
-          orientation: vertical;
-        };
-      }
+      content: Adw.NavigationPage {
+        tag: "main";
+        title: "Home";
 
-      Adw.LeafletPage {
-        name: "main";
         child: Box {
           orientation: vertical;
 
@@ -116,9 +120,7 @@ Adw.ApplicationWindow window {
             }
           }
         };
-      }
-
-      visible-child: main;
+      };
     }
   }
 }
