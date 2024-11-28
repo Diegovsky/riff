@@ -1,7 +1,6 @@
 use gio::prelude::*;
 use gio::ListModel;
 use glib::Properties;
-use glib::StaticType;
 use gtk::subclass::prelude::*;
 use std::cell::{Cell, Ref, RefCell, RefMut};
 

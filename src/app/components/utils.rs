@@ -142,8 +142,8 @@ where
 }
 
 pub fn wrap_flowbox_item<
-    Model: glib::IsA<glib::Object>,
-    Widget: gtk::glib::IsA<gtk::Widget>,
+    Model: IsA<glib::Object>,
+    Widget: IsA<gtk::Widget>,
     F: Fn(&Model) -> Widget,
 >(
     item: &glib::Object,

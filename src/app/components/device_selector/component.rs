@@ -1,7 +1,7 @@
 use std::ops::Deref;
 use std::rc::Rc;
 
-use glib::Cast;
+use gtk::prelude::Cast;
 
 use crate::app::components::{Component, EventListener};
 use crate::app::models::ConnectDevice;

@@ -2,7 +2,7 @@ use crate::app::models::{ConnectDevice, ConnectDeviceKind};
 use crate::app::state::Device;
 use gettextrs::gettext;
 use gio::{Action, SimpleAction, SimpleActionGroup};
-use glib::FromVariant;
+use gdk::prelude::FromVariant;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;

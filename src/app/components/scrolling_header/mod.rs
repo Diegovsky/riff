@@ -1,5 +1,5 @@
 mod scrolling_header_widget;
-use glib::StaticType;
+use gtk::prelude::StaticType;
 pub use scrolling_header_widget::*;
 
 pub fn expose_widgets() {

@@ -1,6 +1,7 @@
 use gettextrs::*;
 use gio::{prelude::ActionMapExt, SimpleAction, SimpleActionGroup};
 use gtk::prelude::*;
+use libadwaita::prelude::AdwDialogExt;
 use std::rc::Rc;
 
 use super::UserMenuModel;
@@ -16,17 +17,11 @@ impl UserMenu {
     pub fn new(
         user_button: gtk::MenuButton,
         settings: Settings,
-        about: libadwaita::AboutWindow,
+        about: libadwaita::AboutDialog,
+        parent: gtk::Window,
         model: UserMenuModel,
     ) -> Self {
         let model = Rc::new(model);
-
-        about.connect_close_request(
-            clone!(@weak about => @default-return glib::Propagation::Proceed, move |_| {
-                about.set_visible(false);
-                glib::Propagation::Stop
-            }),
-        );
 
         let action_group = SimpleActionGroup::new();
 
@@ -48,8 +43,8 @@ impl UserMenu {
 
         action_group.add_action(&{
             let about_action = SimpleAction::new("about", None);
-            about_action.connect_activate(clone!(@weak about => move |_, _| {
-                about.present();
+            about_action.connect_activate(clone!(@weak about, @weak parent => move |_, _| {
+                about.present(&parent);
             }));
             about_action
         });

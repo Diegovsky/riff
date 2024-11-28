@@ -1,4 +1,4 @@
-use glib::StaticType;
+use gtk::prelude::StaticType;
 
 mod component;
 pub use component::*;

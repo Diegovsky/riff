@@ -49,7 +49,7 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct ReleaseDetailsWindow(ObjectSubclass<imp::ReleaseDetailsWindow>) @extends gtk::Widget, libadwaita::Window, libadwaita::PreferencesWindow;
+    pub struct ReleaseDetailsWindow(ObjectSubclass<imp::ReleaseDetailsWindow>) @extends gtk::Widget, libadwaita::Window;
 }
 
 impl Default for ReleaseDetailsWindow {

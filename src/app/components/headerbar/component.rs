@@ -1,6 +1,5 @@
 use std::rc::Rc;
 
-use glib::Cast;
 use gtk::prelude::*;
 
 use crate::app::{

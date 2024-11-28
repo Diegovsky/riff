@@ -51,7 +51,7 @@ fn main() {
 
     // Couple of actions used with shortcuts
     register_actions(&gtk_app, sender.clone());
-    setup_credits(builder.object::<libadwaita::AboutWindow>("about").unwrap());
+    setup_credits(builder.object::<libadwaita::AboutDialog>("about").unwrap());
 
     // Main app logic is hooked up here
     let app = App::new(
@@ -124,7 +124,7 @@ fn setup_gtk(settings: &settings::SpotSettings) {
     );
 }
 
-fn setup_credits(about: libadwaita::AboutWindow) {
+fn setup_credits(about: libadwaita::AboutDialog) {
     // Read from a couple files at compile time and update the about dialog
     let authors: Vec<&str> = include_str!("../AUTHORS")
         .trim_end_matches('\n')

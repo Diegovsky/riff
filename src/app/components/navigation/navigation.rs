@@ -1,4 +1,4 @@
-use gtk::traits::WidgetExt;
+use gtk::prelude::WidgetExt;
 use std::rc::Rc;
 
 use crate::app::components::{EventListener, ListenerComponent};
@@ -26,31 +26,27 @@ impl Navigation {
     ) -> Self {
         let model = Rc::new(model);
 
-        split_view.connect_collapsed_notify(
-            clone!(@weak model => move |split_view| {
-                let is_main = split_view.shows_content();
-                let folded = split_view.is_collapsed();
-                if folded {
-                    split_view.add_css_class("collapsed");
-                } else {
-                    split_view.remove_css_class("collapsed");
-                }
-                model.set_nav_hidden(folded && is_main);
-            })
-        );
+        split_view.connect_collapsed_notify(clone!(@weak model => move |split_view| {
+            let is_main = split_view.shows_content();
+            let folded = split_view.is_collapsed();
+            if folded {
+                split_view.add_css_class("collapsed");
+            } else {
+                split_view.remove_css_class("collapsed");
+            }
+            model.set_nav_hidden(folded && is_main);
+        }));
 
-        split_view.connect_show_content_notify(
-            clone!(@weak model => move |split_view| {
-                let is_main = split_view.shows_content();
-                let folded = split_view.is_collapsed();
-                if folded {
-                    split_view.add_css_class("collapsed");
-                } else {
-                    split_view.remove_css_class("collapsed");
-                }
-                model.set_nav_hidden(folded && is_main);
-            })
-        );
+        split_view.connect_show_content_notify(clone!(@weak model => move |split_view| {
+            let is_main = split_view.shows_content();
+            let folded = split_view.is_collapsed();
+            if folded {
+                split_view.add_css_class("collapsed");
+            } else {
+                split_view.remove_css_class("collapsed");
+            }
+            model.set_nav_hidden(folded && is_main);
+        }));
 
         Self {
             model,
