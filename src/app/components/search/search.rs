@@ -151,15 +151,13 @@ pub struct SearchResults {
 impl SearchResults {
     pub fn new(
         model: SearchResultsModel,
-        worker: Worker, //, leaflet: &libadwaita::Leaflet
+        worker: Worker,
     ) -> Self {
         let model = Rc::new(model);
         let widget = SearchResultsWidget::new();
 
         let album_results_model = gio::ListStore::new::<AlbumModel>();
         let artist_results_model = gio::ListStore::new::<ArtistModel>();
-
-        // widget.bind_to_leaflet(leaflet);
 
         widget.connect_go_back(clone!(@weak model => move || {
             model.go_back();
