@@ -79,7 +79,7 @@ impl AlbumWidget {
 
     fn set_image(&self, pixbuf: &gdk_pixbuf::Pixbuf) {
         let texture = gdk::Texture::for_pixbuf(pixbuf);
-        self.imp().cover_image.set_from_paintable(Some(&texture));
+        self.imp().cover_image.set_paintable(Some(&texture));
     }
 
     fn bind(&self, album_model: &AlbumModel, worker: Worker) {
@@ -122,11 +122,9 @@ impl AlbumWidget {
         }
     }
 
-    pub fn connect_album_pressed<F: Fn(&Self) + 'static>(&self, f: F) {
-        self.imp()
-            .cover_btn
-            .connect_clicked(clone!(@weak self as _self => move |_| {
-                f(&_self);
-            }));
+    pub fn connect_album_pressed<F: Fn() + 'static>(&self, f: F) {
+        self.imp().cover_btn.connect_clicked(move |_| {
+            f();
+        });
     }
 }

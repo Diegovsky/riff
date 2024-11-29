@@ -85,9 +85,13 @@ impl UserDetailsWidget {
                 wrap_flowbox_item(item, |item: &AlbumModel| {
                     let f = on_pressed.clone();
                     let album = AlbumWidget::for_model(item, worker.clone());
-                    album.connect_album_pressed(clone!(@weak item => move |_| {
-                        f(item.uri());
-                    }));
+                    album.connect_album_pressed(clone!(
+                        #[weak]
+                        item,
+                        move || {
+                            f(item.uri());
+                        }
+                    ));
                     album
                 })
             });
@@ -106,17 +110,25 @@ impl UserDetails {
         let widget = UserDetailsWidget::new();
         let model = Rc::new(model);
 
-        widget.connect_bottom_edge(clone!(@weak model => move || {
-            model.load_more();
-        }));
+        widget.connect_bottom_edge(clone!(
+            #[weak]
+            model,
+            move || {
+                model.load_more();
+            }
+        ));
 
         if let Some(store) = model.get_list_store() {
             widget.bind_user_playlists(
                 worker,
                 &store,
-                clone!(@weak model => move |uri| {
-                    model.open_playlist(uri);
-                }),
+                clone!(
+                    #[weak]
+                    model,
+                    move |uri| {
+                        model.open_playlist(uri);
+                    }
+                ),
             );
         }
 

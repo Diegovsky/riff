@@ -41,7 +41,7 @@ mod imp {
         type Type = super::ArtistModel;
         type ParentType = glib::Object;
     }
-    
+
     #[glib::derived_properties]
     impl ObjectImpl for ArtistModel {}
 }

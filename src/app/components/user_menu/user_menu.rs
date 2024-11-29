@@ -27,25 +27,35 @@ impl UserMenu {
 
         action_group.add_action(&{
             let logout = SimpleAction::new("logout", None);
-            logout.connect_activate(clone!(@weak model => move |_, _| {
-                model.logout();
-            }));
+            logout.connect_activate(clone!(
+                #[weak]
+                model,
+                move |_, _| {
+                    model.logout();
+                }
+            ));
             logout
         });
 
         action_group.add_action(&{
             let settings_action = SimpleAction::new("settings", None);
-            settings_action.connect_activate(clone!(@weak model => move |_, _| {
+            settings_action.connect_activate(move |_, _| {
                 settings.show_self();
-            }));
+            });
             settings_action
         });
 
         action_group.add_action(&{
             let about_action = SimpleAction::new("about", None);
-            about_action.connect_activate(clone!(@weak about, @weak parent => move |_, _| {
-                about.present(&parent);
-            }));
+            about_action.connect_activate(clone!(
+                #[weak]
+                about,
+                #[weak]
+                parent,
+                move |_, _| {
+                    about.present(Some(&parent));
+                }
+            ));
             about_action
         });
 

@@ -177,7 +177,7 @@ impl AlbumHeaderWidget {
 
     pub fn set_artwork(&self, pixbuf: &gdk_pixbuf::Pixbuf) {
         let texture = gdk::Texture::for_pixbuf(pixbuf);
-        self.imp().album_art.set_from_paintable(Some(&texture));
+        self.imp().album_art.set_paintable(Some(&texture));
     }
 
     pub fn set_album_and_artist_and_year(&self, album: &str, artist: &str, year: Option<u32>) {

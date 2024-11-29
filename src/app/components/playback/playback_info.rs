@@ -58,10 +58,10 @@ impl PlaybackInfoWidget {
             .set_label(&gettext("No song playing"));
         widget
             .playing_image
-            .set_from_icon_name(Some("emblem-music-symbolic"));
+            .set_icon_name(Some("emblem-music-symbolic"));
         widget
             .playing_image
-            .set_from_icon_name(Some("emblem-music-symbolic"));
+            .set_icon_name(Some("emblem-music-symbolic"));
     }
 
     pub fn set_info_visible(&self, visible: bool) {
@@ -70,6 +70,6 @@ impl PlaybackInfoWidget {
 
     pub fn set_artwork(&self, pixbuf: &gdk_pixbuf::Pixbuf) {
         let texture = gdk::Texture::for_pixbuf(pixbuf);
-        self.imp().playing_image.set_from_paintable(Some(&texture));
+        self.imp().playing_image.set_paintable(Some(&texture));
     }
 }

@@ -116,7 +116,7 @@ impl HeaderBarWidget {
     {
         self.imp().go_back.connect_clicked(move |_| f());
     }
-    
+
     pub fn set_can_go_back(&self, can_go_back: bool) {
         self.imp().go_back.set_visible(can_go_back);
     }

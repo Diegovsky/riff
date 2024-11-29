@@ -155,7 +155,7 @@ impl SongWidget {
 
     fn set_image(&self, pixbuf: &gdk_pixbuf::Pixbuf) {
         let texture = gdk::Texture::for_pixbuf(pixbuf);
-        self.imp().song_cover.set_from_paintable(Some(&texture));
+        self.imp().song_cover.set_paintable(Some(&texture));
     }
 
     pub fn set_art(&self, model: &SongModel, worker: Worker) {

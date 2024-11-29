@@ -1,7 +1,7 @@
 use crate::app::components::EventListener;
 use crate::app::AppEvent;
-use gettextrs::*;
 use gdk::prelude::ToVariant;
+use gettextrs::*;
 
 pub struct Notification {
     toast_overlay: libadwaita::ToastOverlay,

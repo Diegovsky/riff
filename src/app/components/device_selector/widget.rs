@@ -1,8 +1,8 @@
 use crate::app::models::{ConnectDevice, ConnectDeviceKind};
 use crate::app::state::Device;
+use gdk::prelude::FromVariant;
 use gettextrs::gettext;
 use gio::{Action, SimpleAction, SimpleActionGroup};
-use gdk::prelude::FromVariant;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
@@ -70,12 +70,15 @@ mod imp {
 
             self.obj()
                 .insert_action_group(ACTIONS, Some(&self.action_group));
-            self.obj()
-                .connect_clicked(clone!(@weak popover => move |_| {
+            self.obj().connect_clicked(clone!(
+                #[weak]
+                popover,
+                move |_| {
                     popover.set_visible(true);
                     popover.present();
                     popover.grab_focus();
-                }));
+                }
+            ));
         }
     }
 

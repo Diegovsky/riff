@@ -164,11 +164,8 @@ impl App {
         let home_listbox: gtk::ListBox = builder.object("home_listbox").unwrap();
         let model = NavigationModel::new(Rc::clone(&app_model), dispatcher.box_clone());
         // This is where components that are not created initially will be assembled
-        let screen_factory = ScreenFactory::new(
-            Rc::clone(&app_model),
-            dispatcher.box_clone(),
-            worker,
-        );
+        let screen_factory =
+            ScreenFactory::new(Rc::clone(&app_model), dispatcher.box_clone(), worker);
         Box::new(Navigation::new(
             model,
             split_view,

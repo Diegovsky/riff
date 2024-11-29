@@ -274,7 +274,7 @@ impl Settings {
     }
 
     pub fn show_self(&self) {
-        self.dialog().present(&self.parent);
+        self.dialog().present(Some(&self.parent));
     }
 }
 

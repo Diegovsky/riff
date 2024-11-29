@@ -1,10 +1,11 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
+use libadwaita::prelude::AdwDialogExt;
 use std::rc::Rc;
 
 use super::album_header::AlbumHeaderWidget;
-use super::release_details::ReleaseDetailsWindow;
+use super::release_details::ReleaseDetailsDialog;
 use super::DetailsModel;
 
 use crate::app::components::{
@@ -85,11 +86,15 @@ impl AlbumDetailsWidget {
 
     fn connect_header(&self) {
         self.set_header_visible(false);
-        self.imp().scrolling_header.connect_header_visibility(
-            clone!(@weak self as _self => move |visible| {
-                _self.set_header_visible(visible);
-            }),
-        );
+        self.imp()
+            .scrolling_header
+            .connect_header_visibility(clone!(
+                #[weak(rename_to = _self)]
+                self,
+                move |visible| {
+                    _self.set_header_visible(visible);
+                }
+            ));
     }
 
     fn connect_bottom_edge<F>(&self, f: F)
@@ -129,9 +134,13 @@ impl AlbumDetailsWidget {
 
     fn connect_info<F>(&self, f: F)
     where
-        F: Fn() + 'static,
+        F: Fn(&Self) + 'static,
     {
-        self.imp().header_widget.connect_info(f);
+        self.imp().header_widget.connect_info(clone!(
+            #[weak(rename_to = _self)]
+            self,
+            move || f(&_self)
+        ));
     }
 
     fn set_liked(&self, is_liked: bool) {
@@ -165,15 +174,12 @@ pub struct Details {
     model: Rc<DetailsModel>,
     worker: Worker,
     widget: AlbumDetailsWidget,
-    modal: ReleaseDetailsWindow,
+    modal: ReleaseDetailsDialog,
     children: Vec<Box<dyn EventListener>>,
 }
 
 impl Details {
-    pub fn new(
-        model: Rc<DetailsModel>,
-        worker: Worker,
-    ) -> Self {
+    pub fn new(model: Rc<DetailsModel>, worker: Worker) -> Self {
         if model.get_album_info().is_none() {
             model.load_album_info();
         }
@@ -192,29 +198,39 @@ impl Details {
             model.to_headerbar_model(),
         ));
 
-        let modal = ReleaseDetailsWindow::new();
+        let modal = ReleaseDetailsDialog::new();
 
-        widget.connect_liked(clone!(@weak model => move || model.toggle_save_album()));
+        widget.connect_liked(clone!(
+            #[weak]
+            model,
+            move || model.toggle_save_album()
+        ));
 
-        widget.connect_play(clone!(@weak model => move || model.toggle_play_album()));
+        widget.connect_play(clone!(
+            #[weak]
+            model,
+            move || model.toggle_play_album()
+        ));
 
         widget.connect_header();
 
-        widget.connect_bottom_edge(clone!(@weak model => move || {
-            model.load_more();
-        }));
+        widget.connect_bottom_edge(clone!(
+            #[weak]
+            model,
+            move || {
+                model.load_more();
+            }
+        ));
 
-        widget.connect_info(clone!(@weak modal, @weak widget => move || {
-            let modal = modal.upcast_ref::<libadwaita::Window>();
-            modal.set_modal(true);
-            modal.set_transient_for(
-                widget
-                    .root()
-                    .and_then(|r| r.downcast::<gtk::Window>().ok())
-                    .as_ref(),
-            );
-            modal.set_visible(true);
-        }));
+        widget.connect_info(clone!(
+            #[weak]
+            modal,
+            move |w| {
+                let modal = modal.upcast_ref::<libadwaita::Dialog>();
+                let parent = w.root().and_then(|r| r.downcast::<gtk::Window>().ok());
+                modal.present(parent.as_ref());
+            }
+        ));
 
         Self {
             model,
@@ -254,9 +270,11 @@ impl Details {
                 album.year(),
             );
 
-            self.widget.connect_artist_clicked(
-                clone!(@weak self.model as model => move || model.view_artist()),
-            );
+            self.widget.connect_artist_clicked(clone!(
+                #[weak(rename_to = model)]
+                self.model,
+                move || model.view_artist()
+            ));
 
             self.modal.set_details(
                 &album.title,

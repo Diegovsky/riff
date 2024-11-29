@@ -93,15 +93,16 @@ pub struct NowPlaying {
 }
 
 impl NowPlaying {
-    pub fn new(
-        model: Rc<NowPlayingModel>,
-        worker: Worker,
-    ) -> Self {
+    pub fn new(model: Rc<NowPlayingModel>, worker: Worker) -> Self {
         let widget = NowPlayingWidget::new();
 
-        widget.connect_bottom_edge(clone!(@weak model => move || {
-            model.load_more();
-        }));
+        widget.connect_bottom_edge(clone!(
+            #[weak]
+            model,
+            move || {
+                model.load_more();
+            }
+        ));
 
         let playlist = Box::new(Playlist::new(
             widget.song_list_widget().clone(),

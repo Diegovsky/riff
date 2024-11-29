@@ -76,11 +76,9 @@ impl LoginWindow {
     where
         F: Fn() + 'static,
     {
-        self.imp().login_with_spotify_button.connect_clicked(
-            clone!(@weak self as _self => move |_| {
-                on_login_with_spotify_button()
-            }),
-        );
+        self.imp()
+            .login_with_spotify_button
+            .connect_clicked(move |_| on_login_with_spotify_button());
     }
 
     fn show_auth_error(&self, shown: bool) {
@@ -101,15 +99,23 @@ impl Login {
 
         let login_window = LoginWindow::new();
 
-        login_window.connect_close(clone!(@weak parent => move || {
-            if let Some(app) = parent.application().as_ref() {
-                app.quit();
+        login_window.connect_close(clone!(
+            #[weak]
+            parent,
+            move || {
+                if let Some(app) = parent.application().as_ref() {
+                    app.quit();
+                }
             }
-        }));
+        ));
 
-        login_window.connect_login_oauth_spotify(clone!(@weak model => move || {
-            model.login_with_spotify();
-        }));
+        login_window.connect_login_oauth_spotify(clone!(
+            #[weak]
+            model,
+            move || {
+                model.login_with_spotify();
+            }
+        ));
 
         Self {
             parent,

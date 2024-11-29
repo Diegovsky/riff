@@ -62,13 +62,21 @@ impl DeviceSelector {
     pub fn new(widget: DeviceSelectorWidget, model: DeviceSelectorModel) -> Self {
         let model = Rc::new(model);
 
-        widget.connect_refresh(clone!(@weak model => move || {
-            model.refresh_available_devices();
-        }));
+        widget.connect_refresh(clone!(
+            #[weak]
+            model,
+            move || {
+                model.refresh_available_devices();
+            }
+        ));
 
-        widget.connect_switch_device(clone!(@weak model => move |id| {
-            model.set_current_device(id);
-        }));
+        widget.connect_switch_device(clone!(
+            #[weak]
+            model,
+            move |id| {
+                model.set_current_device(id);
+            }
+        ));
 
         Self { widget, model }
     }

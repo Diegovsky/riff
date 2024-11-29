@@ -26,27 +26,35 @@ impl Navigation {
     ) -> Self {
         let model = Rc::new(model);
 
-        split_view.connect_collapsed_notify(clone!(@weak model => move |split_view| {
-            let is_main = split_view.shows_content();
-            let folded = split_view.is_collapsed();
-            if folded {
-                split_view.add_css_class("collapsed");
-            } else {
-                split_view.remove_css_class("collapsed");
+        split_view.connect_collapsed_notify(clone!(
+            #[weak]
+            model,
+            move |split_view| {
+                let is_main = split_view.shows_content();
+                let folded = split_view.is_collapsed();
+                if folded {
+                    split_view.add_css_class("collapsed");
+                } else {
+                    split_view.remove_css_class("collapsed");
+                }
+                model.set_nav_hidden(folded && is_main);
             }
-            model.set_nav_hidden(folded && is_main);
-        }));
+        ));
 
-        split_view.connect_show_content_notify(clone!(@weak model => move |split_view| {
-            let is_main = split_view.shows_content();
-            let folded = split_view.is_collapsed();
-            if folded {
-                split_view.add_css_class("collapsed");
-            } else {
-                split_view.remove_css_class("collapsed");
+        split_view.connect_show_content_notify(clone!(
+            #[weak]
+            model,
+            move |split_view| {
+                let is_main = split_view.shows_content();
+                let folded = split_view.is_collapsed();
+                if folded {
+                    split_view.add_css_class("collapsed");
+                } else {
+                    split_view.remove_css_class("collapsed");
+                }
+                model.set_nav_hidden(folded && is_main);
             }
-            model.set_nav_hidden(folded && is_main);
-        }));
+        ));
 
         Self {
             model,

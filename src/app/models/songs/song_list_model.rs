@@ -79,12 +79,16 @@ impl SongListModel {
     fn notify_changes(&self, changes: impl IntoIterator<Item = ListRangeUpdate> + 'static) {
         // Eh, not great but that works
         if cfg!(not(test)) {
-            glib::source::idle_add_local_once(clone!(@weak self as s => move || {
-                for ListRangeUpdate(a, b, c) in changes.into_iter() {
-                    debug!("pos {}, removed {}, added {}", a, b, c);
-                    s.items_changed(a as u32, b as u32, c as u32);
+            glib::source::idle_add_local_once(clone!(
+                #[weak(rename_to = s)]
+                self,
+                move || {
+                    for ListRangeUpdate(a, b, c) in changes.into_iter() {
+                        debug!("pos {}, removed {}, added {}", a, b, c);
+                        s.items_changed(a as u32, b as u32, c as u32);
+                    }
                 }
-            }));
+            ));
         }
     }
 
@@ -207,7 +211,7 @@ mod imp {
         type ParentType = glib::Object;
         type Interfaces = (ListModel,);
     }
-    
+
     #[glib::derived_properties]
     impl ObjectImpl for SongListModel {}
 

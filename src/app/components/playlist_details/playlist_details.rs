@@ -94,11 +94,15 @@ impl PlaylistDetailsWidget {
 
     fn connect_header(&self) {
         self.set_header_visible(false);
-        self.imp().scrolling_header.connect_header_visibility(
-            clone!(@weak self as _self => move |visible| {
-                _self.set_header_visible(visible);
-            }),
-        );
+        self.imp()
+            .scrolling_header
+            .connect_header_visibility(clone!(
+                #[weak(rename_to = _self)]
+                self,
+                move |visible| {
+                    _self.set_header_visible(visible);
+                }
+            ));
     }
 
     fn set_loaded(&self) {
@@ -147,12 +151,14 @@ impl PlaylistDetailsWidget {
     where
         F: Fn() + 'static,
     {
-        self.imp()
-            .headerbar
-            .connect_cancel(clone!(@weak self as _self => move || {
+        self.imp().headerbar.connect_cancel(clone!(
+            #[weak(rename_to = _self)]
+            self,
+            move || {
                 _self.imp().header_widget.reset_playlist_name();
                 f();
-            }));
+            }
+        ));
     }
 
     pub fn connect_play<F>(&self, f: F)
@@ -166,12 +172,14 @@ impl PlaylistDetailsWidget {
     where
         F: Fn(String) + 'static,
     {
-        self.imp()
-            .headerbar
-            .connect_ok(clone!(@weak self as _self => move || {
+        self.imp().headerbar.connect_ok(clone!(
+            #[weak(rename_to = _self)]
+            self,
+            move || {
                 let s = _self.imp().header_widget.get_edited_playlist_name();
                 f(s);
-            }));
+            }
+        ));
     }
 
     pub fn connect_go_back<F>(&self, f: F)
@@ -206,25 +214,53 @@ impl PlaylistDetails {
 
         widget.connect_header();
 
-        widget.connect_bottom_edge(clone!(@weak model => move || {
-            model.load_more_tracks();
-        }));
+        widget.connect_bottom_edge(clone!(
+            #[weak]
+            model,
+            move || {
+                model.load_more_tracks();
+            }
+        ));
 
-        widget.connect_owner_clicked(clone!(@weak model => move || model.view_owner()));
+        widget.connect_owner_clicked(clone!(
+            #[weak]
+            model,
+            move || model.view_owner()
+        ));
 
-        widget.connect_edit(clone!(@weak model => move || {
-            model.enable_selection();
-        }));
+        widget.connect_edit(clone!(
+            #[weak]
+            model,
+            move || {
+                model.enable_selection();
+            }
+        ));
 
-        widget.connect_cancel(clone!(@weak model => move || model.disable_selection()));
-        widget.connect_done(clone!(@weak model => move |n| {
-            model.disable_selection();
-            model.update_playlist_details(n);
-        }));
+        widget.connect_cancel(clone!(
+            #[weak]
+            model,
+            move || model.disable_selection()
+        ));
+        widget.connect_done(clone!(
+            #[weak]
+            model,
+            move |n| {
+                model.disable_selection();
+                model.update_playlist_details(n);
+            }
+        ));
 
-        widget.connect_play(clone!(@weak model => move || model.toggle_play_playlist()));
+        widget.connect_play(clone!(
+            #[weak]
+            model,
+            move || model.toggle_play_playlist()
+        ));
 
-        widget.connect_go_back(clone!(@weak model => move || model.go_back()));
+        widget.connect_go_back(clone!(
+            #[weak]
+            model,
+            move || model.go_back()
+        ));
 
         Self {
             model,

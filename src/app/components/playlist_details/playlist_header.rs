@@ -44,7 +44,7 @@ mod imp {
         #[property(get, set = Self::set_vertical, name = "vertical-layout")]
         pub vertical_layout: Cell<bool>,
     }
-    
+
     impl PlaylistHeaderWidget {
         pub fn set_vertical(&self, vertical: bool) {
             let self_ = self.obj();
@@ -53,13 +53,13 @@ mod imp {
                 box_.set_orientation(gtk::Orientation::Vertical);
                 box_.set_spacing(12);
                 self.playlist_info.set_halign(gtk::Align::Center);
-                self.playlist_label_entry.set_xalign(0.5);
+                EntryExt::set_alignment(&*self.playlist_label_entry, 0.5);
                 self.author_button.set_halign(gtk::Align::Center);
             } else {
                 box_.set_orientation(gtk::Orientation::Horizontal);
                 box_.set_spacing(0);
                 self.playlist_info.set_halign(gtk::Align::Start);
-                self.playlist_label_entry.set_xalign(0.0);
+                EntryExt::set_alignment(&*self.playlist_label_entry, 0.0);
                 self.author_button.set_halign(gtk::Align::Start);
             }
         }
@@ -131,7 +131,7 @@ impl PlaylistHeaderWidget {
 
     pub fn set_artwork(&self, pixbuf: &gdk_pixbuf::Pixbuf) {
         let texture = gdk::Texture::for_pixbuf(pixbuf);
-        self.imp().playlist_art.set_from_paintable(Some(&texture));
+        self.imp().playlist_art.set_paintable(Some(&texture));
     }
 
     pub fn set_info(&self, playlist: &str, owner: &str) {

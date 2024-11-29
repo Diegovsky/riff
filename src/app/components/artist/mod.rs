@@ -64,12 +64,10 @@ impl ArtistWidget {
         _self
     }
 
-    pub fn connect_artist_pressed<F: Fn(&Self) + 'static>(&self, f: F) {
-        self.imp()
-            .avatar_btn
-            .connect_clicked(clone!(@weak self as _self => move |_| {
-                f(&_self);
-            }));
+    pub fn connect_artist_pressed<F: Fn() + 'static>(&self, f: F) {
+        self.imp().avatar_btn.connect_clicked(move |_| {
+            f();
+        });
     }
 
     fn bind(&self, model: &ArtistModel, worker: Worker) {
