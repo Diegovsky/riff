@@ -90,9 +90,13 @@ pub struct Sidebar {
 impl Sidebar {
     pub fn new(listbox: gtk::ListBox, model: Rc<SidebarModel>) -> Self {
         let popover = CreatePlaylistPopover::new();
-        popover.connect_create(clone!(@weak model => move |t| model.create_new_playlist(t)));
+        popover.connect_create(clone!(
+            #[weak]
+            model,
+            move |t| model.create_new_playlist(t)
+        ));
 
-        let list_store = gio::ListStore::new(SidebarItem::static_type());
+        let list_store = gio::ListStore::new::<SidebarItem>();
 
         list_store.append(&SidebarItem::from_destination(SidebarDestination::Library));
         list_store.append(&SidebarItem::from_destination(
@@ -109,32 +113,43 @@ impl Sidebar {
 
         listbox.bind_model(
             Some(&list_store),
-            clone!(@weak popover => @default-panic, move |obj| {
-                let item = obj.downcast_ref::<SidebarItem>().unwrap();
-                if item.navigatable() {
-                    Self::make_navigatable(item)
-                } else {
-                    match item.id().as_str() {
-                        SAVED_PLAYLISTS_SECTION => Self::make_section_label(item),
-                        CREATE_PLAYLIST_ITEM => Self::make_create_playlist(item, popover),
-                        _ => unimplemented!(),
+            clone!(
+                #[weak]
+                popover,
+                #[upgrade_or_panic]
+                move |obj| {
+                    let item = obj.downcast_ref::<SidebarItem>().unwrap();
+                    if item.navigatable() {
+                        Self::make_navigatable(item)
+                    } else {
+                        match item.id().as_str() {
+                            SAVED_PLAYLISTS_SECTION => Self::make_section_label(item),
+                            CREATE_PLAYLIST_ITEM => Self::make_create_playlist(item, popover),
+                            _ => unimplemented!(),
+                        }
                     }
                 }
-            }),
+            ),
         );
 
-        listbox.connect_row_activated(clone!(@weak popover, @weak model => move |_, row| {
-            if let Some(row) = row.downcast_ref::<SidebarRow>() {
-                if let Some(dest) = row.item().destination() {
-                    model.navigate(dest);
-                } else {
-                    match row.item().id().as_str() {
-                        CREATE_PLAYLIST_ITEM => popover.popup(),
-                        _ => unimplemented!()
+        listbox.connect_row_activated(clone!(
+            #[weak]
+            popover,
+            #[weak]
+            model,
+            move |_, row| {
+                if let Some(row) = row.downcast_ref::<SidebarRow>() {
+                    if let Some(dest) = row.item().destination() {
+                        model.navigate(dest);
+                    } else {
+                        match row.item().id().as_str() {
+                            CREATE_PLAYLIST_ITEM => popover.popup(),
+                            _ => unimplemented!(),
+                        }
                     }
                 }
             }
-        }));
+        ));
 
         Self {
             listbox,

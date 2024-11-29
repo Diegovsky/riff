@@ -8,8 +8,8 @@ const CSS_RO_ENTRY: &str = "playlist__title-entry--ro";
 
 mod imp {
 
-    use glib::{ParamSpec, Properties};
-    use std::cell::RefCell;
+    use glib::Properties;
+    use std::cell::{Cell, RefCell};
 
     use super::*;
 
@@ -40,6 +40,29 @@ mod imp {
 
         #[property(get, set, name = "original-entry-text")]
         pub original_entry_text: RefCell<String>,
+
+        #[property(get, set = Self::set_vertical, name = "vertical-layout")]
+        pub vertical_layout: Cell<bool>,
+    }
+
+    impl PlaylistHeaderWidget {
+        pub fn set_vertical(&self, vertical: bool) {
+            let self_ = self.obj();
+            let box_ = self_.upcast_ref::<gtk::Box>();
+            if vertical {
+                box_.set_orientation(gtk::Orientation::Vertical);
+                box_.set_spacing(12);
+                self.playlist_info.set_halign(gtk::Align::Center);
+                EntryExt::set_alignment(&*self.playlist_label_entry, 0.5);
+                self.author_button.set_halign(gtk::Align::Center);
+            } else {
+                box_.set_orientation(gtk::Orientation::Horizontal);
+                box_.set_spacing(0);
+                self.playlist_info.set_halign(gtk::Align::Start);
+                EntryExt::set_alignment(&*self.playlist_label_entry, 0.0);
+                self.author_button.set_halign(gtk::Align::Start);
+            }
+        }
     }
 
     #[glib::object_subclass]
@@ -58,24 +81,8 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for PlaylistHeaderWidget {
-        fn properties() -> &'static [ParamSpec] {
-            Self::derived_properties()
-        }
-
-        fn set_property(&self, id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
-            self.derived_set_property(id, value, pspec);
-        }
-
-        fn property(&self, id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-            self.derived_property(id, pspec)
-        }
-
-        fn constructed(&self) {
-            self.parent_constructed();
-        }
-    }
-
+    #[glib::derived_properties]
+    impl ObjectImpl for PlaylistHeaderWidget {}
     impl WidgetImpl for PlaylistHeaderWidget {}
     impl BoxImpl for PlaylistHeaderWidget {}
 }
@@ -101,7 +108,7 @@ impl PlaylistHeaderWidget {
     {
         self.imp().author_button.connect_activate_link(move |_| {
             f();
-            glib::signal::Inhibit(true)
+            glib::Propagation::Stop
         });
     }
 
@@ -122,8 +129,9 @@ impl PlaylistHeaderWidget {
         self.imp().playlist_label_entry.text().to_string()
     }
 
-    pub fn set_artwork(&self, art: &gdk_pixbuf::Pixbuf) {
-        self.imp().playlist_art.set_from_pixbuf(Some(art));
+    pub fn set_artwork(&self, pixbuf: &gdk_pixbuf::Pixbuf) {
+        let texture = gdk::Texture::for_pixbuf(pixbuf);
+        self.imp().playlist_art.set_paintable(Some(&texture));
     }
 
     pub fn set_info(&self, playlist: &str, owner: &str) {
@@ -152,16 +160,6 @@ impl PlaylistHeaderWidget {
 
         self.imp().play_button.set_icon_name(playback_icon);
         self.imp().play_button.set_tooltip_text(tooltip_text);
-    }
-
-    pub fn set_centered(&self) {
-        let widget = self.imp();
-        widget.playlist_info.set_halign(gtk::Align::Center);
-        widget.play_button.set_margin_end(0);
-        widget.playlist_info.set_margin_start(0);
-        widget.playlist_image_box.set_margin_start(0);
-        widget.playlist_label_entry.set_xalign(0.5);
-        widget.author_button.set_halign(gtk::Align::Center);
     }
 
     pub fn set_editing(&self, editing: bool) {

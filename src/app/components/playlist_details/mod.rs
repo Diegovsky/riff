@@ -7,7 +7,7 @@ mod playlist_headerbar;
 pub use playlist_details::*;
 pub use playlist_details_model::*;
 
-use glib::StaticType;
+use gtk::prelude::StaticType;
 
 pub fn expose_widgets() {
     playlist_headerbar::PlaylistHeaderBarWidget::static_type();

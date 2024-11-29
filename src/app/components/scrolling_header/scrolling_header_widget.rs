@@ -32,11 +32,7 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for ScrollingHeaderWidget {
-        fn constructed(&self) {
-            self.parent_constructed();
-        }
-    }
+    impl ObjectImpl for ScrollingHeaderWidget {}
 
     impl BuildableImpl for ScrollingHeaderWidget {
         fn add_child(&self, builder: &gtk::Builder, child: &glib::Object, type_: Option<&str>) {
@@ -81,22 +77,36 @@ impl ScrollingHeaderWidget {
 
         let scroll_controller =
             gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
-        scroll_controller.connect_scroll(
-            clone!(@strong f, @weak self as _self => @default-return gtk::Inhibit(false), move |_, _, dy| {
+        scroll_controller.connect_scroll(clone!(
+            #[strong]
+            f,
+            #[weak(rename_to = _self)]
+            self,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_, _, dy| {
                 let visible = dy < 0f64 && _self.is_scrolled_to_top();
                 f(visible);
-                gtk::Inhibit(!_self.set_header_visible(visible))
-            }),
-        );
+                if _self.set_header_visible(visible) {
+                    glib::Propagation::Proceed
+                } else {
+                    glib::Propagation::Stop
+                }
+            }
+        ));
 
         let swipe_controller = gtk::GestureSwipe::new();
         swipe_controller.set_touch_only(true);
         swipe_controller.set_propagation_phase(gtk::PropagationPhase::Capture);
-        swipe_controller.connect_swipe(clone!(@weak self as _self => move |_, _, dy| {
-            let visible = dy >= 0f64 && _self.is_scrolled_to_top();
-            f(visible);
-            _self.set_header_visible(visible);
-        }));
+        swipe_controller.connect_swipe(clone!(
+            #[weak(rename_to = _self)]
+            self,
+            move |_, _, dy| {
+                let visible = dy >= 0f64 && _self.is_scrolled_to_top();
+                f(visible);
+                _self.set_header_visible(visible);
+            }
+        ));
 
         self.imp().scrolled_window.add_controller(scroll_controller);
         self.add_controller(swipe_controller);

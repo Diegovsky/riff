@@ -23,17 +23,21 @@ impl MainWindow {
         app_model: Rc<AppModel>,
         window: libadwaita::ApplicationWindow,
     ) -> Self {
-        window.connect_close_request(
-            clone!(@weak app_model => @default-return gtk::Inhibit(false), move |window| {
+        window.connect_close_request(clone!(
+            #[weak]
+            app_model,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |window| {
                 let state = app_model.get_state();
                 if state.playback.is_playing() {
                     window.set_visible(false);
-                    gtk::Inhibit(true)
+                    glib::Propagation::Stop
                 } else {
-                    gtk::Inhibit(false)
+                    glib::Propagation::Proceed
                 }
-            }),
-        );
+            }
+        ));
 
         window.connect_default_height_notify(Self::save_window_geometry);
         window.connect_default_width_notify(Self::save_window_geometry);

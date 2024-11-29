@@ -159,20 +159,16 @@ impl App {
         dispatcher: Box<dyn ActionDispatcher>,
         worker: Worker,
     ) -> Box<Navigation> {
-        let leaflet: libadwaita::Leaflet = builder.object("leaflet").unwrap();
+        let split_view: libadwaita::NavigationSplitView = builder.object("split_view").unwrap();
         let navigation_stack: gtk::Stack = builder.object("navigation_stack").unwrap();
         let home_listbox: gtk::ListBox = builder.object("home_listbox").unwrap();
         let model = NavigationModel::new(Rc::clone(&app_model), dispatcher.box_clone());
         // This is where components that are not created initially will be assembled
-        let screen_factory = ScreenFactory::new(
-            Rc::clone(&app_model),
-            dispatcher.box_clone(),
-            worker,
-            leaflet.clone(),
-        );
+        let screen_factory =
+            ScreenFactory::new(Rc::clone(&app_model), dispatcher.box_clone(), worker);
         Box::new(Navigation::new(
             model,
-            leaflet,
+            split_view,
             navigation_stack,
             home_listbox,
             screen_factory,
@@ -226,12 +222,12 @@ impl App {
     ) -> Box<UserMenu> {
         let parent: gtk::Window = builder.object("window").unwrap();
         let settings_model = SettingsModel::new(app_model.clone(), dispatcher.box_clone());
-        let settings = Settings::new(parent, settings_model);
+        let settings = Settings::new(parent.clone(), settings_model);
 
         let button: gtk::MenuButton = builder.object("user").unwrap();
-        let about: libadwaita::AboutWindow = builder.object("about").unwrap();
+        let about: libadwaita::AboutDialog = builder.object("about").unwrap();
         let model = UserMenuModel::new(app_model, dispatcher);
-        let user_menu = UserMenu::new(button, settings, about, model);
+        let user_menu = UserMenu::new(button, settings, about, parent, model);
         Box::new(user_menu)
     }
 

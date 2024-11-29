@@ -1,10 +1,11 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
+use libadwaita::prelude::AdwDialogExt;
 use std::rc::Rc;
 
 use super::album_header::AlbumHeaderWidget;
-use super::release_details::ReleaseDetailsWindow;
+use super::release_details::ReleaseDetailsDialog;
 use super::DetailsModel;
 
 use crate::app::components::{
@@ -34,9 +35,6 @@ mod imp {
         pub header_widget: TemplateChild<AlbumHeaderWidget>,
 
         #[template_child]
-        pub header_mobile: TemplateChild<AlbumHeaderWidget>,
-
-        #[template_child]
         pub album_tracks: TemplateChild<gtk::ListView>,
     }
 
@@ -58,7 +56,7 @@ mod imp {
     impl ObjectImpl for AlbumDetailsWidget {
         fn constructed(&self) {
             self.parent_constructed();
-            self.header_mobile.set_centered();
+            // self.header_mobile.set_centered();
             self.headerbar.add_classes(&["details__headerbar"]);
         }
     }
@@ -88,11 +86,15 @@ impl AlbumDetailsWidget {
 
     fn connect_header(&self) {
         self.set_header_visible(false);
-        self.imp().scrolling_header.connect_header_visibility(
-            clone!(@weak self as _self => move |visible| {
-                _self.set_header_visible(visible);
-            }),
-        );
+        self.imp()
+            .scrolling_header
+            .connect_header_visibility(clone!(
+                #[weak(rename_to = _self)]
+                self,
+                move |visible| {
+                    _self.set_header_visible(visible);
+                }
+            ));
     }
 
     fn connect_bottom_edge<F>(&self, f: F)
@@ -118,59 +120,53 @@ impl AlbumDetailsWidget {
 
     fn connect_liked<F>(&self, f: F)
     where
-        F: Fn() + Clone + 'static,
+        F: Fn() + 'static,
     {
-        self.imp().header_widget.connect_liked(f.clone());
-        self.imp().header_mobile.connect_liked(f);
+        self.imp().header_widget.connect_liked(f);
     }
 
     fn connect_play<F>(&self, f: F)
     where
-        F: Fn() + Clone + 'static,
+        F: Fn() + 'static,
     {
-        self.imp().header_widget.connect_play(f.clone());
-        self.imp().header_mobile.connect_play(f);
+        self.imp().header_widget.connect_play(f);
     }
 
     fn connect_info<F>(&self, f: F)
     where
-        F: Fn() + Clone + 'static,
+        F: Fn(&Self) + 'static,
     {
-        self.imp().header_widget.connect_info(f.clone());
-        self.imp().header_mobile.connect_info(f);
+        self.imp().header_widget.connect_info(clone!(
+            #[weak(rename_to = _self)]
+            self,
+            move || f(&_self)
+        ));
     }
 
     fn set_liked(&self, is_liked: bool) {
         self.imp().header_widget.set_liked(is_liked);
-        self.imp().header_mobile.set_liked(is_liked);
     }
 
     fn set_playing(&self, is_playing: bool) {
         self.imp().header_widget.set_playing(is_playing);
-        self.imp().header_mobile.set_playing(is_playing);
     }
 
     fn set_album_and_artist_and_year(&self, album: &str, artist: &str, year: Option<u32>) {
         self.imp()
             .header_widget
             .set_album_and_artist_and_year(album, artist, year);
-        self.imp()
-            .header_mobile
-            .set_album_and_artist_and_year(album, artist, year);
         self.imp().headerbar.set_title_and_subtitle(album, artist);
     }
 
     fn set_artwork(&self, art: &gdk_pixbuf::Pixbuf) {
         self.imp().header_widget.set_artwork(art);
-        self.imp().header_mobile.set_artwork(art);
     }
 
     fn connect_artist_clicked<F>(&self, f: F)
     where
-        F: Fn() + Clone + 'static,
+        F: Fn() + 'static,
     {
-        self.imp().header_widget.connect_artist_clicked(f.clone());
-        self.imp().header_mobile.connect_artist_clicked(f);
+        self.imp().header_widget.connect_artist_clicked(f);
     }
 }
 
@@ -178,12 +174,12 @@ pub struct Details {
     model: Rc<DetailsModel>,
     worker: Worker,
     widget: AlbumDetailsWidget,
-    modal: ReleaseDetailsWindow,
+    modal: ReleaseDetailsDialog,
     children: Vec<Box<dyn EventListener>>,
 }
 
 impl Details {
-    pub fn new(model: Rc<DetailsModel>, worker: Worker, leaflet: &libadwaita::Leaflet) -> Self {
+    pub fn new(model: Rc<DetailsModel>, worker: Worker) -> Self {
         if model.get_album_info().is_none() {
             model.load_album_info();
         }
@@ -197,35 +193,44 @@ impl Details {
         ));
 
         let headerbar_widget = widget.headerbar_widget();
-        headerbar_widget.bind_to_leaflet(leaflet);
         let headerbar = Box::new(HeaderBarComponent::new(
             headerbar_widget.clone(),
             model.to_headerbar_model(),
         ));
 
-        let modal = ReleaseDetailsWindow::new();
+        let modal = ReleaseDetailsDialog::new();
 
-        widget.connect_liked(clone!(@weak model => move || model.toggle_save_album()));
+        widget.connect_liked(clone!(
+            #[weak]
+            model,
+            move || model.toggle_save_album()
+        ));
 
-        widget.connect_play(clone!(@weak model => move || model.toggle_play_album()));
+        widget.connect_play(clone!(
+            #[weak]
+            model,
+            move || model.toggle_play_album()
+        ));
 
         widget.connect_header();
 
-        widget.connect_bottom_edge(clone!(@weak model => move || {
-            model.load_more();
-        }));
+        widget.connect_bottom_edge(clone!(
+            #[weak]
+            model,
+            move || {
+                model.load_more();
+            }
+        ));
 
-        widget.connect_info(clone!(@weak modal, @weak widget => move || {
-            let modal = modal.upcast_ref::<libadwaita::Window>();
-            modal.set_modal(true);
-            modal.set_transient_for(
-                widget
-                    .root()
-                    .and_then(|r| r.downcast::<gtk::Window>().ok())
-                    .as_ref(),
-            );
-            modal.set_visible(true);
-        }));
+        widget.connect_info(clone!(
+            #[weak]
+            modal,
+            move |w| {
+                let modal = modal.upcast_ref::<libadwaita::Dialog>();
+                let parent = w.root().and_then(|r| r.downcast::<gtk::Window>().ok());
+                modal.present(parent.as_ref());
+            }
+        ));
 
         Self {
             model,
@@ -265,9 +270,11 @@ impl Details {
                 album.year(),
             );
 
-            self.widget.connect_artist_clicked(
-                clone!(@weak self.model as model => move || model.view_artist()),
-            );
+            self.widget.connect_artist_clicked(clone!(
+                #[weak(rename_to = model)]
+                self.model,
+                move || model.view_artist()
+            ));
 
             self.modal.set_details(
                 &album.title,

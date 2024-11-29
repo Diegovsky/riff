@@ -46,12 +46,7 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for NowPlayingWidget {
-        fn constructed(&self) {
-            self.parent_constructed();
-        }
-    }
-
+    impl ObjectImpl for NowPlayingWidget {}
     impl WidgetImpl for NowPlayingWidget {}
     impl BoxImpl for NowPlayingWidget {}
 }
@@ -98,12 +93,16 @@ pub struct NowPlaying {
 }
 
 impl NowPlaying {
-    pub fn new(model: Rc<NowPlayingModel>, worker: Worker, leaflet: &libadwaita::Leaflet) -> Self {
+    pub fn new(model: Rc<NowPlayingModel>, worker: Worker) -> Self {
         let widget = NowPlayingWidget::new();
 
-        widget.connect_bottom_edge(clone!(@weak model => move || {
-            model.load_more();
-        }));
+        widget.connect_bottom_edge(clone!(
+            #[weak]
+            model,
+            move || {
+                model.load_more();
+            }
+        ));
 
         let playlist = Box::new(Playlist::new(
             widget.song_list_widget().clone(),
@@ -112,7 +111,6 @@ impl NowPlaying {
         ));
 
         let headerbar_widget = widget.headerbar_widget();
-        headerbar_widget.bind_to_leaflet(leaflet);
         let headerbar = Box::new(HeaderBarComponent::new(
             headerbar_widget.clone(),
             model.to_headerbar_model(),

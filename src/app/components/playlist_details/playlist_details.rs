@@ -33,9 +33,6 @@ mod imp {
         pub header_widget: TemplateChild<PlaylistHeaderWidget>,
 
         #[template_child]
-        pub header_mobile: TemplateChild<PlaylistHeaderWidget>,
-
-        #[template_child]
         pub tracks: TemplateChild<gtk::ListView>,
     }
 
@@ -57,13 +54,7 @@ mod imp {
     impl ObjectImpl for PlaylistDetailsWidget {
         fn constructed(&self) {
             self.parent_constructed();
-            self.header_mobile.set_centered();
             self.header_widget.set_grows_automatically();
-            self.header_widget
-                .entry()
-                .bind_property("text", self.header_mobile.entry(), "text")
-                .flags(glib::BindingFlags::BIDIRECTIONAL)
-                .build();
         }
     }
 
@@ -103,11 +94,15 @@ impl PlaylistDetailsWidget {
 
     fn connect_header(&self) {
         self.set_header_visible(false);
-        self.imp().scrolling_header.connect_header_visibility(
-            clone!(@weak self as _self => move |visible| {
-                _self.set_header_visible(visible);
-            }),
-        );
+        self.imp()
+            .scrolling_header
+            .connect_header_visibility(clone!(
+                #[weak(rename_to = _self)]
+                self,
+                move |visible| {
+                    _self.set_header_visible(visible);
+                }
+            ));
     }
 
     fn set_loaded(&self) {
@@ -118,7 +113,6 @@ impl PlaylistDetailsWidget {
 
     fn set_editing(&self, editing: bool) {
         self.imp().header_widget.set_editing(editing);
-        self.imp().header_mobile.set_editing(editing);
         self.imp().headerbar.set_editing(editing);
     }
 
@@ -128,26 +122,22 @@ impl PlaylistDetailsWidget {
 
     fn set_info(&self, playlist: &str, owner: &str) {
         self.imp().header_widget.set_info(playlist, owner);
-        self.imp().header_mobile.set_info(playlist, owner);
         self.imp().headerbar.set_title(Some(playlist));
     }
 
     fn set_playing(&self, is_playing: bool) {
         self.imp().header_widget.set_playing(is_playing);
-        self.imp().header_mobile.set_playing(is_playing);
     }
 
     fn set_artwork(&self, art: &gdk_pixbuf::Pixbuf) {
         self.imp().header_widget.set_artwork(art);
-        self.imp().header_mobile.set_artwork(art);
     }
 
     fn connect_owner_clicked<F>(&self, f: F)
     where
-        F: Fn() + Clone + 'static,
+        F: Fn() + 'static,
     {
-        self.imp().header_widget.connect_owner_clicked(f.clone());
-        self.imp().header_mobile.connect_owner_clicked(f);
+        self.imp().header_widget.connect_owner_clicked(f);
     }
 
     pub fn connect_edit<F>(&self, f: F)
@@ -161,33 +151,35 @@ impl PlaylistDetailsWidget {
     where
         F: Fn() + 'static,
     {
-        self.imp()
-            .headerbar
-            .connect_cancel(clone!(@weak self as _self => move || {
+        self.imp().headerbar.connect_cancel(clone!(
+            #[weak(rename_to = _self)]
+            self,
+            move || {
                 _self.imp().header_widget.reset_playlist_name();
-                _self.imp().header_mobile.reset_playlist_name();
                 f();
-            }));
+            }
+        ));
     }
 
     pub fn connect_play<F>(&self, f: F)
     where
-        F: Fn() + Clone + 'static,
+        F: Fn() + 'static,
     {
-        self.imp().header_widget.connect_play(f.clone());
-        self.imp().header_mobile.connect_play(f);
+        self.imp().header_widget.connect_play(f);
     }
 
     pub fn connect_done<F>(&self, f: F)
     where
         F: Fn(String) + 'static,
     {
-        self.imp()
-            .headerbar
-            .connect_ok(clone!(@weak self as _self => move || {
+        self.imp().headerbar.connect_ok(clone!(
+            #[weak(rename_to = _self)]
+            self,
+            move || {
                 let s = _self.imp().header_widget.get_edited_playlist_name();
                 f(s);
-            }));
+            }
+        ));
     }
 
     pub fn connect_go_back<F>(&self, f: F)
@@ -222,25 +214,53 @@ impl PlaylistDetails {
 
         widget.connect_header();
 
-        widget.connect_bottom_edge(clone!(@weak model => move || {
-            model.load_more_tracks();
-        }));
+        widget.connect_bottom_edge(clone!(
+            #[weak]
+            model,
+            move || {
+                model.load_more_tracks();
+            }
+        ));
 
-        widget.connect_owner_clicked(clone!(@weak model => move || model.view_owner()));
+        widget.connect_owner_clicked(clone!(
+            #[weak]
+            model,
+            move || model.view_owner()
+        ));
 
-        widget.connect_edit(clone!(@weak model => move || {
-            model.enable_selection();
-        }));
+        widget.connect_edit(clone!(
+            #[weak]
+            model,
+            move || {
+                model.enable_selection();
+            }
+        ));
 
-        widget.connect_cancel(clone!(@weak model => move || model.disable_selection()));
-        widget.connect_done(clone!(@weak model => move |n| {
-            model.disable_selection();
-            model.update_playlist_details(n);
-        }));
+        widget.connect_cancel(clone!(
+            #[weak]
+            model,
+            move || model.disable_selection()
+        ));
+        widget.connect_done(clone!(
+            #[weak]
+            model,
+            move |n| {
+                model.disable_selection();
+                model.update_playlist_details(n);
+            }
+        ));
 
-        widget.connect_play(clone!(@weak model => move || model.toggle_play_playlist()));
+        widget.connect_play(clone!(
+            #[weak]
+            model,
+            move || model.toggle_play_playlist()
+        ));
 
-        widget.connect_go_back(clone!(@weak model => move || model.go_back()));
+        widget.connect_go_back(clone!(
+            #[weak]
+            model,
+            move || model.go_back()
+        ));
 
         Self {
             model,

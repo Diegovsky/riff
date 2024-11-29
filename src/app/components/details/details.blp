@@ -7,33 +7,31 @@ template $AlbumDetailsWidget : Adw.Bin {
     vexpand: true;
     hexpand: true;
 
-    $HeaderBarWidget headerbar {
-    }
+    $HeaderBarWidget headerbar {}
 
     $ScrollingHeaderWidget scrolling_header {
       [header]
       WindowHandle {
         Adw.Clamp {
           maximum-size: 900;
-
-          Adw.Squeezer {
-            switch-threshold-policy: natural;
-            valign: center;
-            homogeneous: false;
-            transition-type: crossfade;
-
-            $AlbumHeaderWidget header_widget {
-            }
-
-            $AlbumHeaderWidget header_mobile {
-              orientation: "vertical";
-              spacing: "12";
-            }
-          }
-
           styles [
             "details__clamp",
           ]
+
+          Adw.BreakpointBin {
+            width-request: 1;
+            height-request: 1;
+
+            Adw.Breakpoint {
+              condition("max-width:500sp")
+
+              setters {
+                header_widget.vertical-layout: true;
+              }
+            }
+
+            $AlbumHeaderWidget header_widget {}
+          }
         }
       }
 

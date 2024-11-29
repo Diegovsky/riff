@@ -89,14 +89,18 @@ impl ArtistDetailsWidget {
     {
         self.imp()
             .artist_releases
-            .bind_model(Some(store.unsafe_store()), move |item| {
+            .bind_model(Some(store.inner()), move |item| {
                 let item = item.downcast_ref::<AlbumModel>().unwrap();
                 let child = gtk::FlowBoxChild::new();
                 let album = AlbumWidget::for_model(item, worker.clone());
                 let f = on_album_pressed.clone();
-                album.connect_album_pressed(clone!(@weak item => move |_| {
-                    f(item.uri());
-                }));
+                album.connect_album_pressed(clone!(
+                    #[weak]
+                    item,
+                    move || {
+                        f(item.uri());
+                    }
+                ));
                 child.set_child(Some(&album));
                 child.upcast::<gtk::Widget>()
             });
@@ -115,17 +119,25 @@ impl ArtistDetails {
 
         let widget = ArtistDetailsWidget::new();
 
-        widget.connect_bottom_edge(clone!(@weak model => move || {
-            model.load_more();
-        }));
+        widget.connect_bottom_edge(clone!(
+            #[weak]
+            model,
+            move || {
+                model.load_more();
+            }
+        ));
 
         if let Some(store) = model.get_list_store() {
             widget.bind_artist_releases(
                 worker.clone(),
                 &store,
-                clone!(@weak model => move |id| {
-                    model.open_album(id);
-                }),
+                clone!(
+                    #[weak]
+                    model,
+                    move |id| {
+                        model.open_album(id);
+                    }
+                ),
             );
         }
 

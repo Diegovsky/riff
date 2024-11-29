@@ -83,13 +83,41 @@ impl PlaybackControl {
     pub fn new(model: PlaybackModel, widget: PlaybackWidget, worker: Worker) -> Self {
         let model = Rc::new(model);
 
-        widget.connect_play_pause(clone!(@weak model => move || model.toggle_playback() ));
-        widget.connect_next(clone!(@weak model => move || model.play_next_song()));
-        widget.connect_prev(clone!(@weak model => move || model.play_prev_song()));
-        widget.connect_shuffle(clone!(@weak model => move || model.toggle_shuffle()));
-        widget.connect_repeat(clone!(@weak model => move || model.toggle_repeat()));
-        widget.connect_seek(clone!(@weak model => move |position| model.seek_to(position)));
-        widget.connect_now_playing_clicked(clone!(@weak model => move || model.go_home()));
+        widget.connect_play_pause(clone!(
+            #[weak]
+            model,
+            move || model.toggle_playback()
+        ));
+        widget.connect_next(clone!(
+            #[weak]
+            model,
+            move || model.play_next_song()
+        ));
+        widget.connect_prev(clone!(
+            #[weak]
+            model,
+            move || model.play_prev_song()
+        ));
+        widget.connect_shuffle(clone!(
+            #[weak]
+            model,
+            move || model.toggle_shuffle()
+        ));
+        widget.connect_repeat(clone!(
+            #[weak]
+            model,
+            move || model.toggle_repeat()
+        ));
+        widget.connect_seek(clone!(
+            #[weak]
+            model,
+            move |position| model.seek_to(position)
+        ));
+        widget.connect_now_playing_clicked(clone!(
+            #[weak]
+            model,
+            move || model.go_home()
+        ));
 
         Self {
             model,

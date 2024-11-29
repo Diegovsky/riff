@@ -12,7 +12,7 @@ impl SidebarRow {
 
 mod imp {
     use super::*;
-    use glib::{ParamSpec, Properties};
+    use glib::Properties;
     use std::cell::RefCell;
 
     #[derive(Debug, CompositeTemplate, Properties)]
@@ -61,20 +61,8 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for SidebarRow {
-        fn properties() -> &'static [ParamSpec] {
-            Self::derived_properties()
-        }
-
-        fn set_property(&self, id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
-            self.derived_set_property(id, value, pspec);
-        }
-
-        fn property(&self, id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-            self.derived_property(id, pspec)
-        }
-    }
-
+    #[glib::derived_properties]
+    impl ObjectImpl for SidebarRow {}
     impl WidgetImpl for SidebarRow {}
     impl ListBoxRowImpl for SidebarRow {}
 }

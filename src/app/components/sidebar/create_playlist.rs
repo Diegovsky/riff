@@ -55,11 +55,19 @@ impl CreatePlaylistPopover {
 
     pub fn connect_create<F: Clone + Fn(String) + 'static>(&self, create_fun: F) {
         let entry = self.imp().entry.get();
-        let closure = clone!(@weak self as popover, @weak entry, @strong create_fun => move || {
-            create_fun(entry.text().to_string());
-            popover.popdown();
-            entry.buffer().delete_text(0, None);
-        });
+        let closure = clone!(
+            #[weak(rename_to = popover)]
+            self,
+            #[weak]
+            entry,
+            #[strong]
+            create_fun,
+            move || {
+                create_fun(entry.text().to_string());
+                popover.popdown();
+                entry.buffer().delete_text(0, None);
+            }
+        );
         let closure_clone = closure.clone();
         entry.connect_activate(move |_| closure());
         self.imp().button.connect_clicked(move |_| closure_clone());

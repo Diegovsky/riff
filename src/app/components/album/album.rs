@@ -13,7 +13,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/dev/alextren/Spot/components/album.ui")]
+    #[template(file = "src/app/components/album/album.blp")]
     pub struct AlbumWidget {
         #[template_child]
         pub album_label: TemplateChild<gtk::Label>,
@@ -77,8 +77,9 @@ impl AlbumWidget {
         self.add_css_class("container--loaded");
     }
 
-    fn set_image(&self, pixbuf: Option<&gdk_pixbuf::Pixbuf>) {
-        self.imp().cover_image.set_from_pixbuf(pixbuf);
+    fn set_image(&self, pixbuf: &gdk_pixbuf::Pixbuf) {
+        let texture = gdk::Texture::for_pixbuf(pixbuf);
+        self.imp().cover_image.set_paintable(Some(&texture));
     }
 
     fn bind(&self, album_model: &AlbumModel, worker: Worker) {
@@ -91,8 +92,10 @@ impl AlbumWidget {
                 if let Some(_self) = _self.upgrade() {
                     let loader = ImageLoader::new();
                     let result = loader.load_remote(&cover_art, "jpg", 200, 200).await;
-                    _self.set_image(result.as_ref());
-                    _self.set_loaded();
+                    if let Some(image) = result.as_ref() {
+                        _self.set_image(image);
+                        _self.set_loaded();
+                    }
                 }
             });
         } else {
@@ -119,11 +122,9 @@ impl AlbumWidget {
         }
     }
 
-    pub fn connect_album_pressed<F: Fn(&Self) + 'static>(&self, f: F) {
-        self.imp()
-            .cover_btn
-            .connect_clicked(clone!(@weak self as _self => move |_| {
-                f(&_self);
-            }));
+    pub fn connect_album_pressed<F: Fn() + 'static>(&self, f: F) {
+        self.imp().cover_btn.connect_clicked(move |_| {
+            f();
+        });
     }
 }

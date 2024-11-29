@@ -80,15 +80,19 @@ impl SavedPlaylistsWidget {
     {
         self.imp()
             .flowbox
-            .bind_model(Some(store.unsafe_store()), move |item| {
+            .bind_model(Some(store.inner()), move |item| {
                 let album_model = item.downcast_ref::<AlbumModel>().unwrap();
                 let child = gtk::FlowBoxChild::new();
                 let album = AlbumWidget::for_model(album_model, worker.clone());
 
                 let f = on_album_pressed.clone();
-                album.connect_album_pressed(clone!(@weak album_model => move |_| {
-                    f(album_model.uri());
-                }));
+                album.connect_album_pressed(clone!(
+                    #[weak]
+                    album_model,
+                    move || {
+                        f(album_model.uri());
+                    }
+                ));
 
                 child.set_child(Some(&album));
                 child.upcast::<gtk::Widget>()
@@ -111,9 +115,13 @@ impl SavedPlaylists {
 
         let widget = SavedPlaylistsWidget::new();
 
-        widget.connect_bottom_edge(clone!(@weak model => move || {
-            model.load_more_playlists();
-        }));
+        widget.connect_bottom_edge(clone!(
+            #[weak]
+            model,
+            move || {
+                model.load_more_playlists();
+            }
+        ));
 
         Self {
             widget,
@@ -126,9 +134,13 @@ impl SavedPlaylists {
         self.widget.bind_albums(
             self.worker.clone(),
             &self.model.get_list_store().unwrap(),
-            clone!(@weak self.model as model => move |id| {
-                model.open_playlist(id);
-            }),
+            clone!(
+                #[weak(rename_to = model)]
+                self.model,
+                move |id| {
+                    model.open_playlist(id);
+                }
+            ),
         );
     }
 }

@@ -102,18 +102,22 @@ where
             item.set_child(Some(&SongWidget::new()));
         });
 
-        factory.connect_bind(clone!(@weak model => move |_, item| {
-            let item = item.downcast_ref::<gtk::ListItem>().unwrap();
-            let song_model = item.item().unwrap().downcast::<SongModel>().unwrap();
-            song_model.set_state(model.song_state(&song_model.get_id()));
+        factory.connect_bind(clone!(
+            #[weak]
+            model,
+            move |_, item| {
+                let item = item.downcast_ref::<gtk::ListItem>().unwrap();
+                let song_model = item.item().unwrap().downcast::<SongModel>().unwrap();
+                song_model.set_state(model.song_state(&song_model.get_id()));
 
-            let widget = item.child().unwrap().downcast::<SongWidget>().unwrap();
-            widget.bind(&song_model, worker.clone(), model.show_song_covers());
+                let widget = item.child().unwrap().downcast::<SongWidget>().unwrap();
+                widget.bind(&song_model, worker.clone(), model.show_song_covers());
 
-            let id = &song_model.get_id();
-            widget.set_actions(model.actions_for(id).as_ref());
-            widget.set_menu(model.menu_for(id).as_ref());
-        }));
+                let id = &song_model.get_id();
+                widget.set_actions(model.actions_for(id).as_ref());
+                widget.set_menu(model.menu_for(id).as_ref());
+            }
+        ));
 
         factory.connect_unbind(|_, item| {
             let item = item.downcast_ref::<gtk::ListItem>().unwrap();
@@ -121,23 +125,35 @@ where
             song_model.unbind_all();
         });
 
-        listview.connect_activate(clone!(@weak list_model, @weak model => move |_, position| {
-            let song = list_model.index_continuous(position as usize).expect("attempt to access invalid index");
-            let song = song.description();
-            let selection_enabled = model.is_selection_enabled();
-            if selection_enabled {
-                model.toggle_select(&song.id);
-            } else {
-                model.play_song_at(position as usize, &song.id);
+        listview.connect_activate(clone!(
+            #[weak]
+            list_model,
+            #[weak]
+            model,
+            move |_, position| {
+                let song = list_model
+                    .index_continuous(position as usize)
+                    .expect("attempt to access invalid index");
+                let song = song.description();
+                let selection_enabled = model.is_selection_enabled();
+                if selection_enabled {
+                    model.toggle_select(&song.id);
+                } else {
+                    model.play_song_at(position as usize, &song.id);
+                }
             }
-        }));
+        ));
 
         let press_gesture = gtk::GestureLongPress::new();
         press_gesture.set_touch_only(false);
         press_gesture.set_propagation_phase(gtk::PropagationPhase::Capture);
-        press_gesture.connect_pressed(clone!(@weak model => move |_, _, _| {
-            model.enable_selection();
-        }));
+        press_gesture.connect_pressed(clone!(
+            #[weak]
+            model,
+            move |_, _, _| {
+                model.enable_selection();
+            }
+        ));
         listview.add_controller(press_gesture);
 
         Self {
@@ -160,11 +176,17 @@ where
             if pos < v || pos > v2 {
                 self.animator.animate(
                     20,
-                    clone!(@weak adj => @default-return false, move |p| {
-                        let v = adj.value();
-                        adj.set_value(v + p * (pos - v));
-                        true
-                    }),
+                    clone!(
+                        #[weak]
+                        adj,
+                        #[upgrade_or]
+                        false,
+                        move |p| {
+                            let v = adj.value();
+                            adj.set_value(v + p * (pos - v));
+                            true
+                        }
+                    ),
                 );
             }
         }

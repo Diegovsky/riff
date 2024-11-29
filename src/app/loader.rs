@@ -1,6 +1,5 @@
 use crate::api::cache::*;
-use gdk_pixbuf::traits::PixbufLoaderExt;
-use gdk_pixbuf::{Pixbuf, PixbufLoader};
+use gdk_pixbuf::{prelude::PixbufLoaderExt, Pixbuf, PixbufLoader};
 use isahc::config::Configurable;
 use isahc::{AsyncBody, AsyncReadResponseExt, HttpClient, Response};
 use std::collections::hash_map::DefaultHasher;
@@ -10,7 +9,7 @@ use std::io::{Error, ErrorKind, Write};
 // A wrapper to be able to implement the Write trait on a PixbufLoader
 struct LocalPixbufLoader<'a>(&'a PixbufLoader);
 
-impl<'a> Write for LocalPixbufLoader<'a> {
+impl Write for LocalPixbufLoader<'_> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
         self.0
             .write(buf)

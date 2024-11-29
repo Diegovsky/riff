@@ -153,8 +153,9 @@ impl SongWidget {
         }
     }
 
-    fn set_image(&self, pixbuf: Option<&gdk_pixbuf::Pixbuf>) {
-        self.imp().song_cover.set_from_pixbuf(pixbuf);
+    fn set_image(&self, pixbuf: &gdk_pixbuf::Pixbuf) {
+        let texture = gdk::Texture::for_pixbuf(pixbuf);
+        self.imp().song_cover.set_paintable(Some(&texture));
     }
 
     pub fn set_art(&self, model: &SongModel, worker: Worker) {
@@ -164,7 +165,9 @@ impl SongWidget {
                 if let Some(_self) = _self.upgrade() {
                     let loader = ImageLoader::new();
                     let result = loader.load_remote(&url, "jpg", 100, 100).await;
-                    _self.set_image(result.as_ref());
+                    if let Some(pixbuf) = result.as_ref() {
+                        _self.set_image(pixbuf);
+                    }
                 }
             });
         }

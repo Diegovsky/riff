@@ -79,17 +79,6 @@ impl SearchResultsWidget {
         glib::Object::new()
     }
 
-    pub fn bind_to_leaflet(&self, leaflet: &libadwaita::Leaflet) {
-        leaflet
-            .bind_property(
-                "folded",
-                &*self.imp().main_header,
-                "show-start-title-buttons",
-            )
-            .build();
-        leaflet.notify("folded");
-    }
-
     pub fn connect_go_back<F>(&self, f: F)
     where
         F: Fn() + 'static,
@@ -101,9 +90,10 @@ impl SearchResultsWidget {
     where
         F: Fn(String) + 'static,
     {
-        self.imp()
-            .search_entry
-            .connect_changed(clone!(@weak self as _self => move |s| {
+        self.imp().search_entry.connect_changed(clone!(
+            #[weak(rename_to = _self)]
+            self,
+            move |s| {
                 let query = s.text();
                 let query = query.as_str();
                 _self.imp().status_page.set_visible(query.is_empty());
@@ -111,7 +101,8 @@ impl SearchResultsWidget {
                 if !query.is_empty() {
                     f(query.to_string());
                 }
-            }));
+            }
+        ));
     }
 
     fn bind_albums_results<F>(&self, worker: Worker, store: &gio::ListStore, on_album_pressed: F)
@@ -124,9 +115,13 @@ impl SearchResultsWidget {
                 wrap_flowbox_item(item, |album_model| {
                     let f = on_album_pressed.clone();
                     let album = AlbumWidget::for_model(album_model, worker.clone());
-                    album.connect_album_pressed(clone!(@weak album_model => move |_| {
-                        f(album_model.uri());
-                    }));
+                    album.connect_album_pressed(clone!(
+                        #[weak]
+                        album_model,
+                        move || {
+                            f(album_model.uri());
+                        }
+                    ));
                     album
                 })
             });
@@ -142,9 +137,13 @@ impl SearchResultsWidget {
                 wrap_flowbox_item(item, |artist_model| {
                     let f = on_artist_pressed.clone();
                     let artist = ArtistWidget::for_model(artist_model, worker.clone());
-                    artist.connect_artist_pressed(clone!(@weak artist_model => move |_| {
-                        f(artist_model.id());
-                    }));
+                    artist.connect_artist_pressed(clone!(
+                        #[weak]
+                        artist_model,
+                        move || {
+                            f(artist_model.id());
+                        }
+                    ));
                     artist
                 })
             });
@@ -160,37 +159,51 @@ pub struct SearchResults {
 }
 
 impl SearchResults {
-    pub fn new(model: SearchResultsModel, worker: Worker, leaflet: &libadwaita::Leaflet) -> Self {
+    pub fn new(model: SearchResultsModel, worker: Worker) -> Self {
         let model = Rc::new(model);
         let widget = SearchResultsWidget::new();
 
-        let album_results_model = gio::ListStore::new(AlbumModel::static_type());
-        let artist_results_model = gio::ListStore::new(ArtistModel::static_type());
+        let album_results_model = gio::ListStore::new::<AlbumModel>();
+        let artist_results_model = gio::ListStore::new::<ArtistModel>();
 
-        widget.bind_to_leaflet(leaflet);
+        widget.connect_go_back(clone!(
+            #[weak]
+            model,
+            move || {
+                model.go_back();
+            }
+        ));
 
-        widget.connect_go_back(clone!(@weak model => move || {
-            model.go_back();
-        }));
-
-        widget.connect_search_updated(clone!(@weak model => move |q| {
-            model.search(q);
-        }));
+        widget.connect_search_updated(clone!(
+            #[weak]
+            model,
+            move |q| {
+                model.search(q);
+            }
+        ));
 
         widget.bind_albums_results(
             worker.clone(),
             &album_results_model,
-            clone!(@weak model => move |uri| {
-                model.open_album(uri);
-            }),
+            clone!(
+                #[weak]
+                model,
+                move |uri| {
+                    model.open_album(uri);
+                }
+            ),
         );
 
         widget.bind_artists_results(
             worker,
             &artist_results_model,
-            clone!(@weak model => move |id| {
-                model.open_artist(id);
-            }),
+            clone!(
+                #[weak]
+                model,
+                move |id| {
+                    model.open_artist(id);
+                }
+            ),
         );
 
         Self {
@@ -230,7 +243,11 @@ impl SearchResults {
     fn update_search_query(&self) {
         self.debouncer.debounce(
             600,
-            clone!(@weak self.model as model => move || model.fetch_results()),
+            clone!(
+                #[weak(rename_to = model)]
+                self.model,
+                move || model.fetch_results()
+            ),
         );
     }
 }

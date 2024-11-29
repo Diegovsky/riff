@@ -124,7 +124,6 @@ impl SidebarItem {
 
 mod imp {
     use super::*;
-    use gdk::cairo::glib::ParamSpec;
     use std::cell::{Cell, RefCell};
 
     #[derive(Debug, Default, Properties)]
@@ -147,19 +146,8 @@ mod imp {
         type ParentType = glib::Object;
     }
 
-    impl ObjectImpl for SidebarItem {
-        fn properties() -> &'static [ParamSpec] {
-            Self::derived_properties()
-        }
-
-        fn set_property(&self, id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
-            self.derived_set_property(id, value, pspec);
-        }
-
-        fn property(&self, id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-            self.derived_property(id, pspec)
-        }
-    }
+    #[glib::derived_properties]
+    impl ObjectImpl for SidebarItem {}
 }
 
 glib::wrapper! {

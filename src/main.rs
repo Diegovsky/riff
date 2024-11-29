@@ -41,7 +41,7 @@ fn main() {
     // In debug mode, the app id is different (see meson config) so we fix the resource path (and add a distinctive style)
     // Having a different app id allows running both the stable and development version at the same time
     if cfg!(debug_assertions) {
-        window.add_css_class("devel");
+        // window.add_css_class("devel");
         gtk_app.set_resource_base_path(Some("/dev/alextren/Spot"));
     }
 
@@ -51,7 +51,7 @@ fn main() {
 
     // Couple of actions used with shortcuts
     register_actions(&gtk_app, sender.clone());
-    setup_credits(builder.object::<libadwaita::AboutWindow>("about").unwrap());
+    setup_credits(builder.object::<libadwaita::AboutDialog>("about").unwrap());
 
     // Main app logic is hooked up here
     let app = App::new(
@@ -124,7 +124,7 @@ fn setup_gtk(settings: &settings::SpotSettings) {
     );
 }
 
-fn setup_credits(about: libadwaita::AboutWindow) {
+fn setup_credits(about: libadwaita::AboutDialog) {
     // Read from a couple files at compile time and update the about dialog
     let authors: Vec<&str> = include_str!("../AUTHORS")
         .trim_end_matches('\n')
@@ -143,12 +143,16 @@ fn setup_credits(about: libadwaita::AboutWindow) {
 
 fn register_actions(app: &gtk::Application, sender: UnboundedSender<AppAction>) {
     let quit = SimpleAction::new("quit", None);
-    quit.connect_activate(clone!(@weak app => move |_, _| {
-        if let Some(existing_window) = app.active_window() {
-            existing_window.close();
+    quit.connect_activate(clone!(
+        #[weak]
+        app,
+        move |_, _| {
+            if let Some(existing_window) = app.active_window() {
+                existing_window.close();
+            }
+            app.quit();
         }
-        app.quit();
-    }));
+    ));
     app.add_action(&quit);
 
     app.add_action(&make_action(

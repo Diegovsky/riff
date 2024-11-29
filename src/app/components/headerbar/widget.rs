@@ -117,17 +117,6 @@ impl HeaderBarWidget {
         self.imp().go_back.connect_clicked(move |_| f());
     }
 
-    pub fn bind_to_leaflet(&self, leaflet: &libadwaita::Leaflet) {
-        leaflet
-            .bind_property(
-                "folded",
-                &*self.imp().main_header,
-                "show-start-title-buttons",
-            )
-            .build();
-        leaflet.notify("folded");
-    }
-
     pub fn set_can_go_back(&self, can_go_back: bool) {
         self.imp().go_back.set_visible(can_go_back);
     }
