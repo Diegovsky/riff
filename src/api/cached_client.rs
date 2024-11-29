@@ -144,7 +144,7 @@ enum SpotCacheKey<'a> {
     UserPlaylists(&'a str, usize, usize),
 }
 
-impl<'a> SpotCacheKey<'a> {
+impl SpotCacheKey<'_> {
     fn into_raw(self) -> String {
         match self {
             Self::SavedAlbums(offset, limit) => format!("me_albums_{offset}_{limit}.json"),
