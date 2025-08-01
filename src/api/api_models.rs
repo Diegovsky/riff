@@ -178,7 +178,8 @@ trait WithImages {
     }
 
     fn best_image_for_width(&self, width: i32) -> Option<&Image> {
-        self.best_image(|i| (width - i.width.unwrap_or(0) as i32).abs())
+        // When the API does return a float, it seems to just be an integer with a .0
+        self.best_image(|i| (width - (i.width.unwrap_or(0.0).abs()) as i32))
     }
 }
 
@@ -186,7 +187,7 @@ trait WithImages {
 pub struct Playlist {
     pub id: String,
     pub name: String,
-    pub images: Vec<Image>,
+    pub images: Option<Vec<Image>>,
     pub tracks: Page<PlaylistTrack>,
     pub owner: PlaylistOwner,
 }
@@ -199,7 +200,11 @@ pub struct PlaylistOwner {
 
 impl WithImages for Playlist {
     fn images(&self) -> &[Image] {
-        &self.images
+        if let Some(ref images) = self.images {
+            images
+        } else {
+            &[]
+        }
     }
 }
 
@@ -261,8 +266,9 @@ impl WithImages for Album {
 #[derive(Deserialize, Debug, Clone)]
 pub struct Image {
     pub url: String,
-    pub height: Option<u32>,
-    pub width: Option<u32>,
+    // Spotify's API sometimes returns image height/width as a float instead of a integer
+    pub height: Option<f64>,
+    pub width: Option<f64>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

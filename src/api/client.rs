@@ -219,7 +219,6 @@ impl SpotifyClient {
         B: Into<isahc::AsyncBody>,
     {
         let mut result = self.client.send_async(request).await?;
-
         let etag = result
             .headers()
             .get("etag")
