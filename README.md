@@ -1,4 +1,8 @@
-# Spot [![spot-snapshots](https://github.com/xou816/spot/actions/workflows/spot-snapshots.yml/badge.svg?branch=master)](https://github.com/xou816/spot/actions/workflows/spot-snapshots.yml)
+# Riff (Spot fork)
+
+**This is a fork of Spot to continue development and add new features**
+
+I'm (@Diegovsky) am a maintainer but don't have write access, making a fork unfortunately necessary.
 
 Gtk/Rust native Spotify client for the GNOME desktop. **Only works with premium accounts!**
 
