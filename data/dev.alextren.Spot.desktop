@@ -1,6 +1,6 @@
 [Desktop Entry]
 Version=1.5
-Name=Spot
+Name=Riff
 Exec=spot %u
 GenericName=Music Player
 Icon=dev.alextren.Spot

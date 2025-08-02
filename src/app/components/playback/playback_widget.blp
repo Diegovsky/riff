@@ -16,12 +16,40 @@ template $PlaybackWidget : Box {
     ]
   }
 
+  Box {
+    margin-top: 0;
+    margin-bottom: 0;
+    margin-start: 10;
+    margin-end: 10;
+
+    Label track_position {
+      sensitive: false;
+      label: "0∶00";
+      halign: start;
+      hexpand: true;
+
+      styles [
+        "numeric",
+      ]
+    }
+
+    Label track_duration {
+      sensitive: false;
+      label: "0∶00";
+      halign: end;
+
+      styles [
+        "numeric",
+      ]
+    }
+  }
+
   Adw.BreakpointBin {
     width-request: 1;
     height-request: 1;
 
     Adw.Breakpoint {
-      condition("max-width:700sp")
+      condition("max-width:550sp")
 
       setters {
         stack.visible-child-name: "mobile";
@@ -37,7 +65,7 @@ template $PlaybackWidget : Box {
         child: Grid {
           halign: fill;
           hexpand: true;
-          column-homogeneous: true;
+          column-homogeneous: false;
 
           $PlaybackInfoWidget now_playing {
             receives-default: "1";
@@ -53,6 +81,7 @@ template $PlaybackWidget : Box {
           }
 
           $PlaybackControlsWidget controls {
+          halign: start;
             layout {
               column-span: "1";
               column: "1";
@@ -61,41 +90,39 @@ template $PlaybackWidget : Box {
           }
 
           Box {
-            margin-top: 4;
-            margin-bottom: 4;
-            margin-start: 4;
-            margin-end: 4;
-
-            layout {
-              column-span: "1";
-              column: "2";
-              row: "0";
+            hexpand: true;
+            Image {
+              icon-name: 'multimedia-volume-control-symbolic';
             }
 
-            Label track_position {
-              sensitive: false;
-              label: "0∶00";
-              halign: end;
+            Scale volume_slider {
               hexpand: true;
+              show-fill-level: true;
+              restrict-to-fill-level: false;
+              value-pos: left;
+              layout {
+                column-span: "1";
+                column: 2;
+                row: "0";
+              }
 
               styles [
-                "numeric",
+                'volume-slider'
               ]
-            }
 
-            Label track_duration {
-              sensitive: false;
-              label: " / 0∶00";
-              halign: end;
-
-              styles [
-                "numeric",
-              ]
+              adjustment: Adjustment {
+                lower: 0.0;
+                value: 0.7;
+                upper: 1.0;
+                step-increment: 0.01;
+                page-increment: 0.05;
+              };
             }
           }
+
         };
       }
-      
+
       StackPage {
         name: "mobile";
         child: Grid {

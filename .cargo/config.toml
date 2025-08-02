@@ -1,0 +1,4 @@
+[profile.dev]
+debug = false
+panic = "abort"
+lto = "none"
