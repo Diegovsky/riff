@@ -1,5 +1,6 @@
 use crate::settings::SpotSettings;
 use crate::{api::CachedSpotifyClient, player::TokenStore};
+use crate::PlaybackAction;
 use futures::channel::mpsc::UnboundedSender;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -87,6 +88,10 @@ impl App {
         let sender = &self.sender;
         // ...ALSO some way to send actions, but more conveniently
         let dispatcher = Box::new(ActionDispatcherImpl::new(sender.clone(), worker.clone()));
+
+        // For now, we hardcode 70% volume
+        // it would be nice to get this from gsettings *wink wink*
+        dispatcher.dispatch(PlaybackAction::SetVolume(0.7).into());
 
         // All components that will be available initially
         let mut components: Vec<Box<dyn EventListener>> = vec![

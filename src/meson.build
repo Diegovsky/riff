@@ -89,10 +89,10 @@ cargo = find_program('cargo', required: true)
 
 if get_option('buildtype') == 'release'
   rust_target = 'release'
-  cargo_profile_option = '--release'
+  cargo_profile_options = ['--release']
 else
   rust_target = 'debug'
-  cargo_profile_option = '--verbose'
+  cargo_profile_options = []
 endif
 
 cargo_manifest = meson.project_source_root() / 'Cargo.toml'
@@ -104,9 +104,8 @@ env.set('CARGO_HOME', meson.project_source_root() / 'cargo')
 cargo_options = [
   '--manifest-path', cargo_manifest,
   '--features', get_option('features'),
-  '--target-dir', meson.project_build_root() / 'src',
-  cargo_profile_option
-]
+  '--target-dir', meson.project_build_root() / 'src'
+] + cargo_profile_options
 
 if get_option('offline')
   cargo_options += ['--offline']
@@ -144,8 +143,7 @@ test('Unit tests',
     'test',
     '--manifest-path', cargo_manifest,
     '--target-dir', meson.project_build_root() / 'src',
-    cargo_profile_option
-  ],
+  ] + cargo_profile_options,
   timeout: 180,
   env: env
 )

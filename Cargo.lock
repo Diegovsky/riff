@@ -224,7 +224,7 @@ dependencies = [
  "futures-lite 2.6.0",
  "parking",
  "polling 3.8.0",
- "rustix 1.0.7",
+ "rustix 1.0.8",
  "slab",
  "tracing",
  "windows-sys 0.59.0",
@@ -256,7 +256,7 @@ dependencies = [
  "cfg-if",
  "event-listener 5.4.0",
  "futures-lite 2.6.0",
- "rustix 1.0.7",
+ "rustix 1.0.8",
  "tracing",
 ]
 
@@ -283,7 +283,7 @@ dependencies = [
  "cfg-if",
  "futures-core",
  "futures-io",
- "rustix 1.0.7",
+ "rustix 1.0.8",
  "signal-hook-registry",
  "slab",
  "windows-sys 0.59.0",
@@ -363,6 +363,8 @@ dependencies = [
 [[package]]
 name = "aws-lc-sys"
 version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61b1d86e7705efe1be1b569bab41d4fa1e14e220b60a160f78de2db687add079"
 dependencies = [
  "bindgen 0.69.5",
  "cc",
@@ -436,12 +438,13 @@ dependencies = [
 [[package]]
 name = "bindgen"
 version = "0.72.0"
-source = "git+https://github.com/helce/rust-bindgen?branch=devel_e2k#8ad23ea344fca67b52ed3c563384817f29a0e7ae"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f72209734318d0b619a5e0f5129918b848c416e122a3c4ce054e03cb87b726f"
 dependencies = [
  "bitflags 2.9.1",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.12.1",
  "proc-macro2",
  "quote",
  "regex",
@@ -563,8 +566,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.24"
-source = "git+https://github.com/helce/cc-rs?branch=devel_e2k#b96e1c1f58964681f5748ec31bae644bf959d835"
+version = "1.2.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3a42d84bb6b69d3a8b3eaacf0d88f179e1929695e1ad012b6cf64d9caaa5fd2"
 dependencies = [
  "jobserver",
  "libc",
@@ -588,8 +592,9 @@ dependencies = [
 
 [[package]]
 name = "cfg-expr"
-version = "0.20.0"
-source = "git+https://github.com/helce/cfg-expr?branch=devel_e2k#3f3817df56b12dcb69a7f706fe7e3f95ab4a1b92"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d0390889d58f934f01cd49736275b4c2da15bcfc328c78ff2349907e6cabf22"
 dependencies = [
  "smallvec",
  "target-lexicon",
@@ -2309,15 +2314,6 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
@@ -2454,8 +2450,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.172"
-source = "git+https://github.com/helce/libc?branch=devel_e2k#f6fe257d351c23046c024161fb05957e24b30a8f"
+version = "0.2.174"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1171693293099992e19cddea4e8b849964e9846f4acee11b3948bcc337be8776"
 
 [[package]]
 name = "libloading"
@@ -2785,12 +2782,14 @@ dependencies = [
 [[package]]
 name = "linux-raw-sys"
 version = "0.4.15"
-source = "git+https://github.com/helce/linux-raw-sys?branch=devel_e2k_0.4#d0038665cc5adf27e26d07e5d9ecac488d845349"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d26c52dbd32dccf2d10cac7725f8eae5296885fb5703b261f7d0a0739ec807ab"
 
 [[package]]
 name = "linux-raw-sys"
 version = "0.9.4"
-source = "git+https://github.com/helce/linux-raw-sys?branch=devel_e2k#93c4845f8ba6a005b24042ccc0bd9ff3be65cf75"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd945864f07fe9f5371a27ad7b52a172b4b499999f1d97574c9fa68373937e12"
 
 [[package]]
 name = "litemap"
@@ -3173,8 +3172,9 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.36.4"
-source = "git+https://github.com/helce/object?branch=devel_e2k#c9731fa5ddb8d1b73c65f4a91f2433134634c172"
+version = "0.36.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62948e14d923ea95ea2c7c86c71013138b66525b86bdc08d2dcc262bdb497b87"
 dependencies = [
  "memchr",
 ]
@@ -3461,7 +3461,7 @@ dependencies = [
  "concurrent-queue",
  "hermit-abi",
  "pin-project-lite",
- "rustix 1.0.7",
+ "rustix 1.0.8",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -3777,7 +3777,8 @@ dependencies = [
 [[package]]
 name = "ring"
 version = "0.17.14"
-source = "git+https://github.com/helce/ring?branch=devel_e2k#75d8456acaea27d50b77ce9f47e0a17f500c273c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4689e6c2294d81e88dc6261c768b63bc4fcdb852be6d1352498b114f61383b7"
 dependencies = [
  "cc",
  "cfg-if",
@@ -3847,25 +3848,27 @@ dependencies = [
 [[package]]
 name = "rustix"
 version = "0.38.44"
-source = "git+https://github.com/helce/rustix?branch=devel_e2k_0.38#6a1cd094d637a80648e967519868865a465d2a07"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdb5bc1ae2baa591800df16c9ca78619bf65c0488b41b96ccec5d11220d8c154"
 dependencies = [
  "bitflags 2.9.1",
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
 name = "rustix"
-version = "1.0.7"
-source = "git+https://github.com/helce/rustix?branch=devel_e2k#12d784fa22030fbbb01b0cff1082332ad100839e"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11181fbabf243db407ef8df94a6ce0b2f9a733bd8be4ad02b4eda9602296cac8"
 dependencies = [
  "bitflags 2.9.1",
  "errno",
  "libc",
  "linux-raw-sys 0.9.4",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4517,7 +4520,8 @@ dependencies = [
 [[package]]
 name = "target-lexicon"
 version = "0.13.2"
-source = "git+https://github.com/helce/target-lexicon?branch=devel_e2k#5bb3a9043fe410b37570d68f7902cd3abadbba9c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e502f78cdbb8ba4718f566c418c52bc729126ffd16baee5baa718cf25dd5a69a"
 
 [[package]]
 name = "temp-dir"
@@ -4534,7 +4538,7 @@ dependencies = [
  "fastrand 2.3.0",
  "getrandom 0.3.3",
  "once_cell",
- "rustix 1.0.7",
+ "rustix 1.0.8",
  "windows-sys 0.59.0",
 ]
 
@@ -5851,83 +5855,3 @@ dependencies = [
  "quote",
  "syn",
 ]
-
-[[patch.unused]]
-name = "authenticator"
-version = "0.4.1"
-source = "git+https://github.com/helce/authenticator-rs?branch=devel_e2k#4179eb59e0b5273b1e5df8d28b971f42e5c0032a"
-
-[[patch.unused]]
-name = "caps"
-version = "0.5.5"
-source = "git+https://github.com/helce/caps-rs?branch=devel_e2k#b9f51ec665377875e9a80726a6c93aaac96086b8"
-
-[[patch.unused]]
-name = "compiletest_rs"
-version = "0.11.2"
-source = "git+https://github.com/helce/compiletest-rs?branch=devel_e2k#ebaf133371738802f82aec1e40725196d909a7d7"
-
-[[patch.unused]]
-name = "ctest2"
-version = "0.4.10"
-source = "git+https://github.com/helce/ctest2?branch=devel_e2k#209d2ac35b91f044e5e35363d59f6baecf09b971"
-
-[[patch.unused]]
-name = "ioctl-sys"
-version = "0.8.0"
-source = "git+https://github.com/helce/ioctl?branch=devel_e2k#2d31de1870720a01d260f525b5111c2cc4fe6665"
-
-[[patch.unused]]
-name = "libffi"
-version = "4.1.0"
-source = "git+https://github.com/helce/libffi-rs?branch=devel_e2k#bdc56db8be3d300d5780744fd02c3cfde6261701"
-
-[[patch.unused]]
-name = "libffi-sys"
-version = "3.3.1"
-source = "git+https://github.com/helce/libffi-rs?branch=devel_e2k#bdc56db8be3d300d5780744fd02c3cfde6261701"
-
-[[patch.unused]]
-name = "nix"
-version = "0.24.3"
-source = "git+https://github.com/helce/nix?branch=devel_e2k_24#0f35f4717fcc607986a7cf45207cb296597179dd"
-
-[[patch.unused]]
-name = "openssl-src"
-version = "111.28.2+1.1.1w"
-source = "git+https://github.com/helce/openssl-src-rs?branch=devel_e2k_111#968a793bb61e5acab05d9a7c37b2004209fe8eef"
-
-[[patch.unused]]
-name = "openssl-src"
-version = "300.4.2+3.4.1"
-source = "git+https://github.com/helce/openssl-src-rs?branch=devel_e2k#f71b769501d06a29f96028e631876918a7a63810"
-
-[[patch.unused]]
-name = "psm"
-version = "0.1.26"
-source = "git+https://github.com/helce/stacker?branch=devel_e2k#ad41d804bb90a08d460791e24c1ed4a0dfaa5f58"
-
-[[patch.unused]]
-name = "stacker"
-version = "0.1.21"
-source = "git+https://github.com/helce/stacker?branch=devel_e2k#ad41d804bb90a08d460791e24c1ed4a0dfaa5f58"
-
-[[patch.unused]]
-name = "tikv-jemalloc-ctl"
-version = "0.5.4"
-source = "git+https://github.com/helce/jemallocator?branch=devel_e2k#8933ac8f8f397d3868677ce50738aa07522dc4d4"
-
-[[patch.unused]]
-name = "tikv-jemalloc-sys"
-version = "0.5.4+5.3.0-patched"
-source = "git+https://github.com/helce/jemallocator?branch=devel_e2k#8933ac8f8f397d3868677ce50738aa07522dc4d4"
-
-[[patch.unused]]
-name = "tikv-jemallocator"
-version = "0.5.4"
-source = "git+https://github.com/helce/jemallocator?branch=devel_e2k#8933ac8f8f397d3868677ce50738aa07522dc4d4"
-
-[[patch.unused]]
-name = "tikv-jemallocator-global"
-version = "0.5.0"
-source = "git+https://github.com/helce/jemallocator?branch=devel_e2k#8933ac8f8f397d3868677ce50738aa07522dc4d4"

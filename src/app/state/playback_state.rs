@@ -469,7 +469,10 @@ impl UpdatableState for PlaybackState {
                 self.seek_position.set(pos as u64 * 1000, true);
                 vec![PlaybackEvent::SeekSynced(pos)]
             }
-            PlaybackAction::SetVolume(volume) => vec![PlaybackEvent::VolumeSet(volume)],
+            PlaybackAction::SetVolume(volume) => {
+                vec![PlaybackEvent::VolumeSet(volume)]
+            },
+
             PlaybackAction::SetAvailableDevices(list) => {
                 self.available_devices = list;
                 vec![PlaybackEvent::AvailableDevicesChanged]
