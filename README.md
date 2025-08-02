@@ -10,7 +10,7 @@ Based on [librespot](https://github.com/librespot-org/librespot/).
 
 Join the discussion on [Matrix](https://matrix.to/#/#spot-devel:matrix.org).
 
-![Spot screenshot](./data/appstream/2.png)
+![Spot screenshot](./data/appstream/1.png)
 
 ## Installing
 
