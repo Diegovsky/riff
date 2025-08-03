@@ -397,7 +397,7 @@ msgid "Connection to device lost!"
 msgstr ""
 
 #: src/app/components/login/login.blp:46
-msgid "Welcome to Spot"
+msgid "Welcome to Riff"
 msgstr ""
 
 #. Translators: Login window title, must mention Premium (a premium account is required).

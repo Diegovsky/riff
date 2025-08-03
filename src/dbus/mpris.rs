@@ -54,7 +54,7 @@ impl SpotMpris {
 
     #[zbus(property)]
     fn identity(&self) -> &'static str {
-        "Spot"
+        "Riff"
     }
 
     #[zbus(property)]

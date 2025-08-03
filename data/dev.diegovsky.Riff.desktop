@@ -1,7 +1,7 @@
 [Desktop Entry]
 Version=1.5
 Name=Riff
-Exec=spot %u
+Exec=riff %u
 GenericName=Music Player
 Icon=dev.diegovsky.Riff
 Terminal=false

@@ -5,7 +5,7 @@
     "options": {
         "env": {
             "RUST_BACKTRACE": "1",
-            "RUST_LOG": "spot=debug",
+            "RUST_LOG": "riff=debug",
             "LANG": "C",
             //"https_proxy": "localhost:8080"
         }
@@ -32,7 +32,7 @@
         {
             "label": "run",
             "type": "shell",
-            "command": "$HOME/.local/bin/spot",
+            "command": "$HOME/.local/bin/riff",
             "presentation": {
                 "reveal": "always",
                 "clear": true

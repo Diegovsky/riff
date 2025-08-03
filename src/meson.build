@@ -63,8 +63,8 @@ blueprints = custom_target('blueprints',
   command: [find_program('blueprint-compiler'), 'batch-compile', '@OUTPUT@', '@CURRENT_SOURCE_DIR@', '@INPUT@'],
 )
 
-gnome.compile_resources('spot',
-  'spot.gresource.xml',
+gnome.compile_resources('riff',
+  'riff.gresource.xml',
   gresource_bundle: true,
   install: true,
   install_dir: pkgdatadir,
