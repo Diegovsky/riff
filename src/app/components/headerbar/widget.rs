@@ -10,7 +10,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/dev/alextren/Spot/components/headerbar.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/components/headerbar.ui")]
     pub struct HeaderBarWidget {
         #[template_child]
         pub main_header: TemplateChild<libadwaita::HeaderBar>,

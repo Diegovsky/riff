@@ -4,7 +4,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: POEditor.com\n"
-"Project-Id-Version: Spot\n"
+"Project-Id-Version: Riff\n"
 "Language: ar\n"
 "Plural-Forms: nplurals=6; plural= n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 && n%100<=10 ? 3 : n%100>=11 ? 4 : 5;\n"
 
@@ -382,7 +382,7 @@ msgid "Connection to device lost!"
 msgstr ""
 
 #: src/app/components/login/login.blp:46
-msgid "Welcome to Spot"
+msgid "Welcome to Riff"
 msgstr ""
 
 #. Translators: Login window title, must mention Premium (a premium account is required).

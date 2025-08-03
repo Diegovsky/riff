@@ -69,7 +69,7 @@ impl SpotMpris {
 
     #[zbus(property)]
     fn desktop_entry(&self) -> &'static str {
-        "dev.alextren.Spot"
+        "dev.diegovsky.Riff"
     }
 }
 

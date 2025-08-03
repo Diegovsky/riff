@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist gettext-domain="spot">
-  <enum id="dev.alextren.Spot.AudioBackend">
+  <enum id="dev.diegovsky.Riff.AudioBackend">
     <value value="0" nick="pulseaudio" />
     <value value="1" nick="alsa" />
     <value value="2" nick="gstreamer" />
   </enum>
-  <enum id="dev.alextren.Spot.Bitrate">
+  <enum id="dev.diegovsky.Riff.Bitrate">
     <value value="0" nick="96" />
     <value value="1" nick="160" />
     <value value="2" nick="320" />
   </enum>
-  <enum id="dev.alextren.Spot.ThemePref">
+  <enum id="dev.diegovsky.Riff.ThemePref">
     <value value="0" nick="light" />
     <value value="1" nick="dark" />
     <value value="2" nick="system" />
   </enum>
-  <schema id="dev.alextren.Spot" path="/dev/alextren/Spot/">
-    <key name='theme-preference' enum='dev.alextren.Spot.ThemePref'>
+  <schema id="dev.diegovsky.Riff" path="/dev/diegovsky/Riff/">
+    <key name='theme-preference' enum='dev.diegovsky.Riff.ThemePref'>
       <default>'system'</default>
       <summary>The theme preference</summary>
     </key>
@@ -32,11 +32,11 @@
       <default>false</default>
       <summary>A flag to enable maximized mode</summary>
     </key>
-    <key name='player-bitrate' enum='dev.alextren.Spot.Bitrate'>
+    <key name='player-bitrate' enum='dev.diegovsky.Riff.Bitrate'>
       <default>'160'</default>
       <summary>Songs bitrate (96, 160, 320kbps)</summary>
     </key>
-    <key name='audio-backend' enum='dev.alextren.Spot.AudioBackend'>
+    <key name='audio-backend' enum='dev.diegovsky.Riff.AudioBackend'>
       <default>'pulseaudio'</default>
       <summary>Audio backend</summary>
     </key>

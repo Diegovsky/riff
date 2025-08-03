@@ -9,7 +9,7 @@ use libadwaita::prelude::*;
 
 use super::SettingsModel;
 
-const SETTINGS: &str = "dev.alextren.Spot";
+const SETTINGS: &str = "dev.diegovsky.Riff";
 
 mod imp {
 
@@ -17,7 +17,7 @@ mod imp {
     use libadwaita::subclass::prelude::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/dev/alextren/Spot/components/settings.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/components/settings.ui")]
     pub struct SettingsDialog {
         #[template_child]
         pub player_bitrate: TemplateChild<libadwaita::ComboRow>,

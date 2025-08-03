@@ -8,7 +8,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/dev/alextren/Spot/components/playlist_headerbar.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/components/playlist_headerbar.ui")]
     pub struct PlaylistHeaderBarWidget {
         #[template_child]
         pub main_header: TemplateChild<libadwaita::HeaderBar>,

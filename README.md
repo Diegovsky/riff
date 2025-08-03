@@ -10,11 +10,11 @@ Based on [librespot](https://github.com/librespot-org/librespot/).
 
 Join the discussion on [Matrix](https://matrix.to/#/#spot-devel:matrix.org).
 
-![Spot screenshot](./data/appstream/1.png)
+![Riff screenshot](./data/appstream/1.png)
 
 ## Installing
 
-<a href='https://flathub.org/apps/details/dev.alextren.Spot'><img width='130' alt='Download on Flathub' src='https://flathub.org/assets/badges/flathub-badge-en.png'/></a>
+<a href='https://flathub.org/apps/details/dev.diegovsky.Riff'><img width='130' alt='Download on Flathub' src='https://flathub.org/assets/badges/flathub-badge-en.png'/></a>
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/spot-client.svg)](https://repology.org/project/spot-client/versions)
 
@@ -66,7 +66,7 @@ If you feel like it, you are welcome to open a PR to be added to the `TRANSLATOR
 
 Pre-requisite: install the `org.freedesktop.Sdk.Extension.rust-stable` SDK extension with flatpak. Builder might do this for you automatically, but it will install an older version; make sure  the version installed matches the version of the Freedesktop SDK GNOME uses.
 
-Open the project in GNOME Builder and make the `dev.alextren.Spot.development.json` configuration active. Then build :)
+Open the project in GNOME Builder and make the `dev.diegovsky.Riff.development.json` configuration active. Then build :)
 
 ### Manually
 
@@ -81,7 +81,7 @@ ninja install -C target
 meson test -C target  --verbose
 ```
 
-This will install a `.desktop` file among other things, and the spot executable will be put in `.local/bin` (you might want to add it to your path).
+This will install a `.desktop` file among other things, and the riff executable will be put in `.local/bin` (you might want to add it to your path).
 
 To build an optimized release build, use `-Dbuildtype=release` instead.
 
@@ -90,8 +90,8 @@ To build an optimized release build, use `-Dbuildtype=release` instead.
 When adding new `msgids`, don't forget to regenerate/update the potfiles.
 
 ```
-ninja spot-pot -C target
-ninja spot-update-po -C target
+ninja riff-pot -C target
+ninja riff-update-po -C target
 ```
 
 ### Pulling updated strings from POEditor
@@ -114,8 +114,8 @@ ninja cargo-sources.json -C target
 
 Set the `RUST_LOG` env variable to the appropriate level.
 
-Debug builds (flatpak) are available from the master branch on Github (see the `spot-snaphots` action).
+Debug builds (flatpak) are available from the master branch on Github (see the `riff-snaphots` action).
 
-Spot caches images and HTTP responses in `~/.cache/spot`.
+Riff caches images and HTTP responses in `~/.cache/riff`.
 
-Spot uses [isahc](https://github.com/sagebind/isahc), which uses libcurl, therefore you can set the `https_proxy` env variable to help with debugging. In debug mode, Spot skips SSL certificate verification.
+Ruff uses [isahc](https://github.com/sagebind/isahc), which uses libcurl, therefore you can set the `https_proxy` env variable to help with debugging. In debug mode, Riff skips SSL certificate verification.

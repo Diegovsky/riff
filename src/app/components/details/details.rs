@@ -23,7 +23,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/dev/alextren/Spot/components/details.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/components/details.ui")]
     pub struct AlbumDetailsWidget {
         #[template_child]
         pub scrolling_header: TemplateChild<ScrollingHeaderWidget>,

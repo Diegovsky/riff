@@ -16,7 +16,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/dev/alextren/Spot/components/login.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/components/login.ui")]
     pub struct LoginWindow {
         #[template_child]
         pub login_with_spotify_button: TemplateChild<gtk::Button>,

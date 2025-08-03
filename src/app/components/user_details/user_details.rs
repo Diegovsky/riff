@@ -15,7 +15,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/dev/alextren/Spot/components/user_details.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/components/user_details.ui")]
     pub struct UserDetailsWidget {
         #[template_child]
         pub scrolled_window: TemplateChild<gtk::ScrolledWindow>,

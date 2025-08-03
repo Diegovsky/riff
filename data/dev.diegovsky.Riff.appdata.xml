@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>dev.alextren.Spot</id>
+  <id>dev.diegovsky.Riff</id>
   <url type="homepage">https://github.com/Diegovsky/riff</url>
   <name>Riff</name>
   <developer_name>Diego Augusto</developer_name>
   <summary>Listen to music on Spotify</summary>
-  <launchable type="desktop-id">dev.alextren.Spot.desktop</launchable>
+  <launchable type="desktop-id">dev.diegovsky.Riff.desktop</launchable>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
   <content_rating type="oars-1.1" />

@@ -16,7 +16,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/dev/alextren/Spot/components/now_playing.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/components/now_playing.ui")]
     pub struct NowPlayingWidget {
         #[template_child]
         pub song_list: TemplateChild<gtk::ListView>,

@@ -15,7 +15,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/dev/alextren/Spot/components/saved_playlists.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/components/saved_playlists.ui")]
     pub struct SavedPlaylistsWidget {
         #[template_child]
         pub scrolled_window: TemplateChild<gtk::ScrolledWindow>,

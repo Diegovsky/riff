@@ -9,7 +9,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/dev/alextren/Spot/components/release_details.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/components/release_details.ui")]
     pub struct ReleaseDetailsDialog {
         #[template_child]
         pub album_artist: TemplateChild<libadwaita::WindowTitle>,

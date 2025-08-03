@@ -16,7 +16,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/dev/alextren/Spot/components/device_selector.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/components/device_selector.ui")]
     pub struct DeviceSelectorWidget {
         #[template_child]
         pub button_content: TemplateChild<libadwaita::ButtonContent>,

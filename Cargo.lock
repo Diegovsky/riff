@@ -3775,6 +3775,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "riff"
+version = "0.5.0"
+dependencies = [
+ "async-std",
+ "env_logger 0.10.2",
+ "form_urlencoded",
+ "futures",
+ "gdk-pixbuf",
+ "gdk4",
+ "gettext-rs",
+ "gio",
+ "glib",
+ "gtk4",
+ "isahc",
+ "lazy_static",
+ "libadwaita",
+ "libc",
+ "librespot",
+ "log",
+ "oauth2",
+ "open",
+ "percent-encoding",
+ "rand 0.8.5",
+ "ref_filter_map",
+ "regex",
+ "secret-service",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "url",
+ "zbus",
+ "zvariant",
+]
+
+[[package]]
 name = "ring"
 version = "0.17.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4296,42 +4332,6 @@ checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
  "der",
-]
-
-[[package]]
-name = "spot"
-version = "0.5.0"
-dependencies = [
- "async-std",
- "env_logger 0.10.2",
- "form_urlencoded",
- "futures",
- "gdk-pixbuf",
- "gdk4",
- "gettext-rs",
- "gio",
- "glib",
- "gtk4",
- "isahc",
- "lazy_static",
- "libadwaita",
- "libc",
- "librespot",
- "log",
- "oauth2",
- "open",
- "percent-encoding",
- "rand 0.8.5",
- "ref_filter_map",
- "regex",
- "secret-service",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "url",
- "zbus",
- "zvariant",
 ]
 
 [[package]]

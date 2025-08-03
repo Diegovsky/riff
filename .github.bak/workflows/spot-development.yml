@@ -17,6 +17,6 @@ jobs:
     - uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@v6.3
       with:
         bundle: "spot.flatpak"
-        manifest-path: "dev.alextren.Spot.development.json"
+        manifest-path: "dev.diegovsky.Riff.development.json"
         cache-key: flatpak-builder-${{ github.sha }}
         run-tests: true
