@@ -57,6 +57,7 @@ mod imp {
     impl ObjectImpl for PlaybackWidget {
         fn constructed(&self) {
             self.parent_constructed();
+            self.now_playing.set_info_visible(true);
             display_add_css_provider(resource!("/components/playback.css"));
         }
     }
