@@ -22,13 +22,7 @@ mod imp {
         pub controls: TemplateChild<PlaybackControlsWidget>,
 
         #[template_child]
-        pub controls_mobile: TemplateChild<PlaybackControlsWidget>,
-
-        #[template_child]
         pub now_playing: TemplateChild<PlaybackInfoWidget>,
-
-        #[template_child]
-        pub now_playing_mobile: TemplateChild<PlaybackInfoWidget>,
 
         #[template_child]
         pub seek_bar: TemplateChild<gtk::Scale>,
@@ -63,8 +57,6 @@ mod imp {
     impl ObjectImpl for PlaybackWidget {
         fn constructed(&self) {
             self.parent_constructed();
-            self.now_playing_mobile.set_info_visible(false);
-            self.now_playing.set_info_visible(true);
             display_add_css_provider(resource!("/components/playback.css"));
         }
     }
@@ -86,14 +78,12 @@ impl PlaybackWidget {
     pub fn reset_info(&self) {
         let widget = self.imp();
         widget.now_playing.reset_info();
-        widget.now_playing_mobile.reset_info();
         self.set_song_duration(None);
     }
 
     fn set_artwork(&self, image: &gdk_pixbuf::Pixbuf) {
         let widget = self.imp();
         widget.now_playing.set_artwork(image);
-        widget.now_playing_mobile.set_artwork(image);
     }
 
     pub fn set_artwork_from_url(&self, url: String, worker: &Worker) {
@@ -146,7 +136,6 @@ impl PlaybackWidget {
         let widget = self.imp();
         let f_clone = f.clone();
         widget.now_playing.connect_clicked(move |_| f_clone());
-        widget.now_playing_mobile.connect_clicked(move |_| f());
     }
 
     pub fn connect_seek<Seek>(&self, seek: Seek)
@@ -176,7 +165,6 @@ impl PlaybackWidget {
     pub fn set_playing(&self, is_playing: bool) {
         let widget = self.imp();
         widget.controls.set_playing(is_playing);
-        widget.controls_mobile.set_playing(is_playing);
         if is_playing {
             widget.clock.start(clone!(
                 #[weak(rename_to = _self)]
@@ -191,13 +179,11 @@ impl PlaybackWidget {
     pub fn set_repeat_mode(&self, mode: RepeatMode) {
         let widget = self.imp();
         widget.controls.set_repeat_mode(mode);
-        widget.controls_mobile.set_repeat_mode(mode);
     }
 
     pub fn set_shuffled(&self, shuffled: bool) {
         let widget = self.imp();
         widget.controls.set_shuffled(shuffled);
-        widget.controls_mobile.set_shuffled(shuffled);
     }
 
     pub fn set_seekbar_visible(&self, visible: bool) {
@@ -216,7 +202,6 @@ impl PlaybackWidget {
     {
         let widget = self.imp();
         widget.controls.connect_play_pause(f.clone());
-        widget.controls_mobile.connect_play_pause(f);
     }
 
     pub fn connect_prev<F>(&self, f: F)
@@ -225,7 +210,6 @@ impl PlaybackWidget {
     {
         let widget = self.imp();
         widget.controls.connect_prev(f.clone());
-        widget.controls_mobile.connect_prev(f);
     }
 
     pub fn connect_next<F>(&self, f: F)
@@ -234,7 +218,6 @@ impl PlaybackWidget {
     {
         let widget = self.imp();
         widget.controls.connect_next(f.clone());
-        widget.controls_mobile.connect_next(f);
     }
 
     pub fn connect_shuffle<F>(&self, f: F)
@@ -243,7 +226,6 @@ impl PlaybackWidget {
     {
         let widget = self.imp();
         widget.controls.connect_shuffle(f.clone());
-        widget.controls_mobile.connect_shuffle(f);
     }
 
     pub fn connect_repeat<F>(&self, f: F)
@@ -252,7 +234,6 @@ impl PlaybackWidget {
     {
         let widget = self.imp();
         widget.controls.connect_repeat(f.clone());
-        widget.controls_mobile.connect_repeat(f);
     }
 
     pub fn connect_volume_changed<F>(&self, f: F)
@@ -260,6 +241,8 @@ impl PlaybackWidget {
         F: Fn(f64) + Clone + 'static,
     {
         let widget = self.imp();
-        widget.volume_slider.connect_value_changed(move |scale| f(scale.value()));
+        widget
+            .volume_slider
+            .connect_value_changed(move |scale| f(scale.value()));
     }
 }
