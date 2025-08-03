@@ -55,6 +55,15 @@ template $PlaybackWidget : Box {
         stack.visible-child-name: "mobile";
       }
     }
+    Adw.Breakpoint {
+      condition("max-width:700sp")
+
+      setters {
+        desktop-grid.column-homogeneous: false;
+        controls.halign: start;
+        volume-stack.visible-child-name: 'slider-button';
+      }
+    }
 
     Stack stack {
       visible-child-name: "desktop";
@@ -62,10 +71,10 @@ template $PlaybackWidget : Box {
 
       StackPage {
         name: "desktop";
-        child: Grid {
+        child: Grid desktop-grid  {
           halign: fill;
           hexpand: true;
-          column-homogeneous: false;
+          column-homogeneous: true;
 
           $PlaybackInfoWidget now_playing {
             receives-default: "1";
@@ -81,7 +90,7 @@ template $PlaybackWidget : Box {
           }
 
           $PlaybackControlsWidget controls {
-          halign: start;
+            halign: center;
             layout {
               column-span: "1";
               column: "1";
@@ -89,37 +98,61 @@ template $PlaybackWidget : Box {
             }
           }
 
-          Box {
+          Stack volume-stack {
+            visible-child-name: "slider";
             hexpand: true;
-            Image {
-              icon-name: 'multimedia-volume-control-symbolic';
+
+            layout {
+              column-span: "1";
+              column: "2";
+              row: "0";
             }
 
-            Scale volume_slider {
-              hexpand: true;
-              show-fill-level: true;
-              restrict-to-fill-level: false;
-              value-pos: left;
-              layout {
-                column-span: "1";
-                column: 2;
-                row: "0";
-              }
+            StackPage {
+              name: 'slider';
+              child: Box {
+                Image {
+                  icon-name: 'multimedia-volume-control-symbolic';
+                }
 
-              styles [
-                'volume-slider'
-              ]
+                Scale volume_slider {
+                  hexpand: true;
+                  show-fill-level: true;
+                  restrict-to-fill-level: false;
+                  value-pos: left;
+                  layout {
+                    column-span: "1";
+                    column: 2;
+                    row: "0";
+                  }
 
-              adjustment: Adjustment {
-                lower: 0.0;
-                value: 0.7;
-                upper: 1.0;
-                step-increment: 0.01;
-                page-increment: 0.05;
+                  styles [
+                    'volume-slider'
+                  ]
+
+                  adjustment: Adjustment {
+                    lower: 0.0;
+                    value: 0.7;
+                    upper: 1.0;
+                    step-increment: 0.01;
+                    page-increment: 0.05;
+                  };
+                }
+              };
+            }
+
+
+            StackPage {
+              name: 'slider-button';
+              child: Box {
+                halign: end;
+                valign: center;
+                MenuButton {
+                  halign: end;
+                }
               };
             }
           }
-
         };
       }
 
