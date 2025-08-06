@@ -192,7 +192,7 @@ impl CachedSpotifyClient {
     pub fn new(token_store: Arc<TokenStore>) -> CachedSpotifyClient {
         CachedSpotifyClient {
             client: SpotifyClient::new(token_store),
-            cache: CacheManager::for_dir("spot/net").unwrap(),
+            cache: CacheManager::for_dir("riff/net").unwrap(),
         }
     }
 

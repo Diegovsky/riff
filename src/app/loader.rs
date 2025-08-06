@@ -33,7 +33,7 @@ pub struct ImageLoader {
 impl ImageLoader {
     pub fn new() -> Self {
         Self {
-            cache: CacheManager::for_dir("spot/img").unwrap(),
+            cache: CacheManager::for_dir("riff/img").unwrap(),
         }
     }
 

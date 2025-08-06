@@ -4,7 +4,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: POEditor.com\n"
-"Project-Id-Version: Spot\n"
+"Project-Id-Version: Riff\n"
 "Language: cs\n"
 "Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2;\n"
 
@@ -118,8 +118,6 @@ msgid "Artists"
 msgstr "Umělci"
 
 #. Where is this text displayed?
-#. I see it is supposed to be in `src/app/components/navigation/home.rs:47`, but that does not seem to be the case: https://github.com/xou816/spot/blob/1b96cd07129f27c7f3f3a2e66299c44a52e489d4/src/app/components/navigation/home.rs
-#. Maybe it is something that has not been commited yet (2021-10-02T10:42:52+02:00), but @xou816 has it locally and has generated pot / po files from it in https://github.com/xou816/spot/commit/86414c03d207cdf4e2c1cbddd47c7ca5629d1303
 #: src/app/components/navigation/factory.rs:76
 #: src/app/components/sidebar/sidebar_item.rs:41
 msgid "Saved tracks"
@@ -381,7 +379,7 @@ msgid "Connection to device lost!"
 msgstr ""
 
 #: src/app/components/login/login.blp:46
-msgid "Welcome to Spot"
+msgid "Welcome to Riff"
 msgstr ""
 
 #. Translators: Login window title, must mention Premium (a premium account is required).

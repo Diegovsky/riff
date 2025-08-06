@@ -16,7 +16,7 @@ mod imp {
     use std::cell::RefCell;
 
     #[derive(Debug, CompositeTemplate, Properties)]
-    #[template(resource = "/dev/alextren/Spot/sidebar/sidebar_row.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/sidebar/sidebar_row.ui")]
     #[properties(wrapper_type = super::SidebarRow)]
     pub struct SidebarRow {
         #[template_child]

@@ -317,7 +317,7 @@ impl SpotifyPlayer {
             }
             AudioBackend::PulseAudio => {
                 info!("using pulseaudio");
-                env::set_var("PULSE_PROP_application.name", "Spot");
+                env::set_var("PULSE_PROP_application.name", "Riff");
                 let backend = audio_backend::find(Some("pulseaudio".to_string())).unwrap();
                 backend(None, AudioFormat::default())
             }
@@ -350,7 +350,7 @@ async fn create_session_with_port(
         ap_port,
         ..Default::default()
     };
-    let root = glib::user_cache_dir().join("spot").join("librespot");
+    let root = glib::user_cache_dir().join("riff").join("librespot");
     let cache = Cache::new(
         Some(root.join("credentials")),
         Some(root.join("volume")),

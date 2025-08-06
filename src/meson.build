@@ -20,10 +20,10 @@ pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
 conf.set_quoted('PKGDATADIR', pkgdatadir)
 
 if get_option('buildtype') == 'debug'
-  conf.set_quoted('APPID', 'dev.alextren.Spot.Devel')
+  conf.set_quoted('APPID', 'dev.diegovsky.Riff.Devel')
   conf.set('VERSION', meson.project_version() + '-dev')
 else
-  conf.set_quoted('APPID', 'dev.alextren.Spot')
+  conf.set_quoted('APPID', 'dev.diegovsky.Riff')
   conf.set('VERSION', meson.project_version())
 endif
 
@@ -63,8 +63,8 @@ blueprints = custom_target('blueprints',
   command: [find_program('blueprint-compiler'), 'batch-compile', '@OUTPUT@', '@CURRENT_SOURCE_DIR@', '@INPUT@'],
 )
 
-gnome.compile_resources('spot',
-  'spot.gresource.xml',
+gnome.compile_resources('riff',
+  'riff.gresource.xml',
   gresource_bundle: true,
   install: true,
   install_dir: pkgdatadir,

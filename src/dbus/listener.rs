@@ -50,7 +50,7 @@ impl AppPlaybackStateListener {
             ..
         } = self.app_model.get_state().playback.current_song()?;
         Some(TrackMetadata {
-            id: format!("/dev/alextren/Spot/Track/{id}"),
+            id: format!("/dev/diegovsky/Riff/Track/{id}"),
             length: 1000 * duration as u64,
             title,
             album: album.name,

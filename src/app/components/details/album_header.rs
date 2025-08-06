@@ -12,7 +12,7 @@ mod imp {
 
     #[derive(Debug, Default, CompositeTemplate, glib::Properties)]
     #[properties(wrapper_type = super::AlbumHeaderWidget)]
-    #[template(resource = "/dev/alextren/Spot/components/album_header.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/components/album_header.ui")]
     pub struct AlbumHeaderWidget {
         #[template_child]
         pub album_overlay: TemplateChild<gtk::Overlay>,

@@ -1,4 +1,4 @@
-name: spot-development
+name: riff-development
 
 on:
   pull_request:
@@ -16,7 +16,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@v6.3
       with:
-        bundle: "spot.flatpak"
-        manifest-path: "dev.alextren.Spot.development.json"
+        bundle: "riff.flatpak"
+        manifest-path: "dev.diegovsky.Riff.development.json"
         cache-key: flatpak-builder-${{ github.sha }}
         run-tests: true

@@ -4,7 +4,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: POEditor.com\n"
-"Project-Id-Version: Spot\n"
+"Project-Id-Version: Riff\n"
 "Language: ru\n"
 "Plural-Forms: nplurals=4; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || (n%100>=11 && n%100<=14)? 2 : 3);\n"
 
@@ -71,7 +71,7 @@ msgstr "Песня сейчас не играет"
 #. translators: This is a menu entry.
 #: src/app/components/user_menu/user_menu.rs:67
 msgid "About"
-msgstr "О Spot"
+msgstr "О Riff"
 
 #. translators: This is a menu entry.
 #: src/app/components/user_menu/user_menu.rs:69
@@ -379,7 +379,7 @@ msgid "Connection to device lost!"
 msgstr ""
 
 #: src/app/components/login/login.blp:46
-msgid "Welcome to Spot"
+msgid "Welcome to Riff"
 msgstr ""
 
 #. Translators: Login window title, must mention Premium (a premium account is required).

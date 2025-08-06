@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! resource {
     ($resource:expr) => {
-        concat!("/dev/alextren/Spot", $resource)
+        concat!("/dev/diegovsky/Riff", $resource)
     };
 }
 

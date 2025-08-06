@@ -3,7 +3,7 @@ use gio::prelude::SettingsExt;
 use libadwaita::ColorScheme;
 use librespot::playback::config::Bitrate;
 
-const SETTINGS: &str = "dev.alextren.Spot";
+const SETTINGS: &str = "dev.diegovsky.Riff";
 
 #[derive(Clone, Debug, Default)]
 pub struct WindowGeometry {

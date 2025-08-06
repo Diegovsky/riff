@@ -1,12 +1,12 @@
 {
-    "app-id": "dev.alextren.Spot",
+    "app-id": "dev.diegovsky.Riff",
     "runtime": "org.gnome.Platform",
-    "runtime-version": "47",
+    "runtime-version": "master",
     "sdk": "org.gnome.Sdk",
     "sdk-extensions": [
         "org.freedesktop.Sdk.Extension.rust-stable"
     ],
-    "command": "spot",
+    "command": "riff",
     "finish-args": [
         "--share=network",
         "--share=ipc",
@@ -15,18 +15,15 @@
         "--socket=pulseaudio",
         "--device=dri",
         "--talk-name=org.freedesktop.secrets",
-        "--own-name=org.mpris.MediaPlayer2.Spot"
+        "--own-name=org.mpris.MediaPlayer2.Riff"
     ],
     "separate-locales": false,
     "build-options": {
         "append-path": "/usr/lib/sdk/rust-stable/bin",
         "env": {
-            "CARGO_HOME": "/run/build/spot/cargo",
             "RUST_BACKTRACE": "full",
-            "RUST_LOG": "spot=debug"
-        },
-        "strip": false,
-        "no-debuginfo": true
+            "RUST_LOG": "riff=debug"
+        }
     },
     "cleanup": [
         "/include",
@@ -52,7 +49,7 @@
             ]
         },
         {
-            "name": "spot",
+            "name": "riff",
             "builddir": true,
             "buildsystem": "meson",
             "config-opts": [

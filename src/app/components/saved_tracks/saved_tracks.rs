@@ -14,7 +14,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/dev/alextren/Spot/components/saved_tracks.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/components/saved_tracks.ui")]
     pub struct SavedTracksWidget {
         #[template_child]
         pub song_list: TemplateChild<gtk::ListView>,

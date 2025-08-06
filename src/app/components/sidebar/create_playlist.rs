@@ -6,7 +6,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/dev/alextren/Spot/components/create_playlist.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/components/create_playlist.ui")]
     pub struct CreatePlaylistPopover {
         #[template_child]
         pub label: TemplateChild<gtk::Label>,

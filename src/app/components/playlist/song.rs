@@ -16,7 +16,7 @@ mod imp {
     const SONG_CLASS: &str = "song--playing";
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/dev/alextren/Spot/components/song.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/components/song.ui")]
     pub struct SongWidget {
         #[template_child]
         pub song_index: TemplateChild<gtk::Label>,

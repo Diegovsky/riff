@@ -21,7 +21,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/dev/alextren/Spot/components/playlist_details.ui")]
+    #[template(resource = "/dev/diegovsky/Riff/components/playlist_details.ui")]
     pub struct PlaylistDetailsWidget {
         #[template_child]
         pub headerbar: TemplateChild<PlaylistHeaderBarWidget>,

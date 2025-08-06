@@ -8,7 +8,7 @@ pub use cached_client::{CachedSpotifyClient, SpotifyApiClient, SpotifyResult};
 pub use client::SpotifyApiError;
 
 pub async fn clear_user_cache() -> Option<()> {
-    cache::CacheManager::for_dir("spot/net")?
+    cache::CacheManager::for_dir("riff/net")?
         .clear_cache_pattern(&cached_client::USER_CACHE)
         .await
         .ok()
