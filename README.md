@@ -8,7 +8,7 @@ Gtk/Rust native Spotify client for the GNOME desktop. **Only works with premium 
 
 Based on [librespot](https://github.com/librespot-org/librespot/).
 
-Join the discussion on [Matrix](https://matrix.to/#/#spot-devel:matrix.org).
+Join the discussion on [Discord](https://discord.gg/SYuYsjzWbm).
 
 ![Riff screenshot](./data/appstream/1.png)
 
