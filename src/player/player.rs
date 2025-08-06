@@ -302,7 +302,7 @@ impl SpotifyPlayer {
                     // This value feels reasonable to me. Feel free to change it
                     volume_ctrl: VolumeCtrl::Log(VolumeCtrl::DEFAULT_DB_RANGE / 2.0),
                     ..Default::default()
-                }));
+                }).expect("Failed to create soft mixer"));
                 // TODO: Should read volume from somewhere instead of hard coding.
                 // Sets volume to 100%
                 mix.set_volume(VolumeCtrl::MAX_VOLUME);
