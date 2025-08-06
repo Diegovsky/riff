@@ -75,7 +75,7 @@ Requires Rust (stable), **GTK4**, and a couple other things. Also requires **lib
 With meson:
 
 ```
-meson target -Dbuildtype=debug -Doffline=false --prefix="$HOME/.local"
+meson setup target -Dbuildtype=debug -Doffline=false --prefix="$HOME/.local"
 ninja install -C target
 # to run test/linter/etc
 meson test -C target  --verbose
