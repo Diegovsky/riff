@@ -8,17 +8,16 @@ on:
   workflow_dispatch:
 
 jobs:
-  flatpak-builder:
+  flatpak:
     name: "Flatpak Builder"
     runs-on: ubuntu-latest
     container:
-      image: bilelmoussaoui/flatpak-github-actions:gnome-48
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
       options: --privileged
     steps:
     - uses: actions/checkout@v4
-    - uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@v6.3
+    - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
       with:
-        bundle: "riff.flatpak"
-        manifest-path: "dev.diegovsky.Riff.snapshots.json"
+        bundle: palette.flatpak
+        manifest-path: "dev.diegovsky.Riff.snapshopts.json"
         cache-key: flatpak-builder-${{ github.sha }}
-        run-tests: true
