@@ -12,11 +12,11 @@ jobs:
     name: "Flatpak Builder"
     runs-on: ubuntu-latest
     container:
-      image: bilelmoussaoui/flatpak-github-actions:gnome-42
+      image: bilelmoussaoui/flatpak-github-actions:gnome-48
       options: --privileged
     steps:
-    - uses: actions/checkout@v2
-    - uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@v4
+    - uses: actions/checkout@v4
+    - uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@v6.3
       with:
         bundle: "riff.flatpak"
         manifest-path: "dev.diegovsky.Riff.snapshots.json"
