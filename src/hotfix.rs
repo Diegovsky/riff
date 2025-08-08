@@ -3,7 +3,6 @@ use libc::{addrinfo, c_char, c_int};
 use std::ffi::{CStr};
 use std::ptr;
 use std::sync::LazyLock;
-use libloading::os::unix::{Library, Symbol};
 
 type GetAddrInfoFn = unsafe extern "C" fn(
     node: *const c_char,
