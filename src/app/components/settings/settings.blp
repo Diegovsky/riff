@@ -63,7 +63,22 @@ template $SettingsWindow : Adw.PreferencesDialog {
           margin-bottom: 12;
         }
       }
+
+      Adw.ActionRow playback_notifications {
+        /* Translators: Title for an item in preferences */
+
+        title: _("Playback notifications");
+        name: "playback_notifications_row";
+        activatable-widget: playback_notification_switch;
+        visible: true;
+
+        Switch playback_notification_switch {
+           margin-top: 12;
+           margin-bottom: 12;
+        }
+      }
     }
+
 
     Adw.PreferencesGroup {
       /* Translators: Header for a group of preference items regarding the application's appearance */

@@ -17,15 +17,15 @@ template $PlaybackWidget : Box {
   }
 
   Box {
-    margin-top: 0;
-    margin-bottom: 0;
-    margin-start: 10;
+    margin-top: 5;
+    margin-bottom: 5;
+    margin-start: 5;
     margin-end: 10;
 
     Label track_position {
       sensitive: false;
       label: "0∶00";
-      halign: start;
+      halign: end;
       hexpand: true;
 
       styles [
@@ -35,7 +35,7 @@ template $PlaybackWidget : Box {
 
     Label track_duration {
       sensitive: false;
-      label: "0∶00";
+      label: " / 0∶00";
       halign: end;
 
       styles [
@@ -58,7 +58,7 @@ template $PlaybackWidget : Box {
     }
 
     Adw.Breakpoint {
-      condition("max-width:600sp")
+      condition("max-width:700sp")
 
       setters {
         volume-stack.visible-child-name: 'slider-button';
@@ -67,7 +67,7 @@ template $PlaybackWidget : Box {
       }
     }
 
-    child: Grid desktop-grid  {
+    child: Grid desktop-grid {
       halign: fill;
       hexpand: true;
       column-homogeneous: true;
@@ -87,6 +87,7 @@ template $PlaybackWidget : Box {
 
       $PlaybackControlsWidget controls {
         halign: center;
+
         layout {
           column-span: "1";
           column: "1";
@@ -95,8 +96,9 @@ template $PlaybackWidget : Box {
       }
 
       Stack volume-stack {
+        halign: end;
+        margin-end: 10;
         visible-child-name: "slider";
-        hexpand: true;
 
         layout {
           column-span: "1";
@@ -106,21 +108,22 @@ template $PlaybackWidget : Box {
 
         StackPage {
           name: 'slider';
+
           child: Box {
+            halign: end;
+            valign: center;
+            spacing: 6;
+
             Image {
               icon-name: 'multimedia-volume-control-symbolic';
             }
 
             Scale volume_slider {
-              hexpand: true;
+              width-request: 175;
+              halign: end;
               show-fill-level: true;
               restrict-to-fill-level: false;
               value-pos: left;
-              layout {
-                column-span: "1";
-                column: 2;
-                row: "0";
-              }
 
               styles [
                 'volume-slider'
@@ -139,23 +142,28 @@ template $PlaybackWidget : Box {
 
         StackPage {
           name: 'slider-button';
+
           child: Box {
             halign: end;
             valign: center;
-            margin-end: 10;
-            MenuButton {
-              icon-name: 'multimedia-volume-control-symbolic';
+
+            ScaleButton volume_slider_button {
               halign: end;
+              margin-end: 10;
+              receives-default: true;
+              tooltip-text: _("Volume");
+              icons: ['multimedia-volume-control-symbolic'];
+
               styles [
-                "flat"
+                'volume-slider'
               ]
-              popover: Popover{
-                child: Scale {
-                  inverted: true;
-                  orientation: vertical;
-                  height-request: 160;
-                  adjustment: bind volume_slider.adjustment;
-                };
+
+              adjustment: Adjustment {
+                lower: 0.0;
+                value: 0.7;
+                upper: 1.0;
+                step-increment: 0.01;
+                page-increment: 0.05;
               };
             }
           };

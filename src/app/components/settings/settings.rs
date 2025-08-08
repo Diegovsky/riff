@@ -35,6 +35,9 @@ mod imp {
         pub gapless_playback: TemplateChild<libadwaita::ActionRow>,
 
         #[template_child]
+        pub playback_notifications: TemplateChild<libadwaita::ActionRow>,
+
+        #[template_child]
         pub ap_port: TemplateChild<gtk::Entry>,
 
         #[template_child]
@@ -179,6 +182,18 @@ impl SettingsDialog {
             .bind(
                 "gapless-playback",
                 &gapless_playback.activatable_widget().unwrap(),
+                "active",
+            )
+            .build();
+
+        let playback_notifications = widget
+            .playback_notifications
+            .downcast_ref::<libadwaita::ActionRow>()
+            .unwrap();
+        settings
+            .bind(
+                "playback-notifications",
+                &playback_notifications.activatable_widget().unwrap(),
                 "active",
             )
             .build();

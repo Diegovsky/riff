@@ -2,7 +2,7 @@ using Gtk 4.0;
 
 template $PlaybackInfoWidget : Button {
   receives-default: true;
-  halign: start;
+  halign: center;
   valign: center;
   has-frame: false;
 
@@ -14,10 +14,11 @@ template $PlaybackInfoWidget : Button {
 
   Box {
     halign: center;
+    valign: center;
 
     Image playing_image {
-      width-request: 50;
-      height-request: 50;
+      width-request: 40;
+      height-request: 40;
       icon-name: "emblem-music-symbolic";
     }
 
@@ -37,7 +38,7 @@ template $PlaybackInfoWidget : Button {
     }
   }
 
-  // styles [
-  //   "body",
-  // ]
+   //styles [
+   //  "body",
+   //]
 }
