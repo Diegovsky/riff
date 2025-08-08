@@ -21,6 +21,7 @@ mod connect;
 mod dbus;
 mod player;
 mod settings;
+mod hotfix;
 
 use crate::app::components::expose_custom_widgets;
 use crate::app::dispatch::{spawn_task_handler, DispatchLoop};
