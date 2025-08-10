@@ -6,8 +6,8 @@ install_subdir('hicolor',
   install_dir: get_option('datadir') / 'icons'
 )
 
-install_data('dev.diegovsky.Riff.appdata.xml',
-  install_dir: get_option('datadir') / 'appdata'
+install_data('dev.diegovsky.Riff.metainfo.xml',
+  install_dir: get_option('datadir') / 'metainfo'
 )
 
 install_data('dev.diegovsky.Riff.gschema.xml',
@@ -26,6 +26,6 @@ if appstream_util.found()
   test(
     'Validate appstream appdata',
     appstream_util,
-    args: ['validate-relax', meson.current_source_dir() / 'dev.diegovsky.Riff.appdata.xml']
+    args: ['validate-relax', meson.current_source_dir() / 'dev.diegovsky.Riff.metainfo.xml']
   )
 endif
