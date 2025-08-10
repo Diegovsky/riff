@@ -21,11 +21,13 @@ if compile_schemas.found()
   )
 endif
 
-appstream_util = find_program('appstream-util', required: false)
-if appstream_util.found()
+appstreamcli = find_program('appstreamcli', required: false)
+if appstreamcli.found()
   test(
-    'Validate appstream appdata',
-    appstream_util,
-    args: ['validate-relax', meson.current_source_dir() / 'dev.diegovsky.Riff.metainfo.xml']
+    'Validate AppStream metainfo',
+    appstreamcli,
+    # --no-net keeps CLI from phoning home; --pedantic catches style issues
+    args: ['validate', '--no-net', '--pedantic',
+          meson.current_source_dir() / 'dev.diegovsky.Riff.metainfo.xml']
   )
 endif
