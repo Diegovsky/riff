@@ -34,7 +34,7 @@ mod imp {
         pub track_duration: TemplateChild<gtk::Label>,
 
         #[template_child]
-        pub volume_slider: TemplateChild<gtk::Scale>,
+        pub volume_slider: TemplateChild<gtk::ScaleButton>,
 
         pub clock: Clock,
     }
@@ -108,7 +108,7 @@ impl PlaybackWidget {
             widget.track_position.set_text("0∶00");
             widget
                 .track_duration
-                .set_text(&format!("{}", format_duration(duration)));
+                .set_text(&format!(" / {}", format_duration(duration)));
             widget.track_position.set_visible(true);
             widget.track_duration.set_visible(true);
         } else {
@@ -244,6 +244,6 @@ impl PlaybackWidget {
         let widget = self.imp();
         widget
             .volume_slider
-            .connect_value_changed(move |scale| f(scale.value()));
+            .connect_value_changed(move |_scale_button, value| f(value));
     }
 }

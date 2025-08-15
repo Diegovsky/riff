@@ -106,22 +106,20 @@ Adw.ApplicationWindow window {
               transition-type: slide_left_right;
             }
           }
+        Overlay {
+          hexpand: true;
 
+          $PlaybackWidget playback {
+            hexpand: "1";
+          }
 
+          [overlay]
+          $SelectionToolbarWidget selection_toolbar {
+            hexpand: "1";
+          }
+        }
         };
       };
-    }
-    Overlay {
-      hexpand: true;
-
-      $PlaybackWidget playback {
-        hexpand: "1";
-      }
-
-      [overlay]
-      $SelectionToolbarWidget selection_toolbar {
-        hexpand: "1";
-      }
     }
   }
 }
