@@ -17,7 +17,7 @@ template $PlaybackWidget : Box {
   }
 
   Box {
-    margin-top: 0;
+    margin-top: 4;
     margin-bottom: 0;
     margin-start: 10;
     margin-end: 10;
@@ -25,7 +25,7 @@ template $PlaybackWidget : Box {
     Label track_position {
       sensitive: false;
       label: "0∶00";
-      halign: start;
+      halign: end;
       hexpand: true;
 
       styles [
@@ -35,7 +35,7 @@ template $PlaybackWidget : Box {
 
     Label track_duration {
       sensitive: false;
-      label: "0∶00";
+      label: " / 0∶00";
       halign: end;
 
       styles [
@@ -57,15 +57,7 @@ template $PlaybackWidget : Box {
       }
     }
 
-    Adw.Breakpoint {
-      condition("max-width:600sp")
 
-      setters {
-        volume-stack.visible-child-name: 'slider-button';
-        desktop-grid.column-homogeneous: false;
-        controls.halign: end;
-      }
-    }
 
     child: Grid desktop-grid  {
       halign: fill;
@@ -94,71 +86,23 @@ template $PlaybackWidget : Box {
         }
       }
 
-      Stack volume-stack {
-        visible-child-name: "slider";
-        hexpand: true;
+      ScaleButton volume_slider {
+        receives-default: true;
+        halign: end;
+        margin-end: 10;
+        tooltip-text: _("Volume");
+        icons: ["multimedia-volume-control-symbolic"];
+        adjustment: Adjustment {
+          step-increment: 0.01;
+          page-increment: 0.10;
+          upper: 1.0;
+          lower: 0.0;
+        };
 
         layout {
           column-span: "1";
           column: "2";
           row: "0";
-        }
-
-        StackPage {
-          name: 'slider';
-          child: Box {
-            Image {
-              icon-name: 'multimedia-volume-control-symbolic';
-            }
-
-            Scale volume_slider {
-              hexpand: true;
-              show-fill-level: true;
-              restrict-to-fill-level: false;
-              value-pos: left;
-              layout {
-                column-span: "1";
-                column: 2;
-                row: "0";
-              }
-
-              styles [
-                'volume-slider'
-              ]
-
-              adjustment: Adjustment {
-                lower: 0.0;
-                value: 0.7;
-                upper: 1.0;
-                step-increment: 0.01;
-                page-increment: 0.05;
-              };
-            }
-          };
-        }
-
-        StackPage {
-          name: 'slider-button';
-          child: Box {
-            halign: end;
-            valign: center;
-            margin-end: 10;
-            MenuButton {
-              icon-name: 'multimedia-volume-control-symbolic';
-              halign: end;
-              styles [
-                "flat"
-              ]
-              popover: Popover{
-                child: Scale {
-                  inverted: true;
-                  orientation: vertical;
-                  height-request: 160;
-                  adjustment: bind volume_slider.adjustment;
-                };
-              };
-            }
-          };
         }
       }
     };
