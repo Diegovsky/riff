@@ -14,11 +14,11 @@ use librespot::playback::config::{AudioFormat, Bitrate, PlayerConfig, VolumeCtrl
 use librespot::playback::player::{Player, PlayerEvent, PlayerEventChannel};
 use url::Url;
 
-use super::oauth2::{AuthcodeChallenge, SpotOauthClient};
+use super::oauth2::{AuthcodeChallenge, RiffOauthClient};
 use super::{Command, TokenStore};
 use crate::app::credentials;
 use crate::player::oauth2::OAuthError;
-use crate::settings::SpotSettings;
+use crate::settings::RiffSettings;
 use std::env;
 use std::error::Error;
 use std::fmt;
@@ -91,7 +91,7 @@ pub struct SpotifyPlayer {
     session: Option<Session>,
 
     // Auth related stuff
-    oauth_client: Arc<SpotOauthClient>,
+    oauth_client: Arc<RiffOauthClient>,
     auth_challenge: Option<AuthcodeChallenge>,
     command_sender: UnboundedSender<Command>,
 
@@ -111,7 +111,7 @@ impl SpotifyPlayer {
             mixer: None,
             player: None,
             session: None,
-            oauth_client: Arc::new(SpotOauthClient::new(token_store)),
+            oauth_client: Arc::new(RiffOauthClient::new(token_store)),
             auth_challenge: None,
             command_sender,
             delegate,
@@ -236,7 +236,7 @@ impl SpotifyPlayer {
                 self.initial_login(credentials).await
             }
             Command::ReloadSettings => {
-                let settings = SpotSettings::new_from_gsettings().unwrap_or_default();
+                let settings = RiffSettings::new_from_gsettings().unwrap_or_default();
                 self.settings = settings.player_settings;
 
                 let session = self.session.take().ok_or(SpotifyError::PlayerNotReady)?;

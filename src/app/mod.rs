@@ -1,6 +1,6 @@
-use crate::settings::SpotSettings;
-use crate::{api::CachedSpotifyClient, player::TokenStore};
+use crate::settings::RiffSettings;
 use crate::PlaybackAction;
+use crate::{api::CachedSpotifyClient, player::TokenStore};
 use futures::channel::mpsc::UnboundedSender;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -30,7 +30,7 @@ pub use rng::LazyRandomIndex;
 
 // Where all the app logic happens
 pub struct App {
-    settings: SpotSettings,
+    settings: RiffSettings,
     // The builder instance used to properly configure all the widgets created at startup
     builder: gtk::Builder,
     // All the "components" that will be notified of things happening throughout the app
@@ -44,7 +44,7 @@ pub struct App {
 
 impl App {
     pub fn new(
-        settings: SpotSettings,
+        settings: RiffSettings,
         builder: gtk::Builder,
         sender: UnboundedSender<AppAction>,
         worker: Worker,
@@ -121,7 +121,7 @@ impl App {
     // A component that listens to what's happening in the app, and translates it for the actual player
     fn make_player_notifier(
         app_model: Rc<AppModel>,
-        settings: &SpotSettings,
+        settings: &RiffSettings,
         dispatcher: Box<dyn ActionDispatcher>,
         sender: UnboundedSender<AppAction>,
         token_store: Arc<TokenStore>,
@@ -150,7 +150,7 @@ impl App {
     }
 
     fn make_window(
-        settings: &SpotSettings,
+        settings: &RiffSettings,
         builder: &gtk::Builder,
         app_model: Rc<AppModel>,
     ) -> Box<impl EventListener> {

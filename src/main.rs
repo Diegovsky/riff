@@ -27,7 +27,7 @@ use crate::app::dispatch::{spawn_task_handler, DispatchLoop};
 use crate::app::{state::PlaybackAction, App, AppAction, BrowserAction};
 
 fn main() {
-    let settings = settings::SpotSettings::new_from_gsettings().unwrap_or_default();
+    let settings = settings::RiffSettings::new_from_gsettings().unwrap_or_default();
     setup_gtk(&settings);
 
     // Looks like there's a side effect to declaring widgets that allows them to be referenced them in ui/blueprint files
@@ -93,7 +93,7 @@ fn main() {
     std::process::exit(0);
 }
 
-fn setup_gtk(settings: &settings::SpotSettings) {
+fn setup_gtk(settings: &settings::RiffSettings) {
     // Setup logging
     env_logger::init();
 

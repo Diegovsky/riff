@@ -1,6 +1,6 @@
 use crate::{
     app::state::{AppAction, AppEvent, UpdatableState},
-    settings::SpotSettings,
+    settings::RiffSettings,
 };
 
 #[derive(Clone, Debug)]
@@ -28,7 +28,7 @@ impl From<SettingsEvent> for AppEvent {
 #[derive(Default)]
 pub struct SettingsState {
     // Probably shouldn't be stored, the source of truth is GSettings anyway
-    pub settings: SpotSettings,
+    pub settings: RiffSettings,
 }
 
 impl UpdatableState for SettingsState {
@@ -39,7 +39,7 @@ impl UpdatableState for SettingsState {
         match action.into_owned() {
             SettingsAction::ChangeSettings => {
                 let old_settings = &self.settings;
-                let new_settings = SpotSettings::new_from_gsettings().unwrap_or_default();
+                let new_settings = RiffSettings::new_from_gsettings().unwrap_or_default();
                 let player_settings_changed =
                     new_settings.player_settings != old_settings.player_settings;
                 self.settings = new_settings;
