@@ -80,14 +80,14 @@ impl SpotifyPlayerSettings {
 }
 
 #[derive(Debug, Clone)]
-pub struct SpotSettings {
+pub struct RiffSettings {
     pub theme_preference: ColorScheme,
     pub player_settings: SpotifyPlayerSettings,
     pub window: WindowGeometry,
 }
 
 // Application settings
-impl SpotSettings {
+impl RiffSettings {
     pub fn new_from_gsettings() -> Option<Self> {
         let settings = gio::Settings::new(SETTINGS);
         let theme_preference = match settings.enum_("theme-preference") {
@@ -104,7 +104,7 @@ impl SpotSettings {
     }
 }
 
-impl Default for SpotSettings {
+impl Default for RiffSettings {
     fn default() -> Self {
         Self {
             theme_preference: ColorScheme::PreferDark,

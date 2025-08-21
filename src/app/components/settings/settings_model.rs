@@ -1,6 +1,6 @@
 use crate::app::state::{PlaybackAction, SettingsAction};
 use crate::app::{ActionDispatcher, AppModel};
-use crate::settings::SpotSettings;
+use crate::settings::RiffSettings;
 use std::rc::Rc;
 
 pub struct SettingsModel {
@@ -25,7 +25,7 @@ impl SettingsModel {
             .dispatch(SettingsAction::ChangeSettings.into());
     }
 
-    pub fn settings(&self) -> SpotSettings {
+    pub fn settings(&self) -> RiffSettings {
         let state = self.app_model.get_state();
         state.settings.settings.clone()
     }

@@ -1,6 +1,6 @@
 use crate::app::components::EventListener;
 use crate::app::AppEvent;
-use crate::settings::SpotSettings;
+use crate::settings::RiffSettings;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -256,7 +256,7 @@ impl Settings {
         let settings_dialog = SettingsDialog::new();
 
         settings_dialog.connect_close(move || {
-            let new_settings = SpotSettings::new_from_gsettings().unwrap_or_default();
+            let new_settings = RiffSettings::new_from_gsettings().unwrap_or_default();
             if model.settings().player_settings != new_settings.player_settings {
                 model.stop_player();
             }

@@ -47,7 +47,7 @@ user-modify-playback-state,\
 streaming,\
 playlist-modify-public";
 
-pub struct SpotOauthClient {
+pub struct RiffOauthClient {
     client: BasicClient,
     token_store: Arc<TokenStore>,
 }
@@ -58,7 +58,7 @@ pub struct AuthcodeChallenge {
     listener: JoinHandle<Result<AuthorizationCode, OAuthError>>,
 }
 
-impl SpotOauthClient {
+impl RiffOauthClient {
     pub fn new(token_store: Arc<TokenStore>) -> Self {
         let auth_url = AuthUrl::new("https://accounts.spotify.com/authorize".to_string())
             .expect("Malformed URL");
