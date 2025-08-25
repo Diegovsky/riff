@@ -298,11 +298,14 @@ impl SpotifyPlayer {
         let soft_volume = self
             .mixer
             .get_or_insert_with(|| {
-                let mix = Box::new(SoftMixer::open(MixerConfig {
-                    // This value feels reasonable to me. Feel free to change it
-                    volume_ctrl: VolumeCtrl::Log(VolumeCtrl::DEFAULT_DB_RANGE / 2.0),
-                    ..Default::default()
-                }));
+                let mix = Box::new(
+                    SoftMixer::open(MixerConfig {
+                        // This value feels reasonable to me. Feel free to change it
+                        volume_ctrl: VolumeCtrl::Log(VolumeCtrl::DEFAULT_DB_RANGE / 2.0),
+                        ..Default::default()
+                    })
+                    .unwrap(),
+                );
                 // TODO: Should read volume from somewhere instead of hard coding.
                 // Sets volume to 100%
                 mix.set_volume(VolumeCtrl::MAX_VOLUME);
