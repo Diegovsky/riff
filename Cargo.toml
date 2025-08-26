@@ -40,10 +40,8 @@ version = "^0.9"
 package = "gdk4"
 
 [dependencies.librespot]
-version = "0.6.0-dev"
+version = "0.7.0"
 features = ["alsa-backend", "pulseaudio-backend", "gstreamer-backend"]
-git = "https://github.com/librespot-org/librespot/"
-rev = "be37402421167ec3721aa7f6fd1103851475517b"
 
 [dependencies.tokio]
 version = "1"
