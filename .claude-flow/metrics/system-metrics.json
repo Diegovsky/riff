@@ -1,0 +1,74 @@
+[
+  {
+    "timestamp": 1758464780399,
+    "memoryTotal": 16701419520,
+    "memoryUsed": 6846894080,
+    "memoryFree": 9854525440,
+    "memoryUsagePercent": 40.99588104951692,
+    "memoryEfficiency": 59.00411895048308,
+    "cpuCount": 6,
+    "cpuLoad": 0.18666666666666668,
+    "platform": "linux",
+    "uptime": 8875.47
+  },
+  {
+    "timestamp": 1758464810402,
+    "memoryTotal": 16701419520,
+    "memoryUsed": 6931136512,
+    "memoryFree": 9770283008,
+    "memoryUsagePercent": 41.50028387527146,
+    "memoryEfficiency": 58.49971612472854,
+    "cpuCount": 6,
+    "cpuLoad": 0.16333333333333333,
+    "platform": "linux",
+    "uptime": 8905.47
+  },
+  {
+    "timestamp": 1758464840402,
+    "memoryTotal": 16701419520,
+    "memoryUsed": 7048544256,
+    "memoryFree": 9652875264,
+    "memoryUsagePercent": 42.20326450430963,
+    "memoryEfficiency": 57.79673549569037,
+    "cpuCount": 6,
+    "cpuLoad": 0.19999999999999998,
+    "platform": "linux",
+    "uptime": 8935.47
+  },
+  {
+    "timestamp": 1758464870406,
+    "memoryTotal": 16701419520,
+    "memoryUsed": 6580514816,
+    "memoryFree": 10120904704,
+    "memoryUsagePercent": 39.40093120898983,
+    "memoryEfficiency": 60.59906879101017,
+    "cpuCount": 6,
+    "cpuLoad": 0.26166666666666666,
+    "platform": "linux",
+    "uptime": 8965.48
+  },
+  {
+    "timestamp": 1758464900409,
+    "memoryTotal": 16701419520,
+    "memoryUsed": 6595772416,
+    "memoryFree": 10105647104,
+    "memoryUsagePercent": 39.49228631794766,
+    "memoryEfficiency": 60.50771368205234,
+    "cpuCount": 6,
+    "cpuLoad": 0.20666666666666667,
+    "platform": "linux",
+    "uptime": 8995.48
+  },
+  {
+    "timestamp": 1758464930410,
+    "memoryTotal": 16701419520,
+    "memoryUsed": 6415249408,
+    "memoryFree": 10286170112,
+    "memoryUsagePercent": 38.4114020985924,
+    "memoryEfficiency": 61.5885979014076,
+    "cpuCount": 6,
+    "cpuLoad": 0.13333333333333333,
+    "platform": "linux",
+    "uptime": 9025.48
+  }
+]
