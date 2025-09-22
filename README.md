@@ -2,7 +2,7 @@
 
 **This is a fork of Spot to continue development and add new features**
 
-I'm (@Diegovsky) a maintainer but don't have write access, making a fork unfortunately necessary.
+No the project is still alive, I'm just swamped in real life to produce code, but open a PR and tag me for a review!
 
 Gtk/Rust native Spotify client for the GNOME desktop. **Only works with premium accounts!**
 
