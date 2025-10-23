@@ -43,6 +43,7 @@ impl DiscordRPC {
         let activity = activity::Activity::new()
             .state(artist)
             .details(song_name)
+            .activity_type(activity::ActivityType::Listening)
             .assets(assets);
 
         let _ = self.client.set_activity(activity);
