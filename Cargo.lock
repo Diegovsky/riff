@@ -838,6 +838,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "discord-rich-presence"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ead3c5edc7e048c317c6fc4a7e24aff0c7e4c136918e2ba38106a385b2cc53a5"
+dependencies = [
+ "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "serde_repr",
+ "thiserror 2.0.16",
+ "uuid 0.8.2",
+]
+
+[[package]]
 name = "dispatch2"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2596,7 +2611,7 @@ dependencies = [
  "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
- "uuid",
+ "uuid 1.18.0",
 ]
 
 [[package]]
@@ -2653,7 +2668,7 @@ dependencies = [
  "tokio-tungstenite",
  "tokio-util",
  "url",
- "uuid",
+ "uuid 1.18.0",
  "vergen-gitcl",
 ]
 
@@ -2700,7 +2715,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.16",
- "uuid",
+ "uuid 1.18.0",
 ]
 
 [[package]]
@@ -3907,6 +3922,7 @@ name = "riff"
 version = "0.5.0"
 dependencies = [
  "async-std",
+ "discord-rich-presence",
  "env_logger 0.10.2",
  "form_urlencoded",
  "futures",
@@ -5001,6 +5017,15 @@ name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
+
+[[package]]
+name = "uuid"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
+dependencies = [
+ "getrandom 0.2.16",
+]
 
 [[package]]
 name = "uuid"

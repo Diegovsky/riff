@@ -21,10 +21,12 @@ mod connect;
 mod dbus;
 mod player;
 mod settings;
+mod discord_rpc;
 
 use crate::app::components::expose_custom_widgets;
 use crate::app::dispatch::{spawn_task_handler, DispatchLoop};
 use crate::app::{state::PlaybackAction, App, AppAction, BrowserAction};
+use discord_rpc::rpc::DiscordRPC;
 
 fn main() {
     let settings = settings::RiffSettings::new_from_gsettings().unwrap_or_default();
@@ -62,7 +64,20 @@ fn main() {
     );
     context.spawn_local(app.attach(dispatch_loop));
 
+    // Discord RPC
+    let discord_rpc = std::sync::Arc::new(std::sync::Mutex::new(DiscordRPC::new()));
+    {
+        println!("[RPC] Loading RPC.");
+        let mut rpc = discord_rpc.lock().unwrap();
+        rpc.presence_update("Listening via Riff!", "Download Riff today!");
+        println!("[RPC] RPC loaded, check your client.")
+    }
+
+    // Clone for use in actual client.
+    let discord_rpc_clone = discord_rpc.clone();
+
     let sender_clone = sender.clone();
+
     gtk_app.connect_activate(move |gtk_app| {
         debug!("activate");
         if let Some(existing_window) = gtk_app.active_window() {
