@@ -6,3 +6,4 @@
 /src/config.rs
 /subprojects/blueprint-compiler
 /.idea/
+cargo.lock
