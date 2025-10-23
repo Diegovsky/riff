@@ -2,6 +2,7 @@ use gettextrs::gettext;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{glib, CompositeTemplate};
+use crate::discord_rpc::rpc::{update_discord_presence, clear_discord_presence};
 
 mod imp {
 
@@ -41,13 +42,19 @@ glib::wrapper! {
     pub struct PlaybackInfoWidget(ObjectSubclass<imp::PlaybackInfoWidget>) @extends gtk::Widget, gtk::Button;
 }
 
+// Implements for cover_url OPTIONALLY now (used in DiscordRPC).
 impl PlaybackInfoWidget {
-    pub fn set_title_and_artist(&self, title: &str, artist: &str) {
+    pub fn set_title_and_artist(&self, title: &str, artist: &str, cover_url: Option<&str>) {
         let widget = self.imp();
-        let title = glib::markup_escape_text(title);
-        let artist = glib::markup_escape_text(artist);
-        let label = format!("<b>{}</b>\n{}", title.as_str(), artist.as_str());
-        widget.current_song_info.set_label(&label[..]);
+        
+        let title_escaped = glib::markup_escape_text(title);
+        let artist_escaped = glib::markup_escape_text(artist);
+        let label = format!("<b>{}</b>\n{}", title_escaped.as_str(), artist_escaped.as_str());
+        widget.current_song_info.set_label(&label);
+
+        // Discord RPC - Set the RPC.
+        println!("[RPC] Setting RPC for song with title '{}' and artist '{}'", title, artist);
+        update_discord_presence(title, artist, cover_url);
     }
 
     pub fn reset_info(&self) {
@@ -62,6 +69,8 @@ impl PlaybackInfoWidget {
         widget
             .playing_image
             .set_icon_name(Some("emblem-music-symbolic"));
+
+        clear_discord_presence();
     }
 
     pub fn set_info_visible(&self, visible: bool) {

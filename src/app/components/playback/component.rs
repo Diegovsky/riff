@@ -148,10 +148,11 @@ impl PlaybackControl {
         self.widget.set_playing(is_playing);
     }
 
+    // Added song art to the update current info for use in RPC.
     fn update_current_info(&self) {
         if let Some(song) = self.model.current_song() {
             self.widget
-                .set_title_and_artist(&song.title, &song.artists_name());
+                .set_title_and_artist(&song.title, &song.artists_name(), song.art.as_deref());
             self.widget.set_song_duration(Some(song.duration as f64));
             if let Some(url) = song.art {
                 self.widget.set_artwork_from_url(url, &self.worker);

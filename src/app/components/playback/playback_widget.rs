@@ -71,9 +71,10 @@ glib::wrapper! {
 }
 
 impl PlaybackWidget {
-    pub fn set_title_and_artist(&self, title: &str, artist: &str) {
+    // Optionally has Cover_URL for DiscordRPC. Not needed for elsewise.
+    pub fn set_title_and_artist(&self, title: &str, artist: &str, cover_url: Option<&str>) {
         let widget = self.imp();
-        widget.now_playing.set_title_and_artist(title, artist);
+        widget.now_playing.set_title_and_artist(title, artist, cover_url);
     }
 
     pub fn reset_info(&self) {
