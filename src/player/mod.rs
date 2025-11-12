@@ -1,5 +1,5 @@
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use librespot::core::spotify_id::SpotifyId;
+use librespot::core::SpotifyUri;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -24,13 +24,13 @@ pub enum Command {
     CompleteLogin,
     RefreshToken,
     Logout,
-    PlayerLoad { track: SpotifyId, resume: bool },
+    PlayerLoad { track: SpotifyUri, resume: bool },
     PlayerResume,
     PlayerPause,
     PlayerStop,
     PlayerSeek(u32),
     PlayerSetVolume(f64),
-    PlayerPreload(SpotifyId),
+    PlayerPreload(SpotifyUri),
     ReloadSettings,
 }
 
