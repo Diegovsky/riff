@@ -15,10 +15,10 @@ template $PlaybackInfoWidget : Button {
   Box {
     halign: center;
 
-    Image playing_image {
+    Picture playing_image {
       width-request: 50;
       height-request: 50;
-      icon-name: "emblem-music-symbolic";
+      content-fit: cover;
     }
 
     Label current_song_info {
