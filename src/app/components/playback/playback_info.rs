@@ -11,7 +11,7 @@ mod imp {
     #[template(resource = "/dev/diegovsky/Riff/components/playback_info.ui")]
     pub struct PlaybackInfoWidget {
         #[template_child]
-        pub playing_image: TemplateChild<gtk::Image>,
+        pub playing_image: TemplateChild<gtk::Picture>,
 
         #[template_child]
         pub current_song_info: TemplateChild<gtk::Label>,
@@ -58,10 +58,7 @@ impl PlaybackInfoWidget {
             .set_label(&gettext("No song playing"));
         widget
             .playing_image
-            .set_icon_name(Some("emblem-music-symbolic"));
-        widget
-            .playing_image
-            .set_icon_name(Some("emblem-music-symbolic"));
+            .set_paintable(None::<gdk::Paintable>.as_ref());
     }
 
     pub fn set_info_visible(&self, visible: bool) {

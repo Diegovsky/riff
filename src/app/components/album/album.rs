@@ -28,7 +28,7 @@ mod imp {
         pub cover_btn: TemplateChild<gtk::Button>,
 
         #[template_child]
-        pub cover_image: TemplateChild<gtk::Image>,
+        pub cover_image: TemplateChild<gtk::Picture>,
     }
 
     #[glib::object_subclass]

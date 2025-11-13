@@ -24,7 +24,7 @@ mod imp {
         pub playlist_image_box: TemplateChild<gtk::Box>,
 
         #[template_child]
-        pub playlist_art: TemplateChild<gtk::Image>,
+        pub playlist_art: TemplateChild<gtk::Picture>,
 
         #[template_child]
         pub playlist_info: TemplateChild<gtk::Box>,

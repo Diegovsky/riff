@@ -21,7 +21,7 @@ mod imp {
         pub album_label: TemplateChild<gtk::Label>,
 
         #[template_child]
-        pub album_art: TemplateChild<gtk::Image>,
+        pub album_art: TemplateChild<gtk::Picture>,
 
         #[template_child]
         pub button_box: TemplateChild<gtk::Box>,
