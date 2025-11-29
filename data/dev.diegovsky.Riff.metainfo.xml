@@ -5,18 +5,24 @@
   <name>Riff</name>
   <developer_name>Diego Augusto</developer_name>
   <summary>Listen to music on Spotify</summary>
+  
   <launchable type="desktop-id">dev.diegovsky.Riff.desktop</launchable>
+  
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
+  
   <content_rating type="oars-1.1" />
+  
   <requires>
     <display_length compare="ge">360</display_length>
   </requires>
+  
   <recommends>
     <control>keyboard</control>
     <control>pointing</control>
     <control>touch</control>
   </recommends>
+  
   <description>
     <p>A fork of xou816's Spot</p>
     <p>Listen to music on Spotify.</p>
@@ -34,15 +40,33 @@
       <li>MPRIS integration</li>
     </ul>
   </description>
+  
   <screenshots>
     <screenshot type="default">
       <image>https://raw.githubusercontent.com/Diegovsky/riff/master/data/appstream/1.png</image>
+      <caption>Main application window showing playback</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/Diegovsky/riff/master/data/appstream/2.png</image>
+      <caption>Browsing albums and playlists</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/Diegovsky/riff/master/data/appstream/3.png</image>
+      <caption>Search results view</caption>
     </screenshot>
   </screenshots>
+
+  <releases>
+    <release version="1.0.0" date="2025-11-29"/>
+	<url type="details">https://github.com/Diegovsky/riff/releases/tag/v25.11</url>
+    <description>
+      <p>Release description</p>
+        <ul>
+          <li>Migrate AppStream metadata to metainfo/ and update validation tooling</li>
+          <li>refactor: rename Spot* to Riff* across app, settings, dbus, oauth, cache</li>
+		  <li>Fix album art no longer scaling up</li>
+          <li>Fix audio playback by updating librespot to v0.8.0</li>
+        </ul>
+    </description>
+  </releases>
 </component>
