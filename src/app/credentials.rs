@@ -1,5 +1,5 @@
-use secret_service::{EncryptionType, Error, SecretService};
 use serde::{Deserialize, Serialize};
+use secret_service::{EncryptionType, Error, SecretService};
 use std::{collections::HashMap, time::SystemTime};
 
 static SPOT_ATTR: &str = "spot_credentials";

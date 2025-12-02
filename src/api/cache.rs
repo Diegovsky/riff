@@ -1,14 +1,11 @@
-use async_std::fs;
-use async_std::io;
-use async_std::path::Path;
-use async_std::path::PathBuf;
-use async_std::prelude::*;
 use core::mem::size_of;
 use futures::join;
 use regex::Regex;
+use std::path::{PathBuf,Path};
 use std::convert::From;
 use std::future::Future;
 use std::time::{Duration, SystemTime};
+use tokio::{fs, io};
 use thiserror::Error;
 
 const EXPIRY_FILE_EXT: &str = ".expiry";
@@ -185,7 +182,7 @@ impl CacheManager {
             .await
             .map_err(CacheError::ReadError)?;
 
-        while let Some(Ok(entry)) = entries.next().await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
             let matches = entry
                 .file_name()
                 .to_str()
@@ -214,7 +211,7 @@ impl CacheManager {
             .await
             .map_err(CacheError::ReadError)?;
 
-        while let Some(Ok(entry)) = entries.next().await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
             let matches = entry
                 .file_name()
                 .to_str()

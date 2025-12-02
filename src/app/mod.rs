@@ -265,11 +265,13 @@ impl App {
 
     // Here is the loop
     pub async fn attach(mut self, dispatch_loop: DispatchLoop) {
-        let app = &mut self;
-        dispatch_loop
-            .attach(move |action| {
-                app.handle(action);
-            })
-            .await;
+            let rt = tokio::runtime::Runtime::new().expect("Failed to acquire tokio runtime");
+                       let _guard = rt.enter();
+            let app = &mut self;
+            dispatch_loop
+                .attach(move |action| {
+                    app.handle(action);
+                })
+                .await;
     }
 }

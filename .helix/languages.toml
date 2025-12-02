@@ -1,0 +1,6 @@
+[[language]]
+name = "rust"
+language-servers = ["bacon-ls"]
+
+[language-server.bacon-ls]
+command = "bacon-ls"
