@@ -30,7 +30,7 @@ async fn dbus_server(
         .at("/org/mpris/MediaPlayer2", player)
         .await?;
     connection
-        .request_name("org.mpris.MediaPlayer2.Riff")
+        .request_name("org.mpris.MediaPlayer2.dev.diegovsky.Riff")
         .await?;
 
     receiver

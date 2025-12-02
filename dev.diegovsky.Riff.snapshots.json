@@ -13,9 +13,8 @@
     "--socket=fallback-x11",
     "--socket=wayland",
     "--socket=pulseaudio",
-    "--device=dri",
     "--talk-name=org.freedesktop.secrets",
-    "--own-name=org.mpris.MediaPlayer2.Riff"
+    "--device=dri"
   ],
   "separate-locales": false,
   "build-options": {
@@ -42,8 +41,13 @@
   "modules": [
     {
       "name": "riff",
-      "builddir": true,
       "buildsystem": "meson",
+      "build-options": {
+        "append-path": "/usr/lib/sdk/rust-stable/bin",
+        "env": {
+          "CARGO_NET_OFFLINE": "true"
+        }
+      },
       "config-opts": [
         "-Doffline=true",
         "-Dbuildtype=debug"
