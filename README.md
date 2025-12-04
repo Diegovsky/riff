@@ -1,22 +1,22 @@
-# Riff (Spot fork)
+<h1 align="center"> Riff </h1>
+<h4 align="center"> A libadwaita/GTK4-based Spotify client </h4>
 
-**This is a fork of Spot to continue development and add new features**
+![showcase](https://github.com/user-attachments/assets/50ea171e-3983-403d-90ba-a165a37b32e1)
 
-No the project is still alive, I'm just swamped in real life to produce code, but open a PR and tag me for a review!
+Enjoy listening to your favorite Spotify content with **Riff**: a libadwaita/GTK4-based Spotify client designed for GNOME!
 
-Gtk/Rust native Spotify client for the GNOME desktop. **Only works with premium accounts!**
+Originally a fork of [Spot](https://github.com/xou816/spot),  Riff continues development to bring the coolest Spotify client onto your desktop and mobile. Written in Rust and based on [librespot](https://github.com/librespot-org/librespot/).
 
-Based on [librespot](https://github.com/librespot-org/librespot/).
-
-Join the discussion on [Discord](https://discord.gg/SYuYsjzWbm).
-
-![Riff screenshot](./data/appstream/1.png)
+If you have any feature suggestions or want to contribute to the project, feel free to leave an issue / pull request or join the discussion on our [Discord server](https://discord.gg/SYuYsjzWbm)!
 
 ## Installing
 
 <a href='https://flathub.org/apps/details/dev.diegovsky.Riff'><img width='130' alt='Download on Flathub' src='https://flathub.org/assets/badges/flathub-badge-en.png'/></a>
 
-[![Packaging status](https://repology.org/badge/vertical-allrepos/spot-client.svg)](https://repology.org/project/spot-client/versions)
+Riff is currently only available on Flathub. Install with the command below:
+```sh
+flatpak install flathub dev.diegovsky.Riff
+```
 
 ## Usage notes
 
