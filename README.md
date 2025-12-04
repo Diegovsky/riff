@@ -3,6 +3,11 @@
 
 ![showcase](https://github.com/user-attachments/assets/50ea171e-3983-403d-90ba-a165a37b32e1)
 
+<div align="center">
+    <a href='https://flathub.org/apps/details/dev.diegovsky.Riff'><img width='130' alt='Download on Flathub' src='https://flathub.org/assets/badges/flathub-badge-en.png'/></a>
+</div>
+<br>
+
 Enjoy listening to your favorite Spotify content with **Riff**: a libadwaita/GTK4-based Spotify client designed for GNOME!
 
 Originally a fork of [Spot](https://github.com/xou816/spot),  Riff continues development to bring the coolest Spotify client onto your desktop and mobile. Written in Rust and based on [librespot](https://github.com/librespot-org/librespot/).
@@ -11,7 +16,8 @@ If you have any feature suggestions or want to contribute to the project, feel f
 
 ## Installing
 
-<a href='https://flathub.org/apps/details/dev.diegovsky.Riff'><img width='130' alt='Download on Flathub' src='https://flathub.org/assets/badges/flathub-badge-en.png'/></a>
+> [!NOTE]
+> **Riff requires a premium account to work!**
 
 Riff is currently only available on Flathub. Install with the command below:
 ```sh
