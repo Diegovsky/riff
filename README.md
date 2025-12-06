@@ -14,7 +14,7 @@ Join the discussion on [Discord](https://discord.gg/SYuYsjzWbm).
 
 ## Installing
 
-<a href='https://flathub.org/apps/details/dev.diegovsky.Riff'><img width='130' alt='Download on Flathub' src='https://flathub.org/assets/badges/flathub-badge-en.png'/></a>
+<a href='https://flathub.org/en/apps/dev.diegovsky.Riff'><img width='130' alt='Download on Flathub' src='https://flathub.org/assets/badges/flathub-badge-en.png'/></a>
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/spot-client.svg)](https://repology.org/project/spot-client/versions)
 
