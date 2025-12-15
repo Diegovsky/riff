@@ -372,36 +372,36 @@ msgstr "Создать"
 #: src/app/components/device_selector/device_selector.blp:9
 #: src/app/components/device_selector/device_selector.blp:37
 msgid "This device"
-msgstr ""
+msgstr "Это устройство"
 
 #: src/connect/player.rs:65
 msgid "Connection to device lost!"
-msgstr ""
+msgstr "Связь с устройством потеряна!"
 
 #: src/app/components/login/login.blp:46
 msgid "Welcome to Riff"
-msgstr ""
+msgstr "Добро пожаловать в Riff!"
 
 #. Translators: Login window title, must mention Premium (a premium account is required).
 #: src/app/components/login/login.blp:53
 msgid "Log in with your Spotify Account. A Spotify Premium subscription is required to use the app."
-msgstr ""
+msgstr "Войдите используя свой Spotify аккаунт. Для использования приложения обязательно наличие премиум подписки."
 
 #. Translators: This error is shown when authentication fails.
 #: src/app/components/login/login.blp:68
 msgid "An error occured when trying to connect."
-msgstr ""
+msgstr "Возникла ошибка при попытке подключения"
 
 #. Translators: Log in button label
 #: src/app/components/login/login.blp:79
 msgid "Log in with Spotify..."
-msgstr ""
+msgstr "Вход с помощью Spotify..."
 
 #: src/app/components/device_selector/device_selector.blp:15
 msgid "Playing on"
-msgstr ""
+msgstr "Играет на"
 
 #: src/app/components/device_selector/device_selector.blp:24
 msgid "Refresh devices"
-msgstr ""
+msgstr "Обновить устройства"
 
