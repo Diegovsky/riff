@@ -13,8 +13,10 @@
     "--socket=fallback-x11",
     "--socket=wayland",
     "--socket=pulseaudio",
+    "--filesystem=xdg-run/pipewire-0:ro",
+    "--device=dri",
     "--talk-name=org.freedesktop.secrets",
-    "--device=dri"
+    "--own-name=org.mpris.MediaPlayer2.Riff"
   ],
   "separate-locales": false,
   "build-options": {
@@ -25,7 +27,7 @@
       "RUST_LOG": "riff=debug"
     },
     "strip": false,
-    "no-debuginfo": false
+    "no-debuginfo": true
   },
   "cleanup": [
     "/include",
