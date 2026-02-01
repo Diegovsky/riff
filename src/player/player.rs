@@ -5,6 +5,7 @@ use librespot::core::authentication::Credentials;
 use librespot::core::cache::Cache;
 use librespot::core::config::SessionConfig;
 use librespot::core::session::Session;
+use librespot::core::SpotifyUri;
 
 use librespot::playback::mixer::softmixer::SoftMixer;
 use librespot::playback::mixer::{Mixer, MixerConfig};
@@ -56,6 +57,7 @@ pub trait SpotifyPlayerDelegate {
     fn report_error(&self, error: SpotifyError);
     fn notify_playback_state(&self, position: u32);
     fn preload_next_track(&self);
+    fn track_unavailable(&self, track_id: String);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -408,7 +410,18 @@ async fn player_setup_delegate(
                 debug!("Requesting next track to be preloaded...");
                 delegate.preload_next_track();
             }
-            _ => {}
+            PlayerEvent::Unavailable { track_id, .. } => {
+                warn!("Track {:?} is unavailable", track_id);
+                // Extract track ID from SpotifyUri
+                if let SpotifyUri::Track { id } = track_id {
+                    if let Ok(id_string) = id.to_base62() {
+                        delegate.track_unavailable(id_string);
+                    }
+                }
+            }
+            _ => {
+                debug!("Unhandled player event: {:?}", event);
+            }
         }
     }
 }

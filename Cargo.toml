@@ -45,7 +45,7 @@ features = ["alsa-backend", "pulseaudio-backend", "gstreamer-backend"]
 
 [dependencies.tokio]
 version = "1"
-features = ["rt", "macros", "sync"]
+features = ["rt", "macros", "sync", "fs", "io-util"]
 
 [dependencies.serde]
 version = "^1.0.136"

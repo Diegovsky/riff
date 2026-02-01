@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -39,6 +40,7 @@ pub struct PlayerNotifier {
     dispatcher: Box<dyn ActionDispatcher>,
     command_sender: UnboundedSender<Command>,
     connect_command_sender: UnboundedSender<ConnectCommand>,
+    last_play_state: Cell<Option<bool>>,
 }
 
 impl PlayerNotifier {
@@ -53,6 +55,7 @@ impl PlayerNotifier {
             dispatcher,
             command_sender,
             connect_command_sender,
+            last_play_state: Cell::new(None),
         }
     }
 
@@ -144,12 +147,32 @@ impl PlayerNotifier {
 
     fn notify_local_player(&self, event: &PlaybackEvent) {
         let command = match event {
-            PlaybackEvent::PlaybackPaused => Some(Command::PlayerPause),
-            PlaybackEvent::PlaybackResumed => Some(Command::PlayerResume),
-            PlaybackEvent::PlaybackStopped => Some(Command::PlayerStop),
+            PlaybackEvent::PlaybackPaused => {
+                // Only send pause command if we haven't just sent one
+                if self.last_play_state.get() != Some(false) {
+                    self.last_play_state.set(Some(false));
+                    Some(Command::PlayerPause)
+                } else {
+                    None
+                }
+            }
+            PlaybackEvent::PlaybackResumed => {
+                // Only send resume command if we haven't just sent one
+                if self.last_play_state.get() != Some(true) {
+                    self.last_play_state.set(Some(true));
+                    Some(Command::PlayerResume)
+                } else {
+                    None
+                }
+            }
+            PlaybackEvent::PlaybackStopped => {
+                self.last_play_state.set(None);
+                Some(Command::PlayerStop)
+            }
             PlaybackEvent::VolumeSet(volume) => Some(Command::PlayerSetVolume(*volume)),
             PlaybackEvent::TrackChanged(id) => {
                 info!("track changed: {}", id);
+                self.last_play_state.set(None); // Reset state on track change
                 SpotifyId::from_base62(id).ok().map(|track| {
                     Command::PlayerLoad {
                         track: SpotifyUri::Track { id: track },
@@ -159,6 +182,7 @@ impl PlayerNotifier {
             }
             PlaybackEvent::SourceChanged => {
                 let resume = self.is_playing();
+                self.last_play_state.set(None); // Reset state on source change
                 self.currently_playing()
                     .and_then(|c| SpotifyId::from_base62(c.song_id()).ok())
                     .map(|track| {

@@ -5,4 +5,7 @@
 /.flatpak-builder/
 /src/config.rs
 /subprojects/blueprint-compiler
+/subprojects/blueprint-compiler-v0.18.0
+/subprojects/.wraplock
+/subprojects/packagecache
 /.idea/

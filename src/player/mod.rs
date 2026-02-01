@@ -98,6 +98,22 @@ impl SpotifyPlayerDelegate for AppPlayerDelegate {
             .unbounded_send(LoginAction::OpenLoginUrl(url).into())
             .unwrap();
     }
+
+    fn track_unavailable(&self, track_id: String) {
+        warn!("Track {} unavailable, skipping to next", track_id);
+        // Show notification to user
+        self.sender
+            .borrow_mut()
+            .unbounded_send(AppAction::ShowNotification(
+                "Faixa indisponível, pulando...".to_string(),
+            ))
+            .unwrap();
+        // Auto-skip to next track
+        self.sender
+            .borrow_mut()
+            .unbounded_send(PlaybackAction::Next.into())
+            .unwrap();
+    }
 }
 
 #[tokio::main]
