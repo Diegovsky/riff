@@ -1,6 +1,6 @@
 using Gtk 4.0;
 
-template $PlaylistHeaderWidget : Box {
+template $PlaylistHeaderWidget: Box {
   valign: start;
   vexpand: false;
   margin-start: 6;
@@ -27,14 +27,17 @@ template $PlaylistHeaderWidget : Box {
 
   Box playlist_info {
     hexpand: true;
+    hexpand-set: true;
     valign: center;
+    halign: fill;
     orientation: vertical;
     spacing: 6;
     margin-start: 18;
 
     Entry playlist_label_entry {
-      hexpand: false;
-      halign: start;
+      hexpand: true;
+      hexpand-set: true;
+      halign: fill;
       editable: false;
       can-focus: false;
       placeholder-text: "Playlist Title";
@@ -64,6 +67,7 @@ template $PlaylistHeaderWidget : Box {
       ]
     }
   }
+
   Button play_button {
     margin-end: 6;
     receives-default: true;
