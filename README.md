@@ -14,6 +14,8 @@ Originally a fork of [Spot](https://github.com/xou816/spot),  Riff continues dev
 
 If you have any feature suggestions or want to contribute to the project, feel free to leave an issue / pull request or join the discussion on our [Discord server](https://discord.gg/SYuYsjzWbm)!
 
+*Note*: AI contributions in any part are not welcome. 
+
 ## Installing
 
 > [!NOTE]
