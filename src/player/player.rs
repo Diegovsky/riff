@@ -14,6 +14,7 @@ use librespot::playback::config::{AudioFormat, Bitrate, PlayerConfig, VolumeCtrl
 use librespot::playback::player::{Player, PlayerEvent, PlayerEventChannel};
 use url::Url;
 
+use crate::api::recently_listened_albums;
 use crate::app::models::RepeatMode;
 
 use super::oauth2::{AuthcodeChallenge, RiffOauthClient};
@@ -269,6 +270,8 @@ impl SpotifyPlayer {
         let creds = Credentials::with_access_token(&credentials.access_token);
         let new_session = create_session(&creds, self.settings.ap_port).await?;
         let username = new_session.username();
+
+        recently_listened_albums(new_session.spclient(), &*username).await;
 
         let oauth_client = Arc::clone(&self.oauth_client);
         let session = new_session.clone();

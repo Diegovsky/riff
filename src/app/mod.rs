@@ -1,6 +1,8 @@
 use crate::settings::{RiffSettings, StateTracker};
-use crate::PlaybackAction;
-use crate::{api::CachedSpotifyClient, player::TokenStore};
+use crate::{
+    api::{client::SpotifyClient, CachedSpotifyClient},
+    player::TokenStore,
+};
 use futures::channel::mpsc::UnboundedSender;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -51,7 +53,8 @@ impl App {
     ) -> Self {
         let state = AppState::new();
         let token_store = Arc::new(TokenStore::new());
-        let spotify_client = Arc::new(CachedSpotifyClient::new(Arc::clone(&token_store)));
+        let spotify_client = SpotifyClient::new(Arc::clone(&token_store));
+        let spotify_client = Arc::new(CachedSpotifyClient::new(spotify_client));
         let model = Rc::new(AppModel::new(state, spotify_client));
 
         // Non widget components

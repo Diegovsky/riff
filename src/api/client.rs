@@ -2,6 +2,7 @@ use form_urlencoded::Serializer;
 use isahc::config::Configurable;
 use isahc::http::{method::Method, request::Builder, StatusCode, Uri};
 use isahc::{AsyncReadResponseExt, HttpClient, Request};
+use librespot::core::Session;
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use serde::{de::Deserialize, Serialize};
 use serde_json::from_str;
@@ -68,6 +69,7 @@ where
     fn authenticated(mut self) -> Result<Self, SpotifyApiError> {
         let token = self.client.token_store.get_cached_blocking();
         let token = token.as_ref().ok_or(SpotifyApiError::NoToken)?;
+        debug!("YOUR BEARER: {}", token.access_token);
         self.request = self
             .request
             .header("Authorization", format!("Bearer {}", token.access_token));
@@ -174,6 +176,7 @@ pub enum SpotifyApiError {
 
 pub(crate) struct SpotifyClient {
     token_store: Arc<TokenStore>,
+    session: Option<Session>,
     client: HttpClient,
 }
 
@@ -185,6 +188,7 @@ impl SpotifyClient {
         }
         let client = builder.build().unwrap();
         Self {
+            session: None,
             token_store,
             client,
         }
