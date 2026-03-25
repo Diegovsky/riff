@@ -1,4 +1,12 @@
-use crate::player::{AudioBackend, SpotifyPlayerSettings};
+use crate::{
+    app::{
+        components::EventListener,
+        models::RepeatMode,
+        state::{PlaybackAction, PlaybackEvent},
+        AppAction, AppEvent,
+    },
+    player::{AudioBackend, SpotifyPlayerSettings},
+};
 use gio::prelude::SettingsExt;
 use libadwaita::ColorScheme;
 use librespot::playback::config::Bitrate;
@@ -37,8 +45,7 @@ impl WindowGeometry {
 
 // Player (librespot) settings
 impl SpotifyPlayerSettings {
-    pub fn new_from_gsettings() -> Option<Self> {
-        let settings = gio::Settings::new(SETTINGS);
+    fn new_from_gsettings(settings: &gio::Settings) -> Option<Self> {
         let bitrate = match settings.enum_("player-bitrate") {
             0 => Some(Bitrate::Bitrate96),
             1 => Some(Bitrate::Bitrate160),
@@ -70,12 +77,32 @@ impl SpotifyPlayerSettings {
             x => Some(x as u16),
         };
 
+        let volume = settings.double("volume");
+        let shuffle = settings.boolean("shuffle");
+        let repeat = match settings.string("repeat").as_str() {
+            "song" => RepeatMode::Song,
+            "playlist" => RepeatMode::Playlist,
+            "none" | _ => RepeatMode::None,
+        };
+
         Some(Self {
+            volume,
+            repeat,
+            shuffle,
+
             bitrate,
             backend,
             gapless,
             ap_port,
         })
+    }
+    pub fn actions(&self) -> Vec<AppAction> {
+        use PlaybackAction::*;
+        vec![
+            SetVolume(self.volume).into(),
+            SetShuffled(self.shuffle).into(),
+            SetRepeatMode(self.repeat).into(),
+        ]
     }
 }
 
@@ -98,7 +125,7 @@ impl RiffSettings {
         }?;
         Some(Self {
             theme_preference,
-            player_settings: SpotifyPlayerSettings::new_from_gsettings()?,
+            player_settings: SpotifyPlayerSettings::new_from_gsettings(&settings)?,
             window: WindowGeometry::new_from_gsettings(),
         })
     }
@@ -110,6 +137,53 @@ impl Default for RiffSettings {
             theme_preference: ColorScheme::PreferDark,
             player_settings: Default::default(),
             window: Default::default(),
+        }
+    }
+}
+
+/// Observes some app state changes and records them into GSettings.
+pub struct StateTracker {
+    settings: gio::Settings,
+}
+
+type GResult = Result<(), glib::error::BoolError>;
+impl StateTracker {
+    pub fn new_from_gsettings() -> Self {
+        Self {
+            settings: gio::Settings::new(SETTINGS),
+        }
+    }
+    fn on_playback_event(&self, event: &PlaybackEvent) -> GResult {
+        use PlaybackEvent::*;
+        match event {
+            VolumeSet(volume) => self.settings.set_double("volume", *volume)?,
+            ShuffleChanged(shuffle) => self.settings.set_boolean("shuffle", *shuffle)?,
+            RepeatModeChanged(repeat) => self.settings.set_string(
+                "repeat",
+                match *repeat {
+                    RepeatMode::Song => "song",
+                    RepeatMode::Playlist => "playlist",
+                    RepeatMode::None => "none",
+                },
+            )?,
+            _ => (),
+        }
+        Ok(())
+    }
+
+    fn handle_event(&self, event: &AppEvent) -> GResult {
+        match event {
+            AppEvent::PlaybackEvent(event) => self.on_playback_event(event)?,
+            _ => (),
+        }
+        Ok(())
+    }
+}
+
+impl EventListener for StateTracker {
+    fn on_event(&mut self, event: &AppEvent) {
+        if let Err(e) = self.handle_event(event) {
+            error!("Trying to update gsettings: {e}")
         }
     }
 }

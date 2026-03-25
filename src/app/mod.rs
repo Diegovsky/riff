@@ -1,4 +1,4 @@
-use crate::settings::RiffSettings;
+use crate::settings::{RiffSettings, StateTracker};
 use crate::PlaybackAction;
 use crate::{api::CachedSpotifyClient, player::TokenStore};
 use futures::channel::mpsc::UnboundedSender;
@@ -63,6 +63,7 @@ impl App {
                 sender.clone(),
                 token_store,
             ),
+            Box::new(StateTracker::new_from_gsettings()),
             App::make_dbus(Rc::clone(&model), sender.clone()),
         ];
 
@@ -89,9 +90,11 @@ impl App {
         // ...ALSO some way to send actions, but more conveniently
         let dispatcher = Box::new(ActionDispatcherImpl::new(sender.clone(), worker.clone()));
 
-        // For now, we hardcode 70% volume
-        // it would be nice to get this from gsettings *wink wink*
-        dispatcher.dispatch(PlaybackAction::SetVolume(0.7).into());
+        // Send gsettings updates for saved settings like repeat mode, shuffle, etc.
+        // has to be done after the UI loads, otherwise visual glitches occour.
+        for action in self.settings.player_settings.actions() {
+            sender.unbounded_send(action).unwrap();
+        }
 
         // All components that will be available initially
         let mut components: Vec<Box<dyn EventListener>> = vec![
@@ -265,13 +268,17 @@ impl App {
 
     // Here is the loop
     pub async fn attach(mut self, dispatch_loop: DispatchLoop) {
-            let rt = tokio::runtime::Runtime::new().expect("Failed to acquire tokio runtime");
-                       let _guard = rt.enter();
-            let app = &mut self;
-            dispatch_loop
-                .attach(move |action| {
-                    app.handle(action);
-                })
-                .await;
+        let rt = tokio::runtime::Runtime::new().expect("Failed to acquire tokio runtime");
+        let _guard = rt.enter();
+
+        let app = &mut self;
+        dispatch_loop
+            .attach(move |action| {
+                if let AppAction::PlaybackAction(ref action) = action {
+                    eprintln!("{action:#?}")
+                };
+                app.handle(action);
+            })
+            .await;
     }
 }

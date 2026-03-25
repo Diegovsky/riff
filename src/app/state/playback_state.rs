@@ -157,6 +157,7 @@ impl PlaybackState {
         if self.current_song_id().map(|cur| cur == id).unwrap_or(false) {
             return false;
         }
+        debug!("Playing {id}");
 
         let found_index = self.songs.find_index(id);
 
@@ -170,6 +171,7 @@ impl PlaybackState {
             }
             true
         } else {
+            debug!("Song not found");
             false
         }
     }
@@ -471,7 +473,7 @@ impl UpdatableState for PlaybackState {
             }
             PlaybackAction::SetVolume(volume) => {
                 vec![PlaybackEvent::VolumeSet(volume)]
-            },
+            }
 
             PlaybackAction::SetAvailableDevices(list) => {
                 self.available_devices = list;

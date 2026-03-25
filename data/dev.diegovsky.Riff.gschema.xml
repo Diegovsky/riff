@@ -52,5 +52,22 @@
       <default>0</default>
       <summary>Port to communicate with Spotify's server (access point). Setting to 0 (default) allows Riff to use servers running on any port.</summary>
     </key>
+    <key name='volume' type='d'>
+      <default>0.7</default>
+      <summary>The playback volume</summary>
+    </key>
+    <key name='shuffle' type='b'>
+      <default>false</default>
+      <summary>The playback shuffle state</summary>
+    </key>
+     <key name="repeat" type="s">
+      <choices>
+        <choice value='song'/>
+        <choice value='playlist'/>
+        <choice value='none'/>
+      </choices>
+      <summary>The playback repeat mode</summary>
+      <default>'none'</default>
+    </key>
   </schema>
 </schemalist>

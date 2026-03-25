@@ -14,6 +14,8 @@ use librespot::playback::config::{AudioFormat, Bitrate, PlayerConfig, VolumeCtrl
 use librespot::playback::player::{Player, PlayerEvent, PlayerEventChannel};
 use url::Url;
 
+use crate::app::models::RepeatMode;
+
 use super::oauth2::{AuthcodeChallenge, RiffOauthClient};
 use super::{Command, TokenStore};
 use crate::app::credentials;
@@ -65,17 +67,25 @@ pub enum AudioBackend {
     Alsa(String),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SpotifyPlayerSettings {
     pub bitrate: Bitrate,
     pub backend: AudioBackend,
     pub gapless: bool,
     pub ap_port: Option<u16>,
+
+    pub shuffle: bool,
+    pub repeat: RepeatMode,
+    pub volume: f64,
 }
 
 impl Default for SpotifyPlayerSettings {
     fn default() -> Self {
         Self {
+            volume: 0.7,
+            repeat: RepeatMode::None,
+            shuffle: false,
+
             bitrate: Bitrate::Bitrate160,
             gapless: true,
             backend: AudioBackend::PulseAudio,
@@ -137,7 +147,7 @@ impl SpotifyPlayer {
         match action {
             Command::PlayerSetVolume(volume) => {
                 if let Some(mixer) = self.mixer.as_mut() {
-                    mixer.set_volume((VolumeCtrl::MAX_VOLUME as f64 * volume) as u16);
+                    mixer_set_volume(&mut **mixer, volume);
                 }
                 Ok(())
             }
@@ -295,17 +305,19 @@ impl SpotifyPlayer {
         };
         info!("bitrate: {:?}", &player_config.bitrate);
 
+        let volume = self.settings.volume;
         let soft_volume = self
             .mixer
             .get_or_insert_with(|| {
-                let mix = Box::new(SoftMixer::open(MixerConfig {
-                    // This value feels reasonable to me. Feel free to change it
-                    volume_ctrl: VolumeCtrl::Log(VolumeCtrl::DEFAULT_DB_RANGE / 2.0),
-                    ..Default::default()
-                }).expect("Failed to create soft mixer"));
-                // TODO: Should read volume from somewhere instead of hard coding.
-                // Sets volume to 100%
-                mix.set_volume(VolumeCtrl::MAX_VOLUME);
+                let mut mix = Box::new(
+                    SoftMixer::open(MixerConfig {
+                        // This value feels reasonable to me. Feel free to change it
+                        volume_ctrl: VolumeCtrl::Log(VolumeCtrl::DEFAULT_DB_RANGE / 2.0),
+                        ..Default::default()
+                    })
+                    .expect("Failed to create soft mixer"),
+                );
+                mixer_set_volume(&mut *mix, volume);
                 mix
             })
             .get_soft_volume();
@@ -411,4 +423,8 @@ async fn player_setup_delegate(
             _ => {}
         }
     }
+}
+
+fn mixer_set_volume(mixer: &mut dyn Mixer, volume: f64) {
+    mixer.set_volume((VolumeCtrl::MAX_VOLUME as f64 * volume) as u16);
 }
