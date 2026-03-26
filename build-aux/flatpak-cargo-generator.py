@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.14"
+# dependencies = [
+#     "aiohttp>=3.13.3",
+#     "toml>=0.10.2",
+# ]
+# ///
 
 __license__ = 'MIT'
 import json

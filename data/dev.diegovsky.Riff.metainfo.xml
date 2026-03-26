@@ -55,6 +55,15 @@
   </screenshots>
 
   <releases>
+    <release version="1.0.1" date="2026-03-25">
+        <description>
+        This new maintenance release brings simple but fundamental changes.
+
+        - Playback state is now saved and restored properly.
+        - Minor under-the-hood improvements.
+        - More Russian translations.
+        </description>
+    </release>
     <release version="1.0.0" date="2025-11-29">
     </release>
   </releases>

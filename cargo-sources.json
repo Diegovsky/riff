@@ -288,19 +288,6 @@
     {
         "type": "archive",
         "archive-type": "tar-gzip",
-        "url": "https://static.crates.io/crates/async-global-executor/async-global-executor-2.4.1.crate",
-        "sha256": "05b1b633a2115cd122d73b955eadd9916c18c8f510ec9cd1686404c60ad1c29c",
-        "dest": "cargo/vendor/async-global-executor-2.4.1"
-    },
-    {
-        "type": "inline",
-        "contents": "{\"package\": \"05b1b633a2115cd122d73b955eadd9916c18c8f510ec9cd1686404c60ad1c29c\", \"files\": {}}",
-        "dest": "cargo/vendor/async-global-executor-2.4.1",
-        "dest-filename": ".cargo-checksum.json"
-    },
-    {
-        "type": "archive",
-        "archive-type": "tar-gzip",
         "url": "https://static.crates.io/crates/async-io/async-io-2.5.0.crate",
         "sha256": "19634d6336019ef220f09fd31168ce5c184b295cbf80345437cc36094ef223ca",
         "dest": "cargo/vendor/async-io-2.5.0"
@@ -361,19 +348,6 @@
         "type": "inline",
         "contents": "{\"package\": \"f567af260ef69e1d52c2b560ce0ea230763e6fbb9214a85d768760a920e3e3c1\", \"files\": {}}",
         "dest": "cargo/vendor/async-signal-0.2.12",
-        "dest-filename": ".cargo-checksum.json"
-    },
-    {
-        "type": "archive",
-        "archive-type": "tar-gzip",
-        "url": "https://static.crates.io/crates/async-std/async-std-1.13.2.crate",
-        "sha256": "2c8e079a4ab67ae52b7403632e4618815d6db36d2a010cfe41b02c1b1578f93b",
-        "dest": "cargo/vendor/async-std-1.13.2"
-    },
-    {
-        "type": "inline",
-        "contents": "{\"package\": \"2c8e079a4ab67ae52b7403632e4618815d6db36d2a010cfe41b02c1b1578f93b\", \"files\": {}}",
-        "dest": "cargo/vendor/async-std-1.13.2",
         "dest-filename": ".cargo-checksum.json"
     },
     {
@@ -1848,19 +1822,6 @@
     {
         "type": "archive",
         "archive-type": "tar-gzip",
-        "url": "https://static.crates.io/crates/gloo-timers/gloo-timers-0.3.0.crate",
-        "sha256": "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994",
-        "dest": "cargo/vendor/gloo-timers-0.3.0"
-    },
-    {
-        "type": "inline",
-        "contents": "{\"package\": \"bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994\", \"files\": {}}",
-        "dest": "cargo/vendor/gloo-timers-0.3.0",
-        "dest-filename": ".cargo-checksum.json"
-    },
-    {
-        "type": "archive",
-        "archive-type": "tar-gzip",
         "url": "https://static.crates.io/crates/gobject-sys/gobject-sys-0.20.10.crate",
         "sha256": "ec9aca94bb73989e3cfdbf8f2e0f1f6da04db4d291c431f444838925c4c63eda",
         "dest": "cargo/vendor/gobject-sys-0.20.10"
@@ -2844,19 +2805,6 @@
         "type": "inline",
         "contents": "{\"package\": \"558bf9508a558512042d3095138b1f7b8fe90c5467d94f9f1da28b3731c5dbd1\", \"files\": {}}",
         "dest": "cargo/vendor/kstring-2.0.2",
-        "dest-filename": ".cargo-checksum.json"
-    },
-    {
-        "type": "archive",
-        "archive-type": "tar-gzip",
-        "url": "https://static.crates.io/crates/kv-log-macro/kv-log-macro-1.0.7.crate",
-        "sha256": "0de8b303297635ad57c9f5059fd9cee7a47f8e8daa09df0fcd07dd39fb22977f",
-        "dest": "cargo/vendor/kv-log-macro-1.0.7"
-    },
-    {
-        "type": "inline",
-        "contents": "{\"package\": \"0de8b303297635ad57c9f5059fd9cee7a47f8e8daa09df0fcd07dd39fb22977f\", \"files\": {}}",
-        "dest": "cargo/vendor/kv-log-macro-1.0.7",
         "dest-filename": ".cargo-checksum.json"
     },
     {
@@ -5925,19 +5873,6 @@
         "type": "inline",
         "contents": "{\"package\": \"f33196643e165781c20a5ead5582283a7dacbb87855d867fbc2df3f81eddc1be\", \"files\": {}}",
         "dest": "cargo/vendor/uuid-1.18.0",
-        "dest-filename": ".cargo-checksum.json"
-    },
-    {
-        "type": "archive",
-        "archive-type": "tar-gzip",
-        "url": "https://static.crates.io/crates/value-bag/value-bag-1.11.1.crate",
-        "sha256": "943ce29a8a743eb10d6082545d861b24f9d1b160b7d741e0f2cdf726bec909c5",
-        "dest": "cargo/vendor/value-bag-1.11.1"
-    },
-    {
-        "type": "inline",
-        "contents": "{\"package\": \"943ce29a8a743eb10d6082545d861b24f9d1b160b7d741e0f2cdf726bec909c5\", \"files\": {}}",
-        "dest": "cargo/vendor/value-bag-1.11.1",
         "dest-filename": ".cargo-checksum.json"
     },
     {
