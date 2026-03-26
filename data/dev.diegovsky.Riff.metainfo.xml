@@ -57,11 +57,13 @@
   <releases>
     <release version="1.0.1" date="2026-03-25">
         <description>
-        This new maintenance release brings simple but fundamental changes.
-
-        - Playback state is now saved and restored properly.
-        - Minor under-the-hood improvements.
-        - More Russian translations.
+            <p>This new maintenance release brings simple but fundamental changes.</p>
+            <p>Highlights:</p>
+            <ul>
+                <li>Playback state is now saved and restored properly.</li>
+                <li>Minor under-the-hood improvements.</li>
+                <li>More Russian translations.</li>
+            </ul>
         </description>
     </release>
     <release version="1.0.0" date="2025-11-29">
