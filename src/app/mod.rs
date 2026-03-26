@@ -275,7 +275,7 @@ impl App {
         dispatch_loop
             .attach(move |action| {
                 if let AppAction::PlaybackAction(ref action) = action {
-                    eprintln!("{action:#?}")
+                    info!("{action:#?}")
                 };
                 app.handle(action);
             })

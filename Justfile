@@ -4,7 +4,7 @@ compile *ARGS:
     just meson compile {{ARGS}}
 
 run: install
-    riff
+    env RUST_BACKTRACE=1 riff
 
 install:
     just meson install

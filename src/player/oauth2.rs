@@ -80,7 +80,7 @@ impl RiffOauthClient {
 
     pub async fn spawn_authcode_listener(
         &self,
-        notify_complete: impl FnOnce() + 'static,
+        notify_complete: impl FnOnce() + Send + 'static,
     ) -> Result<AuthcodeChallenge, OAuthError> {
         let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
@@ -99,7 +99,7 @@ impl RiffOauthClient {
         Ok(AuthcodeChallenge {
             pkce_verifier,
             auth_url,
-            listener: tokio::task::spawn_local(async move {
+            listener: tokio::task::spawn(async move {
                 let result = wait_for_authcode(csrf_token).await;
                 notify_complete();
                 result

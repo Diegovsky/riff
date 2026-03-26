@@ -15,6 +15,7 @@ use librespot::playback::player::{Player, PlayerEvent, PlayerEventChannel};
 use url::Url;
 
 use crate::app::models::RepeatMode;
+use crate::player::AppPlayerDelegate;
 
 use super::oauth2::{AuthcodeChallenge, RiffOauthClient};
 use super::{Command, TokenStore};
@@ -106,13 +107,13 @@ pub struct SpotifyPlayer {
     command_sender: UnboundedSender<Command>,
 
     // Receives feedback from commands or various events in the player
-    delegate: Rc<dyn SpotifyPlayerDelegate>,
+    delegate: AppPlayerDelegate,
 }
 
 impl SpotifyPlayer {
     pub fn new(
         settings: SpotifyPlayerSettings,
-        delegate: Rc<dyn SpotifyPlayerDelegate>,
+        delegate: AppPlayerDelegate,
         token_store: Arc<TokenStore>,
         command_sender: UnboundedSender<Command>,
     ) -> Self {
@@ -251,9 +252,9 @@ impl SpotifyPlayer {
 
                 let session = self.session.take().ok_or(SpotifyError::PlayerNotReady)?;
                 let new_player = self.create_player(session);
-                tokio::task::spawn_local(player_setup_delegate(
+                tokio::task::spawn(player_setup_delegate(
                     new_player.get_player_event_channel(),
-                    Rc::clone(&self.delegate),
+                    self.delegate.clone(),
                 ));
                 self.player.replace(new_player);
 
@@ -272,7 +273,7 @@ impl SpotifyPlayer {
 
         let oauth_client = Arc::clone(&self.oauth_client);
         let session = new_session.clone();
-        tokio::task::spawn_local(async move {
+        tokio::task::spawn(async move {
             loop {
                 if let Ok(token) = oauth_client.refresh_token_at_expiry().await {
                     _ = session
@@ -283,9 +284,9 @@ impl SpotifyPlayer {
         });
 
         let new_player = self.create_player(new_session.clone());
-        tokio::task::spawn_local(player_setup_delegate(
+        tokio::task::spawn(player_setup_delegate(
             new_player.get_player_event_channel(),
-            Rc::clone(&self.delegate),
+            self.delegate.clone(),
         ));
 
         self.player.replace(new_player);
@@ -404,10 +405,7 @@ async fn create_session(
     }
 }
 
-async fn player_setup_delegate(
-    mut channel: PlayerEventChannel,
-    delegate: Rc<dyn SpotifyPlayerDelegate>,
-) {
+async fn player_setup_delegate(mut channel: PlayerEventChannel, delegate: AppPlayerDelegate) {
     while let Some(event) = channel.recv().await {
         match event {
             PlayerEvent::EndOfTrack { .. } => {

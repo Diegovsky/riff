@@ -34,69 +34,50 @@ pub enum Command {
     ReloadSettings,
 }
 
-struct AppPlayerDelegate {
-    sender: RefCell<UnboundedSender<AppAction>>,
+#[derive(Clone)]
+pub(crate) struct AppPlayerDelegate {
+    sender: UnboundedSender<AppAction>,
 }
 
 impl AppPlayerDelegate {
     fn new(sender: UnboundedSender<AppAction>) -> Self {
-        let sender = RefCell::new(sender);
         Self { sender }
     }
-}
 
-impl SpotifyPlayerDelegate for AppPlayerDelegate {
+    fn send(&self, action: AppAction) {
+        self.sender.unbounded_send(action).unwrap();
+    }
+
     fn end_of_track_reached(&self) {
-        self.sender
-            .borrow_mut()
-            .unbounded_send(PlaybackAction::Next.into())
-            .unwrap();
+        self.send(PlaybackAction::Next.into())
     }
 
     fn token_login_successful(&self, username: String) {
-        self.sender
-            .borrow_mut()
-            .unbounded_send(LoginAction::SetLoginSuccess(username).into())
-            .unwrap();
+        self.send(LoginAction::SetLoginSuccess(username).into())
     }
 
     fn refresh_successful(&self) {
-        self.sender
-            .borrow_mut()
-            .unbounded_send(LoginAction::TokenRefreshed.into())
-            .unwrap();
+        self.send(LoginAction::TokenRefreshed.into())
     }
 
     fn report_error(&self, error: SpotifyError) {
-        self.sender
-            .borrow_mut()
-            .unbounded_send(match error {
-                SpotifyError::LoginFailed => LoginAction::SetLoginFailure.into(),
-                SpotifyError::LoggedOut => LoginAction::Logout.into(),
-                _ => AppAction::ShowNotification(format!("{error}")),
-            })
-            .unwrap();
+        self.send(match error {
+            SpotifyError::LoginFailed => LoginAction::SetLoginFailure.into(),
+            SpotifyError::LoggedOut => LoginAction::Logout.into(),
+            _ => AppAction::ShowNotification(format!("{error}")),
+        })
     }
 
     fn notify_playback_state(&self, position: u32) {
-        self.sender
-            .borrow_mut()
-            .unbounded_send(PlaybackAction::SyncSeek(position).into())
-            .unwrap();
+        self.send(PlaybackAction::SyncSeek(position).into())
     }
 
     fn preload_next_track(&self) {
-        self.sender
-            .borrow_mut()
-            .unbounded_send(PlaybackAction::Preload.into())
-            .unwrap();
+        self.send(PlaybackAction::Preload.into())
     }
 
     fn login_challenge_started(&self, url: Url) {
-        self.sender
-            .borrow_mut()
-            .unbounded_send(LoginAction::OpenLoginUrl(url).into())
-            .unwrap();
+        self.send(LoginAction::OpenLoginUrl(url).into())
     }
 }
 
@@ -108,17 +89,13 @@ async fn player_main(
     sender: UnboundedSender<Command>,
     receiver: UnboundedReceiver<Command>,
 ) {
-    task::LocalSet::new()
-        .run_until(async move {
-            task::spawn_local(async move {
-                let delegate = Rc::new(AppPlayerDelegate::new(appaction_sender.clone()));
-                let player = SpotifyPlayer::new(player_settings, delegate, token_store, sender);
-                player.start(receiver).await.unwrap();
-            })
-            .await
-            .unwrap();
-        })
-        .await;
+    task::spawn(async move {
+        let delegate = AppPlayerDelegate::new(appaction_sender.clone());
+        let player = SpotifyPlayer::new(player_settings, delegate, token_store, sender);
+        player.start(receiver).await.unwrap();
+    })
+    .await
+    .unwrap();
 }
 
 pub fn start_player_service(
