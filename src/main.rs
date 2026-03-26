@@ -1,3 +1,4 @@
+#![allow(mismatched_lifetime_syntaxes)]
 #[macro_use(clone)]
 extern crate glib;
 #[macro_use]
