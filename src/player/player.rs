@@ -25,7 +25,6 @@ use crate::settings::RiffSettings;
 use std::env;
 use std::error::Error;
 use std::fmt;
-use std::rc::Rc;
 use std::sync::Arc;
 
 #[derive(Debug)]

@@ -1,12 +1,12 @@
 use core::mem::size_of;
 use futures::join;
 use regex::Regex;
-use std::path::{PathBuf,Path};
 use std::convert::From;
 use std::future::Future;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
-use tokio::{fs, io};
 use thiserror::Error;
+use tokio::{fs, io};
 
 const EXPIRY_FILE_EXT: &str = ".expiry";
 

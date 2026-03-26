@@ -73,7 +73,8 @@ impl PlaybackModel {
     }
 
     fn set_volume(&self, value: f64) {
-        self.dispatcher.dispatch(PlaybackAction::SetVolume(value).into())
+        self.dispatcher
+            .dispatch(PlaybackAction::SetVolume(value).into())
     }
 }
 

@@ -1,5 +1,4 @@
 use crate::settings::{RiffSettings, StateTracker};
-use crate::PlaybackAction;
 use crate::{api::CachedSpotifyClient, player::TokenStore};
 use futures::channel::mpsc::UnboundedSender;
 use std::rc::Rc;

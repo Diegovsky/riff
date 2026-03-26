@@ -150,27 +150,26 @@ impl PlayerNotifier {
             PlaybackEvent::VolumeSet(volume) => Some(Command::PlayerSetVolume(*volume)),
             PlaybackEvent::TrackChanged(id) => {
                 info!("track changed: {}", id);
-                SpotifyId::from_base62(id).ok().map(|track| {
-                    Command::PlayerLoad {
+                SpotifyId::from_base62(id)
+                    .ok()
+                    .map(|track| Command::PlayerLoad {
                         track: SpotifyUri::Track { id: track },
                         resume: true,
-                    }
-                })
+                    })
             }
             PlaybackEvent::SourceChanged => {
                 let resume = self.is_playing();
                 self.currently_playing()
                     .and_then(|c| SpotifyId::from_base62(c.song_id()).ok())
-                    .map(|track| {
-                        Command::PlayerLoad { track: SpotifyUri::Track { id: track }, resume }
+                    .map(|track| Command::PlayerLoad {
+                        track: SpotifyUri::Track { id: track },
+                        resume,
                     })
             }
             PlaybackEvent::TrackSeeked(position) => Some(Command::PlayerSeek(*position)),
             PlaybackEvent::Preload(id) => SpotifyId::from_base62(id)
                 .ok()
-                .map(|track| {
-                    SpotifyUri::Track { id: track }
-                })
+                .map(|track| SpotifyUri::Track { id: track })
                 .map(Command::PlayerPreload),
             _ => None,
         };
