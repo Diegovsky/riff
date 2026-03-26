@@ -55,7 +55,7 @@
   </screenshots>
 
   <releases>
-    <release version="1.0.1" date="2026-03-25">
+    <release version="26.03" date="2026-03-25">
         <description>
             <p>This new maintenance release brings simple but fundamental changes.</p>
             <p>Highlights:</p>
@@ -66,7 +66,7 @@
             </ul>
         </description>
     </release>
-    <release version="1.0.0" date="2025-11-29">
+    <release version="25.11" date="2025-11-29">
     </release>
   </releases>
 </component>
