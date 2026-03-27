@@ -2,6 +2,9 @@
 <component type="desktop-application">
   <id>dev.diegovsky.Riff</id>
   <url type="homepage">https://github.com/Diegovsky/riff</url>
+  <url type="bugtracker">https://github.com/Diegovsky/riff/issues</url>
+  <url type="vcs-browser">https://github.com/Diegovsky/riff/</url>
+
   <name>Riff</name>
   <developer id="diegovsky@fosstodon.org">
      <name>Diego Augusto</name>
