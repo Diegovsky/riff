@@ -51,12 +51,7 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for PlaylistDetailsWidget {
-        fn constructed(&self) {
-            self.parent_constructed();
-            self.header_widget.set_grows_automatically();
-        }
-    }
+    impl ObjectImpl for PlaylistDetailsWidget {}
 
     impl WidgetImpl for PlaylistDetailsWidget {}
     impl BinImpl for PlaylistDetailsWidget {}
