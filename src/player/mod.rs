@@ -83,7 +83,7 @@ impl AppPlayerDelegate {
 async fn player_main(
     player_settings: SpotifyPlayerSettings,
     appaction_sender: UnboundedSender<AppAction>,
-    token_store: Arc<TokenStore>,
+    token_store: TokenStore,
     sender: UnboundedSender<Command>,
     receiver: UnboundedReceiver<Command>,
 ) {
@@ -99,7 +99,7 @@ async fn player_main(
 pub fn start_player_service(
     player_settings: SpotifyPlayerSettings,
     appaction_sender: UnboundedSender<AppAction>,
-    token_store: Arc<TokenStore>,
+    token_store: TokenStore,
 ) -> UnboundedSender<Command> {
     let (sender, receiver) = unbounded::<Command>();
     let sender_clone = sender.clone();

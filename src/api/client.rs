@@ -173,12 +173,12 @@ pub enum SpotifyApiError {
 }
 
 pub(crate) struct SpotifyClient {
-    token_store: Arc<TokenStore>,
+    token_store: TokenStore,
     client: HttpClient,
 }
 
 impl SpotifyClient {
-    pub(crate) fn new(token_store: Arc<TokenStore>) -> Self {
+    pub(crate) fn new(token_store: TokenStore) -> Self {
         let mut builder = HttpClient::builder();
         if cfg!(debug_assertions) {
             builder = builder.ssl_options(isahc::config::SslOption::DANGER_ACCEPT_INVALID_CERTS);
@@ -642,10 +642,10 @@ pub mod tests {
 
     use super::*;
 
-    #[test]
-    fn test_username_encoding() {
+    #[tokio::test]
+    async fn test_username_encoding() {
         let username = "anna.lafuente❤";
-        let client = SpotifyClient::new(Arc::new(TokenStore::new()));
+        let client = SpotifyClient::new(TokenStore::new());
         let req = client.get_user(username);
         assert_eq!(
             req.request

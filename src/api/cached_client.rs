@@ -189,9 +189,9 @@ pub struct CachedSpotifyClient {
 }
 
 impl CachedSpotifyClient {
-    pub fn new(token_store: Arc<TokenStore>) -> CachedSpotifyClient {
+    pub fn new(client: TokenStore) -> CachedSpotifyClient {
         CachedSpotifyClient {
-            client: SpotifyClient::new(token_store),
+            client: SpotifyClient::new(client),
             cache: CacheManager::for_dir("riff/net").unwrap(),
         }
     }

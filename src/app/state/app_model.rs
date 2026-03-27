@@ -4,34 +4,30 @@ use ref_filter_map::*;
 use std::cell::{Ref, RefCell};
 use std::sync::Arc;
 
-pub struct AppServices {
-    pub spotify_api: Arc<dyn SpotifyApiClient + Send + Sync>,
-    pub batch_loader: BatchLoader,
-}
-
 // Two purposes: give access to some services to users of the AppModel (shared)
 // and give a read only view of the state
 pub struct AppModel {
     state: RefCell<AppState>,
-    services: AppServices,
+    pub spotify_api: Arc<dyn SpotifyApiClient + Send + Sync>,
+    pub batch_loader: BatchLoader,
 }
 
 impl AppModel {
     pub fn new(state: AppState, spotify_api: Arc<dyn SpotifyApiClient + Send + Sync>) -> Self {
-        let services = AppServices {
+        let state = RefCell::new(state);
+        Self {
+            state,
             batch_loader: BatchLoader::new(Arc::clone(&spotify_api)),
             spotify_api,
-        };
-        let state = RefCell::new(state);
-        Self { state, services }
+        }
     }
 
     pub fn get_spotify(&self) -> Arc<dyn SpotifyApiClient + Send + Sync> {
-        Arc::clone(&self.services.spotify_api)
+        Arc::clone(&self.spotify_api)
     }
 
     pub fn get_batch_loader(&self) -> BatchLoader {
-        self.services.batch_loader.clone()
+        self.batch_loader.clone()
     }
 
     // Read only access to the state!

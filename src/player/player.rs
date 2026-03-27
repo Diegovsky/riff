@@ -113,7 +113,7 @@ impl SpotifyPlayer {
     pub fn new(
         settings: SpotifyPlayerSettings,
         delegate: AppPlayerDelegate,
-        token_store: Arc<TokenStore>,
+        token_store: TokenStore,
         command_sender: UnboundedSender<Command>,
     ) -> Self {
         Self {
@@ -168,6 +168,7 @@ impl SpotifyPlayer {
                 Ok(())
             }
             Command::PlayerLoad { track, resume } => {
+                debug!("Player: playing track {track}");
                 self.get_player_mut()?.load(track, resume, 0);
                 Ok(())
             }

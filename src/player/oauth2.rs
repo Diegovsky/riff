@@ -49,7 +49,7 @@ playlist-modify-public";
 
 pub struct RiffOauthClient {
     client: BasicClient,
-    token_store: Arc<TokenStore>,
+    token_store: TokenStore,
 }
 
 pub struct AuthcodeChallenge {
@@ -59,7 +59,7 @@ pub struct AuthcodeChallenge {
 }
 
 impl RiffOauthClient {
-    pub fn new(token_store: Arc<TokenStore>) -> Self {
+    pub fn new(token_store: TokenStore) -> Self {
         let auth_url = AuthUrl::new("https://accounts.spotify.com/authorize".to_string())
             .expect("Malformed URL");
         let token_url = TokenUrl::new("https://accounts.spotify.com/api/token".to_string())

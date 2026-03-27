@@ -49,8 +49,8 @@ impl App {
         worker: Worker,
     ) -> Self {
         let state = AppState::new();
-        let token_store = Arc::new(TokenStore::new());
-        let spotify_client = Arc::new(CachedSpotifyClient::new(Arc::clone(&token_store)));
+        let token_store = TokenStore::new();
+        let spotify_client = Arc::new(CachedSpotifyClient::new(token_store.clone()));
         let model = Rc::new(AppModel::new(state, spotify_client));
 
         // Non widget components
@@ -126,7 +126,7 @@ impl App {
         settings: &RiffSettings,
         dispatcher: Box<dyn ActionDispatcher>,
         sender: UnboundedSender<AppAction>,
-        token_store: Arc<TokenStore>,
+        token_store: TokenStore,
     ) -> Box<impl EventListener> {
         let api = app_model.get_spotify();
         Box::new(PlayerNotifier::new(
