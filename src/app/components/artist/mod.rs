@@ -17,9 +17,6 @@ mod imp {
         pub artist: TemplateChild<gtk::Label>,
 
         #[template_child]
-        pub avatar_btn: TemplateChild<gtk::Button>,
-
-        #[template_child]
         pub avatar: TemplateChild<libadwaita::Avatar>,
     }
 
@@ -62,12 +59,6 @@ impl ArtistWidget {
         let _self = Self::new();
         _self.bind(model, worker);
         _self
-    }
-
-    pub fn connect_artist_pressed<F: Fn() + 'static>(&self, f: F) {
-        self.imp().avatar_btn.connect_clicked(move |_| {
-            f();
-        });
     }
 
     fn bind(&self, model: &ArtistModel, worker: Worker) {
