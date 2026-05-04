@@ -293,6 +293,16 @@ impl UpdatableState for HomeState {
                 }
                 vec![BrowserEvent::SavedPlaylistsUpdated]
             }
+            BrowserAction::RemovePlaylist(id) => {
+                let position = self.playlists.iter().position(|p| p.uri() == *id);
+                if let Some(position) = position {
+                    self.playlists.remove(position as u32);
+                    self.next_playlists_page.decrement();
+                    vec![BrowserEvent::SavedPlaylistsUpdated]
+                } else {
+                    vec![]
+                }
+            }
             BrowserAction::AppendSavedTracks(song_batch) => {
                 if self.saved_tracks.add(*song_batch.clone()).commit() {
                     vec![BrowserEvent::SavedTracksUpdated]
