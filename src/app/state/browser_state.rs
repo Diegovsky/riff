@@ -17,6 +17,7 @@ pub enum BrowserAction {
     SetPlaylistsContent(Vec<PlaylistDescription>),
     AppendPlaylistsContent(Vec<PlaylistDescription>),
     RemoveTracksFromPlaylist(String, Vec<String>),
+    RemovePlaylist(String),
     SetAlbumDetails(Box<AlbumFullDescription>),
     AppendAlbumTracks(String, Box<SongBatch>),
     SetPlaylistDetails(Box<PlaylistDescription>, Box<SongBatch>),

@@ -37,6 +37,7 @@ pub enum AppAction {
     CancelSelection,
     CreatePlaylist(PlaylistDescription),
     UpdatePlaylistName(PlaylistSummary),
+    RemovePlaylist(String),
 }
 
 // Not actual actions, just neat wrappers
@@ -240,6 +241,18 @@ impl AppState {
                 );
                 let mut more_events =
                     forward_action(BrowserAction::UpdatePlaylistName(s), &mut self.browser);
+                events.append(&mut more_events);
+                events
+            }
+            AppAction::RemovePlaylist(id) => {
+                let mut events = forward_action(
+                    LoginAction::RemoveUserPlaylist(id.clone()),
+                    &mut self.logged_user,
+                );
+                let mut more_events = forward_action(
+                    BrowserAction::RemovePlaylist(id),
+                    &mut self.browser,
+                );
                 events.append(&mut more_events);
                 events
             }
