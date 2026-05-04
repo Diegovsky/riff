@@ -48,7 +48,7 @@ msgstr "An error occured. Check logs for details!"
 #: src/app/components/navigation/factory.rs:33
 #: src/app/components/sidebar/sidebar_item.rs:39
 msgid "Library"
-msgstr "Library"
+msgstr "Albums"
 
 #. translators: This is a sidebar entry to browse to saved playlists.
 #: src/app/components/navigation/factory.rs:54
@@ -59,7 +59,7 @@ msgstr "Playlists"
 #. This is the visible name for the play queue. It appears in the sidebar as well.
 #: src/app/components/sidebar/sidebar_item.rs:43
 msgid "Now playing"
-msgstr "Now playing"
+msgstr "Now Playing"
 
 #. translators: Short text displayed instead of a song title when nothing plays
 #. Short text displayed instead of a song title when nothing plays
@@ -120,7 +120,7 @@ msgstr "Artists"
 #: src/app/components/navigation/factory.rs:76
 #: src/app/components/sidebar/sidebar_item.rs:41
 msgid "Saved tracks"
-msgstr "Saved Tracks"
+msgstr "Tracks"
 
 #: src/app/components/playback/playback_controls.rs:64
 msgid "Pause"
