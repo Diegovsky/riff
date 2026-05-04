@@ -13,6 +13,7 @@ use crate::app::state::{
     PlaybackAction, PlaybackState, SelectionAction, SelectionContext, SelectionState,
 };
 use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel};
+use crate::feature_flags::{self, FeatureFlag};
 
 pub struct NowPlayingModel {
     app_model: Rc<AppModel>,
@@ -142,6 +143,9 @@ impl PlaylistModel for NowPlayingModel {
     }
 
     fn enable_selection(&self) -> bool {
+        if !feature_flags::is_enabled(FeatureFlag::NowPlayingSelectMode) {
+            return false;
+        }
         self.dispatcher
             .dispatch(AppAction::EnableSelection(self.current_selection_context()));
         true
@@ -163,6 +167,9 @@ impl SimpleHeaderBarModel for NowPlayingModel {
     }
 
     fn selection_context(&self) -> Option<SelectionContext> {
+        if !feature_flags::is_enabled(FeatureFlag::NowPlayingSelectMode) {
+            return None;
+        }
         Some(self.current_selection_context())
     }
 

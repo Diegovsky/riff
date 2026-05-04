@@ -1,5 +1,6 @@
 use crate::app::components::EventListener;
 use crate::app::AppEvent;
+use crate::feature_flags::FeatureFlag;
 use crate::settings::RiffSettings;
 
 use gtk::prelude::*;
@@ -78,6 +79,7 @@ impl SettingsDialog {
 
         dialog.bind_backend_and_device();
         dialog.bind_settings();
+        dialog.bind_feature_flags();
         dialog.connect_theme_select();
         dialog
     }
@@ -216,6 +218,27 @@ impl SettingsDialog {
                 })
             })
             .build();
+    }
+
+    fn bind_feature_flags(&self) {
+        let settings = gio::Settings::new(SETTINGS);
+        let group = libadwaita::PreferencesGroup::new();
+        group.set_title("Experimental Features");
+        group.set_description(Some("These settings require restarting the application to take effect."));
+
+        for flag in FeatureFlag::ALL {
+            let row = libadwaita::SwitchRow::new();
+            row.set_title(flag.title());
+            row.set_subtitle(flag.description());
+            settings.bind(flag.key(), &row, "active").build();
+            group.add(&row);
+        }
+
+        let page = self
+            .upcast_ref::<libadwaita::PreferencesDialog>()
+            .visible_page()
+            .unwrap();
+        page.add(&group);
     }
 
     fn connect_theme_select(&self) {
