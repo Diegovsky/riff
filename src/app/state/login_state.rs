@@ -1,5 +1,6 @@
 use gettextrs::*;
 use std::borrow::Cow;
+use std::collections::HashSet;
 use url::Url;
 
 use crate::app::models::PlaylistSummary;
@@ -21,6 +22,7 @@ pub enum LoginAction {
     SetUserPlaylists(Vec<PlaylistSummary>),
     UpdateUserPlaylist(PlaylistSummary),
     PrependUserPlaylist(Vec<PlaylistSummary>),
+    RemoveUserPlaylist(String),
     SetLoginFailure,
     RefreshToken,
     TokenRefreshed,
@@ -65,6 +67,8 @@ pub struct LoginState {
     pub user: Option<String>,
     // Playlists owned by the logged in user
     pub playlists: Vec<PlaylistSummary>,
+    // Playlist IDs for O(1) ownership checks
+    pub playlist_ids: HashSet<String>,
 }
 
 impl UpdatableState for LoginState {
@@ -103,6 +107,7 @@ impl UpdatableState for LoginState {
                 vec![LoginEvent::LogoutCompleted.into()]
             }
             LoginAction::SetUserPlaylists(playlists) => {
+                self.playlist_ids = playlists.iter().map(|p| p.id.clone()).collect();
                 self.playlists = playlists;
                 vec![LoginEvent::UserPlaylistsLoaded.into()]
             }
@@ -113,8 +118,16 @@ impl UpdatableState for LoginState {
                 vec![LoginEvent::UserPlaylistsLoaded.into()]
             }
             LoginAction::PrependUserPlaylist(mut summaries) => {
+                for s in &summaries {
+                    self.playlist_ids.insert(s.id.clone());
+                }
                 summaries.append(&mut self.playlists);
                 self.playlists = summaries;
+                vec![LoginEvent::UserPlaylistsLoaded.into()]
+            }
+            LoginAction::RemoveUserPlaylist(id) => {
+                self.playlists.retain(|p| p.id != id);
+                self.playlist_ids.remove(&id);
                 vec![LoginEvent::UserPlaylistsLoaded.into()]
             }
             LoginAction::TryLogin(TryLoginAction::InitLogin) => {

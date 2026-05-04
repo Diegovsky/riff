@@ -34,7 +34,7 @@ impl PlaylistDetailsModel {
 
     pub fn is_playlist_editable(&self) -> bool {
         let state = self.app_model.get_state();
-        state.logged_user.playlists.iter().any(|p| p.id == self.id)
+        state.logged_user.playlist_ids.contains(&self.id)
     }
 
     pub fn get_playlist_info(&self) -> Option<impl Deref<Target = PlaylistDescription> + '_> {

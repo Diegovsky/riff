@@ -1,11 +1,13 @@
 use gettextrs::gettext;
 use gtk::prelude::*;
+use std::cell::RefCell;
 use std::rc::Rc;
 
-use super::create_playlist::CreatePlaylistPopover;
 use super::{
-    sidebar_row::SidebarRow, SidebarDestination, SidebarItem, CREATE_PLAYLIST_ITEM,
-    SAVED_PLAYLISTS_SECTION,
+    create_playlist::CreatePlaylistPopover,
+    playlist_actions,
+    sidebar_row::SidebarRow,
+    SidebarDestination, SidebarItem, CREATE_PLAYLIST_ITEM, SAVED_PLAYLISTS_SECTION,
 };
 use crate::app::models::{AlbumModel, PlaylistSummary};
 use crate::app::state::ScreenName;
@@ -62,6 +64,23 @@ impl SidebarModel {
             })
     }
 
+    pub(super) fn is_playlist_owned(&self, id: &str) -> bool {
+        self.app_model
+            .get_state()
+            .logged_user
+            .playlist_ids
+            .contains(id)
+    }
+
+    pub(super) fn unfollow_playlist(&self, id: String) {
+        let api = self.app_model.get_spotify();
+        self.dispatcher
+            .call_spotify_and_dispatch(move || async move {
+                api.unfollow_playlist(&id).await?;
+                Ok(AppAction::RemovePlaylist(id))
+            })
+    }
+
     fn navigate(&self, dest: SidebarDestination) {
         let actions = match dest {
             SidebarDestination::Library
@@ -85,6 +104,7 @@ pub struct Sidebar {
     listbox: gtk::ListBox,
     list_store: gio::ListStore,
     model: Rc<SidebarModel>,
+    _context_menu: gtk::PopoverMenu,
 }
 
 impl Sidebar {
@@ -151,10 +171,86 @@ impl Sidebar {
             }
         ));
 
+        let context_menu = gtk::PopoverMenu::from_model(None::<&gio::MenuModel>);
+        context_menu.set_parent(&listbox);
+        context_menu.set_has_arrow(false);
+
+        let context_row: Rc<RefCell<Option<SidebarRow>>> = Default::default();
+
+        context_menu.connect_closed(clone!(
+            #[strong]
+            context_row,
+            move |_| {
+                if let Some(row) = context_row.borrow_mut().take() {
+                    row.unset_state_flags(gtk::StateFlags::SELECTED);
+                }
+            }
+        ));
+
+        let show_context_menu = clone!(
+            #[weak]
+            listbox,
+            #[weak]
+            model,
+            #[weak]
+            context_menu,
+            #[strong]
+            context_row,
+            move |x: f64, y: f64| {
+                let Some(row) = listbox.row_at_y(y as i32) else {
+                    return;
+                };
+                let Some(row) = row.downcast_ref::<SidebarRow>() else {
+                    return;
+                };
+                let Some(SidebarDestination::Playlist(PlaylistSummary { id, .. })) =
+                    row.item().destination()
+                else {
+                    return;
+                };
+
+                row.set_state_flags(gtk::StateFlags::SELECTED, false);
+                context_row.replace(Some(row.clone()));
+
+                let actions = playlist_actions::build_playlist_actions(&id, &model);
+                listbox.insert_action_group("playlist", Some(&actions));
+
+                let is_owned = model.is_playlist_owned(&id);
+                context_menu.set_menu_model(Some(&playlist_actions::build_playlist_menu(is_owned)));
+
+                let rect = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
+                context_menu.set_pointing_to(Some(&rect));
+                context_menu.popup();
+            }
+        );
+
+        let right_click = gtk::GestureClick::new();
+        right_click.set_button(3);
+        right_click.connect_pressed(clone!(
+            #[strong]
+            show_context_menu,
+            move |_, _, x, y| {
+                show_context_menu(x, y);
+            }
+        ));
+        listbox.add_controller(right_click);
+
+        let long_press = gtk::GestureLongPress::new();
+        long_press.set_touch_only(false);
+        long_press.connect_pressed(clone!(
+            #[strong]
+            show_context_menu,
+            move |_, x, y| {
+                show_context_menu(x, y);
+            }
+        ));
+        listbox.add_controller(long_press);
+
         Self {
             listbox,
             list_store,
             model,
+            _context_menu: context_menu,
         }
     }
 

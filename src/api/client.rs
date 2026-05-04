@@ -431,6 +431,12 @@ impl SpotifyClient {
             .json_body(Uris { uris })
     }
 
+    pub(crate) fn unfollow_playlist(&self, id: &str) -> SpotifyRequest<'_, (), ()> {
+        self.request()
+            .method(Method::DELETE)
+            .uri(format!("/v1/playlists/{id}/followers"), None)
+    }
+
     pub(crate) fn update_playlist_details(
         &self,
         playlist: &str,
