@@ -79,21 +79,19 @@ impl UserDetailsWidget {
     where
         F: Fn(String) + Clone + 'static,
     {
+        let store_clone = store.clone();
         self.imp()
             .user_playlists
             .bind_model(Some(store.inner()), move |item| {
-                wrap_flowbox_item(item, |item: &AlbumModel| {
-                    let f = on_pressed.clone();
-                    let album = AlbumWidget::for_model(item, worker.clone());
-                    album.connect_album_pressed(clone!(
-                        #[weak]
-                        item,
-                        move || {
-                            f(item.uri());
-                        }
-                    ));
-                    album
+                wrap_flowbox_item(item, |album_model: &AlbumModel| {
+                    AlbumWidget::for_model(album_model, worker.clone())
                 })
+            });
+        self.imp()
+            .user_playlists
+            .connect_child_activated(move |_, child| {
+                let album_model = store_clone.get(child.index() as u32);
+                on_pressed(album_model.uri());
             });
     }
 }

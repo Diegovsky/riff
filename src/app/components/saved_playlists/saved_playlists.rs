@@ -4,6 +4,7 @@ use gtk::CompositeTemplate;
 use std::rc::Rc;
 
 use super::SavedPlaylistsModel;
+use crate::app::components::utils::wrap_flowbox_item;
 use crate::app::components::{AlbumWidget, Component, EventListener};
 use crate::app::dispatch::Worker;
 use crate::app::models::AlbumModel;
@@ -78,24 +79,19 @@ impl SavedPlaylistsWidget {
     where
         F: Fn(String) + Clone + 'static,
     {
+        let store_clone = store.clone();
         self.imp()
             .flowbox
             .bind_model(Some(store.inner()), move |item| {
-                let album_model = item.downcast_ref::<AlbumModel>().unwrap();
-                let child = gtk::FlowBoxChild::new();
-                let album = AlbumWidget::for_model(album_model, worker.clone());
-
-                let f = on_album_pressed.clone();
-                album.connect_album_pressed(clone!(
-                    #[weak]
-                    album_model,
-                    move || {
-                        f(album_model.uri());
-                    }
-                ));
-
-                child.set_child(Some(&album));
-                child.upcast::<gtk::Widget>()
+                wrap_flowbox_item(item, |album_model: &AlbumModel| {
+                    AlbumWidget::for_model(album_model, worker.clone())
+                })
+            });
+        self.imp()
+            .flowbox
+            .connect_child_activated(move |_, child| {
+                let album_model = store_clone.get(child.index() as u32);
+                on_album_pressed(album_model.uri());
             });
     }
     pub fn get_status_page(&self) -> &libadwaita::StatusPage {
