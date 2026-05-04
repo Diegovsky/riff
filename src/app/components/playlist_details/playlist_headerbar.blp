@@ -16,6 +16,8 @@ template $PlaylistHeaderBarWidget : Adw.Bin {
         valign: center;
         icon-name: "go-previous-symbolic";
         has-frame: false;
+        focus-on-click: false;
+        can-focus: false;
       }
 
       [title]
@@ -27,6 +29,8 @@ template $PlaylistHeaderBarWidget : Adw.Bin {
       [end]
       Button edit {
         icon-name: "document-edit-symbolic";
+        focus-on-click: false;
+        can-focus: false;
       }
 
       styles [

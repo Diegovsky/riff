@@ -16,6 +16,8 @@ template $HeaderBarWidget : Adw.Bin {
         valign: center;
         icon-name: "go-previous-symbolic";
         has-frame: false;
+        focus-on-click: false;
+        can-focus: false;
       }
 
       [title]
@@ -27,6 +29,8 @@ template $HeaderBarWidget : Adw.Bin {
       [end]
       Button start_selection {
         icon-name: "object-select-symbolic";
+        focus-on-click: false;
+        can-focus: false;
       }
     }
 
