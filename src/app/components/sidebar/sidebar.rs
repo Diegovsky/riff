@@ -13,8 +13,8 @@ use crate::app::{
     ActionDispatcher, AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Component,
     EventListener,
 };
+use crate::feature_flags::{self, FeatureFlag};
 
-const NUM_FIXED_ENTRIES: u32 = 6;
 const NUM_PLAYLISTS: usize = 20;
 
 pub struct SidebarModel {
@@ -85,16 +85,24 @@ pub struct Sidebar {
     listbox: gtk::ListBox,
     list_store: gio::ListStore,
     model: Rc<SidebarModel>,
+    num_fixed_entries: u32,
 }
 
 impl Sidebar {
     pub fn new(listbox: gtk::ListBox, model: Rc<SidebarModel>) -> Self {
-        let popover = CreatePlaylistPopover::new();
-        popover.connect_create(clone!(
-            #[weak]
-            model,
-            move |t| model.create_new_playlist(t)
-        ));
+        let create_playlist_enabled = feature_flags::is_enabled(FeatureFlag::CreateNewPlaylist);
+
+        let popover = if create_playlist_enabled {
+            let p = CreatePlaylistPopover::new();
+            p.connect_create(clone!(
+                #[weak]
+                model,
+                move |t| model.create_new_playlist(t)
+            ));
+            Some(p)
+        } else {
+            None
+        };
 
         let list_store = gio::ListStore::new::<SidebarItem>();
 
@@ -106,7 +114,9 @@ impl Sidebar {
             SidebarDestination::NowPlaying,
         ));
         list_store.append(&SidebarItem::playlists_section());
-        list_store.append(&SidebarItem::create_playlist_item());
+        if create_playlist_enabled {
+            list_store.append(&SidebarItem::create_playlist_item());
+        }
         list_store.append(&SidebarItem::from_destination(
             SidebarDestination::SavedPlaylists,
         ));
@@ -114,9 +124,8 @@ impl Sidebar {
         listbox.bind_model(
             Some(&list_store),
             clone!(
-                #[weak]
+                #[strong]
                 popover,
-                #[upgrade_or_panic]
                 move |obj| {
                     let item = obj.downcast_ref::<SidebarItem>().unwrap();
                     if item.navigatable() {
@@ -124,7 +133,10 @@ impl Sidebar {
                     } else {
                         match item.id().as_str() {
                             SAVED_PLAYLISTS_SECTION => Self::make_section_label(item),
-                            CREATE_PLAYLIST_ITEM => Self::make_create_playlist(item, popover),
+                            CREATE_PLAYLIST_ITEM => Self::make_create_playlist(
+                                item,
+                                popover.clone().expect("popover should exist"),
+                            ),
                             _ => unimplemented!(),
                         }
                     }
@@ -133,7 +145,7 @@ impl Sidebar {
         );
 
         listbox.connect_row_activated(clone!(
-            #[weak]
+            #[strong]
             popover,
             #[weak]
             model,
@@ -143,7 +155,11 @@ impl Sidebar {
                         model.navigate(dest);
                     } else {
                         match row.item().id().as_str() {
-                            CREATE_PLAYLIST_ITEM => popover.popup(),
+                            CREATE_PLAYLIST_ITEM => {
+                                if let Some(ref popover) = popover {
+                                    popover.popup();
+                                }
+                            }
                             _ => unimplemented!(),
                         }
                     }
@@ -151,10 +167,13 @@ impl Sidebar {
             }
         ));
 
+        let num_fixed_entries = list_store.n_items();
+
         Self {
             listbox,
             list_store,
             model,
+            num_fixed_entries,
         }
     }
 
@@ -193,8 +212,8 @@ impl Sidebar {
             .map(SidebarItem::from_destination)
             .collect();
         self.list_store.splice(
-            NUM_FIXED_ENTRIES,
-            self.list_store.n_items() - NUM_FIXED_ENTRIES,
+            self.num_fixed_entries,
+            self.list_store.n_items() - self.num_fixed_entries,
             playlists.as_slice(),
         );
     }

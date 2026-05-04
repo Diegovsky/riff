@@ -20,6 +20,7 @@ mod app;
 mod config;
 mod connect;
 mod dbus;
+pub mod feature_flags;
 mod player;
 mod settings;
 

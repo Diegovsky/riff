@@ -12,6 +12,7 @@ use crate::app::state::SelectionContext;
 use crate::app::state::{BrowserAction, PlaybackAction, SelectionAction, SelectionState};
 use crate::app::AppState;
 use crate::app::{ActionDispatcher, AppAction, AppModel, BatchQuery, SongsSource};
+use crate::feature_flags::{self, FeatureFlag};
 
 pub struct PlaylistDetailsModel {
     pub id: String,
@@ -242,6 +243,9 @@ impl PlaylistModel for PlaylistDetailsModel {
     }
 
     fn enable_selection(&self) -> bool {
+        if !feature_flags::is_enabled(FeatureFlag::PlaylistEditMode) {
+            return false;
+        }
         self.dispatcher
             .dispatch(AppAction::EnableSelection(if self.is_playlist_editable() {
                 SelectionContext::EditablePlaylist(self.id.clone())
