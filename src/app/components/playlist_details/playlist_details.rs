@@ -14,6 +14,7 @@ use crate::app::dispatch::Worker;
 use crate::app::loader::ImageLoader;
 use crate::app::state::{PlaybackEvent, SelectionEvent};
 use crate::app::{AppEvent, BrowserEvent};
+use crate::feature_flags::{self, FeatureFlag};
 use libadwaita::subclass::prelude::BinImpl;
 
 mod imp {
@@ -210,7 +211,10 @@ impl PlaylistDetails {
             worker.clone(),
         ));
 
-        widget.set_editable(model.is_playlist_editable());
+        widget.set_editable(
+            model.is_playlist_editable()
+                && feature_flags::is_enabled(FeatureFlag::PlaylistEditMode),
+        );
 
         widget.connect_header();
 
