@@ -1,3 +1,4 @@
+use gettextrs::gettext;
 use gio::prelude::*;
 use gio::SimpleActionGroup;
 use std::cell::Ref;
@@ -110,14 +111,24 @@ impl DetailsModel {
     }
 
     pub fn toggle_play_album(&self) {
-        if let Some(album) = self.get_album_description() {
+        if self.get_album_description().is_some() {
             if !self.album_is_playing() {
                 if self.state().playback.is_shuffled() {
                     self.dispatcher
                         .dispatch(AppAction::PlaybackAction(PlaybackAction::ToggleShuffle));
                 }
-                let id_of_first_song = album.songs.songs[0].id.as_str();
-                self.play_song_at(0, id_of_first_song);
+
+                let first_song = self.song_list_model().index(0);
+                let Some(first_song) = first_song else {
+                    error!("Unable to start playback because the song list is empty");
+                    self.dispatcher
+                        .dispatch(AppAction::ShowNotification(gettext(
+                            "An error occured. Check logs for details!",
+                        )));
+                    return;
+                };
+
+                self.play_song_at(0, &first_song.get_id());
                 return;
             }
             if self.state().playback.is_playing() {

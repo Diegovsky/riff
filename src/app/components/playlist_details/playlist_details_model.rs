@@ -57,25 +57,24 @@ impl PlaylistDetailsModel {
     }
 
     pub fn toggle_play_playlist(&self) {
-        if let Some(playlist) = self.get_playlist_info() {
+        if self.get_playlist_info().is_some() {
             if !self.playlist_is_playing() {
                 if self.state().playback.is_shuffled() {
                     self.dispatcher
                         .dispatch(AppAction::PlaybackAction(PlaybackAction::ToggleShuffle));
                 }
-                // The playlist has no songs and the user has still decided to click the play button,
-                // lets just do an early return and show an error...
-                if playlist.songs.songs.is_empty() {
-                    error!("Unable to start playback because songs is empty");
+
+                let first_song = self.song_list_model().index(0);
+                let Some(first_song) = first_song else {
+                    error!("Unable to start playback because the song list is empty");
                     self.dispatcher
                         .dispatch(AppAction::ShowNotification(gettext(
                             "An error occured. Check logs for details!",
                         )));
                     return;
-                }
+                };
 
-                let id_of_first_song = playlist.songs.songs[0].id.as_str();
-                self.play_song_at(0, id_of_first_song);
+                self.play_song_at(0, &first_song.get_id());
                 return;
             }
             if self.state().playback.is_playing() {
