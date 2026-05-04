@@ -80,21 +80,19 @@ impl LibraryWidget {
     where
         F: Fn(String) + Clone + 'static,
     {
+        let store_clone = store.clone();
         self.imp()
             .flowbox
             .bind_model(Some(store.inner()), move |item| {
-                wrap_flowbox_item(item, |album_model| {
-                    let f = on_album_pressed.clone();
-                    let album = AlbumWidget::for_model(album_model, worker.clone());
-                    album.connect_album_pressed(clone!(
-                        #[weak]
-                        album_model,
-                        move || {
-                            f(album_model.uri());
-                        }
-                    ));
-                    album
+                wrap_flowbox_item(item, |album_model: &AlbumModel| {
+                    AlbumWidget::for_model(album_model, worker.clone())
                 })
+            });
+        self.imp()
+            .flowbox
+            .connect_child_activated(move |_, child| {
+                let album_model = store_clone.get(child.index() as u32);
+                on_album_pressed(album_model.uri());
             });
     }
 

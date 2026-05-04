@@ -11,9 +11,6 @@ navigation-split-view .album {
   margin-bottom: 6px;
 }
 
-navigation-split-view .album button {
- border-radius: 12px;
-}
 /* small style */
 
 navigation-split-view.collapsed .album .card {
@@ -27,8 +24,4 @@ navigation-split-view.collapsed .album .card {
 navigation-split-view .album {
   margin-top: 0px;
   margin-bottom: 0px;
-}
-
-navigation-split-view.collapsed .album button {
- border-radius: 6px;
 }
