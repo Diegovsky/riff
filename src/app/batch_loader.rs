@@ -93,6 +93,22 @@ impl BatchLoader {
             Ok(batch) => Some(create_action(query.source, batch)),
             // No token? Why was the batch loader called? Ah, whatever
             Err(SpotifyApiError::NoToken) => None,
+            Err(SpotifyApiError::InvalidToken) => {
+                // Retry once, token may have been refreshed in the meantime
+                let retry = match &query.source {
+                    SongsSource::Playlist(id) => {
+                        api.get_playlist_tracks(id, offset, batch_size).await
+                    }
+                    SongsSource::SavedTracks => api.get_saved_tracks(offset, batch_size).await,
+                    SongsSource::Album(id) => {
+                        api.get_album_tracks(id, offset, batch_size).await
+                    }
+                };
+                match retry {
+                    Ok(batch) => Some(create_action(query.source, batch)),
+                    _ => None,
+                }
+            }
             Err(err) => {
                 error!("Spotify API error: {}", err);
                 Some(AppAction::ShowNotification(gettext(
