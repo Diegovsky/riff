@@ -13,31 +13,66 @@ template $PlaybackInfoWidget : Button {
   }
 
   Box {
-    halign: center;
+    halign: start;
+    spacing: 0;
 
     Picture playing_image {
-      width-request: 50;
-      height-request: 50;
+      width-request: 56;
+      height-request: 56;
       content-fit: cover;
+      overflow: hidden;
+
+      styles [
+        "playing-image",
+      ]
     }
 
-    Label current_song_info {
+    Box song_info_box {
       visible: false;
+      orientation: vertical;
       halign: start;
       hexpand: true;
       margin-start: 12;
       margin-end: 12;
+      valign: center;
 
-      /* Translators: Short text displayed instead of a song title when nothing plays */
+      Box title_container {
+        overflow: hidden;
+        hexpand: true;
 
-      label: _("No song playing");
-      use-markup: true;
-      ellipsize: middle;
-      lines: 1;
+        Label song_title {
+          halign: start;
+          hexpand: true;
+          ellipsize: end;
+          single-line-mode: true;
+
+          styles [
+            "heading",
+          ]
+        }
+      }
+
+      Box artist_container {
+        overflow: hidden;
+        hexpand: true;
+
+        Label song_artist {
+          halign: start;
+          hexpand: true;
+          ellipsize: end;
+          single-line-mode: true;
+
+          styles [
+            "dim-label",
+            "caption",
+          ]
+        }
+      }
+
     }
   }
 
-  // styles [
-  //   "body",
-  // ]
+  styles [
+    "playback-info",
+  ]
 }
