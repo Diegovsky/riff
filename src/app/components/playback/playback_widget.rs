@@ -10,6 +10,7 @@ use crate::app::Worker;
 
 use super::playback_controls::PlaybackControlsWidget;
 use super::playback_info::PlaybackInfoWidget;
+use super::playback_info_mobile::PlaybackInfoMobileWidget;
 
 mod imp {
 
@@ -22,10 +23,19 @@ mod imp {
         pub controls: TemplateChild<PlaybackControlsWidget>,
 
         #[template_child]
+        pub mobile_controls: TemplateChild<PlaybackControlsWidget>,
+
+        #[template_child]
         pub now_playing: TemplateChild<PlaybackInfoWidget>,
 
         #[template_child]
+        pub mobile_now_playing: TemplateChild<PlaybackInfoMobileWidget>,
+
+        #[template_child]
         pub seek_bar: TemplateChild<gtk::Scale>,
+
+        #[template_child]
+        pub seek_overlay: TemplateChild<gtk::Overlay>,
 
         #[template_child]
         pub track_position: TemplateChild<gtk::Label>,
@@ -59,6 +69,31 @@ mod imp {
             self.parent_constructed();
             self.now_playing.set_info_visible(true);
             display_add_css_provider(resource!("/components/playback.css"));
+
+            let track_position = self.track_position.clone();
+            let track_duration = self.track_duration.clone();
+            let motion = gtk::EventControllerMotion::new();
+            motion.connect_enter(clone!(
+                #[weak]
+                track_position,
+                #[weak]
+                track_duration,
+                move |_, _, _| {
+                    track_position.set_visible(true);
+                    track_duration.set_visible(true);
+                }
+            ));
+            motion.connect_leave(clone!(
+                #[weak]
+                track_position,
+                #[weak]
+                track_duration,
+                move |_| {
+                    track_position.set_visible(false);
+                    track_duration.set_visible(false);
+                }
+            ));
+            self.seek_overlay.add_controller(motion);
         }
     }
 
@@ -73,12 +108,18 @@ glib::wrapper! {
 impl PlaybackWidget {
     pub fn set_title_and_artist(&self, title: &str, artist: &str) {
         let widget = self.imp();
+        widget.now_playing.set_visible(true);
         widget.now_playing.set_title_and_artist(title, artist);
+        widget.mobile_now_playing.set_visible(true);
+        widget.mobile_now_playing.set_title_and_artist(title, artist);
     }
 
     pub fn reset_info(&self) {
         let widget = self.imp();
+        widget.now_playing.set_visible(false);
         widget.now_playing.reset_info();
+        widget.mobile_now_playing.set_visible(false);
+        widget.mobile_now_playing.reset_info();
         self.set_song_duration(None);
     }
 
@@ -105,24 +146,24 @@ impl PlaybackWidget {
             self.add_css_class(class);
             widget.seek_bar.set_range(0.0, duration);
             widget.seek_bar.set_value(0.0);
-            widget.track_position.set_text("0∶00");
-            widget
-                .track_duration
-                .set_text(&format!("{}", format_duration(duration)));
-            widget.track_position.set_visible(true);
-            widget.track_duration.set_visible(true);
+            self.update_track_time(0.0, duration);
         } else {
             self.remove_css_class(class);
             widget.seek_bar.set_range(0.0, 0.0);
-            widget.track_position.set_visible(false);
-            widget.track_duration.set_visible(false);
         }
     }
 
     pub fn set_seek_position(&self, pos: f64) {
         let widget = self.imp();
         widget.seek_bar.set_value(pos);
+        let duration = widget.seek_bar.adjustment().upper();
+        self.update_track_time(pos, duration);
+    }
+
+    fn update_track_time(&self, pos: f64, duration: f64) {
+        let widget = self.imp();
         widget.track_position.set_text(&format_duration(pos));
+        widget.track_duration.set_text(&format_duration(duration));
     }
 
     pub fn increment_seek_position(&self) {
@@ -152,10 +193,8 @@ impl PlaybackWidget {
             #[upgrade_or]
             glib::Propagation::Proceed,
             move |_, _, requested| {
-                _self
-                    .imp()
-                    .track_position
-                    .set_text(&format_duration(requested));
+                let duration = _self.imp().seek_bar.adjustment().upper();
+                _self.update_track_time(requested, duration);
                 let seek = seek.clone();
                 debouncer.debounce(200, move || seek(requested as u32));
                 glib::Propagation::Proceed
@@ -166,6 +205,7 @@ impl PlaybackWidget {
     pub fn set_playing(&self, is_playing: bool) {
         let widget = self.imp();
         widget.controls.set_playing(is_playing);
+        widget.mobile_controls.set_playing(is_playing);
         if is_playing {
             widget.clock.start(clone!(
                 #[weak(rename_to = _self)]
@@ -180,11 +220,13 @@ impl PlaybackWidget {
     pub fn set_repeat_mode(&self, mode: RepeatMode) {
         let widget = self.imp();
         widget.controls.set_repeat_mode(mode);
+        widget.mobile_controls.set_repeat_mode(mode);
     }
 
     pub fn set_shuffled(&self, shuffled: bool) {
         let widget = self.imp();
         widget.controls.set_shuffled(shuffled);
+        widget.mobile_controls.set_shuffled(shuffled);
     }
 
     pub fn set_seekbar_visible(&self, visible: bool) {
@@ -203,6 +245,7 @@ impl PlaybackWidget {
     {
         let widget = self.imp();
         widget.controls.connect_play_pause(f.clone());
+        widget.mobile_controls.connect_play_pause(f);
     }
 
     pub fn connect_prev<F>(&self, f: F)
@@ -211,6 +254,7 @@ impl PlaybackWidget {
     {
         let widget = self.imp();
         widget.controls.connect_prev(f.clone());
+        widget.mobile_controls.connect_prev(f);
     }
 
     pub fn connect_next<F>(&self, f: F)
@@ -219,6 +263,7 @@ impl PlaybackWidget {
     {
         let widget = self.imp();
         widget.controls.connect_next(f.clone());
+        widget.mobile_controls.connect_next(f);
     }
 
     pub fn connect_shuffle<F>(&self, f: F)
@@ -227,6 +272,7 @@ impl PlaybackWidget {
     {
         let widget = self.imp();
         widget.controls.connect_shuffle(f.clone());
+        widget.mobile_controls.connect_shuffle(f);
     }
 
     pub fn connect_repeat<F>(&self, f: F)
@@ -235,6 +281,7 @@ impl PlaybackWidget {
     {
         let widget = self.imp();
         widget.controls.connect_repeat(f.clone());
+        widget.mobile_controls.connect_repeat(f);
     }
 
     pub fn connect_volume_changed<F>(&self, f: F)

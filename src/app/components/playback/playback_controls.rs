@@ -7,6 +7,8 @@ use crate::app::models::RepeatMode;
 
 mod imp {
 
+    use std::cell::RefCell;
+
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
@@ -26,6 +28,8 @@ mod imp {
 
         #[template_child]
         pub repeat: TemplateChild<gtk::Button>,
+
+        pub shuffle_signal: RefCell<Option<glib::SignalHandlerId>>,
     }
 
     #[glib::object_subclass]

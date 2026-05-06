@@ -1,0 +1,14 @@
+using Gtk 4.0;
+
+template $PlaybackInfoMobileWidget : Box {
+  halign: fill;
+  valign: center;
+  hexpand: true;
+
+  Label now_playing_label {
+    halign: center;
+    hexpand: true;
+    ellipsize: end;
+    single-line-mode: true;
+  }
+}

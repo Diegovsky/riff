@@ -14,7 +14,15 @@ mod imp {
         pub playing_image: TemplateChild<gtk::Picture>,
 
         #[template_child]
-        pub current_song_info: TemplateChild<gtk::Label>,
+        pub song_info_box: TemplateChild<gtk::Box>,
+
+        #[template_child]
+        pub song_title: TemplateChild<gtk::Label>,
+
+        #[template_child]
+        pub song_artist: TemplateChild<gtk::Label>,
+
+
     }
 
     #[glib::object_subclass]
@@ -32,7 +40,12 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for PlaybackInfoWidget {}
+    impl ObjectImpl for PlaybackInfoWidget {
+        fn constructed(&self) {
+            self.parent_constructed();
+            self.obj().setup_hover_animations();
+        }
+    }
     impl WidgetImpl for PlaybackInfoWidget {}
     impl ButtonImpl for PlaybackInfoWidget {}
 }
@@ -42,31 +55,36 @@ glib::wrapper! {
 }
 
 impl PlaybackInfoWidget {
+    fn setup_hover_animations(&self) {
+    }
+
     pub fn set_title_and_artist(&self, title: &str, artist: &str) {
         let widget = self.imp();
-        let title = glib::markup_escape_text(title);
-        let artist = glib::markup_escape_text(artist);
-        let label = format!("<b>{}</b>\n{}", title.as_str(), artist.as_str());
-        widget.current_song_info.set_label(&label[..]);
+        widget.song_title.set_text(title);
+        widget.song_artist.set_text(artist);
+        widget.song_info_box.set_visible(true);
     }
 
     pub fn reset_info(&self) {
         let widget = self.imp();
         widget
-            .current_song_info
+            .song_title
             // translators: Short text displayed instead of a song title when nothing plays
-            .set_label(&gettext("No song playing"));
+            .set_text(&gettext("No song playing"));
+        widget.song_artist.set_text("");
+        widget.song_info_box.set_visible(false);
         widget
             .playing_image
             .set_paintable(None::<gdk::Paintable>.as_ref());
     }
 
     pub fn set_info_visible(&self, visible: bool) {
-        self.imp().current_song_info.set_visible(visible);
+        self.imp().song_info_box.set_visible(visible);
     }
 
     pub fn set_artwork(&self, pixbuf: &gdk_pixbuf::Pixbuf) {
         let texture = gdk::Texture::for_pixbuf(pixbuf);
         self.imp().playing_image.set_paintable(Some(&texture));
     }
+
 }

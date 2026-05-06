@@ -44,6 +44,7 @@
     <file alias="components/playback.css">app/components/playback/playback.css</file>
     <file alias="components/playback_controls.ui">app/components/playback/playback_controls.ui</file>
     <file alias="components/playback_info.ui">app/components/playback/playback_info.ui</file>
+    <file alias="components/playback_info_mobile.ui">app/components/playback/playback_info_mobile.ui</file>
     <file alias="components/playback_widget.ui">app/components/playback/playback_widget.ui</file>
     <!-- selection -->
     <file alias="components/selection_toolbar.ui">app/components/selection/selection_toolbar.ui</file>

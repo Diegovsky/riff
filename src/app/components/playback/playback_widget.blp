@@ -4,152 +4,196 @@ using Adw 1;
 template $PlaybackWidget : Box {
   orientation: vertical;
 
-  Scale seek_bar {
-    show-fill-level: true;
-    restrict-to-fill-level: false;
-    fill-level: 0;
-    digits: 0;
-    value-pos: left;
+  Overlay seek_overlay {
+    overflow: visible;
 
-    styles [
-      "seek-bar",
-    ]
-  }
-
-  Box {
-    margin-top: 0;
-    margin-bottom: 0;
-    margin-start: 10;
-    margin-end: 10;
-
-    Label track_position {
-      sensitive: false;
-      label: "0∶00";
-      halign: start;
-      hexpand: true;
+    [overlay]
+    Scale seek_bar {
+      show-fill-level: true;
+      restrict-to-fill-level: false;
+      fill-level: 0;
+      digits: 0;
+      draw-value: false;
 
       styles [
-        "numeric",
+        "seek-bar",
       ]
     }
 
-    Label track_duration {
-      sensitive: false;
-      label: "0∶00";
-      halign: end;
+    child: Box {
+      can-target: false;
+      valign: start;
 
-      styles [
-        "numeric",
-      ]
-    }
+      Label track_position {
+        label: "0∶00";
+        halign: start;
+        visible: false;
+        hexpand: true;
+
+        styles [
+          "numeric",
+          "seek-time-label",
+        ]
+      }
+
+      Label track_duration {
+        label: "0∶00";
+        halign: end;
+        visible: false;
+
+        styles [
+          "numeric",
+          "seek-time-label",
+        ]
+      }
+    };
   }
 
   Adw.BreakpointBin {
     width-request: 1;
     height-request: 1;
+    margin-top: 4;
 
     Adw.Breakpoint {
-      condition("max-width:700sp")
+      condition("max-width:764sp")
 
       setters {
-        desktop-grid.column-homogeneous: false;
-        controls.halign: end;
+        layout-stack.visible-child-name: "mobile";
       }
     }
 
-    Adw.Breakpoint {
-      condition("max-width:600sp")
+    child: Stack layout-stack {
+      visible-child-name: "desktop";
+      vhomogeneous: false;
+      hhomogeneous: false;
 
-      setters {
-        volume-stack.visible-child-name: 'slider-button';
-        desktop-grid.column-homogeneous: false;
-        controls.halign: end;
-      }
-    }
+      StackPage {
+        name: "desktop";
+        child: Grid desktop-grid {
+          halign: fill;
+          hexpand: true;
+          column-homogeneous: true;
+          margin-top: 8;
+          margin-bottom: 8;
+          margin-start: 8;
+          margin-end: 8;
 
-    child: Grid desktop-grid  {
-      halign: fill;
-      hexpand: true;
-      column-homogeneous: true;
+          Box {
+            hexpand: true;
+            height-request: 68;
 
-      $PlaybackInfoWidget now_playing {
-        receives-default: "1";
-        halign: "start";
-        valign: "center";
-        has-frame: "0";
-
-        layout {
-          column-span: "1";
-          column: "0";
-          row: "0";
-        }
-      }
-
-      $PlaybackControlsWidget controls {
-        halign: center;
-        layout {
-          column-span: "1";
-          column: "1";
-          row: "0";
-        }
-      }
-
-      Stack volume-stack {
-        visible-child-name: "slider";
-        hexpand: true;
-
-        layout {
-          column-span: "1";
-          column: "2";
-          row: "0";
-        }
-
-        StackPage {
-          name: 'slider';
-          child: Box {
-            Image {
-              icon-name: 'multimedia-volume-control-symbolic';
+            layout {
+              column-span: "1";
+              column: "0";
+              row: "0";
             }
 
-            Scale volume_slider {
-              hexpand: true;
-              show-fill-level: true;
-              restrict-to-fill-level: false;
-              value-pos: left;
-              layout {
-                column-span: "1";
-                column: 2;
-                row: "0";
-              }
+            $PlaybackInfoWidget now_playing {
+              receives-default: "1";
+              halign: "start";
+              valign: "center";
+              has-frame: "0";
+              visible: false;
+            }
+          }
 
-              styles [
-                'volume-slider'
-              ]
+          $PlaybackControlsWidget controls {
+            halign: center;
+            layout {
+              column-span: "1";
+              column: "1";
+              row: "0";
+            }
+          }
 
-              adjustment: Adjustment {
-                lower: 0.0;
-                value: 0.7;
-                upper: 1.0;
-                step-increment: 0.01;
-                page-increment: 0.05;
+          Stack volume-stack {
+            visible-child-name: "slider";
+            hexpand: true;
+            halign: end;
+
+            layout {
+              column-span: "1";
+              column: "2";
+              row: "0";
+            }
+
+            StackPage {
+              name: 'slider';
+              child: Box {
+                width-request: 250;
+                Image {
+                  icon-name: 'multimedia-volume-control-symbolic';
+                }
+
+                Scale volume_slider {
+                  hexpand: true;
+                  show-fill-level: true;
+                  restrict-to-fill-level: false;
+                  value-pos: left;
+                  layout {
+                    column-span: "1";
+                    column: 2;
+                    row: "0";
+                  }
+
+                  styles [
+                    'volume-slider'
+                  ]
+
+                  adjustment: Adjustment {
+                    lower: 0.0;
+                    value: 0.7;
+                    upper: 1.0;
+                    step-increment: 0.01;
+                    page-increment: 0.05;
+                  };
+                }
               };
             }
-          };
-        }
+          }
+        };
+      }
 
-        StackPage {
-          name: 'slider-button';
-          child: Box {
-            halign: end;
-            valign: center;
-            margin-end: 10;
+      StackPage {
+        name: "mobile";
+        child: Box {
+          orientation: vertical;
+          halign: fill;
+          hexpand: true;
+
+          $PlaybackInfoMobileWidget mobile_now_playing {
+            visible: false;
+            hexpand: true;
+
+            styles [
+              "mobile-now-playing",
+            ]
+          }
+
+          Box {
+            hexpand: true;
+            margin-top: 8;
+            margin-bottom: 8;
+            margin-start: 8;
+            margin-end: 8;
+
+            $PlaybackControlsWidget mobile_controls {
+              halign: center;
+              valign: center;
+              hexpand: true;
+            }
+
             MenuButton {
               icon-name: 'multimedia-volume-control-symbolic';
               halign: end;
+              valign: center;
+              direction: up;
+              focus-on-click: false;
+              can-focus: false;
               styles [
                 "flat"
               ]
-              popover: Popover{
+              popover: Popover {
                 child: Scale {
                   inverted: true;
                   orientation: vertical;
@@ -158,8 +202,8 @@ template $PlaybackWidget : Box {
                 };
               };
             }
-          };
-        }
+          }
+        };
       }
     };
   }

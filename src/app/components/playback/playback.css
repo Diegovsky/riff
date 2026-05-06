@@ -1,34 +1,60 @@
 .seek-bar {
   padding: 0;
-  padding-bottom: 2px;
+  margin: -16px -12px -16px -12px;
   min-height: 1px;
+}
+
+.seek-bar trough {
+  margin: 0;
+  padding: 0;
 }
 
 .seek-bar trough,
 .seek-bar highlight {
   border-radius: 0;
-  border-left: none;
-  border-right: none;
-  min-height: 1px;
-  transition: min-height 100ms ease;
-}
-
-.seek-bar--active trough,
-.seek-bar--active highlight {
   min-height: 5px;
 }
 
-.seek-bar--active:hover trough,
-.seek-bar--active:hover highlight {
-  min-height: 10px;
+.volume-slider trough,
+.volume-slider highlight {
+  border-radius: 9999px;
+  min-height: 5px;
 }
 
-.seek-bar highlight {
-  border-left: none;
-  border-right: none;
+.seek-bar slider,
+.volume-slider slider {
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.seek-bar:hover slider,
+.volume-slider:hover slider {
+  opacity: 1;
 }
 
 .playback-button {
   min-width: 40px;
   min-height: 40px;
+}
+
+.playing-image {
+  border-radius: 6px;
+  margin: -4px 0 -4px -8px;
+}
+
+.mobile-now-playing {
+  border-radius: 0;
+  background-color: alpha(currentColor, 0.05);
+  padding: 8px 24px 8px 24px;
+  margin: 0 -8px 0px -8px;
+}
+
+.seek-time-label {
+  background-color: @card_bg_color;
+  color: @window_fg_color;
+  border: 1px solid @card_shade_color;
+  border-radius: 6px 6px 0 0;
+  padding: 4px 8px;
+  font-size: 1em;
+  margin-top: -32px;
 }
