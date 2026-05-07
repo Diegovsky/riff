@@ -241,6 +241,12 @@ impl ConnectPlayer {
                 let device_id = self.device_id.read().ok()?.clone();
                 if let Some(device_id) = device_id {
                     let result = self.handle_other_command(device_id, command).await;
+                    if matches!(result, Err(SpotifyApiError::TooManyRequests)) {
+                        self.send_actions([AppAction::ShowNotification(gettext(
+                            // translators: This notification is shown when Spotify throttles requests.
+                            "Rate limited by Spotify. Please wait a moment and try again.",
+                        ))]);
+                    }
                     matches!(result, Err(SpotifyApiError::BadStatus(404, _)))
                 } else {
                     true

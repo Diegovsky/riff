@@ -403,3 +403,8 @@ msgstr ""
 msgid "Refresh devices"
 msgstr ""
 
+
+#. translators: This notification is shown when Spotify throttles requests.
+#: src/app/components/mod.rs src/app/batch_loader.rs src/connect/player.rs
+msgid "Rate limited by Spotify. Please wait a moment and try again."
+msgstr ""
