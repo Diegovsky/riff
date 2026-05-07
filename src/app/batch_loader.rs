@@ -93,6 +93,13 @@ impl BatchLoader {
             Ok(batch) => Some(create_action(query.source, batch)),
             // No token? Why was the batch loader called? Ah, whatever
             Err(SpotifyApiError::NoToken) => None,
+            Err(SpotifyApiError::TooManyRequests) => {
+                error!("Spotify API error: rate limited");
+                Some(AppAction::ShowNotification(gettext(
+                    // translators: This notification is shown when Spotify throttles requests.
+                    "Rate limited by Spotify. Please wait a moment and try again.",
+                )))
+            }
             Err(err) => {
                 error!("Spotify API error: {}", err);
                 Some(AppAction::ShowNotification(gettext(
