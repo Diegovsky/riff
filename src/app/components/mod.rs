@@ -122,6 +122,13 @@ impl dyn ActionDispatcher {
                 Ok(actions) => actions,
                 Err(SpotifyApiError::NoToken) => vec![],
                 Err(SpotifyApiError::InvalidToken) => call().await.unwrap_or_else(|_| Vec::new()),
+                Err(SpotifyApiError::TooManyRequests) => {
+                    error!("Spotify API error: rate limited");
+                    vec![AppAction::ShowNotification(gettext(
+                        // translators: This notification is shown when Spotify throttles requests.
+                        "Rate limited by Spotify. Please wait a moment and try again.",
+                    ))]
+                }
                 Err(err) => {
                     error!("Spotify API error: {}", err);
                     vec![AppAction::ShowNotification(gettext(
