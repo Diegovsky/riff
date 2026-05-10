@@ -13,6 +13,12 @@ template $PlaybackControlsWidget : Box {
     has-frame: false;
     icon-name: "media-playlist-shuffle-symbolic";
     tooltip-text: _("Shuffle");
+    focus-on-click: false;
+    can-focus: false;
+
+    styles [
+      "shuffle-btn",
+    ]
   }
 
   Button prev {
@@ -22,6 +28,8 @@ template $PlaybackControlsWidget : Box {
     has-frame: false;
     icon-name: "media-skip-backward-symbolic";
     tooltip-text: _("Previous");
+    focus-on-click: false;
+    can-focus: false;
   }
 
   Button play_pause {
@@ -30,6 +38,8 @@ template $PlaybackControlsWidget : Box {
     valign: center;
     icon-name: "media-playback-start-symbolic";
     tooltip-text: "Play/Pause";
+    focus-on-click: false;
+    can-focus: false;
 
     styles [
       "circular",
@@ -44,6 +54,8 @@ template $PlaybackControlsWidget : Box {
     has-frame: false;
     icon-name: "media-skip-forward-symbolic";
     tooltip-text: _("Next");
+    focus-on-click: false;
+    can-focus: false;
   }
 
   Button repeat {
@@ -53,5 +65,7 @@ template $PlaybackControlsWidget : Box {
     has-frame: false;
     icon-name: "media-playlist-consecutive-symbolic";
     tooltip-text: _("Repeat");
+    focus-on-click: false;
+    can-focus: false;
   }
 }
