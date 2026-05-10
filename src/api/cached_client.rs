@@ -67,6 +67,8 @@ pub trait SpotifyApiClient {
 
     fn remove_from_playlist(&self, id: &str, uris: Vec<String>) -> BoxFuture<SpotifyResult<()>>;
 
+    fn unfollow_playlist(&self, id: &str) -> BoxFuture<SpotifyResult<()>>;
+
     fn update_playlist_details(&self, id: &str, name: String) -> BoxFuture<SpotifyResult<()>>;
 
     fn search(
@@ -175,6 +177,8 @@ impl RiffCacheKey<'_> {
 lazy_static! {
     pub static ref ME_TRACKS_CACHE: Regex = Regex::new(r"^me_tracks_\w+_\w+\.json$").unwrap();
     pub static ref ME_ALBUMS_CACHE: Regex = Regex::new(r"^me_albums_\w+_\w+\.json$").unwrap();
+    pub static ref ME_PLAYLISTS_CACHE: Regex =
+        Regex::new(r"^me_playlists_\w+_\w+\.json$").unwrap();
     pub static ref USER_CACHE: Regex =
         Regex::new(r"^me_(albums|playlists|tracks)_\w+_\w+\.json$").unwrap();
 }
@@ -382,6 +386,21 @@ impl SpotifyApiClient for CachedSpotifyClient {
 
             self.client
                 .remove_from_playlist(&id, uris)
+                .send_no_response()
+                .await?;
+            Ok(())
+        })
+    }
+
+    fn unfollow_playlist(&self, id: &str) -> BoxFuture<SpotifyResult<()>> {
+        let id = id.to_owned();
+
+        Box::pin(async move {
+            let _ = self.cache.set_expired_pattern(&ME_PLAYLISTS_CACHE).await;
+            let _ = self.cache.set_expired_pattern(&playlist_cache_key(&id)).await;
+
+            self.client
+                .unfollow_playlist(&id)
                 .send_no_response()
                 .await?;
             Ok(())
