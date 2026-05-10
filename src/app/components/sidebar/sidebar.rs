@@ -120,6 +120,9 @@ impl Sidebar {
 
         list_store.append(&SidebarItem::from_destination(SidebarDestination::Library));
         list_store.append(&SidebarItem::from_destination(
+            SidebarDestination::SavedPlaylists,
+        ));
+        list_store.append(&SidebarItem::from_destination(
             SidebarDestination::SavedTracks,
         ));
         list_store.append(&SidebarItem::from_destination(
@@ -127,9 +130,6 @@ impl Sidebar {
         ));
         list_store.append(&SidebarItem::playlists_section());
         list_store.append(&SidebarItem::create_playlist_item());
-        list_store.append(&SidebarItem::from_destination(
-            SidebarDestination::SavedPlaylists,
-        ));
 
         listbox.bind_model(
             Some(&list_store),
