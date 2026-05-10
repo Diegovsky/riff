@@ -52,13 +52,11 @@ mod imp {
             if vertical {
                 box_.set_orientation(gtk::Orientation::Vertical);
                 box_.set_spacing(12);
-                self.playlist_info.set_halign(gtk::Align::Center);
                 EntryExt::set_alignment(&*self.playlist_label_entry, 0.5);
                 self.author_button.set_halign(gtk::Align::Center);
             } else {
                 box_.set_orientation(gtk::Orientation::Horizontal);
                 box_.set_spacing(0);
-                self.playlist_info.set_halign(gtk::Align::Start);
                 EntryExt::set_alignment(&*self.playlist_label_entry, 0.0);
                 self.author_button.set_halign(gtk::Align::Start);
             }
@@ -175,14 +173,5 @@ impl PlaylistHeaderWidget {
 
     pub fn entry(&self) -> &gtk::Entry {
         self.imp().playlist_label_entry.as_ref()
-    }
-
-    pub fn set_grows_automatically(&self) {
-        let entry: &gtk::Entry = &self.imp().playlist_label_entry;
-        entry
-            .bind_property("text", entry, "width-chars")
-            .transform_to(|_, text: &str| Some(text.len() as i32))
-            .flags(glib::BindingFlags::DEFAULT | glib::BindingFlags::SYNC_CREATE)
-            .build();
     }
 }
