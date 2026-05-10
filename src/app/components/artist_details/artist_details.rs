@@ -3,6 +3,7 @@ use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
 use std::rc::Rc;
 
+use crate::app::components::utils::wrap_flowbox_item;
 use crate::app::components::{
     display_add_css_provider, AlbumWidget, Component, EventListener, Playlist,
 };
@@ -87,22 +88,19 @@ impl ArtistDetailsWidget {
     ) where
         F: Fn(String) + Clone + 'static,
     {
+        let store_clone = store.clone();
         self.imp()
             .artist_releases
             .bind_model(Some(store.inner()), move |item| {
-                let item = item.downcast_ref::<AlbumModel>().unwrap();
-                let child = gtk::FlowBoxChild::new();
-                let album = AlbumWidget::for_model(item, worker.clone());
-                let f = on_album_pressed.clone();
-                album.connect_album_pressed(clone!(
-                    #[weak]
-                    item,
-                    move || {
-                        f(item.uri());
-                    }
-                ));
-                child.set_child(Some(&album));
-                child.upcast::<gtk::Widget>()
+                wrap_flowbox_item(item, |album_model: &AlbumModel| {
+                    AlbumWidget::for_model(album_model, worker.clone())
+                })
+            });
+        self.imp()
+            .artist_releases
+            .connect_child_activated(move |_, child| {
+                let album_model = store_clone.get(child.index() as u32);
+                on_album_pressed(album_model.uri());
             });
     }
 }

@@ -25,9 +25,6 @@ mod imp {
         pub year_label: TemplateChild<gtk::Label>,
 
         #[template_child]
-        pub cover_btn: TemplateChild<gtk::Button>,
-
-        #[template_child]
         pub cover_image: TemplateChild<gtk::Picture>,
     }
 
@@ -120,11 +117,5 @@ impl AlbumWidget {
         } else {
             widget.year_label.set_visible(false);
         }
-    }
-
-    pub fn connect_album_pressed<F: Fn() + 'static>(&self, f: F) {
-        self.imp().cover_btn.connect_clicked(move |_| {
-            f();
-        });
     }
 }

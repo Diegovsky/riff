@@ -4,14 +4,12 @@ using Adw 1;
 template $ArtistWidget : Box {
   orientation: vertical;
 
-  Button avatar_btn {
+  Box {
     vexpand: true;
     width-request: 150;
     height-request: 150;
-    receives-default: true;
     halign: center;
     valign: center;
-    has-frame: false;
 
     Adw.Avatar avatar {
       halign: center;
@@ -19,10 +17,6 @@ template $ArtistWidget : Box {
       show-initials: true;
       size: 150;
     }
-
-    styles [
-      "circular",
-    ]
   }
 
   Label artist {

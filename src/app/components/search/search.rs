@@ -109,21 +109,23 @@ impl SearchResultsWidget {
     where
         F: Fn(String) + Clone + 'static,
     {
+        let store_clone = store.clone();
         self.imp()
             .albums_results
             .bind_model(Some(store), move |item| {
-                wrap_flowbox_item(item, |album_model| {
-                    let f = on_album_pressed.clone();
-                    let album = AlbumWidget::for_model(album_model, worker.clone());
-                    album.connect_album_pressed(clone!(
-                        #[weak]
-                        album_model,
-                        move || {
-                            f(album_model.uri());
-                        }
-                    ));
-                    album
+                wrap_flowbox_item(item, |album_model: &AlbumModel| {
+                    AlbumWidget::for_model(album_model, worker.clone())
                 })
+            });
+        self.imp()
+            .albums_results
+            .connect_child_activated(move |_, child| {
+                let index = child.index() as u32;
+                if let Some(item) = store_clone.item(index) {
+                    if let Some(album_model) = item.downcast_ref::<AlbumModel>() {
+                        on_album_pressed(album_model.uri());
+                    }
+                }
             });
     }
 
@@ -131,21 +133,23 @@ impl SearchResultsWidget {
     where
         F: Fn(String) + Clone + 'static,
     {
+        let store_clone = store.clone();
         self.imp()
             .artist_results
             .bind_model(Some(store), move |item| {
-                wrap_flowbox_item(item, |artist_model| {
-                    let f = on_artist_pressed.clone();
-                    let artist = ArtistWidget::for_model(artist_model, worker.clone());
-                    artist.connect_artist_pressed(clone!(
-                        #[weak]
-                        artist_model,
-                        move || {
-                            f(artist_model.id());
-                        }
-                    ));
-                    artist
+                wrap_flowbox_item(item, |artist_model: &ArtistModel| {
+                    ArtistWidget::for_model(artist_model, worker.clone())
                 })
+            });
+        self.imp()
+            .artist_results
+            .connect_child_activated(move |_, child| {
+                let index = child.index() as u32;
+                if let Some(item) = store_clone.item(index) {
+                    if let Some(artist_model) = item.downcast_ref::<ArtistModel>() {
+                        on_artist_pressed(artist_model.id());
+                    }
+                }
             });
     }
 }
