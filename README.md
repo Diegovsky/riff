@@ -14,7 +14,7 @@ Originally a fork of [Spot](https://github.com/xou816/spot),  Riff continues dev
 
 If you have any feature suggestions or want to contribute to the project, feel free to leave an issue / pull request or join the discussion on our [Discord server](https://discord.gg/SYuYsjzWbm)!
 
-*Note*: AI contributions in any part are not welcome. 
+*Note*: AI contributions in any part are not welcome.
 
 ## Installing
 
@@ -70,6 +70,14 @@ If you feel like it, you are welcome to open a PR to be added to the `TRANSLATOR
 
 ## Building
 
+### Dependencies
+
+You can install the required development dependencies by running:
+
+```
+./setup-dev.sh
+```
+
 ### With GNOME Builder and flatpak
 
 Pre-requisite: install the `org.freedesktop.Sdk.Extension.rust-stable` SDK extension with flatpak. Builder might do this for you automatically, but it will install an older version; make sure  the version installed matches the version of the Freedesktop SDK GNOME uses.
@@ -78,9 +86,7 @@ Open the project in GNOME Builder and make the `dev.diegovsky.Riff.development.j
 
 ### Manually
 
-Requires Rust (stable), **GTK4**, and a couple other things. Also requires **libadwaita** and **blueprint-compiler**: they are not packaged on all distros at the moment, you might have to build them yourself!
-
-With meson:
+You build and install with meson:
 
 ```
 meson setup target -Dbuildtype=debug -Doffline=false --prefix="$HOME/.local"
