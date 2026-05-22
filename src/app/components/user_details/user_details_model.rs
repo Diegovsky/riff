@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use crate::app::models::*;
 use crate::app::state::BrowserAction;
-use crate::app::{ActionDispatcher, AppAction, AppModel, ListStore};
+use crate::app::{ActionDispatcher, AppAction, AppModel, ListStore, PaginationTarget};
 
 pub struct UserDetailsModel {
     pub id: String,
@@ -45,12 +45,18 @@ impl UserDetailsModel {
 
     pub fn load_more(&self) -> Option<()> {
         let api = self.app_model.get_spotify();
-        let state = self.app_model.get_state();
-        let next_page = &state.browser.user_state(&self.id)?.next_page;
 
-        let id = next_page.data.clone();
+        let state = self.app_model.get_state();
+        let next_page = state.browser.user_state(&self.id)?.next_page.clone();
+        drop(state);
+
+        let id = next_page.data;
         let batch_size = next_page.batch_size;
         let offset = next_page.next_offset?;
+
+        self.app_model
+            .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::UserPlaylists(id.clone())).into());
+
         self.dispatcher
             .call_spotify_and_dispatch(move || async move {
                 api.get_user_playlists(&id, offset, batch_size)

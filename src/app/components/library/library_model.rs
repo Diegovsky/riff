@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::app::models::*;
 use crate::app::state::HomeState;
-use crate::app::{ActionDispatcher, AppAction, AppModel, BrowserAction, ListStore};
+use crate::app::{ActionDispatcher, AppAction, AppModel, BrowserAction, ListStore, PaginationTarget};
 
 pub struct LibraryModel {
     app_model: Rc<AppModel>,
@@ -50,9 +50,13 @@ impl LibraryModel {
     pub fn load_more_albums(&self) -> Option<()> {
         let api = self.app_model.get_spotify();
 
-        let next_page = &self.state()?.next_albums_page;
-        let batch_size = next_page.batch_size;
-        let offset = next_page.next_offset?;
+        let state = self.state()?;
+        let batch_size = state.next_albums_page.batch_size;
+        let offset = state.next_albums_page.next_offset?;
+        drop(state);
+
+        self.app_model
+            .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SavedAlbums).into());
 
         self.dispatcher
             .call_spotify_and_dispatch(move || async move {
