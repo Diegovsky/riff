@@ -53,17 +53,6 @@ pub struct BatchQuery {
     pub batch: Batch,
 }
 
-impl BatchQuery {
-    // Given a query, compute the next batch to get (if any)
-    pub fn next(&self) -> Option<Self> {
-        let Self { source, batch } = self;
-        Some(Self {
-            source: source.clone(),
-            batch: batch.next()?,
-        })
-    }
-}
-
 impl BatchLoader {
     pub fn new(api: Arc<dyn SpotifyApiClient + Send + Sync>) -> Self {
         Self { api }

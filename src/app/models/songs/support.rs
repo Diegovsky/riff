@@ -314,11 +314,6 @@ impl SongList {
 
         let index = batch.offset / batch.batch_size;
 
-        if self.batches.contains_key(&index) {
-            debug!("batch already loaded");
-            return None;
-        }
-
         let insertion_start = self.estimated_len(index);
         let len = songs.len();
         let ids = songs
@@ -588,10 +583,6 @@ mod tests {
 
         let range = list.add(batch(2));
         assert_eq!(range, Some(ListRangeUpdate::inserted(4, 2)));
-        assert_eq!(list.partial_len(), 8);
-
-        let range = list.add(batch(2));
-        assert_eq!(range, None);
         assert_eq!(list.partial_len(), 8);
     }
 

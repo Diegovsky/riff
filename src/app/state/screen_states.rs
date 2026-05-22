@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::cmp::PartialEq;
 
-use super::{pagination::Pagination, BrowserAction, BrowserEvent, UpdatableState};
+use super::{pagination::Pagination, BrowserAction, BrowserEvent, PaginationTarget, UpdatableState};
 use crate::app::models::*;
 use crate::app::ListStore;
 
@@ -43,15 +43,17 @@ pub struct DetailsState {
     pub content: Option<AlbumFullDescription>,
     // Read the songs from here, not content (won't get more than the initial batch of songs)
     pub songs: SongListModel,
+    pub next_tracks_page: Pagination<String>,
 }
 
 impl DetailsState {
     pub fn new(id: String) -> Self {
         Self {
             id: id.clone(),
-            name: ScreenName::AlbumDetails(id),
+            name: ScreenName::AlbumDetails(id.clone()),
             content: None,
             songs: SongListModel::new(50),
+            next_tracks_page: Pagination::new(id, 50),
         }
     }
 }
@@ -65,12 +67,20 @@ impl UpdatableState for DetailsState {
             BrowserAction::SetAlbumDetails(album) if album.description.id == self.id => {
                 let AlbumDescription { id, songs, .. } = album.description.clone();
                 self.songs.add(songs).commit();
+                self.next_tracks_page.reset_count(self.songs.partial_len());
                 self.content = Some(*album.clone());
                 vec![BrowserEvent::AlbumDetailsLoaded(id)]
             }
             BrowserAction::AppendAlbumTracks(id, batch) if id == &self.id => {
+                self.next_tracks_page.set_loaded_count(batch.songs.len());
                 self.songs.add(*batch.clone()).commit();
                 vec![BrowserEvent::AlbumTracksAppended(id.clone())]
+            }
+            BrowserAction::ConsumeNextPage(PaginationTarget::AlbumTracks(id))
+                if id == &self.id =>
+            {
+                self.next_tracks_page.next_offset_take();
+                vec![]
             }
             BrowserAction::SaveAlbum(album) if album.id == self.id => {
                 let id = album.id.clone();
@@ -100,15 +110,17 @@ pub struct PlaylistDetailsState {
     pub playlist: Option<PlaylistDescription>,
     // Read the songs from here, not content (won't get more than the initial batch of songs)
     pub songs: SongListModel,
+    pub next_tracks_page: Pagination<String>,
 }
 
 impl PlaylistDetailsState {
     pub fn new(id: String) -> Self {
         Self {
             id: id.clone(),
-            name: ScreenName::PlaylistDetails(id),
+            name: ScreenName::PlaylistDetails(id.clone()),
             playlist: None,
             songs: SongListModel::new(100),
+            next_tracks_page: Pagination::new(id, 100),
         }
     }
 }
@@ -122,6 +134,7 @@ impl UpdatableState for PlaylistDetailsState {
             BrowserAction::SetPlaylistDetails(playlist, song_batch) if playlist.id == self.id => {
                 let PlaylistDescription { id, .. } = *playlist.clone();
                 self.songs.add(*song_batch.clone()).commit();
+                self.next_tracks_page.reset_count(self.songs.partial_len());
                 self.playlist = Some(*playlist.clone());
                 vec![BrowserEvent::PlaylistDetailsLoaded(id)]
             }
@@ -132,8 +145,15 @@ impl UpdatableState for PlaylistDetailsState {
                 vec![BrowserEvent::PlaylistDetailsLoaded(self.id.clone())]
             }
             BrowserAction::AppendPlaylistTracks(id, song_batch) if id == &self.id => {
+                self.next_tracks_page.set_loaded_count(song_batch.songs.len());
                 self.songs.add(*song_batch.clone()).commit();
                 vec![BrowserEvent::PlaylistTracksAppended(id.clone())]
+            }
+            BrowserAction::ConsumeNextPage(PaginationTarget::PlaylistTracks(id))
+                if id == &self.id =>
+            {
+                self.next_tracks_page.next_offset_take();
+                vec![]
             }
             BrowserAction::RemoveTracksFromPlaylist(id, uris) if id == &self.id => {
                 self.songs.remove(&uris[..]).commit();
@@ -194,6 +214,12 @@ impl UpdatableState for ArtistState {
                 self.albums.extend(albums.iter().map(|a| a.into()));
                 vec![BrowserEvent::ArtistDetailsUpdated(self.id.clone())]
             }
+            BrowserAction::ConsumeNextPage(PaginationTarget::ArtistReleases(id))
+                if id == &self.id =>
+            {
+                self.next_page.next_offset_take();
+                vec![]
+            }
             _ => vec![],
         }
     }
@@ -207,6 +233,7 @@ pub struct HomeState {
     pub albums: ListStore<AlbumModel>,
     pub next_playlists_page: Pagination<()>,
     pub playlists: ListStore<AlbumModel>,
+    pub next_saved_tracks_page: Pagination<()>,
     pub saved_tracks: SongListModel,
 }
 
@@ -219,6 +246,7 @@ impl Default for HomeState {
             albums: ListStore::new(),
             next_playlists_page: Pagination::new((), 30),
             playlists: ListStore::new(),
+            next_saved_tracks_page: Pagination::new((), 50),
             saved_tracks: SongListModel::new(50),
         }
     }
@@ -304,6 +332,7 @@ impl UpdatableState for HomeState {
                 }
             }
             BrowserAction::AppendSavedTracks(song_batch) => {
+                self.next_saved_tracks_page.set_loaded_count(song_batch.songs.len());
                 if self.saved_tracks.add(*song_batch.clone()).commit() {
                     vec![BrowserEvent::SavedTracksUpdated]
                 } else {
@@ -312,12 +341,14 @@ impl UpdatableState for HomeState {
             }
             BrowserAction::SetSavedTracks(song_batch) => {
                 let song_batch = *song_batch.clone();
+                let len = song_batch.songs.len();
                 if self
                     .saved_tracks
                     .clear()
                     .and(|s| s.add(song_batch))
                     .commit()
                 {
+                    self.next_saved_tracks_page.reset_count(len);
                     vec![BrowserEvent::SavedTracksUpdated]
                 } else {
                     vec![]
@@ -330,6 +361,18 @@ impl UpdatableState for HomeState {
             BrowserAction::RemoveSavedTracks(tracks) => {
                 self.saved_tracks.remove(&tracks[..]).commit();
                 vec![BrowserEvent::SavedTracksUpdated]
+            }
+            BrowserAction::ConsumeNextPage(PaginationTarget::SavedAlbums) => {
+                self.next_albums_page.next_offset_take();
+                vec![]
+            }
+            BrowserAction::ConsumeNextPage(PaginationTarget::SavedPlaylists) => {
+                self.next_playlists_page.next_offset_take();
+                vec![]
+            }
+            BrowserAction::ConsumeNextPage(PaginationTarget::SavedTracks) => {
+                self.next_saved_tracks_page.next_offset_take();
+                vec![]
             }
             _ => vec![],
         }
@@ -418,6 +461,12 @@ impl UpdatableState for UserState {
                 self.next_page.set_loaded_count(playlists.len());
                 self.playlists.extend(playlists.iter().map(|p| p.into()));
                 vec![BrowserEvent::UserDetailsUpdated(self.id.clone())]
+            }
+            BrowserAction::ConsumeNextPage(PaginationTarget::UserPlaylists(id))
+                if id == &self.id =>
+            {
+                self.next_page.next_offset_take();
+                vec![]
             }
             _ => vec![],
         }

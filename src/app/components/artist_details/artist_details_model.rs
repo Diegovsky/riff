@@ -9,7 +9,7 @@ use crate::app::components::{labels, PlaylistModel};
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
 use crate::app::state::{
-    BrowserAction, BrowserEvent, PlaybackAction, SelectionAction, SelectionState,
+    BrowserAction, BrowserEvent, PlaybackAction, PaginationTarget, SelectionAction, SelectionState,
 };
 use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, ListStore};
 
@@ -61,11 +61,15 @@ impl ArtistDetailsModel {
     pub fn load_more(&self) -> Option<()> {
         let api = self.app_model.get_spotify();
         let state = self.app_model.get_state();
-        let next_page = &state.browser.artist_state(&self.id)?.next_page;
+        let next_page = state.browser.artist_state(&self.id)?.next_page.clone();
+        drop(state);
 
-        let id = next_page.data.clone();
+        let id = next_page.data;
         let batch_size = next_page.batch_size;
         let offset = next_page.next_offset?;
+
+        self.app_model
+            .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::ArtistReleases(id.clone())).into());
 
         self.dispatcher
             .call_spotify_and_dispatch(move || async move {
