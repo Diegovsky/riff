@@ -14,7 +14,7 @@ jobs:
     name: "Flatpak ${{ matrix.variant.arch }}"
     runs-on: ${{ matrix.variant.runner }}
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
       options: --privileged
     strategy:
       matrix:
