@@ -16,6 +16,7 @@ use crate::app::models::*;
 use crate::app::state::SelectionContext;
 use crate::app::state::{BrowserAction, PlaybackAction, SelectionAction, SelectionState};
 use crate::app::{AppAction, AppEvent, AppModel, AppState, BatchQuery, SongsSource};
+use crate::feature_flags::{self, FeatureFlag};
 
 pub struct DetailsModel {
     pub id: String,
@@ -205,6 +206,9 @@ impl PlaylistModel for DetailsModel {
     }
 
     fn enable_selection(&self) -> bool {
+        if !feature_flags::is_enabled(FeatureFlag::AlbumSelectMode) {
+            return false;
+        }
         self.dispatcher
             .dispatch(AppAction::EnableSelection(SelectionContext::Default));
         true
@@ -272,6 +276,9 @@ impl SimpleHeaderBarModel for DetailsModel {
     }
 
     fn selection_context(&self) -> Option<SelectionContext> {
+        if !feature_flags::is_enabled(FeatureFlag::AlbumSelectMode) {
+            return None;
+        }
         Some(SelectionContext::Default)
     }
 

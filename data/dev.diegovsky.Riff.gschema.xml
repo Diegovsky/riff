@@ -69,5 +69,21 @@
       <summary>The playback repeat mode</summary>
       <default>'none'</default>
     </key>
+    <key name="feature-playlist-edit-mode" type="b">
+      <default>false</default>
+      <summary>Enable the edit button to rename playlists and manage tracks</summary>
+    </key>
+    <key name="feature-album-select-mode" type="b">
+      <default>false</default>
+      <summary>Enable the selection checkmark when viewing an album</summary>
+    </key>
+    <key name="feature-create-new-playlist" type="b">
+      <default>false</default>
+      <summary>Enable the New Playlist button in the sidebar</summary>
+    </key>
+    <key name="feature-now-playing-select-mode" type="b">
+      <default>false</default>
+      <summary>Enable selection mode on the Now Playing page</summary>
+    </key>
   </schema>
 </schemalist>
