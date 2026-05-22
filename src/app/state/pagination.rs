@@ -33,10 +33,19 @@ where
         }
     }
 
+    // Eagerly advance the offset before the request completes.
+    // Returns the offset to use for the request, or None if already consumed/exhausted.
+    pub fn next_offset_take(&mut self) -> Option<usize> {
+        let offset = self.next_offset.take()?;
+        // Optimistically assume a full batch will be returned
+        self.next_offset = Some(offset + self.batch_size);
+        Some(offset)
+    }
+
     pub fn set_loaded_count(&mut self, loaded_count: usize) {
         if let Some(offset) = self.next_offset.take() {
             self.next_offset = if loaded_count >= self.batch_size {
-                Some(offset + self.batch_size)
+                Some(offset)
             } else {
                 None
             }

@@ -6,6 +6,17 @@ use crate::app::models::*;
 use std::borrow::Cow;
 use std::iter::Iterator;
 
+#[derive(Clone, Debug)]
+pub enum PaginationTarget {
+    SavedAlbums,
+    SavedPlaylists,
+    SavedTracks,
+    ArtistReleases(String),
+    UserPlaylists(String),
+    PlaylistTracks(String),
+    AlbumTracks(String),
+}
+
 // Actions that affect any "screen" that we push over time
 #[derive(Clone, Debug)]
 pub enum BrowserAction {
@@ -38,6 +49,7 @@ pub enum BrowserAction {
     AppendSavedTracks(Box<SongBatch>),
     SaveTracks(Vec<SongDescription>),
     RemoveSavedTracks(Vec<String>),
+    ConsumeNextPage(PaginationTarget),
 }
 
 impl From<BrowserAction> for AppAction {

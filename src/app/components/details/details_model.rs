@@ -15,7 +15,7 @@ use crate::app::dispatch::ActionDispatcher;
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
 use crate::app::state::{BrowserAction, PlaybackAction, SelectionAction, SelectionState};
-use crate::app::{AppAction, AppEvent, AppModel, AppState, BatchQuery, SongsSource};
+use crate::app::{AppAction, AppEvent, AppModel, AppState, PaginationTarget, SongsSource};
 use crate::feature_flags::{self, FeatureFlag};
 
 pub struct DetailsModel {
@@ -143,23 +143,25 @@ impl DetailsModel {
     }
 
     pub fn load_more(&self) -> Option<()> {
-        let last_batch = self.song_list_model().last_batch()?;
-        let query = BatchQuery {
-            source: SongsSource::Album(self.id.clone()),
-            batch: last_batch,
-        };
+        let api = self.app_model.get_spotify();
 
+        let state = self.app_model.get_state();
+        let next_page = state.browser.details_state(&self.id)?.next_tracks_page.clone();
+        drop(state);
+
+        let batch_size = next_page.batch_size;
+        let offset = next_page.next_offset?;
         let id = self.id.clone();
-        let next_query = query.next()?;
-        let loader = self.app_model.get_batch_loader();
 
-        self.dispatcher.dispatch_async(Box::pin(async move {
-            loader
-                .query(next_query, |_s, song_batch| {
-                    BrowserAction::AppendAlbumTracks(id, Box::new(song_batch)).into()
-                })
-                .await
-        }));
+        self.app_model
+            .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::AlbumTracks(id.clone())).into());
+
+        self.dispatcher
+            .call_spotify_and_dispatch(move || async move {
+                api.get_album_tracks(&id, offset, batch_size)
+                    .await
+                    .map(|song_batch| BrowserAction::AppendAlbumTracks(id, Box::new(song_batch)).into())
+            });
 
         Some(())
     }

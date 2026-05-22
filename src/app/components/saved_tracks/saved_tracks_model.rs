@@ -7,7 +7,7 @@ use crate::app::components::{labels, PlaylistModel};
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
 use crate::app::state::{PlaybackAction, SelectionAction, SelectionState};
-use crate::app::{ActionDispatcher, AppAction, AppModel, BatchQuery, BrowserAction, SongsSource};
+use crate::app::{ActionDispatcher, AppAction, AppModel, BatchQuery, BrowserAction, PaginationTarget, SongsSource};
 
 pub struct SavedTracksModel {
     app_model: Rc<AppModel>,
@@ -38,19 +38,25 @@ impl SavedTracksModel {
     }
 
     pub fn load_more(&self) -> Option<()> {
-        let loader = self.app_model.get_batch_loader();
-        let last_batch = self.song_list_model().last_batch()?.next()?;
-        let query = BatchQuery {
-            source: SongsSource::SavedTracks,
-            batch: last_batch,
-        };
-        self.dispatcher.dispatch_async(Box::pin(async move {
-            loader
-                .query(query, |_s, song_batch| {
-                    BrowserAction::AppendSavedTracks(Box::new(song_batch)).into()
-                })
-                .await
-        }));
+        let api = self.app_model.get_spotify();
+
+        let state = self.app_model.get_state();
+        let next_page = state.browser.home_state()?.next_saved_tracks_page.clone();
+        drop(state);
+
+        let batch_size = next_page.batch_size;
+        let offset = next_page.next_offset?;
+
+        self.app_model
+            .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SavedTracks).into());
+
+        self.dispatcher
+            .call_spotify_and_dispatch(move || async move {
+                api.get_saved_tracks(offset, batch_size)
+                    .await
+                    .map(|song_batch| BrowserAction::AppendSavedTracks(Box::new(song_batch)).into())
+            });
+
         Some(())
     }
 }
