@@ -1,6 +1,6 @@
 [package]
 name = "riff"
-version = "26.03"
+version = "26.3.0"
 edition = "2018"
 license = "MIT"
 
