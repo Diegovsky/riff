@@ -192,10 +192,10 @@ impl SpotifyPlayer {
                 Ok(())
             }
             Command::Logout => {
-                self.session
-                    .take()
-                    .ok_or(SpotifyError::PlayerNotReady)?
-                    .shutdown();
+                self.oauth_client.clear_credentials().await;
+                if let Some(session) = self.session.take() {
+                    session.shutdown();
+                }
                 let _ = self.player.take();
                 Ok(())
             }

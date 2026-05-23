@@ -68,7 +68,7 @@ impl LoginWindow {
         let window = self.upcast_ref::<libadwaita::Window>();
         window.connect_close_request(move |_| {
             on_close();
-            glib::Propagation::Stop
+            glib::Propagation::Proceed
         });
     }
 
@@ -103,7 +103,7 @@ impl Login {
             #[weak]
             parent,
             move || {
-                if let Some(app) = parent.application().as_ref() {
+                if let Some(app) = parent.application() {
                     app.quit();
                 }
             }
