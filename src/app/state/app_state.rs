@@ -260,6 +260,23 @@ impl AppState {
             AppAction::PlaybackAction(a) => forward_action(a, &mut self.playback),
             AppAction::BrowserAction(a) => forward_action(a, &mut self.browser),
             AppAction::SelectionAction(a) => forward_action(a, &mut self.selection),
+            AppAction::LoginAction(LoginAction::Logout) => {
+                let mut events = forward_action(LoginAction::Logout, &mut self.logged_user);
+                if let Some(home) = self.browser.home_state_mut() {
+                    home.albums.replace_all(std::iter::empty());
+                    home.playlists.replace_all(std::iter::empty());
+                    home.saved_tracks.clear().commit();
+                }
+                events.extend(forward_action(
+                    BrowserAction::NavigationPopTo(ScreenName::Home),
+                    &mut self.browser,
+                ));
+                self.playback = Default::default();
+                events.push(BrowserEvent::LibraryUpdated.into());
+                events.push(BrowserEvent::SavedPlaylistsUpdated.into());
+                events.push(BrowserEvent::SavedTracksUpdated.into());
+                events
+            }
             AppAction::LoginAction(a) => forward_action(a, &mut self.logged_user),
             AppAction::SettingsAction(a) => forward_action(a, &mut self.settings),
             _ => vec![],

@@ -145,7 +145,6 @@ impl EventListener for Library {
     fn on_event(&mut self, event: &AppEvent) {
         match event {
             AppEvent::Started => {
-                let _ = self.model.refresh_saved_albums();
                 self.bind_flowbox();
             }
             AppEvent::LoginEvent(LoginEvent::LoginCompleted) => {
