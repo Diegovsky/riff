@@ -145,7 +145,6 @@ impl EventListener for SavedPlaylists {
     fn on_event(&mut self, event: &AppEvent) {
         match event {
             AppEvent::Started => {
-                let _ = self.model.refresh_saved_playlists();
                 self.bind_flowbox();
             }
             AppEvent::LoginEvent(LoginEvent::LoginCompleted) => {

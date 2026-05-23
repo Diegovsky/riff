@@ -111,7 +111,7 @@ impl Component for SavedTracks {
 impl EventListener for SavedTracks {
     fn on_event(&mut self, event: &AppEvent) {
         match event {
-            AppEvent::Started | AppEvent::LoginEvent(LoginEvent::LoginCompleted) => {
+            AppEvent::LoginEvent(LoginEvent::LoginCompleted) => {
                 self.model.load_initial();
             }
             _ => {}

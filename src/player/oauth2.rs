@@ -158,6 +158,10 @@ impl RiffOauthClient {
         Ok(token)
     }
 
+    pub async fn clear_credentials(&self) {
+        self.token_store.clear().await;
+    }
+
     pub async fn get_valid_token(&self) -> Result<Credentials, OAuthError> {
         let token = self.token_store.get().await.ok_or(OAuthError::LoggedOut)?;
         if token.token_expired() {
