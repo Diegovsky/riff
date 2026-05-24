@@ -13,11 +13,9 @@ use crate::app::models::{AlbumModel, PlaylistSummary};
 use crate::app::state::ScreenName;
 use crate::app::{
     ActionDispatcher, AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Component,
-    EventListener,
+    EventListener, PaginationTarget,
 };
 use crate::feature_flags::{self, FeatureFlag};
-
-const NUM_PLAYLISTS: usize = 20;
 
 pub struct SidebarModel {
     app_model: Rc<AppModel>,
@@ -40,9 +38,29 @@ impl SidebarModel {
             .expect("expected HomeState to be available")
             .playlists
             .iter()
-            .take(NUM_PLAYLISTS)
             .map(Self::map_to_destination)
             .collect()
+    }
+
+    pub fn load_more_playlists(&self) -> Option<()> {
+        let api = self.app_model.get_spotify();
+        let state = self.app_model.get_state();
+        let home = state.browser.home_state()?;
+        let batch_size = home.next_playlists_page.batch_size;
+        let offset = home.next_playlists_page.next_offset?;
+        drop(state);
+
+        self.app_model
+            .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SavedPlaylists).into());
+
+        self.dispatcher
+            .call_spotify_and_dispatch(move || async move {
+                api.get_saved_playlists(offset, batch_size)
+                    .await
+                    .map(|playlists| BrowserAction::AppendPlaylistsContent(playlists).into())
+            });
+
+        Some(())
     }
 
     fn map_to_destination(a: AlbumModel) -> SidebarDestination {
@@ -266,6 +284,20 @@ impl Sidebar {
             }
         ));
         listbox.add_controller(long_press);
+
+        let scrolled_window = listbox
+            .ancestor(gtk::ScrolledWindow::static_type())
+            .and_downcast::<gtk::ScrolledWindow>()
+            .unwrap();
+        scrolled_window.connect_edge_reached(clone!(
+            #[weak]
+            model,
+            move |_, pos| {
+                if pos == gtk::PositionType::Bottom {
+                    model.load_more_playlists();
+                }
+            }
+        ));
 
         let num_fixed_entries = list_store.n_items();
 
