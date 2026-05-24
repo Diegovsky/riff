@@ -163,6 +163,26 @@ impl<T> Default for Page<T> {
     }
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct Cursors {
+    pub after: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct CursorPage<T> {
+    pub items: Option<Vec<T>>,
+    pub cursors: Option<Cursors>,
+    #[allow(dead_code)] // Part of the Spotify API response but currently unused
+    pub limit: Option<usize>,
+    #[allow(dead_code)] // Part of the Spotify API response but currently unused
+    pub total: Option<usize>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct FollowedArtistsInner {
+    pub artists: CursorPage<Artist>,
+}
+
 trait WithImages {
     fn images(&self) -> &[Image];
 

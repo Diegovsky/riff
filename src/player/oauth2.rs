@@ -38,6 +38,7 @@ playlist-read-private,\
 playlist-read-collaborative,\
 user-library-read,\
 user-library-modify,\
+user-follow-read,\
 user-top-read,\
 user-read-recently-played,\
 user-read-playback-state,\

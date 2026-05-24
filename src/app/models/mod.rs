@@ -66,3 +66,9 @@ impl From<&SongDescription> for SongModel {
         SongModel::new(song.clone())
     }
 }
+
+impl From<&ArtistSummary> for ArtistModel {
+    fn from(artist: &ArtistSummary) -> Self {
+        ArtistModel::new(&artist.name, &artist.photo, &artist.id)
+    }
+}

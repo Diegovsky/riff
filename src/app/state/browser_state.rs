@@ -11,6 +11,7 @@ pub enum PaginationTarget {
     SavedAlbums,
     SavedPlaylists,
     SavedTracks,
+    SavedArtists,
     ArtistReleases(String),
     UserPlaylists(String),
     PlaylistTracks(String),
@@ -49,6 +50,8 @@ pub enum BrowserAction {
     AppendSavedTracks(Box<SongBatch>),
     SaveTracks(Vec<SongDescription>),
     RemoveSavedTracks(Vec<String>),
+    SetSavedArtists(Vec<ArtistSummary>, Option<String>),
+    AppendSavedArtists(Vec<ArtistSummary>, Option<String>),
     ConsumeNextPage(PaginationTarget),
 }
 
@@ -79,6 +82,7 @@ pub enum BrowserEvent {
     AlbumUnsaved(String),
     UserDetailsUpdated(String),
     SavedTracksUpdated,
+    SavedArtistsUpdated,
 }
 
 impl From<BrowserEvent> for AppEvent {
