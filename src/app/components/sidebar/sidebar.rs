@@ -7,7 +7,7 @@ use super::{
     create_playlist::CreatePlaylistPopover,
     playlist_actions,
     sidebar_row::SidebarRow,
-    SidebarDestination, SidebarItem, CREATE_PLAYLIST_ITEM, SAVED_PLAYLISTS_SECTION,
+    SidebarDestination, SidebarItem, CREATE_PLAYLIST_ITEM, LIBRARY_SECTION, SAVED_PLAYLISTS_SECTION,
 };
 use crate::app::models::{AlbumModel, PlaylistSummary};
 use crate::app::state::ScreenName;
@@ -86,7 +86,8 @@ impl SidebarModel {
             SidebarDestination::Library
             | SidebarDestination::SavedTracks
             | SidebarDestination::NowPlaying
-            | SidebarDestination::SavedPlaylists => {
+            | SidebarDestination::SavedPlaylists
+            | SidebarDestination::SavedArtists => {
                 vec![
                     BrowserAction::NavigationPopTo(ScreenName::Home).into(),
                     BrowserAction::SetHomeVisiblePage(dest.id()).into(),
@@ -126,15 +127,19 @@ impl Sidebar {
 
         let list_store = gio::ListStore::new::<SidebarItem>();
 
+        list_store.append(&SidebarItem::from_destination(
+            SidebarDestination::NowPlaying,
+        ));
+        list_store.append(&SidebarItem::library_section());
+        list_store.append(&SidebarItem::from_destination(
+            SidebarDestination::SavedArtists,
+        ));
         list_store.append(&SidebarItem::from_destination(SidebarDestination::Library));
         list_store.append(&SidebarItem::from_destination(
             SidebarDestination::SavedPlaylists,
         ));
         list_store.append(&SidebarItem::from_destination(
             SidebarDestination::SavedTracks,
-        ));
-        list_store.append(&SidebarItem::from_destination(
-            SidebarDestination::NowPlaying,
         ));
         list_store.append(&SidebarItem::playlists_section());
         if create_playlist_enabled {
@@ -152,7 +157,7 @@ impl Sidebar {
                         Self::make_navigatable(item)
                     } else {
                         match item.id().as_str() {
-                            SAVED_PLAYLISTS_SECTION => Self::make_section_label(item),
+                            SAVED_PLAYLISTS_SECTION | LIBRARY_SECTION => Self::make_section_label(item),
                             CREATE_PLAYLIST_ITEM => Self::make_create_playlist(
                                 item,
                                 popover.clone().expect("popover should exist"),

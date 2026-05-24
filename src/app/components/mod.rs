@@ -70,6 +70,9 @@ pub use notification::*;
 mod saved_playlists;
 pub use saved_playlists::*;
 
+mod saved_artists;
+pub use saved_artists::*;
+
 mod playlist_details;
 pub use playlist_details::*;
 

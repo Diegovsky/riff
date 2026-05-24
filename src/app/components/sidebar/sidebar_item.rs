@@ -9,8 +9,10 @@ const LIBRARY: &str = "library";
 const SAVED_TRACKS: &str = "saved_tracks";
 const NOW_PLAYING: &str = "now_playing";
 const SAVED_PLAYLISTS: &str = "saved_playlists";
+const SAVED_ARTISTS: &str = "saved_artists";
 const PLAYLIST: &str = "playlist";
 pub const SAVED_PLAYLISTS_SECTION: &str = "saved_playlists_section";
+pub const LIBRARY_SECTION: &str = "library_section";
 pub const CREATE_PLAYLIST_ITEM: &str = "create_playlist";
 
 #[derive(Debug)]
@@ -19,6 +21,7 @@ pub enum SidebarDestination {
     SavedTracks,
     NowPlaying,
     SavedPlaylists,
+    SavedArtists,
     Playlist(PlaylistSummary),
 }
 
@@ -29,6 +32,7 @@ impl SidebarDestination {
             Self::SavedTracks => SAVED_TRACKS,
             Self::NowPlaying => NOW_PLAYING,
             Self::SavedPlaylists => SAVED_PLAYLISTS,
+            Self::SavedArtists => SAVED_ARTISTS,
             Self::Playlist(_) => PLAYLIST,
         }
     }
@@ -43,6 +47,8 @@ impl SidebarDestination {
             Self::NowPlaying => gettext("Now playing"),
             // translators: This is a sidebar entry that marks that the entries below are playlists.
             Self::SavedPlaylists => gettext("Playlists"),
+            // translators: This is a sidebar entry to browse to followed artists.
+            Self::SavedArtists => gettext("Artists"),
             Self::Playlist(PlaylistSummary { title, .. }) => title.clone(),
         }
     }
@@ -53,6 +59,7 @@ impl SidebarDestination {
             Self::SavedTracks => "starred-symbolic",
             Self::NowPlaying => "music-queue-symbolic",
             Self::SavedPlaylists => "view-app-grid-symbolic",
+            Self::SavedArtists => "avatar-default-symbolic",
             Self::Playlist(_) => "playlist2-symbolic",
         }
     }
@@ -83,6 +90,15 @@ impl SidebarItem {
             .build()
     }
 
+    pub fn library_section() -> Self {
+        glib::Object::builder()
+            .property("id", LIBRARY_SECTION)
+            .property("data", String::new())
+            .property("title", gettext("Library"))
+            .property("navigatable", false)
+            .build()
+    }
+
     pub fn create_playlist_item() -> Self {
         glib::Object::builder()
             .property("id", CREATE_PLAYLIST_ITEM)
@@ -103,6 +119,7 @@ impl SidebarItem {
                 SAVED_TRACKS => Some(SidebarDestination::SavedTracks),
                 NOW_PLAYING => Some(SidebarDestination::NowPlaying),
                 SAVED_PLAYLISTS => Some(SidebarDestination::SavedPlaylists),
+                SAVED_ARTISTS => Some(SidebarDestination::SavedArtists),
                 PLAYLIST => Some(SidebarDestination::Playlist(PlaylistSummary {
                     id: data,
                     title,

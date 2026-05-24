@@ -67,6 +67,10 @@ where
         self.store.n_items() as usize
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.store.n_items() == 0
+    }
+
     // Quick and dirty comparison between the list store and a slice of object that can be compared
     // with the contents of the store using some function F.
     // Not so great but eh
