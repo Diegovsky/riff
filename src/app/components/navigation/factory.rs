@@ -58,6 +58,21 @@ impl ScreenFactory {
         )
     }
 
+    pub fn make_saved_artists(&self) -> impl ListenerComponent {
+        let model =
+            SavedArtistsModel::new(Rc::clone(&self.app_model), self.dispatcher.box_clone());
+        let screen_model = DefaultHeaderBarModel::new(
+            Some(gettext("Artists")),
+            None,
+            Rc::clone(&self.app_model),
+            self.dispatcher.box_clone(),
+        );
+        StandardScreen::new(
+            SavedArtists::new(self.worker.clone(), model),
+            Rc::new(screen_model),
+        )
+    }
+
     pub fn make_now_playing(&self) -> impl ListenerComponent {
         let model = Rc::new(NowPlayingModel::new(
             Rc::clone(&self.app_model),

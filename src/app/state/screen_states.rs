@@ -235,6 +235,8 @@ pub struct HomeState {
     pub playlists: ListStore<AlbumModel>,
     pub next_saved_tracks_page: Pagination<()>,
     pub saved_tracks: SongListModel,
+    pub artists: ListStore<ArtistModel>,
+    pub artists_cursor: Option<String>,
 }
 
 impl Default for HomeState {
@@ -248,6 +250,8 @@ impl Default for HomeState {
             playlists: ListStore::new(),
             next_saved_tracks_page: Pagination::new((), 50),
             saved_tracks: SongListModel::new(50),
+            artists: ListStore::new(),
+            artists_cursor: Some(String::new()),
         }
     }
 }
@@ -373,6 +377,20 @@ impl UpdatableState for HomeState {
             BrowserAction::ConsumeNextPage(PaginationTarget::SavedTracks) => {
                 self.next_saved_tracks_page.next_offset_take();
                 vec![]
+            }
+            BrowserAction::ConsumeNextPage(PaginationTarget::SavedArtists) => {
+                self.artists_cursor = None;
+                vec![]
+            }
+            BrowserAction::SetSavedArtists(artists, cursor) => {
+                self.artists.replace_all(artists.iter().map(|a| a.into()));
+                self.artists_cursor = cursor.clone();
+                vec![BrowserEvent::SavedArtistsUpdated]
+            }
+            BrowserAction::AppendSavedArtists(artists, cursor) => {
+                self.artists.extend(artists.iter().map(|a| a.into()));
+                self.artists_cursor = cursor.clone();
+                vec![BrowserEvent::SavedArtistsUpdated]
             }
             _ => vec![],
         }

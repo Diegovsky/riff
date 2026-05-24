@@ -3,11 +3,16 @@ using Adw 1;
 
 template $ArtistWidget : Box {
   orientation: vertical;
+  margin-top: 6;
+  margin-bottom: 6;
+  spacing: 6;
+  halign: center;
+  valign: start;
 
   Box {
     vexpand: true;
-    width-request: 150;
-    height-request: 150;
+    width-request: 200;
+    height-request: 200;
     halign: center;
     valign: center;
 
@@ -15,11 +20,17 @@ template $ArtistWidget : Box {
       halign: center;
       valign: center;
       show-initials: true;
-      size: 150;
+      size: 200;
     }
   }
 
   Label artist {
     label: "Artist Name";
+    ellipsize: end;
+    natural-wrap-mode: none;
+
+    styles [
+      "title-4",
+    ]
   }
 }
