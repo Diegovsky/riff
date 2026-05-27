@@ -1,7 +1,7 @@
 <h1 align="center"> Riff </h1>
 <h4 align="center"> A libadwaita/GTK4-based Spotify client </h4>
 
-![showcase](https://github.com/user-attachments/assets/50ea171e-3983-403d-90ba-a165a37b32e1)
+![showcase](data/appstream/scheme-dark.png)
 
 <div align="center">
     <a href='https://flathub.org/apps/details/dev.diegovsky.Riff'><img width='130' alt='Download on Flathub' src='https://flathub.org/assets/badges/flathub-badge-en.png'/></a>
