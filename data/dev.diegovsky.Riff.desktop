@@ -11,3 +11,4 @@ MimeType=x-scheme-handler/spotify;
 StartupNotify=true
 X-Purism-FormFactor=Workstation;Mobile;
 SingleMainWindow=true
+Keywords=spotify;
