@@ -1,0 +1,173 @@
+/* Shared details page styles */
+
+/* Details page scroll child */
+.details-page-content {
+  opacity: 1;
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+.details-header-clamp {
+  margin-top: 24px;
+  margin-bottom: 24px;
+  padding-left: 24px;
+  padding-right:24px;
+}
+
+.details-content-clamp {
+  padding-left: 24px;
+  padding-right: 24px;
+  margin-bottom: 24px;
+}
+
+/* === Header skeleton (default before loaded) === */
+
+.details-page-content .details-header__image-placeholder {
+  min-width: 200px;
+  min-height: 200px;
+  background-color: @skeleton_color;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.details-page-content .details-header__title {
+  background-color: @skeleton_color;
+  color: transparent;
+  border-radius: 4px;
+  min-width: 24ch;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.details-page-content .details-header .body {
+  background-color: @skeleton_color;
+  color: transparent;
+  border-radius: 4px;
+  min-width: 12ch;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.details-page-content .details-header .caption {
+  background-color: @skeleton_color;
+  color: transparent;
+  border-radius: 4px;
+  min-width: 8ch;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.details-page-content .details-header .circular:not(.play__button):not(.like__button):not(.shuffle__button):not(.info__button) {
+  background-color: @skeleton_color;
+  color: transparent;
+  opacity: 0;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.details-page-content:not(.details-page--loaded) .details-header .play__button,
+.details-page-content:not(.details-page--loaded) .details-header .shuffle__button,
+.details-page-content:not(.details-page--loaded) .details-header .like__button,
+.details-page-content:not(.details-page--loaded) .details-header .edit__button {
+  background-color: @skeleton_color;
+  color: transparent;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+/* === Body skeleton (default before loaded) === */
+.details-page-content .details-content-clamp listview {
+  background-color: @skeleton_color;
+  border-radius: 12px;
+  min-height: 400px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+
+/* === Loaded state clears skeletons === */
+
+.details-page--loaded .details-header__title {
+  animation: none;
+  background-color: transparent;
+  color: inherit;
+  min-width: unset;
+}
+
+.details-page--loaded .details-header .body {
+  animation: none;
+  background-color: transparent;
+  color: inherit;
+  min-width: unset;
+}
+
+.details-page--loaded .details-header .caption {
+  animation: none;
+  background-color: transparent;
+  color: inherit;
+  min-width: unset;
+}
+
+.details-page--loaded .details-header .circular:not(.play__button):not(.like__button):not(.shuffle__button):not(.info__button) {
+  animation: none;
+  background-color: transparent;
+  color: inherit;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.details-page--loaded .details-content-clamp listview {
+  animation: none;
+  background-color: transparent;
+  min-height: unset;
+}
+
+
+/* Circular variant for artist avatars */
+.details-header__image--circular {
+  border-radius: 9999px;
+}
+
+/* Skeleton placeholder background for missing images */
+.details-page--loaded .details-header__image-placeholder {
+  animation: none;
+  background-color: transparent;
+}
+
+/* Header title */
+.details-header__title {
+  font-weight: bold;
+}
+
+/* Subtitle label in headers */
+.details-header .body {
+  min-height: 24px;
+}
+
+.details-header .body:hover {
+  border-radius: 6px;
+  background-image: image(alpha(currentColor, 0.16));
+}
+
+/* Caption label in headers - matches subtitle height for centering */
+.details-header .caption {
+  min-height: 24px;
+}
+
+/* Shared headerbar transitions */
+headerbar.details__headerbar {
+  background-color: @headerbar_bg_color;
+  transition: background-color .3s ease;
+}
+
+headerbar.flat.details__headerbar {
+  background-color: transparent;
+}
+
+headerbar.flat.details__headerbar windowtitle {
+  opacity: 0;
+}
+
+headerbar.details__headerbar windowtitle {
+  transition: opacity .3s ease;
+  opacity: 1;
+}
+
+.details-page--loaded .skeleton {
+  background-color: transparent;
+  color: inherit;
+  animation: none;
+}

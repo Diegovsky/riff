@@ -22,7 +22,6 @@ use oauth2::{PkceCodeVerifier, RefreshToken, RequestTokenError};
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -39,6 +38,7 @@ playlist-read-collaborative,\
 user-library-read,\
 user-library-modify,\
 user-follow-read,\
+user-follow-modify,\
 user-top-read,\
 user-read-recently-played,\
 user-read-playback-state,\

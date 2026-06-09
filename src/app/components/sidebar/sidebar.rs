@@ -9,7 +9,7 @@ use super::{
     sidebar_row::SidebarRow,
     SidebarDestination, SidebarItem, CREATE_PLAYLIST_ITEM, LIBRARY_SECTION, SAVED_PLAYLISTS_SECTION,
 };
-use crate::app::models::{AlbumModel, PlaylistSummary};
+use crate::app::models::{CardModel, PlaylistSummary};
 use crate::app::state::ScreenName;
 use crate::app::{
     ActionDispatcher, AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Component,
@@ -63,11 +63,11 @@ impl SidebarModel {
         Some(())
     }
 
-    fn map_to_destination(a: AlbumModel) -> SidebarDestination {
-        let title = Some(a.album())
+    fn map_to_destination(a: CardModel) -> SidebarDestination {
+        let title = Some(a.title())
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| gettext("Unnamed playlist"));
-        let id = a.uri();
+        let id = a.id();
         SidebarDestination::Playlist(PlaylistSummary { id, title })
     }
 
@@ -148,7 +148,6 @@ impl Sidebar {
         list_store.append(&SidebarItem::from_destination(
             SidebarDestination::NowPlaying,
         ));
-        list_store.append(&SidebarItem::library_section());
         list_store.append(&SidebarItem::from_destination(
             SidebarDestination::SavedArtists,
         ));

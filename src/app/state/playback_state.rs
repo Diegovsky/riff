@@ -97,13 +97,13 @@ impl PlaybackState {
     // Replaces (!) the current playlist with the contents of a song batch
     fn set_batch(&mut self, source: Option<SongsSource>, song_batch: SongBatch) -> bool {
         let ok = self.clear(source).and(|s| s.add(song_batch)).commit();
-        self.index.resize(self.songs.len());
+        self.index.resize(self.songs.partial_len());
         ok
     }
 
     fn add_batch(&mut self, song_batch: SongBatch) -> bool {
         let ok = self.songs.add(song_batch).commit();
-        self.index.resize(self.songs.len());
+        self.index.resize(self.songs.partial_len());
         ok
     }
 
@@ -198,7 +198,8 @@ impl PlaybackState {
     }
 
     pub fn next_index(&self) -> Option<usize> {
-        let len = self.songs.len();
+        // When shuffled, we can only play songs that are actually loaded
+        let len = if self.is_shuffled { self.songs.partial_len() } else { self.songs.len() };
         self.list_position.and_then(|p| match self.repeat {
             RepeatMode::Song => Some(p),
             RepeatMode::Playlist if len != 0 => Some((p + 1) % len),
@@ -223,7 +224,7 @@ impl PlaybackState {
     }
 
     pub fn prev_index(&self) -> Option<usize> {
-        let len = self.songs.len();
+        let len = if self.is_shuffled { self.songs.partial_len() } else { self.songs.len() };
         self.list_position.and_then(|p| match self.repeat {
             RepeatMode::Song => Some(p),
             RepeatMode::Playlist if len != 0 => Some((if p == 0 { len } else { p }) - 1),
@@ -786,5 +787,142 @@ mod tests {
 
         state.dequeue(&["3".to_string()]);
         assert_eq!(state.current_song_id(), None);
+    }
+
+    /// Reproduces the exact dispatch sequence from the details page shuffle button:
+    /// 1. ToggleShuffle (enables shuffle)
+    /// 2. LoadPagedSongs (loads a new source with songs)
+    /// 3. Load(first_song_id) (starts playing the first song)
+    /// Then pressing Next should select the next shuffled song, not stop playback.
+    #[test]
+    fn test_details_page_shuffle_play() {
+        let mut state = PlaybackState::default();
+        let songs = vec![song("1"), song("2"), song("3"), song("4"), song("5")];
+        let batch = SongBatch {
+            songs: songs.clone(),
+            batch: Batch { offset: 0, batch_size: 50, total: 5 },
+        };
+
+        // Step 1: ToggleShuffle (no songs loaded yet)
+        state.update_with(Cow::Owned(PlaybackAction::ToggleShuffle));
+        assert!(state.is_shuffled());
+
+        // Step 2: LoadPagedSongs (new source)
+        state.update_with(Cow::Owned(PlaybackAction::LoadPagedSongs(
+            SongsSource::Album("album1".to_string()),
+            batch,
+        )));
+        assert_eq!(state.songs().len(), 5);
+
+        // Step 3: Load first song
+        state.update_with(Cow::Owned(PlaybackAction::Load("1".to_string())));
+        assert!(state.is_playing());
+        assert!(state.current_song_id().is_some());
+
+        // Now press Next — this should NOT stop playback
+        let events = state.update_with(Cow::Owned(PlaybackAction::Next));
+        assert!(
+            state.is_playing(),
+            "Playback stopped after Next! current_song_id={:?}, list_position={:?}",
+            state.current_song_id(),
+            state.current_position(),
+        );
+        assert!(
+            events.iter().any(|e| matches!(e, PlaybackEvent::TrackChanged(_))),
+            "Expected TrackChanged event, got: {:?}",
+            events,
+        );
+        assert!(state.current_song_id().is_some());
+
+        // Press Next again — should still work
+        let events = state.update_with(Cow::Owned(PlaybackAction::Next));
+        assert!(state.is_playing());
+        assert!(
+            events.iter().any(|e| matches!(e, PlaybackEvent::TrackChanged(_))),
+            "Second Next failed, got: {:?}",
+            events,
+        );
+    }
+
+    /// Reproduces the artist page shuffle bug: Batch::first_of_size(50) sets total=0,
+    /// causing the playback state to think there are 0 songs.
+    #[test]
+    fn test_details_page_shuffle_play_artist_bug() {
+        let mut state = PlaybackState::default();
+        let songs = vec![song("1"), song("2"), song("3"), song("4"), song("5")];
+        // Artist page uses Batch::first_of_size(50) which has total=0
+        let batch = SongBatch {
+            songs: songs.clone(),
+            batch: Batch::first_of_size(50),
+        };
+
+        // Step 1: ToggleShuffle
+        state.update_with(Cow::Owned(PlaybackAction::ToggleShuffle));
+        assert!(state.is_shuffled());
+
+        // Step 2: LoadPagedSongs with total=0 batch
+        state.update_with(Cow::Owned(PlaybackAction::LoadPagedSongs(
+            SongsSource::Artist("artist1".to_string()),
+            batch,
+        )));
+
+        // Step 3: Load first song
+        state.update_with(Cow::Owned(PlaybackAction::Load("1".to_string())));
+        assert!(state.is_playing(), "Song should be playing after Load");
+        assert_eq!(state.current_song_id(), Some("1".to_string()));
+
+        // Now press Next — this SHOULD work but currently fails
+        let events = state.update_with(Cow::Owned(PlaybackAction::Next));
+        assert!(
+            state.is_playing(),
+            "Playback stopped after Next! current_song_id={:?}, list_position={:?}",
+            state.current_song_id(),
+            state.current_position(),
+        );
+        assert!(
+            events.iter().any(|e| matches!(e, PlaybackEvent::TrackChanged(_))),
+            "Expected TrackChanged event, got: {:?}",
+            events,
+        );
+    }
+
+    /// Reproduces the playlist shuffle bug: total > loaded songs means shuffle
+    /// can pick indices that have no songs loaded.
+    #[test]
+    fn test_details_page_shuffle_play_playlist_bug() {
+        let mut state = PlaybackState::default();
+        // Playlist has 200 total songs but only first 100 are loaded
+        let songs: Vec<_> = (1..=100).map(|i| song(&i.to_string())).collect();
+        let batch = SongBatch {
+            songs,
+            batch: Batch { offset: 0, batch_size: 100, total: 200 },
+        };
+
+        // Step 1: ToggleShuffle
+        state.update_with(Cow::Owned(PlaybackAction::ToggleShuffle));
+
+        // Step 2: LoadPagedSongs
+        state.update_with(Cow::Owned(PlaybackAction::LoadPagedSongs(
+            SongsSource::Playlist("pl1".to_string()),
+            batch,
+        )));
+        // songs.len() returns total=200, but only 100 are actually loaded
+        assert_eq!(state.songs().len(), 200);
+
+        // Step 3: Load first song
+        state.update_with(Cow::Owned(PlaybackAction::Load("1".to_string())));
+        assert!(state.is_playing());
+
+        // Press Next multiple times — eventually shuffle will pick an index >= 100
+        // which has no song loaded, causing playback to stop
+        let mut failed = false;
+        for _ in 0..99 {
+            let events = state.update_with(Cow::Owned(PlaybackAction::Next));
+            if !state.is_playing() || state.current_song_id().is_none() {
+                failed = true;
+                break;
+            }
+        }
+        assert!(!failed, "Playback stopped because shuffle picked an unloaded song index");
     }
 }

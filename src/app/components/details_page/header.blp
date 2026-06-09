@@ -1,0 +1,169 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $DetailsHeaderWidget : Box {
+  orientation: horizontal;
+  valign: start;
+  vexpand: false;
+
+  styles [
+    "details-header",
+  ]
+
+  Adw.BreakpointBin {
+    width-request: 1;
+    height-request: 1;
+    hexpand: true;
+
+    Adw.Breakpoint {
+      condition("max-width: 550sp")
+
+    }
+
+    child: Box {
+      orientation: horizontal;
+
+      Box image_box {
+        overflow: hidden;
+        valign: center;
+        margin-end: 12;
+
+        styles [
+          "details-header__image-box",
+        ]
+
+        Overlay {
+          Picture image {
+            content-fit: cover;
+
+            styles [
+              "details-header__image",
+            ]
+          }
+
+          [overlay]
+          Button info_button {
+            icon-name: "preferences-system-details-symbolic";
+            halign: end;
+            valign: end;
+            visible: false;
+            can-target: true;
+            margin-end: 4;
+            margin-bottom: 4;
+
+            styles [
+              "circular",
+              "info__button",
+            ]
+          }
+        }
+      }
+
+      CenterBox {
+        orientation: vertical;
+        hexpand: true;
+
+        [start]
+        Box {}
+
+        [center]
+        Box info_box {
+          orientation: vertical;
+          hexpand: true;
+
+          Label caption_label {
+            halign: start;
+            opacity: 0;
+
+            styles [
+              "caption",
+            ]
+          }
+
+          Label title_label {
+            halign: start;
+            hexpand: false;
+            ellipsize: end;
+
+            styles [
+              "title-1",
+              "details-header__title",
+            ]
+          }
+
+          Label subtitle_label {
+            halign: start;
+            opacity: 0;
+            ellipsize: end;
+
+            styles [
+              "body",
+            ]
+          }
+        }
+
+        [end]
+        Box button_box {
+          orientation: horizontal;
+          spacing: 8;
+          hexpand: true;
+
+          Button play_button {
+            icon-name: "media-playback-start-symbolic";
+            halign: center;
+            valign: center;
+            visible: false;
+            tooltip-text: _("Play");
+
+            styles [
+              "circular",
+              "play__button",
+            ]
+          }
+
+          Button shuffle_button {
+            icon-name: "media-playlist-shuffle-symbolic";
+            halign: center;
+            valign: center;
+            visible: false;
+            tooltip-text: _("Shuffle");
+
+            styles [
+              "circular",
+              "shuffle__button",
+            ]
+          }
+
+          Button like_button {
+            icon-name: "non-starred-symbolic";
+            halign: center;
+            valign: center;
+            tooltip-text: _("Add to Library");
+
+            styles [
+              "circular",
+              "like__button",
+            ]
+          }
+
+          Box {
+            hexpand: true;
+          }
+
+          Button edit_button {
+            icon-name: "document-edit-symbolic";
+            halign: center;
+            valign: center;
+            visible: false;
+            tooltip-text: _("Edit");
+
+            styles [
+              "circular",
+              "edit__button",
+            ]
+          }
+        }
+      }
+    };
+  }
+}
