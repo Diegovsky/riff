@@ -256,6 +256,30 @@ impl AppState {
                 events.append(&mut more_events);
                 events
             }
+            AppAction::BrowserAction(BrowserAction::SavePlaylist(id)) => {
+                let mut events = forward_action(
+                    LoginAction::PrependUserPlaylist(vec![PlaylistSummary { id: id.clone(), title: String::new() }]),
+                    &mut self.logged_user,
+                );
+                let mut more_events = forward_action(
+                    BrowserAction::SavePlaylist(id),
+                    &mut self.browser,
+                );
+                events.append(&mut more_events);
+                events
+            }
+            AppAction::BrowserAction(BrowserAction::UnsavePlaylist(id)) => {
+                let mut events = forward_action(
+                    LoginAction::RemoveUserPlaylist(id.clone()),
+                    &mut self.logged_user,
+                );
+                let mut more_events = forward_action(
+                    BrowserAction::UnsavePlaylist(id),
+                    &mut self.browser,
+                );
+                events.append(&mut more_events);
+                events
+            }
             // As for all other actions, we forward them to the substates :)
             AppAction::PlaybackAction(a) => forward_action(a, &mut self.playback),
             AppAction::BrowserAction(a) => forward_action(a, &mut self.browser),

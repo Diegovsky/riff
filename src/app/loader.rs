@@ -2,9 +2,14 @@ use crate::api::cache::*;
 use gdk_pixbuf::{prelude::PixbufLoaderExt, Pixbuf, PixbufLoader};
 use isahc::config::Configurable;
 use isahc::{AsyncBody, AsyncReadResponseExt, HttpClient, Response};
+use std::cell::OnceCell;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use std::io::{Error, ErrorKind, Write};
+
+thread_local! {
+    static HTTP_CLIENT: OnceCell<HttpClient> = const { OnceCell::new() };
+}
 
 // A wrapper to be able to implement the Write trait on a PixbufLoader
 struct LocalPixbufLoader<'a>(&'a PixbufLoader);
@@ -46,11 +51,17 @@ impl ImageLoader {
     }
 
     async fn get_image(url: &str) -> Option<Response<AsyncBody>> {
-        let mut builder = HttpClient::builder();
-        if cfg!(debug_assertions) {
-            builder = builder.ssl_options(isahc::config::SslOption::DANGER_ACCEPT_INVALID_CERTS);
-        }
-        let client = builder.build().unwrap();
+        let client = HTTP_CLIENT.with(|cell| {
+            cell.get_or_init(|| {
+                let mut builder = HttpClient::builder();
+                if cfg!(debug_assertions) {
+                    builder =
+                        builder.ssl_options(isahc::config::SslOption::DANGER_ACCEPT_INVALID_CERTS);
+                }
+                builder.build().unwrap()
+            })
+            .clone()
+        });
         client.get_async(url).await.ok()
     }
 

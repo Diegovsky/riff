@@ -1,5 +1,4 @@
 use crate::api::clear_user_cache;
-use crate::app::credentials::Credentials;
 use crate::app::state::{LoginAction, PlaybackAction};
 use crate::app::{ActionDispatcher, AppModel};
 use std::ops::Deref;
@@ -34,14 +33,12 @@ impl UserMenuModel {
 
     pub fn fetch_user_playlists(&self) {
         let api = self.app_model.get_spotify();
-        if let Some(current_user) = self.username() {
-            let current_user = current_user.clone();
+        if self.username().is_some() {
             self.dispatcher
                 .call_spotify_and_dispatch(move || async move {
                     api.get_saved_playlists(0, 30).await.map(|playlists| {
                         let summaries = playlists
                             .into_iter()
-                            .filter(|p| p.owner.id == current_user)
                             .map(|p| p.into())
                             .collect();
                         LoginAction::SetUserPlaylists(summaries).into()

@@ -1,0 +1,64 @@
+/* Skeleton state (default before loaded) */
+.container .card {
+  background-color: @skeleton_color;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.container .title-4,
+.container .body {
+  background-color: @skeleton_color;
+  color: transparent;
+  border-radius: 4px;
+  min-width: 80px;
+  min-height: 16px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+/* Max card height */
+.container {
+  max-height: 300px;
+  overflow: hidden;
+  padding: 6px;
+}
+
+/* Size variants */
+navigation-split-view .card--square .card,
+navigation-split-view .card--round .card {
+  min-width: 200px;
+  min-height: 200px;
+}
+
+navigation-split-view .card--square .card {
+  border-radius: 6px;
+}
+
+navigation-split-view .card--round .card {
+  border-radius: 50%;
+}
+
+navigation-split-view.collapsed .card--square .card,
+navigation-split-view.collapsed .card--round .card {
+  min-width: 100px;
+  min-height: 100px;
+}
+
+/* Loaded state removes skeleton */
+.container--loaded .card {
+  animation: none;
+  background-color: transparent;
+}
+
+.container--loaded .title-4,
+.container--loaded .body {
+  animation: none;
+  background-color: transparent;
+  color: inherit;
+  min-width: unset;
+  min-height: unset;
+}
+
+.container--loaded .skeleton {
+  background-color: transparent;
+  color: inherit;
+  animation: none;
+}

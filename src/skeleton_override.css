@@ -1,0 +1,73 @@
+/* Force skeleton: neutralize --loaded overrides so base skeleton styles show.
+   Loaded via provider always; only activates when .force-skeleton is on the window. */
+
+/* === Cards === */
+
+.force-skeleton .container--loaded .card {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  background-color: @skeleton_color;
+}
+
+.force-skeleton .container--loaded .card picture {
+  opacity: 0;
+}
+
+.force-skeleton .container--loaded .title-4,
+.force-skeleton .container--loaded .body {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  background-color: @skeleton_color;
+  color: transparent;
+}
+
+.force-skeleton .details-page--loaded .skeleton,
+.force-skeleton .container--loaded .skeleton {
+  background-color: @skeleton_color;
+  color: transparent;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+/* === Details pages === */
+
+.force-skeleton .details-page--loaded .details-header__image {
+  opacity: 0;
+}
+
+.force-skeleton .details-page--loaded .details-header__image-box {
+  background-color: @skeleton_color;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  min-width: 200px;
+  min-height: 200px;
+}
+
+.force-skeleton .details-page--loaded .play__button,
+.force-skeleton .details-page--loaded .shuffle__button,
+.force-skeleton .details-page--loaded .like__button,
+.force-skeleton .details-page--loaded .info__button,
+.force-skeleton .details-page--loaded .edit__button {
+  background-color: @skeleton_color;
+  color: transparent;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.force-skeleton .details-page--loaded .details-header__title,
+.force-skeleton .details-page--loaded .details-header .body,
+.force-skeleton .details-page--loaded .details-header .caption {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  background-color: @skeleton_color;
+  color: transparent;
+}
+
+.force-skeleton .details-page--loaded .details-header .circular:not(.play__button):not(.like__button):not(.shuffle__button):not(.info__button) {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  background-color: @skeleton_color;
+  color: transparent;
+  opacity: 0;
+}
+
+.force-skeleton .details-page--loaded .details-content-clamp listview {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  background-color: @skeleton_color;
+  border-radius: 12px;
+  min-height: 400px;
+}
+

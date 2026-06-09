@@ -12,7 +12,6 @@ use librespot::playback::mixer::{Mixer, MixerConfig};
 use librespot::playback::audio_backend;
 use librespot::playback::config::{AudioFormat, Bitrate, PlayerConfig, VolumeCtrl};
 use librespot::playback::player::{Player, PlayerEvent, PlayerEventChannel};
-use url::Url;
 
 use crate::app::models::RepeatMode;
 use crate::player::AppPlayerDelegate;
@@ -48,16 +47,6 @@ impl fmt::Display for SpotifyError {
             }
         }
     }
-}
-
-pub trait SpotifyPlayerDelegate {
-    fn end_of_track_reached(&self);
-    fn login_challenge_started(&self, url: Url);
-    fn token_login_successful(&self, username: String);
-    fn refresh_successful(&self);
-    fn report_error(&self, error: SpotifyError);
-    fn notify_playback_state(&self, position: u32);
-    fn preload_next_track(&self);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

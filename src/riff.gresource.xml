@@ -3,45 +3,30 @@
   <gresource prefix="/dev/diegovsky/Riff">
     <file>window.ui</file>
     <file>app.css</file>
+    <file>debug.css</file>
+    <file>skeleton_override.css</file>
     <!-- login -->
-    <file alias="components/login.ui">app/components/login/login.ui</file>
+    <file alias="components/login.ui">app/components/pages/login/login.ui</file>
     <!-- settings -->
-    <file alias="components/settings.ui">app/components/settings/settings.ui</file>
+    <file alias="components/settings.ui">app/components/pages/settings/settings.ui</file>
     <!-- search -->
-    <file alias="components/search.ui">app/components/search/search.ui</file>
-    <!-- album -->
-    <file alias="components/album.css">app/components/album/album.css</file>
-    <!-- artist -->
-    <file alias="components/artist.ui">app/components/artist/artist.ui</file>
-    <!-- details -->
-    <file alias="components/details.ui">app/components/details/details.ui</file>
-    <file alias="components/album_header.ui">app/components/details/album_header.ui</file>
-    <file alias="components/album_header.css">app/components/details/album_header.css</file>
-    <file alias="components/release_details.ui">app/components/details/release_details.ui</file>
-    <!-- playlist details -->
-    <file alias="components/playlist_details.ui">app/components/playlist_details/playlist_details.ui</file>
-    <file alias="components/playlist_header.ui">app/components/playlist_details/playlist_header.ui</file>
-    <file alias="components/playlist_header.css">app/components/playlist_details/playlist_header.css</file>
-    <!-- artist details -->
-    <file alias="components/artist_details.css">app/components/artist_details/artist_details.css</file>
-    <file alias="components/artist_details.ui">app/components/artist_details/artist_details.ui</file>
-    <!-- library -->
-    <file alias="components/library.ui">app/components/library/library.ui</file>
-    <!-- saved_playlists -->
-    <file alias="components/saved_playlists.ui">app/components/saved_playlists/saved_playlists.ui</file>
-    <!-- saved_artists -->
-    <file alias="components/saved_artists.ui">app/components/saved_artists/saved_artists.ui</file>
+    <file alias="components/search.ui">app/components/pages/search/search.ui</file>
+    <!-- card -->
+    <file alias="components/card.css">app/components/card/card.css</file>
+    <!-- details_page -->
+    <file alias="components/details_page/style.css">app/components/details_page/style.css</file>
+    <file alias="components/details_header.ui">app/components/details_page/header.ui</file>
+    <!-- details_album -->
+    <file alias="components/release_details.ui">app/components/pages/details_album/release_details.ui</file>
+    <!-- details_artist -->
+    <!-- details_user -->
+    <!-- details_playlist -->
     <!-- now playing -->
-    <file alias="components/now_playing.ui">app/components/now_playing/now_playing.ui</file>
     <file alias="components/device_selector.ui">app/components/device_selector/device_selector.ui</file>
     <!-- liked songs -->
-    <file alias="components/saved_tracks.ui">app/components/saved_tracks/saved_tracks.ui</file>
     <!-- song -->
     <file alias="components/song.css">app/components/playlist/song.css</file>
     <file alias="components/song.ui">app/components/playlist/song.ui</file>
-    <!-- user details -->
-    <file alias="components/user_details.css">app/components/user_details/user_details.css</file>
-    <file alias="components/user_details.ui">app/components/user_details/user_details.ui</file>
     <!-- playback -->
     <file alias="components/playback.css">app/components/playback/playback.css</file>
     <file alias="components/playback_controls.ui">app/components/playback/playback_controls.ui</file>
@@ -53,12 +38,9 @@
     <file alias="components/selection_toolbar.css">app/components/selection/selection_toolbar.css</file>
     <!-- headerbar -->
     <file alias="components/headerbar.ui">app/components/headerbar/headerbar.ui</file>
-    <file alias="components/playlist_headerbar.ui">app/components/playlist_details/playlist_headerbar.ui</file>
     <!-- sidebar -->
     <file alias="sidebar/sidebar_row.ui">app/components/sidebar/sidebar_row.ui</file>
     <file alias="components/create_playlist.ui">app/components/sidebar/create_playlist.ui</file>
-    <!-- scrolling_header -->
-    <file alias="components/scrolling_header.ui">app/components/scrolling_header/scrolling_header.ui</file>
   </gresource>
   <gresource prefix="/dev/diegovsky/Riff/icons/scalable/actions/">
     <file compressed="true" preprocess="xml-stripblanks" alias="music-queue-symbolic.svg">app/components/selection/icons/music-queue-symbolic.svg</file>

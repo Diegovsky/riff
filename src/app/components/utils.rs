@@ -152,6 +152,8 @@ pub fn wrap_flowbox_item<
     let item = item.downcast_ref::<Model>().unwrap();
     let widget = f(item);
     let child = gtk::FlowBoxChild::new();
+    child.set_halign(gtk::Align::Fill);
+    child.set_hexpand(true);
     child.set_child(Some(&widget));
     child.upcast::<gtk::Widget>()
 }

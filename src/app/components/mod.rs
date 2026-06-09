@@ -22,59 +22,30 @@ pub use playback::*;
 mod playlist;
 pub use playlist::*;
 
-mod login;
-pub use login::*;
-
-mod settings;
-pub use settings::*;
-
 mod player_notifier;
 pub use player_notifier::PlayerNotifier;
 
-mod library;
-pub use library::*;
+mod pages;
+pub use pages::*;
 
-mod details;
-pub use details::*;
+mod card;
+pub use card::*;
 
-mod search;
-pub use search::*;
+mod card_list;
+pub use card_list::*;
 
-mod album;
-use album::*;
+mod details_page;
+pub use details_page::*;
 
-mod artist;
-use artist::*;
-
-mod artist_details;
-pub use artist_details::*;
-
-mod user_details;
-pub use user_details::*;
-
-mod now_playing;
-pub use now_playing::*;
-
+#[allow(dead_code)]
 mod device_selector;
 pub use device_selector::*;
-
-mod saved_tracks;
-pub use saved_tracks::*;
 
 mod user_menu;
 pub use user_menu::*;
 
 mod notification;
 pub use notification::*;
-
-mod saved_playlists;
-pub use saved_playlists::*;
-
-mod saved_artists;
-pub use saved_artists::*;
-
-mod playlist_details;
-pub use playlist_details::*;
 
 mod window;
 pub use window::*;
@@ -84,9 +55,6 @@ pub use selection::*;
 
 mod headerbar;
 pub use headerbar::*;
-
-mod scrolling_header;
-pub use scrolling_header::*;
 
 pub mod utils;
 
@@ -100,8 +68,7 @@ pub fn expose_custom_widgets() {
     selection::expose_widgets();
     headerbar::expose_widgets();
     device_selector::expose_widgets();
-    playlist_details::expose_widgets();
-    scrolling_header::expose_widgets();
+    details_page::expose_widgets();
 }
 
 impl dyn ActionDispatcher {
