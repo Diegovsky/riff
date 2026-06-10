@@ -13,62 +13,29 @@ use std::future::Future;
 use crate::api::SpotifyApiError;
 use crate::app::{ActionDispatcher, AppAction, AppEvent};
 
-mod navigation;
-pub use navigation::*;
-
-mod playback;
-pub use playback::*;
-
-mod playlist;
-pub use playlist::*;
-
-mod player_notifier;
-pub use player_notifier::PlayerNotifier;
-
 mod pages;
 pub use pages::*;
 
-mod card;
-pub use card::*;
+mod widgets;
+pub use widgets::*;
 
-mod card_list;
-pub use card_list::*;
+mod shell;
+pub use shell::*;
 
-mod details_page;
-pub use details_page::*;
-
-#[allow(dead_code)]
-mod device_selector;
-pub use device_selector::*;
-
-mod user_menu;
-pub use user_menu::*;
-
-mod notification;
-pub use notification::*;
-
-mod window;
-pub use window::*;
-
-mod selection;
-pub use selection::*;
-
-mod headerbar;
-pub use headerbar::*;
+mod player_notifier;
+pub use player_notifier::PlayerNotifier;
 
 pub mod utils;
 
 pub mod labels;
 
-pub mod sidebar;
-
 // without this the builder doesn't seen to know about the custom widgets
 pub fn expose_custom_widgets() {
-    playback::expose_widgets();
-    selection::expose_widgets();
-    headerbar::expose_widgets();
-    device_selector::expose_widgets();
-    details_page::expose_widgets();
+    shell::playback::expose_widgets();
+    widgets::selection::expose_widgets();
+    shell::headerbar::expose_widgets();
+    shell::device_selector::expose_widgets();
+    widgets::details_page::expose_widgets();
 }
 
 impl dyn ActionDispatcher {

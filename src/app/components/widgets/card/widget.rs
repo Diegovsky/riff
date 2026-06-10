@@ -22,7 +22,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(file = "src/app/components/card/card.blp")]
+    #[template(file = "src/app/components/widgets/card/card.blp")]
     pub struct CardWidget {
         #[template_child]
         pub title_label: TemplateChild<gtk::Label>,
