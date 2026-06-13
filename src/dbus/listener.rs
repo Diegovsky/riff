@@ -55,7 +55,7 @@ impl AppPlaybackStateListener {
             title,
             album: album.name,
             artist: artists.into_iter().map(|a| a.name).collect(),
-            art,
+            art: art.as_ref().and_then(|s| s.largest()).map(str::to_owned),
         })
     }
 
@@ -123,7 +123,7 @@ impl EventListener for AppPlaybackStateListener {
         if let AppEvent::PlaybackEvent(event) = event {
             if let Some(update) = self.update_for(event) {
                 if let Err(e) = self.sender.unbounded_send(update) {
-                    log::error!("Could not send event to DBUS server");
+                    log::error!("Could not send event to DBUS server: {e}");
                 }
             }
         }

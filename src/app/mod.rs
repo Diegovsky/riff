@@ -1,6 +1,7 @@
 use crate::settings::{RiffSettings, StateTracker};
-use crate::{api::CachedSpotifyClient, player::TokenStore};
+use crate::{api::CachedSpotifyClient, feature_flags, player::TokenStore};
 use futures::channel::mpsc::UnboundedSender;
+use gtk::prelude::*;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -116,6 +117,20 @@ impl App {
             App::make_user_menu(builder, Rc::clone(model), dispatcher),
             App::make_notification(builder),
         ];
+
+        // Wire up skeleton toggle button (debug-only feature)
+        if feature_flags::is_enabled(feature_flags::FeatureFlag::DebugSkeleton) {
+            let skeleton_toggle: gtk::ToggleButton = builder.object("skeleton_toggle").unwrap();
+            let window: libadwaita::ApplicationWindow = builder.object("window").unwrap();
+            skeleton_toggle.set_visible(true);
+            skeleton_toggle.connect_toggled(move |btn| {
+                if btn.is_active() {
+                    window.add_css_class("force-skeleton");
+                } else {
+                    window.remove_css_class("force-skeleton");
+                }
+            });
+        }
 
         self.components.append(&mut components);
     }

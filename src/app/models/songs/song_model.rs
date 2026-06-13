@@ -245,6 +245,9 @@ mod imp {
                     .as_ref()
                     .expect("song set at constructor")
                     .art
+                    .as_ref()
+                    .and_then(|s| s.best_for_width(48))
+                    .map(str::to_owned)
                     .to_value(),
                 "playing" => self.state.get().is_playing.to_value(),
                 "selected" => self.state.get().is_selected.to_value(),

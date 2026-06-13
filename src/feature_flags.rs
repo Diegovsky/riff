@@ -2,20 +2,13 @@ use gio::prelude::SettingsExt;
 
 const SETTINGS: &str = "dev.diegovsky.Riff";
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FeatureFlag {
     /*
-     The playlist select mode, which allows users to remove songs from the playlist or to add songs
-     to the play queue, has visually bugged buttons in the page's header. It is questionable
-     if the buttons should live in the page's header.
+     Selection mode allows users to select multiple songs to queue, save, or remove.
+     It has visually bugged buttons in the page's header across all pages that use it.
      */
-    PlaylistEditMode,
-    /*
-     The album select mode allows users to select multiple songs at once to save to library, add to
-     a playlist, or add songs to the queue. However, it has visually bugged buttons in the page's
-     header. It is also questionable if the buttons should live in the page's header.
-     */
-    AlbumSelectMode,
+    SelectMode,
     /*
      Creating new playlists workflow needs to be flushed out further before launching. Currently,
      users can create a new play list with no songs but interacting with the playlist is awkward.
@@ -24,58 +17,97 @@ pub enum FeatureFlag {
      */
     CreateNewPlaylist,
     /*
-    Users in the album select mode can re-order songs in the queue, save songs to the library, and
-    remove songs from the queue. There are visual bugs relating to the header buttons, and it is
-    possible to crash the application by re-ordering a song past the last queued song.
+     Device selector allows switching playback between Spotify Connect devices.
      */
-    NowPlayingSelectMode,
+    DeviceSelector,
+    /*
+     Debug CSS shows alignment and rendering debug overlays to help identify layout issues.
+     Only available in debug builds.
+     */
+    DebugCss,
+    /*
+     Debug Skeleton adds a toggle button to the header bar that forces all pages into their
+     skeleton/loading state. Only available in debug builds.
+     */
+    DebugSkeleton,
 }
 
 impl FeatureFlag {
     pub const ALL: &[FeatureFlag] = &[
-        FeatureFlag::PlaylistEditMode,
-        FeatureFlag::AlbumSelectMode,
+        FeatureFlag::SelectMode,
         FeatureFlag::CreateNewPlaylist,
-        FeatureFlag::NowPlayingSelectMode,
+        FeatureFlag::DeviceSelector,
+        FeatureFlag::DebugCss,
+        FeatureFlag::DebugSkeleton,
     ];
+
+    pub fn is_debug_only(&self) -> bool {
+        matches!(self, FeatureFlag::DebugCss | FeatureFlag::DebugSkeleton)
+    }
 
     pub fn key(&self) -> &'static str {
         match self {
-            FeatureFlag::PlaylistEditMode => "feature-playlist-edit-mode",
-            FeatureFlag::AlbumSelectMode => "feature-album-select-mode",
+            FeatureFlag::SelectMode => "feature-select-mode",
             FeatureFlag::CreateNewPlaylist => "feature-create-new-playlist",
-            FeatureFlag::NowPlayingSelectMode => "feature-now-playing-select-mode",
+            FeatureFlag::DeviceSelector => "feature-device-selector",
+            FeatureFlag::DebugCss => "feature-debug-css",
+            FeatureFlag::DebugSkeleton => "feature-debug-skeleton",
         }
     }
 
     pub fn title(&self) -> &'static str {
         match self {
-            FeatureFlag::PlaylistEditMode => "Playlist Edit Mode",
-            FeatureFlag::AlbumSelectMode => "Album Select Mode",
+            FeatureFlag::SelectMode => "Select Mode",
             FeatureFlag::CreateNewPlaylist => "Create New Playlist",
-            FeatureFlag::NowPlayingSelectMode => "Now Playing Select Mode",
+            FeatureFlag::DeviceSelector => "Device Selector",
+            FeatureFlag::DebugCss => "Debug CSS",
+            FeatureFlag::DebugSkeleton => "Debug Skeleton",
         }
     }
 
     pub fn description(&self) -> &'static str {
         match self {
-            FeatureFlag::PlaylistEditMode => {
-                "Enable the edit button to rename playlists and manage tracks."
-            }
-            FeatureFlag::AlbumSelectMode => {
-                "Enable the selection checkmark when viewing an album."
+            FeatureFlag::SelectMode => {
+                "Enable selection mode to select multiple songs for queuing, saving, or removing."
             }
             FeatureFlag::CreateNewPlaylist => {
                 "Enable the New Playlist button in the sidebar."
             }
-            FeatureFlag::NowPlayingSelectMode => {
-                "Enable selection mode on the Now Playing page."
+            FeatureFlag::DeviceSelector => {
+                "Enable the device selector in the Now Playing headerbar."
+            }
+            FeatureFlag::DebugCss => {
+                "Show alignment and rendering debug overlays."
+            }
+            FeatureFlag::DebugSkeleton => {
+                "Toggle between loaded content and skeleton loading states."
             }
         }
     }
 }
 
 pub fn is_enabled(flag: FeatureFlag) -> bool {
+    if flag.is_debug_only() && !cfg!(debug_assertions) {
+        return false;
+    }
     let settings = gio::Settings::new(SETTINGS);
     settings.boolean(flag.key())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn debug_flags_are_debug_only() {
+        assert!(FeatureFlag::DebugCss.is_debug_only());
+        assert!(FeatureFlag::DebugSkeleton.is_debug_only());
+    }
+
+    #[test]
+    fn non_debug_flags_are_not_debug_only() {
+        assert!(!FeatureFlag::SelectMode.is_debug_only());
+        assert!(!FeatureFlag::CreateNewPlaylist.is_debug_only());
+        assert!(!FeatureFlag::DeviceSelector.is_debug_only());
+    }
 }

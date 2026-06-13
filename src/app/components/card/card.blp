@@ -1,0 +1,47 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $CardWidget : Adw.Bin {
+  Box {
+    hexpand: false;
+    halign: center;
+    valign: start;
+    orientation: vertical;
+    spacing: 6;
+
+    Picture cover_image {
+      content-fit: cover;
+
+      styles [
+        "card",
+      ]
+    }
+
+    Label title_label {
+      label: " ";
+      justify: center;
+      ellipsize: end;
+      max-width-chars: 16;
+      margin-top: 6;
+
+      styles [
+        "title-4",
+      ]
+    }
+
+    Label subtitle_label {
+      label: " ";
+      justify: center;
+      ellipsize: end;
+      max-width-chars: 16;
+
+      styles [
+        "body",
+      ]
+    }
+  }
+
+  styles [
+    "container",
+  ]
+}

@@ -1,6 +1,5 @@
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use librespot::core::SpotifyUri;
-use std::sync::Arc;
 use tokio::task;
 use url::Url;
 

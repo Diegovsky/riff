@@ -5,6 +5,9 @@ use super::{pagination::Pagination, BrowserAction, BrowserEvent, PaginationTarge
 use crate::app::models::*;
 use crate::app::ListStore;
 
+/// Number of cards (albums, playlists) to load per batch.
+pub const CARD_BATCH_SIZE: usize = 18;
+
 #[derive(Clone, Debug)]
 pub enum ScreenName {
     Home,
@@ -159,6 +162,12 @@ impl UpdatableState for PlaylistDetailsState {
                 self.songs.remove(&uris[..]).commit();
                 vec![BrowserEvent::PlaylistTracksRemoved(self.id.clone())]
             }
+            BrowserAction::SavePlaylist(id) if id == &self.id => {
+                vec![BrowserEvent::PlaylistSaved(self.id.clone())]
+            }
+            BrowserAction::UnsavePlaylist(id) if id == &self.id => {
+                vec![BrowserEvent::PlaylistUnsaved(self.id.clone())]
+            }
             _ => vec![],
         }
     }
@@ -168,8 +177,10 @@ pub struct ArtistState {
     pub id: String,
     pub name: ScreenName,
     pub artist: Option<String>,
+    pub photo: Option<ImageSet>,
+    pub is_followed: bool,
     pub next_page: Pagination<String>,
-    pub albums: ListStore<AlbumModel>,
+    pub albums: ListStore<CardModel>,
     pub top_tracks: SongListModel,
 }
 
@@ -179,7 +190,9 @@ impl ArtistState {
             id: id.clone(),
             name: ScreenName::Artist(id.clone()),
             artist: None,
-            next_page: Pagination::new(id, 20),
+            photo: None,
+            is_followed: false,
+            next_page: Pagination::new(id, CARD_BATCH_SIZE),
             albums: ListStore::new(),
             top_tracks: SongListModel::new(10),
         }
@@ -196,15 +209,19 @@ impl UpdatableState for ArtistState {
                 let ArtistDescription {
                     id,
                     name,
+                    photo,
                     albums,
                     mut top_tracks,
+                    is_followed,
                 } = *details.clone();
                 self.artist = Some(name);
+                self.photo = photo;
+                self.is_followed = is_followed;
                 self.albums
                     .replace_all(albums.into_iter().map(|a| a.into()));
                 self.next_page.reset_count(self.albums.len());
 
-                top_tracks.truncate(5);
+                top_tracks.truncate(10);
                 self.top_tracks.append(top_tracks).commit();
 
                 vec![BrowserEvent::ArtistDetailsUpdated(id)]
@@ -220,6 +237,14 @@ impl UpdatableState for ArtistState {
                 self.next_page.next_offset_take();
                 vec![]
             }
+            BrowserAction::FollowArtist(id) if id == &self.id => {
+                self.is_followed = true;
+                vec![BrowserEvent::ArtistDetailsUpdated(self.id.clone())]
+            }
+            BrowserAction::UnfollowArtist(id) if id == &self.id => {
+                self.is_followed = false;
+                vec![BrowserEvent::ArtistDetailsUpdated(self.id.clone())]
+            }
             _ => vec![],
         }
     }
@@ -230,12 +255,12 @@ pub struct HomeState {
     pub name: ScreenName,
     pub visible_page: &'static str,
     pub next_albums_page: Pagination<()>,
-    pub albums: ListStore<AlbumModel>,
+    pub albums: ListStore<CardModel>,
     pub next_playlists_page: Pagination<()>,
-    pub playlists: ListStore<AlbumModel>,
+    pub playlists: ListStore<CardModel>,
     pub next_saved_tracks_page: Pagination<()>,
     pub saved_tracks: SongListModel,
-    pub artists: ListStore<ArtistModel>,
+    pub artists: ListStore<CardModel>,
     pub artists_cursor: Option<String>,
 }
 
@@ -244,9 +269,9 @@ impl Default for HomeState {
         Self {
             name: ScreenName::Home,
             visible_page: "library",
-            next_albums_page: Pagination::new((), 30),
+            next_albums_page: Pagination::new((), CARD_BATCH_SIZE),
             albums: ListStore::new(),
-            next_playlists_page: Pagination::new((), 30),
+            next_playlists_page: Pagination::new((), CARD_BATCH_SIZE),
             playlists: ListStore::new(),
             next_saved_tracks_page: Pagination::new((), 50),
             saved_tracks: SongListModel::new(50),
@@ -267,7 +292,7 @@ impl UpdatableState for HomeState {
                 vec![BrowserEvent::HomeVisiblePageChanged(page)]
             }
             BrowserAction::SetLibraryContent(content) => {
-                if !self.albums.eq(content, |a, b| a.uri() == b.id) {
+                if !self.albums.eq(content, |a, b| a.id() == b.id) {
                     self.albums.replace_all(content.iter().map(|a| a.into()));
                     self.next_albums_page.reset_count(self.albums.len());
                     vec![BrowserEvent::LibraryUpdated]
@@ -286,7 +311,7 @@ impl UpdatableState for HomeState {
             }
             BrowserAction::SaveAlbum(album) => {
                 let album_id = album.id.clone();
-                let already_present = self.albums.iter().any(|a| a.uri() == album_id);
+                let already_present = self.albums.iter().any(|a| a.id() == album_id);
                 if already_present {
                     vec![]
                 } else {
@@ -296,7 +321,7 @@ impl UpdatableState for HomeState {
                 }
             }
             BrowserAction::UnsaveAlbum(id) => {
-                let position = self.albums.iter().position(|a| a.uri() == *id);
+                let position = self.albums.iter().position(|a| a.id() == *id);
                 if let Some(position) = position {
                     self.albums.remove(position as u32);
                     self.next_albums_page.decrement();
@@ -306,7 +331,7 @@ impl UpdatableState for HomeState {
                 }
             }
             BrowserAction::SetPlaylistsContent(content) => {
-                if !self.playlists.eq(content, |a, b| a.uri() == b.id) {
+                if !self.playlists.eq(content, |a, b| a.id() == b.id) {
                     self.playlists.replace_all(content.iter().map(|a| a.into()));
                     self.next_playlists_page.reset_count(self.playlists.len());
                     vec![BrowserEvent::SavedPlaylistsUpdated]
@@ -320,13 +345,13 @@ impl UpdatableState for HomeState {
                 vec![BrowserEvent::SavedPlaylistsUpdated]
             }
             BrowserAction::UpdatePlaylistName(PlaylistSummary { id, title }) => {
-                if let Some(p) = self.playlists.iter().find(|p| &p.uri() == id) {
-                    p.set_album(title.to_owned());
+                if let Some(p) = self.playlists.iter().find(|p| &p.id() == id) {
+                    p.set_title(title.to_owned());
                 }
                 vec![BrowserEvent::SavedPlaylistsUpdated]
             }
-            BrowserAction::RemovePlaylist(id) => {
-                let position = self.playlists.iter().position(|p| p.uri() == *id);
+            BrowserAction::RemovePlaylist(id) | BrowserAction::UnsavePlaylist(id) => {
+                let position = self.playlists.iter().position(|p| p.id() == *id);
                 if let Some(position) = position {
                     self.playlists.remove(position as u32);
                     self.next_playlists_page.decrement();
@@ -440,8 +465,9 @@ pub struct UserState {
     pub id: String,
     pub name: ScreenName,
     pub user: Option<String>,
+    pub photo: Option<ImageSet>,
     pub next_page: Pagination<String>,
-    pub playlists: ListStore<AlbumModel>,
+    pub playlists: ListStore<CardModel>,
 }
 
 impl UserState {
@@ -450,7 +476,8 @@ impl UserState {
             id: id.clone(),
             name: ScreenName::User(id.clone()),
             user: None,
-            next_page: Pagination::new(id, 30),
+            photo: None,
+            next_page: Pagination::new(id, CARD_BATCH_SIZE),
             playlists: ListStore::new(),
         }
     }
@@ -466,9 +493,11 @@ impl UpdatableState for UserState {
                 let UserDescription {
                     id,
                     name,
+                    photo,
                     playlists,
                 } = *user.clone();
                 self.user = Some(name);
+                self.photo = photo;
                 self.playlists
                     .replace_all(playlists.iter().map(|p| p.into()));
                 self.next_page.reset_count(self.playlists.len());
@@ -503,8 +532,10 @@ mod tests {
             ArtistDescription {
                 id: "id".to_owned(),
                 name: "Foo".to_owned(),
+                photo: None,
                 albums: vec![],
                 top_tracks: vec![],
+                is_followed: false,
             },
         ))));
 
@@ -519,7 +550,7 @@ mod tests {
             title: "".to_owned(),
             artists: vec![],
             release_date: Some("1970-01-01".to_owned()),
-            art: Some("".to_owned()),
+            art: None,
             songs: SongBatch::empty(),
             is_liked: false,
         };
@@ -529,13 +560,15 @@ mod tests {
             ArtistDescription {
                 id: id.clone(),
                 name: "Foo".to_owned(),
-                albums: (0..20).map(|_| fake_album.clone()).collect(),
+                photo: None,
+                albums: (0..CARD_BATCH_SIZE).map(|_| fake_album.clone()).collect(),
                 top_tracks: vec![],
+                is_followed: false,
             },
         ))));
 
         let next = &artist_state.next_page;
-        assert_eq!(Some(20), next.next_offset);
+        assert_eq!(Some(CARD_BATCH_SIZE), next.next_offset);
 
         artist_state.update_with(Cow::Owned(BrowserAction::AppendArtistReleases(
             id.clone(),

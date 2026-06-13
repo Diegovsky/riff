@@ -8,7 +8,6 @@ use serde_json::from_str;
 use std::convert::Into;
 use std::marker::PhantomData;
 use std::str::FromStr;
-use std::sync::Arc;
 use thiserror::Error;
 
 use crate::player::TokenStore;
@@ -431,6 +430,12 @@ impl SpotifyClient {
             .json_body(Uris { uris })
     }
 
+    pub(crate) fn follow_playlist(&self, id: &str) -> SpotifyRequest<'_, (), ()> {
+        self.request()
+            .method(Method::PUT)
+            .uri(format!("/v1/playlists/{id}/followers"), None)
+    }
+
     pub(crate) fn unfollow_playlist(&self, id: &str) -> SpotifyRequest<'_, (), ()> {
         self.request()
             .method(Method::DELETE)
@@ -508,6 +513,36 @@ impl SpotifyClient {
 
         self.request()
             .method(Method::GET)
+            .uri("/v1/me/following".to_string(), Some(&query))
+    }
+
+    pub(crate) fn follow_artist(&self, id: &str) -> SpotifyRequest<'_, (), ()> {
+        let query = make_query_params()
+            .append_pair("type", "artist")
+            .append_pair("ids", id)
+            .finish();
+        self.request()
+            .method(Method::PUT)
+            .uri("/v1/me/following".to_string(), Some(&query))
+    }
+
+    pub(crate) fn is_artist_followed(&self, id: &str) -> SpotifyRequest<'_, (), Vec<bool>> {
+        let query = make_query_params()
+            .append_pair("type", "artist")
+            .append_pair("ids", id)
+            .finish();
+        self.request()
+            .method(Method::GET)
+            .uri("/v1/me/following/contains".to_string(), Some(&query))
+    }
+
+    pub(crate) fn unfollow_artist(&self, id: &str) -> SpotifyRequest<'_, (), ()> {
+        let query = make_query_params()
+            .append_pair("type", "artist")
+            .append_pair("ids", id)
+            .finish();
+        self.request()
+            .method(Method::DELETE)
             .uri("/v1/me/following".to_string(), Some(&query))
     }
 
@@ -601,15 +636,6 @@ impl SpotifyClient {
         self.request()
             .method(Method::PUT)
             .uri("/v1/me/player/pause".to_string(), Some(&query))
-    }
-
-    pub(crate) fn player_next(&self, device_id: &str) -> SpotifyRequest<'_, (), ()> {
-        let query = make_query_params()
-            .append_pair("device_id", device_id)
-            .finish();
-        self.request()
-            .method(Method::PUT)
-            .uri("/v1/me/player/next".to_string(), Some(&query))
     }
 
     pub(crate) fn player_seek(&self, device_id: &str, pos: usize) -> SpotifyRequest<'_, (), ()> {

@@ -1,0 +1,122 @@
+/* === DEBUG: Alignment visualization === */
+/* Loaded when the Debug CSS feature flag is enabled (debug builds only). */
+
+/* === Layout Containers === */
+
+/* ScrolledWindow containing header + content (excludes headerbar) */
+.details-page-scroll {
+  border: 3px solid rgba(0, 200, 255, 0.5);
+}
+
+/* Clamps - dashed borders to show max-width constraints */
+.details-header-clamp {
+  border: 3px dashed rgba(200, 0, 0, 0.6);
+}
+
+.details-content-clamp {
+  border: 3px dashed rgba(0, 150, 0, 0.6);
+}
+
+/* ScrolledWindow pages */
+.details-page {
+  background-color: rgba(128, 128, 128, 0.03);
+}
+
+.saved-items-page {
+  border: 3px dashed rgba(200, 0, 200, 0.6);
+}
+
+.saved-items-page > scrolledwindow {
+  background-color: rgba(255, 140, 0, 0.05);
+  border: 2px solid rgba(255, 140, 0, 0.4);
+}
+
+/* === Details Header === */
+
+.details-header {
+  background-color: rgba(255, 0, 0, 0.1);
+  border: 2px solid rgba(255, 0, 0, 0.5);
+}
+
+.details-header > breakpointbin > box {
+  background-color: rgba(255, 140, 0, 0.08);
+  border: 2px solid rgba(255, 140, 0, 0.5);
+}
+
+.details-header__image-box {
+  background-color: rgba(0, 100, 255, 0.15);
+  border: 2px solid rgba(0, 100, 255, 0.6);
+}
+
+.details-header > breakpointbin > box > centerbox {
+  background-color: rgba(150, 0, 255, 0.08);
+  border: 2px solid rgba(150, 0, 255, 0.4);
+}
+
+.details-header__title {
+  background-color: rgba(255, 255, 0, 0.25);
+  border: 2px solid rgba(200, 200, 0, 0.7);
+}
+
+.details-header .caption {
+  background-color: rgba(255, 100, 200, 0.2);
+  border: 1px solid rgba(255, 100, 200, 0.6);
+}
+
+.details-header .body {
+  background-color: rgba(0, 255, 255, 0.2);
+  border: 1px solid rgba(0, 200, 200, 0.6);
+}
+
+.play__button {
+  background-color: rgba(0, 200, 0, 0.2);
+  border: 2px solid rgba(0, 200, 0, 0.6);
+}
+
+.like__button {
+  background-color: rgba(255, 50, 50, 0.2);
+  border: 2px solid rgba(255, 50, 50, 0.6);
+}
+
+/* === Card Grid (FlowBox) — used in saved items, artist releases, user playlists === */
+
+flowbox {
+  background-color: rgba(0, 100, 255, 0.06);
+  border: 2px solid rgba(0, 100, 255, 0.3);
+}
+
+flowboxchild {
+  background-color: rgba(0, 200, 0, 0.08);
+  border: 1px solid rgba(0, 200, 0, 0.4);
+}
+
+/* === Track List (ListView) — used in album, playlist, artist top tracks, saved tracks === */
+
+.playlist {
+  background-color: rgba(0, 150, 0, 0.05);
+  border: 2px solid rgba(0, 150, 0, 0.3);
+}
+
+.song {
+  border: 1px solid rgba(100, 100, 255, 0.3);
+  margin: 1px 0;
+}
+
+.song--playing {
+  background-color: rgba(0, 200, 100, 0.15);
+  border: 2px solid rgba(0, 200, 100, 0.6);
+}
+
+/* === Status Page (empty states) === */
+
+statuspage {
+  background-color: rgba(255, 255, 0, 0.08);
+  border: 2px dashed rgba(200, 200, 0, 0.5);
+}
+
+/* === Details Page Content Labels (created by create_playlist / create_card_list) === */
+
+.details-content-clamp label {
+  background-color: rgba(255, 165, 0, 0.2);
+  border: 1px solid rgba(255, 165, 0, 0.6);
+}

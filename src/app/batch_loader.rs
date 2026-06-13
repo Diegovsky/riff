@@ -16,6 +16,7 @@ pub struct BatchLoader {
 pub enum SongsSource {
     Playlist(String),
     Album(String),
+    Artist(String),
     SavedTracks,
 }
 
@@ -24,6 +25,7 @@ impl PartialEq for SongsSource {
         match (self, other) {
             (Self::Playlist(l), Self::Playlist(r)) => l == r,
             (Self::Album(l), Self::Album(r)) => l == r,
+            (Self::Artist(l), Self::Artist(r)) => l == r,
             (Self::SavedTracks, Self::SavedTracks) => true,
             _ => false,
         }
@@ -72,10 +74,16 @@ impl BatchLoader {
         let Batch {
             offset, batch_size, ..
         } = query.batch;
+        if matches!(&query.source, SongsSource::Artist(_)) {
+            error!("Artist top tracks are not paginated and should not be batch-loaded");
+            return None;
+        }
+
         let do_fetch = || match &query.source {
             SongsSource::Playlist(id) => api.get_playlist_tracks(id, offset, batch_size),
             SongsSource::SavedTracks => api.get_saved_tracks(offset, batch_size),
             SongsSource::Album(id) => api.get_album_tracks(id, offset, batch_size),
+            SongsSource::Artist(_) => unreachable!(),
         };
 
         let result = match do_fetch().await {

@@ -175,4 +175,9 @@ impl HeaderBarWidget {
             self.imp().title.set_title(title);
         }
     }
+
+    /// Pack a widget at the end of the headerbar (before the selection button).
+    pub fn pack_end(&self, widget: &impl IsA<gtk::Widget>) {
+        self.imp().main_header.pack_end(widget.upcast_ref());
+    }
 }

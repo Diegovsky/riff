@@ -52,6 +52,10 @@ pub enum BrowserAction {
     RemoveSavedTracks(Vec<String>),
     SetSavedArtists(Vec<ArtistSummary>, Option<String>),
     AppendSavedArtists(Vec<ArtistSummary>, Option<String>),
+    FollowArtist(String),
+    UnfollowArtist(String),
+    SavePlaylist(String),
+    UnsavePlaylist(String),
     ConsumeNextPage(PaginationTarget),
 }
 
@@ -80,6 +84,8 @@ pub enum BrowserEvent {
     NavigationPoppedTo(ScreenName),
     AlbumSaved(String),
     AlbumUnsaved(String),
+    PlaylistSaved(String),
+    PlaylistUnsaved(String),
     UserDetailsUpdated(String),
     SavedTracksUpdated,
     SavedArtistsUpdated,
