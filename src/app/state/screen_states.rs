@@ -553,6 +553,7 @@ mod tests {
             art: None,
             songs: SongBatch::empty(),
             is_liked: false,
+            popularity: 0,
         };
         let id = "id".to_string();
         let mut artist_state = ArtistState::new(id.clone());

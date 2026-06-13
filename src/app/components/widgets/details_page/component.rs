@@ -2,7 +2,7 @@ use gtk::prelude::*;
 use std::rc::Rc;
 
 use super::{is_playback_event, DetailsPage, PageModel};
-use crate::app::components::{CardList, CardListModel, Component, EventListener, HeaderBarModel, Playlist, PlaylistModel};
+use crate::app::components::{CardLayout, CardList, CardListModel, CardSize, Component, EventListener, HeaderBarModel, Playlist, PlaylistModel};
 use crate::app::dispatch::Worker;
 use crate::app::AppEvent;
 
@@ -57,7 +57,7 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
     }
 
     /// Create a [`CardList`] and append it to the content box, with an optional label.
-    pub fn create_card_list(&self, label: Option<&str>) -> CardList
+    pub fn create_card_list(&self, label: Option<&str>) -> Rc<CardList>
     where
         M: CardListModel,
     {
@@ -71,10 +71,10 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             self.content.append(&lbl);
         }
 
-        let card_list = CardList::new();
+        let card_list = Rc::new(CardList::new());
         card_list.widget().set_margin_bottom(16);
         self.content.append(card_list.widget());
-        card_list.bind(&self.model, self.worker.clone());
+        card_list.bind(&self.model, self.worker.clone(), CardLayout::Vertical, CardSize::Large);
         card_list
     }
 

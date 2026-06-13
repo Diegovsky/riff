@@ -3,6 +3,9 @@ src/app/batch_loader.rs
 src/app/components/details_page/header.rs
 src/app/components/device_selector/widget.rs
 src/app/components/labels.rs
+src/app/components/widgets/card/widget.rs
+src/app/components/widgets/card_list/card_view_menu.rs
+src/app/models/card_enums.rs
 src/app/components/mod.rs
 src/app/components/navigation/factory.rs
 src/app/components/notification/mod.rs

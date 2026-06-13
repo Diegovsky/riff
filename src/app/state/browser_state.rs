@@ -2,6 +2,7 @@ use super::{
     AppAction, AppEvent, ArtistState, DetailsState, HomeState, PlaylistDetailsState, ScreenName,
     SearchState, UpdatableState, UserState,
 };
+use crate::app::components::{CardLayout, CardSize};
 use crate::app::models::*;
 use std::borrow::Cow;
 use std::iter::Iterator;
@@ -57,6 +58,7 @@ pub enum BrowserAction {
     SavePlaylist(String),
     UnsavePlaylist(String),
     ConsumeNextPage(PaginationTarget),
+    ChangeCardStyle(CardLayout, CardSize),
 }
 
 impl From<BrowserAction> for AppAction {
@@ -71,6 +73,7 @@ pub enum BrowserEvent {
     HomeVisiblePageChanged(&'static str),
     LibraryUpdated,
     SavedPlaylistsUpdated,
+    CardStyleChanged(CardLayout, CardSize),
     AlbumDetailsLoaded(String),
     AlbumTracksAppended(String),
     PlaylistDetailsLoaded(String),
@@ -366,6 +369,9 @@ impl UpdatableState for BrowserState {
             BrowserAction::NavigationPop if self.navigation_hidden => {
                 self.navigation_hidden = false;
                 vec![BrowserEvent::NavigationHidden(false)]
+            }
+            BrowserAction::ChangeCardStyle(layout, size) => {
+                vec![BrowserEvent::CardStyleChanged(*layout, *size)]
             }
             // Besides navigation actions, we just forward actions to each dedicated reducer
             _ => self

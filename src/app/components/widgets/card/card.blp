@@ -1,27 +1,30 @@
 using Gtk 4.0;
-using Adw 1;
 
-template $CardWidget : Adw.Bin {
-  Box {
+template $CardWidget : Widget {
+  Picture cover_image {
+    content-fit: cover;
+    can-shrink: true;
+    overflow: hidden;
+
+    styles [
+      "card",
+    ]
+  }
+
+  Box label_box {
     hexpand: false;
-    halign: center;
-    valign: start;
+    overflow: hidden;
     orientation: vertical;
     spacing: 6;
 
-    Picture cover_image {
-      content-fit: cover;
-
-      styles [
-        "card",
-      ]
-    }
+    styles [
+      "card__labels",
+    ]
 
     Label title_label {
       label: " ";
-      justify: center;
       ellipsize: end;
-      max-width-chars: 16;
+      width-chars: 1;
       margin-top: 6;
 
       styles [
@@ -31,9 +34,8 @@ template $CardWidget : Adw.Bin {
 
     Label subtitle_label {
       label: " ";
-      justify: center;
       ellipsize: end;
-      max-width-chars: 16;
+      width-chars: 1;
 
       styles [
         "body",

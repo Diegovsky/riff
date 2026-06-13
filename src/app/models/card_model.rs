@@ -21,7 +21,7 @@ impl CardModel {
 
 mod imp {
     use super::*;
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
 
     #[derive(Default, Properties)]
     #[properties(wrapper_type = super::CardModel)]
@@ -34,6 +34,12 @@ mod imp {
         title: RefCell<String>,
         #[property(get, set)]
         subtitle: RefCell<String>,
+        #[property(get, set, name = "release-date")]
+        release_date: RefCell<String>,
+        #[property(get, set)]
+        popularity: Cell<u32>,
+        #[property(get, set, name = "insertion-position")]
+        insertion_position: Cell<u32>,
     }
 
     #[glib::object_subclass]
@@ -80,6 +86,28 @@ mod tests {
     }
 
     #[test]
+    fn test_release_date() {
+        let card: CardModel = glib::Object::builder()
+            .property("id", "id")
+            .property("title", "T")
+            .property("subtitle", "S")
+            .property("release-date", "2023-05-01")
+            .build();
+        assert_eq!(card.release_date(), "2023-05-01");
+    }
+
+    #[test]
+    fn test_popularity() {
+        let card: CardModel = glib::Object::builder()
+            .property("id", "id")
+            .property("title", "T")
+            .property("subtitle", "S")
+            .property("popularity", 75u32)
+            .build();
+        assert_eq!(card.popularity(), 75);
+    }
+
+    #[test]
     fn test_from_album_description() {
         let album = AlbumDescription {
             id: "album1".to_string(),
@@ -92,6 +120,7 @@ mod tests {
             art: ImageSet::from_images(vec![(Some(300), "https://img.com/cover.jpg".to_string())]),
             songs: SongBatch::empty(),
             is_liked: false,
+            popularity: 72,
         };
         let card = CardModel::from(&album);
         assert_eq!(card.id(), "album1");
@@ -122,6 +151,7 @@ mod tests {
             id: "art1".to_string(),
             name: "Cool Artist".to_string(),
             photo: ImageSet::from_images(vec![(Some(300), "https://img.com/photo.jpg".to_string())]),
+            popularity: 85,
         };
         let card = CardModel::from(&artist);
         assert_eq!(card.id(), "art1");
@@ -136,6 +166,7 @@ mod tests {
             id: "art2".to_string(),
             name: "No Photo".to_string(),
             photo: None,
+            popularity: 0,
         };
         let card = CardModel::from(&artist);
         assert_eq!(card.image(), None);

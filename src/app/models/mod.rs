@@ -2,6 +2,10 @@
 mod main;
 pub use main::*;
 
+// Shared enums (used by UI, state, and settings)
+mod card_enums;
+pub use card_enums::*;
+
 // UI models (GObject)
 mod songs;
 pub use songs::*;
@@ -14,7 +18,15 @@ impl From<&AlbumDescription> for CardModel {
         let art = album.art.as_ref()
             .and_then(|s| s.best_for_width(200))
             .map(str::to_owned);
-        CardModel::new(&album.id, art.as_ref(), &album.title, &album.artists_name())
+        let release_date = album.release_date.as_deref().unwrap_or("");
+        glib::Object::builder()
+            .property("id", &album.id)
+            .property("image", &art)
+            .property("title", &album.title)
+            .property("subtitle", &album.artists_name())
+            .property("release-date", release_date)
+            .property("popularity", album.popularity)
+            .build()
     }
 }
 
@@ -62,6 +74,12 @@ impl From<&ArtistSummary> for CardModel {
         let photo = artist.photo.as_ref()
             .and_then(|s| s.best_for_width(200))
             .map(str::to_owned);
-        CardModel::new(&artist.id, photo.as_ref(), &artist.name, "")
+        glib::Object::builder()
+            .property("id", &artist.id)
+            .property("image", &photo)
+            .property("title", &artist.name)
+            .property("subtitle", "")
+            .property("popularity", artist.popularity)
+            .build()
     }
 }

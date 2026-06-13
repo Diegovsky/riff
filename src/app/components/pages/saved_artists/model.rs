@@ -1,10 +1,10 @@
-use std::cell::Ref;
+use std::cell::{Cell, Ref};
 use std::ops::Deref;
 use std::rc::Rc;
 
 use gettextrs::gettext;
 
-use crate::app::components::{CardListModel, CardListPage, CardListPageConfig, ImageShape};
+use crate::app::components::{CardLayout, CardListComponent, CardListModel, CardListPageModel, CardSize, ImageShape, SortOrder};
 use crate::app::dispatch::Worker;
 use crate::app::models::*;
 use crate::app::state::HomeState;
@@ -77,17 +77,29 @@ impl CardListModel for SavedArtistsModel {
     }
 }
 
-pub type SavedArtists = CardListPage<SavedArtistsModel>;
+impl CardListPageModel for SavedArtistsModel {
+    fn page_id(&self) -> &str { "artists" }
+    fn empty_title(&self) -> String { gettext("You have no saved artists.") }
+    fn empty_description(&self) -> String { gettext("Your followed artists will be shown here.") }
+    fn empty_icon(&self) -> &str { "avatar-default-symbolic" }
 
-pub fn make_saved_artists(worker: Worker, model: SavedArtistsModel) -> SavedArtists {
-    CardListPage::new(
-        model,
-        worker,
-        CardListPageConfig {
-            empty_title: gettext("You have no saved artists."),
-            empty_description: gettext("Your followed artists will be shown here."),
-            empty_icon: "avatar-default-symbolic".to_string(),
-        },
-        |event| matches!(event, AppEvent::BrowserEvent(BrowserEvent::SavedArtistsUpdated)),
-    )
+    fn available_sort_orders(&self) -> &[SortOrder] {
+        &[SortOrder::RecentlyAdded, SortOrder::Alphabetic, SortOrder::Popularity]
+    }
+
+    fn should_refresh(&self, event: &AppEvent) -> bool {
+        matches!(event, AppEvent::BrowserEvent(BrowserEvent::SavedArtistsUpdated))
+    }
+}
+
+pub type SavedArtists = CardListComponent<SavedArtistsModel>;
+
+pub fn make_saved_artists(
+    worker: Worker,
+    model: SavedArtistsModel,
+    shared_layout: Rc<Cell<CardLayout>>,
+    shared_size: Rc<Cell<CardSize>>,
+    dispatcher: Box<dyn ActionDispatcher>,
+) -> SavedArtists {
+    CardListComponent::new(Rc::new(model), worker, shared_layout, shared_size, dispatcher)
 }

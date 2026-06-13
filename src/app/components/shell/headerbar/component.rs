@@ -280,6 +280,10 @@ where
             children: vec![Box::new(wrapped)],
         }
     }
+
+    pub fn headerbar(&self) -> &HeaderBarWidget {
+        &self.widget
+    }
 }
 
 impl<Model> Component for StandardScreen<Model>

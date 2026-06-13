@@ -1,9 +1,9 @@
 use crate::{
     app::{
-        components::EventListener,
+        components::{CardLayout, CardSize, EventListener, SortOrder},
         models::RepeatMode,
         state::{PlaybackAction, PlaybackEvent},
-        AppAction, AppEvent,
+        AppAction, AppEvent, BrowserEvent,
     },
     player::{AudioBackend, SpotifyPlayerSettings},
 };
@@ -174,9 +174,62 @@ impl StateTracker {
     fn handle_event(&self, event: &AppEvent) -> GResult {
         match event {
             AppEvent::PlaybackEvent(event) => self.on_playback_event(event)?,
+            AppEvent::BrowserEvent(BrowserEvent::CardStyleChanged(layout, size)) => {
+                Self::save_card_style(*layout, *size);
+            }
             _ => (),
         }
         Ok(())
+    }
+
+    pub fn save_card_style(layout: CardLayout, size: CardSize) {
+        let settings = gio::Settings::new(SETTINGS);
+        let _ = settings.set_string("card-layout", match layout {
+            CardLayout::Vertical => "vertical",
+            CardLayout::ImageOnly => "image-only",
+            CardLayout::Horizontal => "horizontal",
+        });
+        let _ = settings.set_string("card-size", match size {
+            CardSize::Small => "small",
+            CardSize::Medium => "medium",
+            CardSize::Large => "large",
+        });
+    }
+
+    pub fn load_card_layout() -> CardLayout {
+        let settings = gio::Settings::new(SETTINGS);
+        match settings.string("card-layout").as_str() {
+            "image-only" => CardLayout::ImageOnly,
+            "horizontal" => CardLayout::Horizontal,
+            _ => CardLayout::Vertical,
+        }
+    }
+
+    pub fn load_card_size() -> CardSize {
+        let settings = gio::Settings::new(SETTINGS);
+        match settings.string("card-size").as_str() {
+            "small" => CardSize::Small,
+            "medium" => CardSize::Medium,
+            _ => CardSize::Large,
+        }
+    }
+
+    pub fn save_sort_order(page: &str, order: SortOrder) {
+        let settings = gio::Settings::new(SETTINGS);
+        let key = format!("sort-{page}");
+        if settings.settings_schema().map_or(false, |s| s.has_key(&key)) {
+            let _ = settings.set_string(&key, order.to_str());
+        }
+    }
+
+    pub fn load_sort_order(page: &str) -> SortOrder {
+        let settings = gio::Settings::new(SETTINGS);
+        let key = format!("sort-{page}");
+        if settings.settings_schema().map_or(false, |s| s.has_key(&key)) {
+            SortOrder::parse_key(settings.string(&key).as_str())
+        } else {
+            SortOrder::RecentlyAdded
+        }
     }
 }
 
