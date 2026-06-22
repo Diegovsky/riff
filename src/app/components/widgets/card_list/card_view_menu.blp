@@ -1,0 +1,64 @@
+using Gtk 4.0;
+
+template $CardViewMenuPopover : Popover {
+  Box content_box {
+    orientation: vertical;
+    spacing: 6;
+    margin-top: 12;
+    margin-bottom: 12;
+    margin-start: 12;
+    margin-end: 12;
+
+    Box size_box {
+      orientation: horizontal;
+      spacing: 6;
+
+      Label size_label {
+        label: _("Icon Size");
+        halign: start;
+        hexpand: true;
+
+        styles [
+          "heading",
+        ]
+      }
+
+      Button decrease_btn {
+        icon-name: "zoom-out-symbolic";
+        margin-start: 12;
+
+        styles [
+          "flat",
+        ]
+      }
+
+      Button increase_btn {
+        icon-name: "zoom-in-symbolic";
+
+        styles [
+          "flat",
+        ]
+      }
+    }
+
+    Separator {
+      orientation: horizontal;
+      margin-top: 6;
+      margin-bottom: 6;
+    }
+
+    Label sort_label {
+      label: _("Sort By");
+      halign: start;
+
+      styles [
+        "heading",
+      ]
+    }
+
+    Box sort_box {
+      orientation: vertical;
+      spacing: 6;
+    }
+  }
+}

@@ -13,6 +13,10 @@
     <file alias="components/search.ui">app/components/pages/search/search.ui</file>
     <!-- card -->
     <file alias="components/card.css">app/components/widgets/card/card.css</file>
+    <file alias="components/card.ui">app/components/widgets/card/card.ui</file>
+    <!-- card_list -->
+    <file alias="components/card_list.ui">app/components/widgets/card_list/card_list.ui</file>
+    <file alias="components/card_view_menu.ui">app/components/widgets/card_list/card_view_menu.ui</file>
     <!-- details_page -->
     <file alias="components/details_page/style.css">app/components/widgets/details_page/style.css</file>
     <file alias="components/details_header.ui">app/components/widgets/details_page/header.ui</file>

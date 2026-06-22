@@ -1,0 +1,23 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $CardListWidget : Box {
+  orientation: vertical;
+
+  styles [
+    "saved-items-page",
+  ]
+
+  ScrolledWindow scrolled_window {
+    hexpand: true;
+    vexpand: true;
+    min-content-width: 250;
+
+    Overlay overlay {
+      [overlay]
+      Adw.StatusPage status_page {
+        visible: true;
+      }
+    }
+  }
+}
