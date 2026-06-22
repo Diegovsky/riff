@@ -4,7 +4,7 @@ use gtk::CompositeTemplate;
 use std::rc::Rc;
 
 use crate::app::components::utils::{wrap_flowbox_item, Debouncer};
-use crate::app::components::{CardWidget, Component, EventListener, ImageShape};
+use crate::app::components::{CardLayout, CardSize, CardWidget, Component, EventListener, ImageShape};
 use crate::app::dispatch::Worker;
 use crate::app::models::CardModel;
 use crate::app::state::{AppEvent, BrowserEvent};
@@ -114,7 +114,7 @@ impl SearchResultsWidget {
             .albums_results
             .bind_model(Some(store), move |item| {
                 wrap_flowbox_item(item, |model: &CardModel| {
-                    CardWidget::for_model(model, worker.clone(), ImageShape::Square)
+                    CardWidget::for_model(model, worker.clone(), ImageShape::Square, CardLayout::Vertical, CardSize::Large)
                 })
             });
         self.imp()
@@ -138,7 +138,7 @@ impl SearchResultsWidget {
             .artist_results
             .bind_model(Some(store), move |item| {
                 wrap_flowbox_item(item, |model: &CardModel| {
-                    CardWidget::for_model(model, worker.clone(), ImageShape::Round)
+                    CardWidget::for_model(model, worker.clone(), ImageShape::Round, CardLayout::Vertical, CardSize::Large)
                 })
             });
         self.imp()

@@ -1,9 +1,9 @@
 use crate::{
     app::{
-        components::EventListener,
+        components::{CardLayout, CardSize, EventListener, SortOrder},
         models::RepeatMode,
         state::{PlaybackAction, PlaybackEvent},
-        AppAction, AppEvent,
+        AppAction, AppEvent, BrowserEvent,
     },
     player::{AudioBackend, SpotifyPlayerSettings},
 };
@@ -65,16 +65,12 @@ impl SpotifyPlayerSettings {
         let gapless = settings.boolean("gapless-playback");
 
         let ap_port_val = settings.uint("ap-port");
-        if ap_port_val > 65535 {
-            panic!("Invalid access point port");
-        }
-
         // Access points usually use port 80, 443 or 4070. Since gsettings
         // does not allow optional values, we use 0 to indicate that any
         // port is OK and we should pass None to librespot's ap-port.
         let ap_port = match ap_port_val {
-            0 => None,
-            x => Some(x as u16),
+            1..=65535 => Some(ap_port_val as u16),
+            _ => None,
         };
 
         let volume = settings.double("volume");
@@ -174,9 +170,66 @@ impl StateTracker {
     fn handle_event(&self, event: &AppEvent) -> GResult {
         match event {
             AppEvent::PlaybackEvent(event) => self.on_playback_event(event)?,
+            AppEvent::BrowserEvent(BrowserEvent::CardLayoutChanged(layout)) => {
+                self.save_card_layout(*layout);
+            }
+            AppEvent::BrowserEvent(BrowserEvent::CardSizeChanged(size)) => {
+                self.save_card_size(*size);
+            }
+            AppEvent::BrowserEvent(BrowserEvent::SortOrderChanged(page, order)) => {
+                self.save_sort_order(page, *order);
+            }
             _ => (),
         }
         Ok(())
+    }
+
+    pub fn save_card_layout(&self, layout: CardLayout) {
+        let _ = self.settings.set_string("card-layout", match layout {
+            CardLayout::Vertical => "vertical",
+            CardLayout::ImageOnly => "image-only",
+            CardLayout::Horizontal => "horizontal",
+        });
+    }
+
+    pub fn save_card_size(&self, size: CardSize) {
+        let _ = self.settings.set_string("card-size", match size {
+            CardSize::Small => "small",
+            CardSize::Medium => "medium",
+            CardSize::Large => "large",
+        });
+    }
+
+    pub fn load_card_layout(&self) -> CardLayout {
+        match self.settings.string("card-layout").as_str() {
+            "image-only" => CardLayout::ImageOnly,
+            "horizontal" => CardLayout::Horizontal,
+            _ => CardLayout::Vertical,
+        }
+    }
+
+    pub fn load_card_size(&self) -> CardSize {
+        match self.settings.string("card-size").as_str() {
+            "small" => CardSize::Small,
+            "medium" => CardSize::Medium,
+            _ => CardSize::Large,
+        }
+    }
+
+    pub fn save_sort_order(&self, page: &str, order: SortOrder) {
+        let key = format!("sort-{page}");
+        if self.settings.settings_schema().map_or(false, |s| s.has_key(&key)) {
+            let _ = self.settings.set_string(&key, order.to_str());
+        }
+    }
+
+    pub fn load_sort_order(&self, page: &str) -> SortOrder {
+        let key = format!("sort-{page}");
+        if self.settings.settings_schema().map_or(false, |s| s.has_key(&key)) {
+            SortOrder::parse_key(self.settings.string(&key).as_str())
+        } else {
+            SortOrder::RecentlyAdded
+        }
     }
 }
 

@@ -89,5 +89,52 @@
       <default>false</default>
       <summary>Toggle between loaded content and skeleton loading states</summary>
     </key>
+    <key name="card-layout" type="s">
+      <choices>
+        <choice value='vertical'/>
+        <choice value='image-only'/>
+        <choice value='horizontal'/>
+      </choices>
+      <default>'vertical'</default>
+      <summary>Card layout style for library pages</summary>
+    </key>
+    <key name="card-size" type="s">
+      <choices>
+        <choice value='small'/>
+        <choice value='medium'/>
+        <choice value='large'/>
+      </choices>
+      <default>'large'</default>
+      <summary>Card size for library pages</summary>
+    </key>
+    <key name="sort-albums" type="s">
+      <choices>
+        <choice value='recently-added'/>
+        <choice value='alphabetic'/>
+        <choice value='creator'/>
+        <choice value='date-released'/>
+        <choice value='popularity'/>
+      </choices>
+      <default>'recently-added'</default>
+      <summary>Sort order for saved albums page</summary>
+    </key>
+    <key name="sort-playlists" type="s">
+      <choices>
+        <choice value='recently-added'/>
+        <choice value='alphabetic'/>
+        <choice value='creator'/>
+      </choices>
+      <default>'recently-added'</default>
+      <summary>Sort order for saved playlists page</summary>
+    </key>
+    <key name="sort-artists" type="s">
+      <choices>
+        <choice value='recently-added'/>
+        <choice value='alphabetic'/>
+        <choice value='popularity'/>
+      </choices>
+      <default>'recently-added'</default>
+      <summary>Sort order for saved artists page</summary>
+    </key>
   </schema>
 </schemalist>

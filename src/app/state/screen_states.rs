@@ -6,7 +6,7 @@ use crate::app::models::*;
 use crate::app::ListStore;
 
 /// Number of cards (albums, playlists) to load per batch.
-pub const CARD_BATCH_SIZE: usize = 18;
+pub const CARD_BATCH_SIZE: usize = 50;
 
 #[derive(Clone, Debug)]
 pub enum ScreenName {
@@ -553,6 +553,7 @@ mod tests {
             art: None,
             songs: SongBatch::empty(),
             is_liked: false,
+            popularity: 0,
         };
         let id = "id".to_string();
         let mut artist_state = ArtistState::new(id.clone());

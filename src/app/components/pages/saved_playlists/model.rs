@@ -1,10 +1,10 @@
-use std::cell::Ref;
+use std::cell::{Cell, Ref};
 use std::ops::Deref;
 use std::rc::Rc;
 
 use gettextrs::gettext;
 
-use crate::app::components::{CardListModel, CardListPage, CardListPageConfig, ImageShape};
+use crate::app::components::{CardLayout, CardListComponent, CardListModel, CardListPageModel, CardSize, ImageShape, SortOrder};
 use crate::app::dispatch::Worker;
 use crate::app::models::*;
 use crate::app::state::HomeState;
@@ -48,6 +48,10 @@ impl CardListModel for SavedPlaylistsModel {
         self.get_store().map(|s| s.len() > 0).unwrap_or(false)
     }
 
+    fn has_more(&self) -> bool {
+        self.state().map(|s| s.next_playlists_page.next_offset.is_some()).unwrap_or(false)
+    }
+
     fn load_more(&self) {
         let api = self.app_model.get_spotify();
         let state = match self.state() {
@@ -81,17 +85,28 @@ impl CardListModel for SavedPlaylistsModel {
     }
 }
 
-pub type SavedPlaylists = CardListPage<SavedPlaylistsModel>;
+impl CardListPageModel for SavedPlaylistsModel {
+    fn page_id(&self) -> &str { "playlists" }
+    fn empty_title(&self) -> String { gettext("You have no saved playlists.") }
+    fn empty_description(&self) -> String { gettext("Your playlists will be shown here.") }
 
-pub fn make_saved_playlists(worker: Worker, model: SavedPlaylistsModel) -> SavedPlaylists {
-    CardListPage::new(
-        model,
-        worker,
-        CardListPageConfig {
-            empty_title: gettext("You have no saved playlists."),
-            empty_description: gettext("Your playlists will be shown here."),
-            empty_icon: "emblem-music-symbolic".to_string(),
-        },
-        |event| matches!(event, AppEvent::BrowserEvent(BrowserEvent::SavedPlaylistsUpdated)),
-    )
+    fn available_sort_orders(&self) -> &[SortOrder] {
+        &[SortOrder::RecentlyAdded, SortOrder::Alphabetic, SortOrder::Creator]
+    }
+
+    fn should_refresh(&self, event: &AppEvent) -> bool {
+        matches!(event, AppEvent::BrowserEvent(BrowserEvent::SavedPlaylistsUpdated))
+    }
+}
+
+pub type SavedPlaylists = CardListComponent<SavedPlaylistsModel>;
+
+pub fn make_saved_playlists(
+    worker: Worker,
+    model: SavedPlaylistsModel,
+    shared_layout: Rc<Cell<CardLayout>>,
+    shared_size: Rc<Cell<CardSize>>,
+    dispatcher: Rc<dyn ActionDispatcher>,
+) -> SavedPlaylists {
+    CardListComponent::new(Rc::new(model), worker, shared_layout, shared_size, dispatcher)
 }

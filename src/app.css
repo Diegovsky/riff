@@ -16,13 +16,8 @@
 }
 
 
-.container {
-  transition: opacity 0.3s ease;
-  opacity: 0;
-}
-
-.container--loaded {
-  opacity: 1;
+.container--loaded .card {
+  transition: background-color 0.3s ease;
 }
 
 .playlist__title-entry--ro {

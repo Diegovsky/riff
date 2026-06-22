@@ -250,6 +250,8 @@ pub struct Album {
     pub release_date: Option<String>,
     pub name: String,
     pub images: Vec<Image>,
+    #[serde(default)]
+    pub popularity: u32,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -284,6 +286,8 @@ pub struct Artist {
     pub id: String,
     pub name: String,
     pub images: Option<Vec<Image>>,
+    #[serde(default)]
+    pub popularity: u32,
 }
 
 impl WithImages for Artist {
@@ -434,8 +438,8 @@ impl From<Artist> for ArtistSummary {
         let photo = ImageSet::from_images(
             artist.images().iter().map(|i| (i.width, i.url.clone())),
         );
-        let Artist { id, name, .. } = artist;
-        Self { id, name, photo }
+        let Artist { id, name, popularity, .. } = artist;
+        Self { id, name, photo, popularity }
     }
 }
 
@@ -608,6 +612,7 @@ impl From<Album> for AlbumDescription {
             art,
             songs,
             is_liked: false,
+            popularity: album.popularity,
         }
     }
 }
