@@ -2615,6 +2615,19 @@
     {
         "type": "archive",
         "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/int-enum/int-enum-1.2.0.crate",
+        "sha256": "e366a1634cccc76b4cfd3e7580de9b605e4d93f1edac48d786c1f867c0def495",
+        "dest": "cargo/vendor/int-enum-1.2.0"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"e366a1634cccc76b4cfd3e7580de9b605e4d93f1edac48d786c1f867c0def495\", \"files\": {}}",
+        "dest": "cargo/vendor/int-enum-1.2.0",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
         "url": "https://static.crates.io/crates/io-uring/io-uring-0.7.10.crate",
         "sha256": "046fa2d4d00aea763528b4950358d0ead425372445dc8ff86312b3c69ff7727b",
         "dest": "cargo/vendor/io-uring-0.7.10"
@@ -4248,6 +4261,19 @@
         "type": "inline",
         "contents": "{\"package\": \"89ae43fd86e4158d6db51ad8e2b80f313af9cc74f5c0e03ccb87de09998732de\", \"files\": {}}",
         "dest": "cargo/vendor/proc-macro2-1.0.101",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/proc-macro2-diagnostics/proc-macro2-diagnostics-0.10.1.crate",
+        "sha256": "af066a9c399a26e020ada66a034357a868728e72cd426f3adcd35f80d88d88c8",
+        "dest": "cargo/vendor/proc-macro2-diagnostics-0.10.1"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"af066a9c399a26e020ada66a034357a868728e72cd426f3adcd35f80d88d88c8\", \"files\": {}}",
+        "dest": "cargo/vendor/proc-macro2-diagnostics-0.10.1",
         "dest-filename": ".cargo-checksum.json"
     },
     {

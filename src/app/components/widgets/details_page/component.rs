@@ -1,10 +1,11 @@
 use gtk::prelude::*;
+use std::cell::Cell;
 use std::rc::Rc;
 
 use super::{is_playback_event, DetailsPage, PageModel};
-use crate::app::components::{CardList, CardListModel, Component, EventListener, HeaderBarModel, Playlist, PlaylistModel};
+use crate::app::components::{CardLayout, CardList, CardListModel, CardSize, Component, EmbeddedCardList, EventListener, HeaderBarModel, Playlist, PlaylistModel, SortOrder};
 use crate::app::dispatch::Worker;
-use crate::app::AppEvent;
+use crate::app::{ActionDispatcher, AppEvent};
 
 /// A generic details page component that wires all standard behavior
 /// from a `PageModel` implementation automatically.
@@ -56,9 +57,17 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         self.children.push(playlist);
     }
 
-    /// Create a [`CardList`] and append it to the content box, with an optional label.
-    pub fn create_card_list(&self, label: Option<&str>) -> CardList
-    where
+    /// Create an [`EmbeddedCardList`] with view controls, appending it to the content box
+    /// and registering it as an event listener. Packs the view button into the headerbar.
+    pub fn create_embedded_card_list(
+        &mut self,
+        label: Option<&str>,
+        page_id: &str,
+        available_sorts: &[SortOrder],
+        shared_layout: Rc<Cell<CardLayout>>,
+        shared_size: Rc<Cell<CardSize>>,
+        dispatcher: Rc<dyn ActionDispatcher>,
+    ) where
         M: CardListModel,
     {
         if let Some(text) = label {
@@ -71,11 +80,24 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             self.content.append(&lbl);
         }
 
-        let card_list = CardList::new();
+        let card_list = Rc::new(CardList::new());
         card_list.widget().set_margin_bottom(16);
         self.content.append(card_list.widget());
-        card_list.bind(&self.model, self.worker.clone());
-        card_list
+        card_list.bind(&self.model, self.worker.clone(), CardLayout::Vertical, CardSize::Large);
+        card_list.show_placeholders();
+
+        let embedded = EmbeddedCardList::new(
+            card_list,
+            page_id,
+            available_sorts,
+            shared_layout,
+            shared_size,
+            dispatcher,
+        );
+        if let Some(hb) = self.page.headerbar() {
+            hb.pack_end(embedded.view_button());
+        }
+        self.children.push(Box::new(embedded));
     }
 
     pub fn page(&self) -> &DetailsPage {

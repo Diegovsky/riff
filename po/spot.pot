@@ -401,3 +401,43 @@ msgstr ""
 #: src/app/components/library/library.blp:29
 msgid "Your library will be shown here."
 msgstr ""
+
+#. Translators: Default title shown on a card when no title is available.
+#: src/app/components/widgets/card/widget.rs
+msgid "Untitled"
+msgstr ""
+
+#. Translators: Sort option — show items in the order they were saved
+#: src/app/models/card_enums.rs
+msgid "Recently Added"
+msgstr ""
+
+#. Translators: Sort option — alphabetical order by title
+#: src/app/models/card_enums.rs
+msgid "Alphabetic"
+msgstr ""
+
+#. Translators: Sort option — group by artist/creator name
+#: src/app/models/card_enums.rs
+msgid "Creator"
+msgstr ""
+
+#. Translators: Sort option — order by release date (newest first)
+#: src/app/models/card_enums.rs
+msgid "Date Released"
+msgstr ""
+
+#. Translators: Sort option — order by popularity score (highest first)
+#: src/app/models/card_enums.rs
+msgid "Popularity"
+msgstr ""
+
+#. Translators: Label for icon size controls in the card view menu
+#: src/app/components/widgets/card_list/card_view_menu.rs
+msgid "Icon Size"
+msgstr ""
+
+#. Translators: Label for sort order section in the card view menu
+#: src/app/components/widgets/card_list/card_view_menu.rs
+msgid "Sort By"
+msgstr ""

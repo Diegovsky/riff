@@ -122,6 +122,7 @@ pub struct AlbumDescription {
     pub art: Option<ImageSet>,
     pub songs: SongBatch,
     pub is_liked: bool,
+    pub popularity: u32,
 }
 
 impl AlbumDescription {
@@ -285,6 +286,7 @@ pub struct ArtistSummary {
     pub id: String,
     pub name: String,
     pub photo: Option<ImageSet>,
+    pub popularity: u32,
 }
 
 #[derive(Clone, Debug)]
