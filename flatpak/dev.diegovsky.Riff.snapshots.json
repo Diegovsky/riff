@@ -57,7 +57,7 @@
       "sources": [
         {
           "type": "dir",
-          "path": "."
+          "path": ".."
         },
         "cargo-sources.json"
       ]

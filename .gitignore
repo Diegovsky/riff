@@ -1,9 +1,20 @@
+# Build output
 /target/
-/doc/target
-/cargo/
 /build/
+/cargo/
+/generated/
 /.flatpak-builder/
+
+# Generated files
 /src/config.rs
-/subprojects/blueprint-compiler
-/.idea/
 data/gschemas.compiled
+
+# Subproject dependencies (fetched during build)
+/subprojects/blueprint-compiler
+
+# Documentation build output
+/doc/target
+
+# IDE / editor settings
+/.idea/
+/.vscode/
