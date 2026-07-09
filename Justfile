@@ -13,7 +13,7 @@ meson command *ARGS:
     meson {{command}} -C {{build}} {{ARGS}}
 
 update-sources:
-    python build-aux/flatpak-cargo-generator.py Cargo.lock -o cargo-sources.json
+    python scripts/flatpak-cargo-generator.py Cargo.lock -o flatpak/cargo-sources.json
 
 init *ARGS:
     meson setup -Dbuildtype=debug -Doffline=false --prefix="$HOME/.local" {{build}} {{ARGS}}
