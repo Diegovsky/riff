@@ -63,7 +63,10 @@ pub(super) fn effective_sort(preferred: SortOrder, available: &[SortOrder]) -> S
     if available.contains(&preferred) {
         preferred
     } else {
-        available.first().copied().unwrap_or(SortOrder::RecentlyAdded)
+        available
+            .first()
+            .copied()
+            .unwrap_or(SortOrder::RecentlyAdded)
     }
 }
 

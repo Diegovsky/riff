@@ -26,11 +26,8 @@ pub struct NowPlaying {
 
 impl NowPlaying {
     pub fn new(model: Rc<NowPlayingModel>, worker: Worker) -> Self {
-        let mut component = DetailsPageComponent::new(
-            model.clone(),
-            model.to_headerbar_model(),
-            worker,
-        );
+        let mut component =
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), worker);
         component.create_playlist(Some(&gettext("Queue")));
 
         if feature_flags::is_enabled(FeatureFlag::DeviceSelector) {
@@ -53,14 +50,26 @@ impl NowPlaying {
         stack.add_named(component.get_root_widget(), Some("content"));
         stack.add_named(&status_page, Some("empty"));
 
-        let visible = if model.current_song_id().is_some() { "content" } else { "empty" };
+        let visible = if model.current_song_id().is_some() {
+            "content"
+        } else {
+            "empty"
+        };
         stack.set_visible_child_name(visible);
 
-        Self { stack, component, status_page }
+        Self {
+            stack,
+            component,
+            status_page,
+        }
     }
 
     fn update_empty_state(&self) {
-        let name = if self.component.model().current_song_id().is_some() { "content" } else { "empty" };
+        let name = if self.component.model().current_song_id().is_some() {
+            "content"
+        } else {
+            "empty"
+        };
         self.stack.set_visible_child_name(name);
     }
 }

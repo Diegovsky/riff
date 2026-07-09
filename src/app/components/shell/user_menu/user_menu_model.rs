@@ -37,10 +37,7 @@ impl UserMenuModel {
             self.dispatcher
                 .call_spotify_and_dispatch(move || async move {
                     api.get_saved_playlists(0, 30).await.map(|playlists| {
-                        let summaries = playlists
-                            .into_iter()
-                            .map(|p| p.into())
-                            .collect();
+                        let summaries = playlists.into_iter().map(|p| p.into()).collect();
                         LoginAction::SetUserPlaylists(summaries).into()
                     })
                 });

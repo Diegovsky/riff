@@ -138,6 +138,7 @@ if confirm_install; then
 
     echo ""
     echo "Done! You can now build with:"
+    # shellcheck disable=SC2016
     echo '  meson setup target -Dbuildtype=debug -Doffline=false --prefix="$HOME/.local"'
     echo '  ninja install -C target'
     echo 'You can run your local build with:'

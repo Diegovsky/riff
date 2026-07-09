@@ -5,30 +5,30 @@ const SETTINGS: &str = "dev.diegovsky.Riff";
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FeatureFlag {
     /*
-     Selection mode allows users to select multiple songs to queue, save, or remove.
-     It has visually bugged buttons in the page's header across all pages that use it.
-     */
+    Selection mode allows users to select multiple songs to queue, save, or remove.
+    It has visually bugged buttons in the page's header across all pages that use it.
+    */
     SelectMode,
     /*
-     Creating new playlists workflow needs to be flushed out further before launching. Currently,
-     users can create a new play list with no songs but interacting with the playlist is awkward.
-     Furthermore, it is possible to crash the application by viewing a newly created playlist and
-     then viewing another playlist in the same session.
-     */
+    Creating new playlists workflow needs to be flushed out further before launching. Currently,
+    users can create a new play list with no songs but interacting with the playlist is awkward.
+    Furthermore, it is possible to crash the application by viewing a newly created playlist and
+    then viewing another playlist in the same session.
+    */
     CreateNewPlaylist,
     /*
-     Device selector allows switching playback between Spotify Connect devices.
-     */
+    Device selector allows switching playback between Spotify Connect devices.
+    */
     DeviceSelector,
     /*
-     Debug CSS shows alignment and rendering debug overlays to help identify layout issues.
-     Only available in debug builds.
-     */
+    Debug CSS shows alignment and rendering debug overlays to help identify layout issues.
+    Only available in debug builds.
+    */
     DebugCss,
     /*
-     Debug Skeleton adds a toggle button to the header bar that forces all pages into their
-     skeleton/loading state. Only available in debug builds.
-     */
+    Debug Skeleton adds a toggle button to the header bar that forces all pages into their
+    skeleton/loading state. Only available in debug builds.
+    */
     DebugSkeleton,
 }
 
@@ -70,15 +70,11 @@ impl FeatureFlag {
             FeatureFlag::SelectMode => {
                 "Enable selection mode to select multiple songs for queuing, saving, or removing."
             }
-            FeatureFlag::CreateNewPlaylist => {
-                "Enable the New Playlist button in the sidebar."
-            }
+            FeatureFlag::CreateNewPlaylist => "Enable the New Playlist button in the sidebar.",
             FeatureFlag::DeviceSelector => {
                 "Enable the device selector in the Now Playing headerbar."
             }
-            FeatureFlag::DebugCss => {
-                "Show alignment and rendering debug overlays."
-            }
+            FeatureFlag::DebugCss => "Show alignment and rendering debug overlays.",
             FeatureFlag::DebugSkeleton => {
                 "Toggle between loaded content and skeleton loading states."
             }

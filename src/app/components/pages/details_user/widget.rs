@@ -7,7 +7,10 @@ use std::rc::Rc;
 
 use super::UserDetailsModel;
 
-use crate::app::components::{CardLayout, CardSize, Component, DetailsPageComponent, EventListener, HasHeaderBarModel, SortOrder};
+use crate::app::components::{
+    CardLayout, CardSize, Component, DetailsPageComponent, EventListener, HasHeaderBarModel,
+    SortOrder,
+};
 use crate::app::{ActionDispatcher, AppEvent, Worker};
 
 /// GTK widget for the user profile detail page.
@@ -25,15 +28,16 @@ impl UserDetails {
     ) -> Self {
         let model = Rc::new(model);
 
-        let mut component = DetailsPageComponent::new(
-            model.clone(),
-            model.to_headerbar_model(),
-            worker,
-        );
+        let mut component =
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), worker);
         component.create_embedded_card_list(
             Some(&gettext("Public Playlists")),
             "user_playlists",
-            &[SortOrder::RecentlyAdded, SortOrder::Alphabetic, SortOrder::Creator],
+            &[
+                SortOrder::RecentlyAdded,
+                SortOrder::Alphabetic,
+                SortOrder::Creator,
+            ],
             shared_layout,
             shared_size,
             dispatcher,

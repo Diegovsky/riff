@@ -137,7 +137,10 @@ impl DetailsPage {
 
     /// Create a [`HeaderBarComponent`] bound to this page's headerbar widget.
     /// The returned listener should be added to the page's children.
-    pub fn create_headerbar_listener(&self, model: Rc<impl HeaderBarModel + 'static>) -> Box<dyn EventListener> {
+    pub fn create_headerbar_listener(
+        &self,
+        model: Rc<impl HeaderBarModel + 'static>,
+    ) -> Box<dyn EventListener> {
         Box::new(HeaderBarComponent::new(
             self.headerbar().unwrap().clone(),
             model,
@@ -169,7 +172,10 @@ impl DetailsPage {
                     if let Some(header) = weak_header.upgrade() {
                         let texture = gdk::Texture::for_pixbuf(pixbuf);
                         header.imp().image.set_paintable(Some(&texture));
-                        header.imp().image_box.remove_css_class("details-header__image-placeholder");
+                        header
+                            .imp()
+                            .image_box
+                            .remove_css_class("details-header__image-placeholder");
                     }
                     scroll_child.add_css_class("details-page--loaded");
                 }

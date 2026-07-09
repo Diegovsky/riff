@@ -4,11 +4,17 @@ use std::rc::Rc;
 
 use gettextrs::gettext;
 
-use crate::app::components::{CardLayout, CardListComponent, CardListModel, CardListPageModel, CardSize, ImageShape, SortOrder};
+use crate::app::components::{
+    CardLayout, CardListComponent, CardListModel, CardListPageModel, CardSize, ImageShape,
+    SortOrder,
+};
 use crate::app::dispatch::Worker;
 use crate::app::models::*;
 use crate::app::state::HomeState;
-use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, ListStore, PaginationTarget};
+use crate::app::{
+    ActionDispatcher, AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, ListStore,
+    PaginationTarget,
+};
 
 pub struct SavedAlbumsModel {
     app_model: Rc<AppModel>,
@@ -17,7 +23,10 @@ pub struct SavedAlbumsModel {
 
 impl SavedAlbumsModel {
     pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
-        Self { app_model, dispatcher }
+        Self {
+            app_model,
+            dispatcher,
+        }
     }
 
     fn state(&self) -> Option<Ref<'_, HomeState>> {
@@ -49,7 +58,9 @@ impl CardListModel for SavedAlbumsModel {
     }
 
     fn has_more(&self) -> bool {
-        self.state().map(|s| s.next_albums_page.next_offset.is_some()).unwrap_or(false)
+        self.state()
+            .map(|s| s.next_albums_page.next_offset.is_some())
+            .unwrap_or(false)
     }
 
     fn load_more(&self) {
@@ -86,12 +97,24 @@ impl CardListModel for SavedAlbumsModel {
 }
 
 impl CardListPageModel for SavedAlbumsModel {
-    fn page_id(&self) -> &str { "albums" }
-    fn empty_title(&self) -> String { gettext("You have no saved albums.") }
-    fn empty_description(&self) -> String { gettext("Your library will be shown here.") }
+    fn page_id(&self) -> &str {
+        "albums"
+    }
+    fn empty_title(&self) -> String {
+        gettext("You have no saved albums.")
+    }
+    fn empty_description(&self) -> String {
+        gettext("Your library will be shown here.")
+    }
 
     fn available_sort_orders(&self) -> &[SortOrder] {
-        &[SortOrder::RecentlyAdded, SortOrder::DateReleased, SortOrder::Alphabetic, SortOrder::Creator, SortOrder::Popularity]
+        &[
+            SortOrder::RecentlyAdded,
+            SortOrder::DateReleased,
+            SortOrder::Alphabetic,
+            SortOrder::Creator,
+            SortOrder::Popularity,
+        ]
     }
 
     fn should_refresh(&self, event: &AppEvent) -> bool {
@@ -108,5 +131,11 @@ pub fn make_saved_albums(
     shared_size: Rc<Cell<CardSize>>,
     dispatcher: Rc<dyn ActionDispatcher>,
 ) -> SavedAlbums {
-    CardListComponent::new(Rc::new(model), worker, shared_layout, shared_size, dispatcher)
+    CardListComponent::new(
+        Rc::new(model),
+        worker,
+        shared_layout,
+        shared_size,
+        dispatcher,
+    )
 }

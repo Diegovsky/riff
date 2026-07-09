@@ -3,7 +3,6 @@ use std::{
     str::FromStr,
 };
 
-
 /// A set of image URLs at different sizes from Spotify.
 ///
 /// An `ImageSet` is guaranteed to contain at least one image. Construction

@@ -8,7 +8,10 @@ use std::rc::Rc;
 
 use super::ArtistDetailsModel;
 
-use crate::app::components::{CardLayout, CardSize, Component, DetailsPageComponent, EventListener, HasHeaderBarModel, SortOrder};
+use crate::app::components::{
+    CardLayout, CardSize, Component, DetailsPageComponent, EventListener, HasHeaderBarModel,
+    SortOrder,
+};
 use crate::app::{ActionDispatcher, AppEvent, Worker};
 
 /// GTK widget for the artist detail page.
@@ -24,11 +27,8 @@ impl ArtistDetails {
         shared_size: Rc<Cell<CardSize>>,
         dispatcher: Rc<dyn ActionDispatcher>,
     ) -> Self {
-        let mut component = DetailsPageComponent::new(
-            model.clone(),
-            model.to_headerbar_model(),
-            worker,
-        );
+        let mut component =
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), worker);
         component.create_playlist(Some(&gettext("Top tracks")));
         component.create_embedded_card_list(
             Some(&gettext("Releases")),

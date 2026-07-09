@@ -21,8 +21,6 @@ mod imp {
 
         #[template_child]
         pub song_artist: TemplateChild<gtk::Label>,
-
-
     }
 
     #[glib::object_subclass]
@@ -55,8 +53,7 @@ glib::wrapper! {
 }
 
 impl PlaybackInfoWidget {
-    fn setup_hover_animations(&self) {
-    }
+    fn setup_hover_animations(&self) {}
 
     pub fn set_title_and_artist(&self, title: &str, artist: &str) {
         let widget = self.imp();
@@ -86,5 +83,4 @@ impl PlaybackInfoWidget {
         let texture = gdk::Texture::for_pixbuf(pixbuf);
         self.imp().playing_image.set_paintable(Some(&texture));
     }
-
 }

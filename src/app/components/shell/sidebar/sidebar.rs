@@ -4,10 +4,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::{
-    create_playlist::CreatePlaylistPopover,
-    playlist_actions,
-    sidebar_row::SidebarRow,
-    SidebarDestination, SidebarItem, CREATE_PLAYLIST_ITEM, LIBRARY_SECTION, SAVED_PLAYLISTS_SECTION,
+    create_playlist::CreatePlaylistPopover, playlist_actions, sidebar_row::SidebarRow,
+    SidebarDestination, SidebarItem, CREATE_PLAYLIST_ITEM, LIBRARY_SECTION,
+    SAVED_PLAYLISTS_SECTION,
 };
 use crate::app::models::{CardModel, PlaylistSummary};
 use crate::app::state::ScreenName;
@@ -174,7 +173,9 @@ impl Sidebar {
                         Self::make_navigatable(item)
                     } else {
                         match item.id().as_str() {
-                            SAVED_PLAYLISTS_SECTION | LIBRARY_SECTION => Self::make_section_label(item),
+                            SAVED_PLAYLISTS_SECTION | LIBRARY_SECTION => {
+                                Self::make_section_label(item)
+                            }
                             CREATE_PLAYLIST_ITEM => Self::make_create_playlist(
                                 item,
                                 popover.clone().expect("popover should exist"),
