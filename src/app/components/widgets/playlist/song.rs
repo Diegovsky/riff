@@ -159,7 +159,13 @@ impl SongWidget {
     }
 
     pub fn set_art(&self, model: &SongModel, worker: Worker) {
-        if let Some(url) = model.description().art.as_ref().and_then(|s| s.best_for_width(48)).map(str::to_owned) {
+        if let Some(url) = model
+            .description()
+            .art
+            .as_ref()
+            .and_then(|s| s.best_for_width(48))
+            .map(str::to_owned)
+        {
             let _self = self.downgrade();
             worker.send_local_task(async move {
                 if let Some(_self) = _self.upgrade() {

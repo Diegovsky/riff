@@ -1,6 +1,8 @@
 use std::rc::Rc;
 
-use crate::app::components::{HeaderBarModel, HeaderImageShape, SimpleHeaderBarModel, SimpleHeaderBarModelWrapper};
+use crate::app::components::{
+    HeaderBarModel, HeaderImageShape, SimpleHeaderBarModel, SimpleHeaderBarModelWrapper,
+};
 use crate::app::models::ImageSet;
 use crate::app::state::PlaybackEvent;
 use crate::app::AppEvent;
@@ -11,7 +13,9 @@ use super::DetailsPageModel;
 /// that implements `SimpleHeaderBarModel` and derefs to `DetailsPageModel`.
 ///
 /// This avoids duplicating the same headerbar wiring in every concrete model.
-pub trait HasHeaderBarModel: SimpleHeaderBarModel + std::ops::Deref<Target = DetailsPageModel> + Sized + 'static {
+pub trait HasHeaderBarModel:
+    SimpleHeaderBarModel + std::ops::Deref<Target = DetailsPageModel> + Sized + 'static
+{
     fn to_headerbar_model(self: &Rc<Self>) -> Rc<impl HeaderBarModel + 'static> {
         Rc::new(SimpleHeaderBarModelWrapper::new(
             self.clone(),
@@ -30,40 +34,64 @@ pub trait PageModel {
     // Page identity
 
     fn get_title(&self) -> Option<String>;
-    fn get_subtitle(&self) -> Option<String> { None }
-    fn get_artwork(&self) -> Option<ImageSet> { None }
-    fn get_caption(&self) -> Option<String> { None }
+    fn get_subtitle(&self) -> Option<String> {
+        None
+    }
+    fn get_artwork(&self) -> Option<ImageSet> {
+        None
+    }
+    fn get_caption(&self) -> Option<String> {
+        None
+    }
     fn header_image_shape(&self) -> HeaderImageShape;
-    fn default_icon(&self) -> Option<&str> { None }
+    fn default_icon(&self) -> Option<&str> {
+        None
+    }
 
     // Loading
 
     fn load_page_info(&self) {}
     fn load_more(&self) {}
-    fn is_loaded(&self) -> bool { false }
+    fn is_loaded(&self) -> bool {
+        false
+    }
 
     // Playback
 
-    fn has_play_button(&self) -> bool { false }
-    fn source_is_playing(&self) -> bool { false }
+    fn has_play_button(&self) -> bool {
+        false
+    }
+    fn source_is_playing(&self) -> bool {
+        false
+    }
     fn toggle_play(&self) {}
     fn shuffle_play(&self) {}
 
     // Like/Save
 
-    fn has_like_button(&self) -> bool { false }
-    fn is_liked(&self) -> bool { false }
+    fn has_like_button(&self) -> bool {
+        false
+    }
+    fn is_liked(&self) -> bool {
+        false
+    }
     fn toggle_like(&self) {}
-    fn like_visible(&self) -> bool { self.has_like_button() }
+    fn like_visible(&self) -> bool {
+        self.has_like_button()
+    }
 
     // Info button
 
-    fn has_info_button(&self) -> bool { false }
+    fn has_info_button(&self) -> bool {
+        false
+    }
     fn on_info_clicked(&self) {}
 
     // Subtitle click
 
-    fn has_subtitle_link(&self) -> bool { false }
+    fn has_subtitle_link(&self) -> bool {
+        false
+    }
     fn on_subtitle_clicked(&self) {}
 
     // Event handling
@@ -71,7 +99,9 @@ pub trait PageModel {
     /// Returns true if this event means page details should be refreshed.
     fn should_refresh_details(&self, event: &AppEvent) -> bool;
     /// Returns true if this event means liked state changed.
-    fn should_refresh_liked(&self, _event: &AppEvent) -> bool { false }
+    fn should_refresh_liked(&self, _event: &AppEvent) -> bool {
+        false
+    }
 }
 
 /// Check if a playback event means we should update the play button.

@@ -199,7 +199,11 @@ impl PlaybackState {
 
     pub fn next_index(&self) -> Option<usize> {
         // When shuffled, we can only play songs that are actually loaded
-        let len = if self.is_shuffled { self.songs.partial_len() } else { self.songs.len() };
+        let len = if self.is_shuffled {
+            self.songs.partial_len()
+        } else {
+            self.songs.len()
+        };
         self.list_position.and_then(|p| match self.repeat {
             RepeatMode::Song => Some(p),
             RepeatMode::Playlist if len != 0 => Some((p + 1) % len),
@@ -224,7 +228,11 @@ impl PlaybackState {
     }
 
     pub fn prev_index(&self) -> Option<usize> {
-        let len = if self.is_shuffled { self.songs.partial_len() } else { self.songs.len() };
+        let len = if self.is_shuffled {
+            self.songs.partial_len()
+        } else {
+            self.songs.len()
+        };
         self.list_position.and_then(|p| match self.repeat {
             RepeatMode::Song => Some(p),
             RepeatMode::Playlist if len != 0 => Some((if p == 0 { len } else { p }) - 1),
@@ -800,7 +808,11 @@ mod tests {
         let songs = vec![song("1"), song("2"), song("3"), song("4"), song("5")];
         let batch = SongBatch {
             songs: songs.clone(),
-            batch: Batch { offset: 0, batch_size: 50, total: 5 },
+            batch: Batch {
+                offset: 0,
+                batch_size: 50,
+                total: 5,
+            },
         };
 
         // Step 1: ToggleShuffle (no songs loaded yet)
@@ -828,7 +840,9 @@ mod tests {
             state.current_position(),
         );
         assert!(
-            events.iter().any(|e| matches!(e, PlaybackEvent::TrackChanged(_))),
+            events
+                .iter()
+                .any(|e| matches!(e, PlaybackEvent::TrackChanged(_))),
             "Expected TrackChanged event, got: {:?}",
             events,
         );
@@ -838,7 +852,9 @@ mod tests {
         let events = state.update_with(Cow::Owned(PlaybackAction::Next));
         assert!(state.is_playing());
         assert!(
-            events.iter().any(|e| matches!(e, PlaybackEvent::TrackChanged(_))),
+            events
+                .iter()
+                .any(|e| matches!(e, PlaybackEvent::TrackChanged(_))),
             "Second Next failed, got: {:?}",
             events,
         );
@@ -880,7 +896,9 @@ mod tests {
             state.current_position(),
         );
         assert!(
-            events.iter().any(|e| matches!(e, PlaybackEvent::TrackChanged(_))),
+            events
+                .iter()
+                .any(|e| matches!(e, PlaybackEvent::TrackChanged(_))),
             "Expected TrackChanged event, got: {:?}",
             events,
         );
@@ -895,7 +913,11 @@ mod tests {
         let songs: Vec<_> = (1..=100).map(|i| song(&i.to_string())).collect();
         let batch = SongBatch {
             songs,
-            batch: Batch { offset: 0, batch_size: 100, total: 200 },
+            batch: Batch {
+                offset: 0,
+                batch_size: 100,
+                total: 200,
+            },
         };
 
         // Step 1: ToggleShuffle
@@ -923,6 +945,9 @@ mod tests {
                 break;
             }
         }
-        assert!(!failed, "Playback stopped because shuffle picked an unloaded song index");
+        assert!(
+            !failed,
+            "Playback stopped because shuffle picked an unloaded song index"
+        );
     }
 }

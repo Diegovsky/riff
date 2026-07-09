@@ -185,19 +185,25 @@ impl StateTracker {
     }
 
     pub fn save_card_layout(&self, layout: CardLayout) {
-        let _ = self.settings.set_string("card-layout", match layout {
-            CardLayout::Vertical => "vertical",
-            CardLayout::ImageOnly => "image-only",
-            CardLayout::Horizontal => "horizontal",
-        });
+        let _ = self.settings.set_string(
+            "card-layout",
+            match layout {
+                CardLayout::Vertical => "vertical",
+                CardLayout::ImageOnly => "image-only",
+                CardLayout::Horizontal => "horizontal",
+            },
+        );
     }
 
     pub fn save_card_size(&self, size: CardSize) {
-        let _ = self.settings.set_string("card-size", match size {
-            CardSize::Small => "small",
-            CardSize::Medium => "medium",
-            CardSize::Large => "large",
-        });
+        let _ = self.settings.set_string(
+            "card-size",
+            match size {
+                CardSize::Small => "small",
+                CardSize::Medium => "medium",
+                CardSize::Large => "large",
+            },
+        );
     }
 
     pub fn load_card_layout(&self) -> CardLayout {
@@ -218,14 +224,22 @@ impl StateTracker {
 
     pub fn save_sort_order(&self, page: &str, order: SortOrder) {
         let key = format!("sort-{page}");
-        if self.settings.settings_schema().map_or(false, |s| s.has_key(&key)) {
+        if self
+            .settings
+            .settings_schema()
+            .map_or(false, |s| s.has_key(&key))
+        {
             let _ = self.settings.set_string(&key, order.to_str());
         }
     }
 
     pub fn load_sort_order(&self, page: &str) -> SortOrder {
         let key = format!("sort-{page}");
-        if self.settings.settings_schema().map_or(false, |s| s.has_key(&key)) {
+        if self
+            .settings
+            .settings_schema()
+            .map_or(false, |s| s.has_key(&key))
+        {
             SortOrder::parse_key(self.settings.string(&key).as_str())
         } else {
             SortOrder::RecentlyAdded

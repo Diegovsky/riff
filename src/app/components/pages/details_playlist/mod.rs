@@ -1,5 +1,5 @@
-mod widget;
 mod model;
+mod widget;
 
-pub use widget::*;
 pub use model::*;
+pub use widget::*;

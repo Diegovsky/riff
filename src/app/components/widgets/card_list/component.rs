@@ -122,7 +122,9 @@ impl<M: CardListPageModel + 'static> EventListener for CardListComponent<M> {
                 self.card_list.widget().remove_all();
                 self.page_widget.status_page().set_visible(false);
             }
-            AppEvent::BrowserEvent(BrowserEvent::CardLayoutChanged(_) | BrowserEvent::CardSizeChanged(_)) => {
+            AppEvent::BrowserEvent(
+                BrowserEvent::CardLayoutChanged(_) | BrowserEvent::CardSizeChanged(_),
+            ) => {
                 self.card_list.update_layout(self.layout.get());
                 self.card_list.update_size(self.size.get());
                 self.view_menu.sync(self.layout.get());
@@ -132,7 +134,9 @@ impl<M: CardListPageModel + 'static> EventListener for CardListComponent<M> {
 
         if self.model.should_refresh(event) {
             self.card_list.remove_placeholders();
-            self.page_widget.status_page().set_visible(!self.model.has_items());
+            self.page_widget
+                .status_page()
+                .set_visible(!self.model.has_items());
             if self.model.has_items() {
                 let adj = self.page_widget.scrolled_window().vadjustment();
                 if adj.upper() <= adj.page_size() && self.model.has_more() {
@@ -213,7 +217,10 @@ impl EmbeddedCardList {
 
 impl EventListener for EmbeddedCardList {
     fn on_event(&mut self, event: &AppEvent) {
-        if let AppEvent::BrowserEvent(BrowserEvent::CardLayoutChanged(_) | BrowserEvent::CardSizeChanged(_)) = event {
+        if let AppEvent::BrowserEvent(
+            BrowserEvent::CardLayoutChanged(_) | BrowserEvent::CardSizeChanged(_),
+        ) = event
+        {
             self.card_list.update_layout(self.layout.get());
             self.card_list.update_size(self.size.get());
             self.view_menu.sync(self.layout.get());

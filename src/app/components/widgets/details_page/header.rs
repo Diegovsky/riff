@@ -97,15 +97,24 @@ impl DetailsHeader {
 
         widget.imp().image.set_halign(gtk::Align::Center);
         widget.imp().image.set_valign(gtk::Align::Center);
-        widget.imp().image_box.add_css_class("details-header__image-placeholder");
+        widget
+            .imp()
+            .image_box
+            .add_css_class("details-header__image-placeholder");
 
         // Apply shape-specific styling.
         widget.imp().image_box.add_css_class("card");
         match shape {
             HeaderImageShape::Square => {}
             HeaderImageShape::Circle => {
-                widget.imp().image.add_css_class("details-header__image--circular");
-                widget.imp().image_box.add_css_class("details-header__image--circular");
+                widget
+                    .imp()
+                    .image
+                    .add_css_class("details-header__image--circular");
+                widget
+                    .imp()
+                    .image_box
+                    .add_css_class("details-header__image--circular");
             }
         }
 
@@ -125,17 +134,22 @@ impl DetailsHeader {
     pub fn set_caption(&self, caption: &str) {
         let imp = self.widget.imp();
         imp.caption_label.set_label(caption);
-        imp.caption_label.set_opacity(if caption.is_empty() { 0.0 } else { 1.0 });
+        imp.caption_label
+            .set_opacity(if caption.is_empty() { 0.0 } else { 1.0 });
     }
 
     pub fn set_caption_visible(&self, visible: bool) {
-        self.widget.imp().caption_label.set_opacity(if visible { 1.0 } else { 0.0 });
+        self.widget
+            .imp()
+            .caption_label
+            .set_opacity(if visible { 1.0 } else { 0.0 });
     }
 
     pub fn set_subtitle(&self, subtitle: &str) {
         let imp = self.widget.imp();
         imp.subtitle_label.set_label(subtitle);
-        imp.subtitle_label.set_opacity(if subtitle.is_empty() { 0.0 } else { 1.0 });
+        imp.subtitle_label
+            .set_opacity(if subtitle.is_empty() { 0.0 } else { 1.0 });
     }
 
     pub fn get_title_text(&self) -> String {
@@ -157,7 +171,10 @@ impl DetailsHeader {
             gtk::IconLookupFlags::empty(),
         );
         self.widget.imp().image.set_paintable(Some(&icon));
-        self.widget.imp().image.set_content_fit(gtk::ContentFit::Fill);
+        self.widget
+            .imp()
+            .image
+            .set_content_fit(gtk::ContentFit::Fill);
     }
 
     // Action button state
@@ -175,7 +192,10 @@ impl DetailsHeader {
             gettext("Play")
         };
         self.widget.imp().play_button.set_icon_name(icon);
-        self.widget.imp().play_button.set_tooltip_text(Some(&tooltip));
+        self.widget
+            .imp()
+            .play_button
+            .set_tooltip_text(Some(&tooltip));
     }
 
     /// Update the like button icon to reflect saved/unsaved state.
@@ -203,7 +223,10 @@ impl DetailsHeader {
     /// Connect a handler to the shuffle button. Also makes the button visible.
     pub fn connect_shuffle<F: Fn() + 'static>(&self, f: F) {
         self.widget.imp().shuffle_button.set_visible(true);
-        self.widget.imp().shuffle_button.connect_clicked(move |_| f());
+        self.widget
+            .imp()
+            .shuffle_button
+            .connect_clicked(move |_| f());
     }
 
     /// Connect a handler to the like/save button. Also makes the button visible.

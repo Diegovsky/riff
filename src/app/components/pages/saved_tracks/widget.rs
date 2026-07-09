@@ -16,11 +16,8 @@ pub struct SavedTracks {
 
 impl SavedTracks {
     pub fn new(model: Rc<SavedTracksModel>, worker: Worker) -> Self {
-        let mut component = DetailsPageComponent::new(
-            model.clone(),
-            model.to_headerbar_model(),
-            worker,
-        );
+        let mut component =
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), worker);
         component.create_playlist(None);
 
         Self { model, component }

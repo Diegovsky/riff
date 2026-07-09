@@ -224,9 +224,14 @@ impl SettingsDialog {
         let settings = gio::Settings::new(SETTINGS);
         let group = libadwaita::PreferencesGroup::new();
         group.set_title("Experimental Features");
-        group.set_description(Some("These settings require restarting the application to take effect."));
+        group.set_description(Some(
+            "These settings require restarting the application to take effect.",
+        ));
 
-        for flag in FeatureFlag::ALL.iter().filter(|f| !f.is_debug_only() || cfg!(debug_assertions)) {
+        for flag in FeatureFlag::ALL
+            .iter()
+            .filter(|f| !f.is_debug_only() || cfg!(debug_assertions))
+        {
             let row = libadwaita::SwitchRow::new();
             row.set_title(flag.title());
             row.set_subtitle(flag.description());
