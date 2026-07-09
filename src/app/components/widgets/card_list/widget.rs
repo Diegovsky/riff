@@ -27,7 +27,9 @@ pub trait CardListModel {
     fn load_more(&self);
     fn refresh(&self);
     fn has_items(&self) -> bool;
-    fn has_more(&self) -> bool { false }
+    fn has_more(&self) -> bool {
+        false
+    }
     fn open_item(&self, id: String);
     fn image_shape(&self) -> ImageShape;
 }
@@ -103,9 +105,8 @@ impl CardList {
 
             // Install sort function
             let sort_ref = Rc::clone(&self.current_sort);
-            self.flowbox.set_sort_func(move |a, b| {
-                sort_children(sort_ref.get(), a, b).into()
-            });
+            self.flowbox
+                .set_sort_func(move |a, b| sort_children(sort_ref.get(), a, b).into());
 
             // Add existing items
             let mut counter = self.next_position.get().max(1);
@@ -127,60 +128,66 @@ impl CardList {
             let current_size = Rc::clone(&self.current_size);
             let placeholder_count = Rc::clone(&self.placeholder_count);
             let worker_clone = worker.clone();
-            let handler_id = inner.connect_items_changed(move |source, position, removed, added| {
-                let Some(flowbox) = flowbox_weak.upgrade() else { return };
-                let layout = current_layout.get();
-                let size = current_size.get();
+            let handler_id =
+                inner.connect_items_changed(move |source, position, removed, added| {
+                    let Some(flowbox) = flowbox_weak.upgrade() else {
+                        return;
+                    };
+                    let layout = current_layout.get();
+                    let size = current_size.get();
 
-                // Remove placeholders when real data arrives
-                if added > 0 && placeholder_count.get() > 0 {
-                    remove_placeholder_children(&flowbox, &placeholder_count);
-                }
+                    // Remove placeholders when real data arrives
+                    if added > 0 && placeholder_count.get() > 0 {
+                        remove_placeholder_children(&flowbox, &placeholder_count);
+                    }
 
-                // Handle removals: find children that no longer exist in the source store.
-                if removed > 0 {
-                    let source_ids: std::collections::HashSet<String> = (0..source.n_items())
-                        .filter_map(|i| source.item(i))
-                        .filter_map(|o| o.downcast_ref::<CardModel>().map(|c| c.id()))
-                        .collect();
-                    let mut child = flowbox.first_child();
-                    while let Some(c) = child {
-                        let next = c.next_sibling();
-                        if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
-                            if let Some(card_model) = get_model(fb_child) {
-                                if !source_ids.contains(&card_model.id()) {
-                                    flowbox.remove(fb_child);
+                    // Handle removals: find children that no longer exist in the source store.
+                    if removed > 0 {
+                        let source_ids: std::collections::HashSet<String> = (0..source.n_items())
+                            .filter_map(|i| source.item(i))
+                            .filter_map(|o| o.downcast_ref::<CardModel>().map(|c| c.id()))
+                            .collect();
+                        let mut child = flowbox.first_child();
+                        while let Some(c) = child {
+                            let next = c.next_sibling();
+                            if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
+                                if let Some(card_model) = get_model(fb_child) {
+                                    if !source_ids.contains(&card_model.id()) {
+                                        flowbox.remove(fb_child);
+                                    }
+                                }
+                            }
+                            child = next;
+                        }
+                    }
+
+                    // Add new items
+                    if added > 0 {
+                        let mut ctr = next_pos.get();
+                        for i in position..(position + added) {
+                            if let Some(obj) = source.item(i) {
+                                if let Some(card) = obj.downcast_ref::<CardModel>() {
+                                    if card.insertion_position() == 0 {
+                                        card.set_insertion_position(ctr);
+                                        ctr += 1;
+                                    }
+                                    let child =
+                                        create_child(card, &worker_clone, shape, layout, size);
+                                    flowbox.insert(&child, -1);
                                 }
                             }
                         }
-                        child = next;
+                        next_pos.set(ctr);
                     }
-                }
-
-                // Add new items
-                if added > 0 {
-                    let mut ctr = next_pos.get();
-                    for i in position..(position + added) {
-                        if let Some(obj) = source.item(i) {
-                            if let Some(card) = obj.downcast_ref::<CardModel>() {
-                                if card.insertion_position() == 0 {
-                                    card.set_insertion_position(ctr);
-                                    ctr += 1;
-                                }
-                                let child = create_child(card, &worker_clone, shape, layout, size);
-                                flowbox.insert(&child, -1);
-                            }
-                        }
-                    }
-                    next_pos.set(ctr);
-                }
-            });
+                });
             self.source_signal.set(Some((inner, handler_id)));
 
             // Handle activation (clicks)
             let weak_model = Rc::downgrade(model);
             let activation_id = self.flowbox.connect_child_activated(move |_, child| {
-                if let Some(card_widget) = child.child().and_then(|w| w.downcast::<CardWidget>().ok()) {
+                if let Some(card_widget) =
+                    child.child().and_then(|w| w.downcast::<CardWidget>().ok())
+                {
                     let id = card_widget.card_id();
                     if !id.is_empty() {
                         if let Some(model) = weak_model.upgrade() {
@@ -193,7 +200,14 @@ impl CardList {
         }
     }
 
-    fn add_child(&self, card: &CardModel, worker: &Worker, shape: ImageShape, layout: CardLayout, size: CardSize) {
+    fn add_child(
+        &self,
+        card: &CardModel,
+        worker: &Worker,
+        shape: ImageShape,
+        layout: CardLayout,
+        size: CardSize,
+    ) {
         let child = create_child(card, worker, shape, layout, size);
         self.flowbox.insert(&child, -1);
     }
@@ -203,7 +217,10 @@ impl CardList {
         let mut child = self.flowbox.first_child();
         while let Some(c) = child {
             if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
-                if let Some(card) = fb_child.child().and_then(|w| w.downcast::<CardWidget>().ok()) {
+                if let Some(card) = fb_child
+                    .child()
+                    .and_then(|w| w.downcast::<CardWidget>().ok())
+                {
                     card.set_image_size(size);
                 }
             }
@@ -216,7 +233,10 @@ impl CardList {
         let mut child = self.flowbox.first_child();
         while let Some(c) = child {
             if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
-                if let Some(card) = fb_child.child().and_then(|w| w.downcast::<CardWidget>().ok()) {
+                if let Some(card) = fb_child
+                    .child()
+                    .and_then(|w| w.downcast::<CardWidget>().ok())
+                {
                     card.set_layout(layout);
                 }
             }
@@ -275,7 +295,13 @@ impl Drop for CardList {
 }
 
 /// Create a FlowBoxChild for a real card model.
-fn create_child(card: &CardModel, worker: &Worker, shape: ImageShape, layout: CardLayout, size: CardSize) -> gtk::FlowBoxChild {
+fn create_child(
+    card: &CardModel,
+    worker: &Worker,
+    shape: ImageShape,
+    layout: CardLayout,
+    size: CardSize,
+) -> gtk::FlowBoxChild {
     let widget = CardWidget::for_model(card, worker.clone(), shape, layout, size);
     let child = gtk::FlowBoxChild::new();
     child.set_halign(gtk::Align::Fill);
@@ -284,7 +310,9 @@ fn create_child(card: &CardModel, worker: &Worker, shape: ImageShape, layout: Ca
     // Attach the CardModel so the sort function can access it.
     // SAFETY: MODEL_DATA_KEY is unique to this module and always stores a CardModel.
     // The data outlives the child because GObject prevents use-after-free on qdata.
-    unsafe { child.set_data(MODEL_DATA_KEY, card.clone()); }
+    unsafe {
+        child.set_data(MODEL_DATA_KEY, card.clone());
+    }
     child
 }
 
@@ -304,7 +332,11 @@ fn create_child_placeholder(layout: CardLayout, size: CardSize) -> gtk::FlowBoxC
 /// Retrieve the attached CardModel from a FlowBoxChild.
 fn get_model(child: &gtk::FlowBoxChild) -> Option<CardModel> {
     // SAFETY: Only create_child stores data at MODEL_DATA_KEY, and it always stores CardModel.
-    unsafe { child.data::<CardModel>(MODEL_DATA_KEY).map(|p| p.as_ref().clone()) }
+    unsafe {
+        child
+            .data::<CardModel>(MODEL_DATA_KEY)
+            .map(|p| p.as_ref().clone())
+    }
 }
 
 /// Sort function for the FlowBox. Reads CardModel from each child.
@@ -340,8 +372,14 @@ fn remove_placeholder_children(flowbox: &gtk::FlowBox, count: &Rc<Cell<u32>>) {
 fn compare_cards(sort: SortOrder, a: &CardModel, b: &CardModel) -> Ordering {
     match sort {
         SortOrder::RecentlyAdded => a.insertion_position().cmp(&b.insertion_position()),
-        SortOrder::Alphabetic => a.title().to_ascii_lowercase().cmp(&b.title().to_ascii_lowercase()),
-        SortOrder::Creator => a.subtitle().to_ascii_lowercase().cmp(&b.subtitle().to_ascii_lowercase()),
+        SortOrder::Alphabetic => a
+            .title()
+            .to_ascii_lowercase()
+            .cmp(&b.title().to_ascii_lowercase()),
+        SortOrder::Creator => a
+            .subtitle()
+            .to_ascii_lowercase()
+            .cmp(&b.subtitle().to_ascii_lowercase()),
         SortOrder::DateReleased => b.release_date().cmp(&a.release_date()),
         SortOrder::Popularity => b.popularity().cmp(&a.popularity()),
     }

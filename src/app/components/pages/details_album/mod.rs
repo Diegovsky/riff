@@ -1,6 +1,6 @@
-mod widget;
 mod model;
 mod release_details;
+mod widget;
 
-pub use widget::Details;
 pub use model::DetailsModel;
+pub use widget::Details;

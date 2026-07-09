@@ -9,15 +9,19 @@ use gio::SimpleActionGroup;
 use std::ops::Deref;
 use std::rc::Rc;
 
-use crate::{impl_playlist_model_base, impl_toggle_play};
 use crate::api::SpotifyApiError;
-use crate::app::components::{labels, HasHeaderBarModel, HeaderImageShape, PageModel, PlaylistModel, SimpleHeaderBarModel};
 use crate::app::components::DetailsPageModel;
+use crate::app::components::{
+    labels, HasHeaderBarModel, HeaderImageShape, PageModel, PlaylistModel, SimpleHeaderBarModel,
+};
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
-use crate::app::state::{BrowserAction, BrowserEvent, PlaybackAction, SelectionAction, SelectionState};
+use crate::app::state::{
+    BrowserAction, BrowserEvent, PlaybackAction, SelectionAction, SelectionState,
+};
 use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, PaginationTarget, SongsSource};
 use crate::feature_flags::{self, FeatureFlag};
+use crate::{impl_playlist_model_base, impl_toggle_play};
 
 /// Data model for the playlist detail page. Composes `DetailsPageModel` via Deref.
 pub struct PlaylistDetailsModel {
@@ -43,15 +47,24 @@ impl PlaylistDetailsModel {
     /// Returns true if the logged-in user owns this playlist.
     pub fn is_playlist_editable(&self) -> bool {
         let state = self.app_model.get_state();
-        let Some(user) = state.logged_user.user.as_ref() else { return false };
-        state.browser.playlist_details_state(&self.id)
+        let Some(user) = state.logged_user.user.as_ref() else {
+            return false;
+        };
+        state
+            .browser
+            .playlist_details_state(&self.id)
             .and_then(|s| s.playlist.as_ref())
             .map(|p| p.owner.id == *user)
             .unwrap_or(false)
     }
 
     pub fn get_playlist_info(&self) -> Option<impl Deref<Target = PlaylistDescription> + '_> {
-        self.app_model.map_state_opt(|s| s.browser.playlist_details_state(&self.id)?.playlist.as_ref())
+        self.app_model.map_state_opt(|s| {
+            s.browser
+                .playlist_details_state(&self.id)?
+                .playlist
+                .as_ref()
+        })
     }
 
     /// Rename the playlist via the API and update local state.
@@ -60,7 +73,8 @@ impl PlaylistDetailsModel {
         let id = self.id.clone();
         self.dispatcher
             .call_spotify_and_dispatch(move || async move {
-                api.update_playlist_details(&id, title.clone()).await
+                api.update_playlist_details(&id, title.clone())
+                    .await
                     .map(|_| AppAction::UpdatePlaylistName(PlaylistSummary { id, title }))
             });
     }
@@ -92,17 +106,19 @@ impl PageModel for PlaylistDetailsModel {
         let id = self.id.clone();
         self.dispatcher
             .call_spotify_and_dispatch(move || async move {
-                let (tracks_result, playlist_result) = futures::join!(
-                    api.get_playlist_tracks(&id, 0, 100),
-                    api.get_playlist(&id)
-                );
+                let (tracks_result, playlist_result) =
+                    futures::join!(api.get_playlist_tracks(&id, 0, 100), api.get_playlist(&id));
                 let playlist_tracks = tracks_result?;
                 match playlist_result {
                     Ok(playlist) => Ok(BrowserAction::SetPlaylistDetails(
-                        Box::new(playlist), Box::new(playlist_tracks),
-                    ).into()),
+                        Box::new(playlist),
+                        Box::new(playlist_tracks),
+                    )
+                    .into()),
                     Err(SpotifyApiError::BadStatus(400, _))
-                    | Err(SpotifyApiError::BadStatus(404, _)) => Ok(BrowserAction::NavigationPop.into()),
+                    | Err(SpotifyApiError::BadStatus(404, _)) => {
+                        Ok(BrowserAction::NavigationPop.into())
+                    }
                     Err(e) => Err(e),
                 }
             });
@@ -111,21 +127,32 @@ impl PageModel for PlaylistDetailsModel {
     fn load_more(&self) {
         let api = self.app_model.get_spotify();
         let state = self.app_model.get_state();
-        let Some(next_page) = state.browser.playlist_details_state(&self.id).map(|s| s.next_tracks_page.clone()) else { return };
+        let Some(next_page) = state
+            .browser
+            .playlist_details_state(&self.id)
+            .map(|s| s.next_tracks_page.clone())
+        else {
+            return;
+        };
         drop(state);
 
-        let Some(offset) = next_page.next_offset else { return };
+        let Some(offset) = next_page.next_offset else {
+            return;
+        };
         let id = self.id.clone();
         let batch_size = next_page.batch_size;
 
-        self.app_model
-            .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::PlaylistTracks(id.clone())).into());
+        self.app_model.update_state(
+            BrowserAction::ConsumeNextPage(PaginationTarget::PlaylistTracks(id.clone())).into(),
+        );
 
         self.dispatcher
             .call_spotify_and_dispatch(move || async move {
                 api.get_playlist_tracks(&id, offset, batch_size)
                     .await
-                    .map(|song_batch| BrowserAction::AppendPlaylistTracks(id, Box::new(song_batch)).into())
+                    .map(|song_batch| {
+                        BrowserAction::AppendPlaylistTracks(id, Box::new(song_batch)).into()
+                    })
             });
     }
 
@@ -133,7 +160,9 @@ impl PageModel for PlaylistDetailsModel {
         self.get_playlist_info().is_some()
     }
 
-    fn has_play_button(&self) -> bool { true }
+    fn has_play_button(&self) -> bool {
+        true
+    }
 
     fn source_is_playing(&self) -> bool {
         matches!(self.app_model.get_state().playback.current_source(), Some(SongsSource::Playlist(ref id)) if id == &self.id)
@@ -141,10 +170,16 @@ impl PageModel for PlaylistDetailsModel {
 
     impl_toggle_play!();
 
-    fn has_like_button(&self) -> bool { true }
+    fn has_like_button(&self) -> bool {
+        true
+    }
 
     fn is_liked(&self) -> bool {
-        self.app_model.get_state().logged_user.playlist_ids.contains(&self.id)
+        self.app_model
+            .get_state()
+            .logged_user
+            .playlist_ids
+            .contains(&self.id)
     }
 
     fn toggle_like(&self) {
@@ -167,11 +202,14 @@ impl PageModel for PlaylistDetailsModel {
         !self.is_playlist_editable()
     }
 
-    fn has_subtitle_link(&self) -> bool { true }
+    fn has_subtitle_link(&self) -> bool {
+        true
+    }
 
     fn on_subtitle_clicked(&self) {
         if let Some(playlist) = self.get_playlist_info() {
-            self.dispatcher.dispatch(AppAction::ViewUser(playlist.owner.id.clone()));
+            self.dispatcher
+                .dispatch(AppAction::ViewUser(playlist.owner.id.clone()));
         }
     }
 
@@ -189,15 +227,20 @@ impl PageModel for PlaylistDetailsModel {
 
 impl PlaylistModel for PlaylistDetailsModel {
     fn song_list_model(&self) -> SongListModel {
-        self.state().browser.playlist_details_state(&self.id)
+        self.state()
+            .browser
+            .playlist_details_state(&self.id)
             .expect("illegal attempt to read playlist_details_state")
-            .songs.clone()
+            .songs
+            .clone()
     }
 
     impl_playlist_model_base!();
 
     fn enable_selection(&self) -> bool {
-        if !feature_flags::is_enabled(FeatureFlag::SelectMode) { return false; }
+        if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
+            return false;
+        }
         let context = if self.is_playlist_editable() {
             SelectionContext::EditablePlaylist(self.id.clone())
         } else {
@@ -209,8 +252,12 @@ impl PlaylistModel for PlaylistDetailsModel {
     fn play_song_at(&self, pos: usize, id: &str) {
         let batch = PlaylistModel::song_list_model(self).song_batch_for(pos);
         if let Some(batch) = batch {
-            self.dispatcher.dispatch(PlaybackAction::LoadPagedSongs(SongsSource::Playlist(self.id.clone()), batch).into());
-            self.dispatcher.dispatch(PlaybackAction::Load(id.to_string()).into());
+            self.dispatcher.dispatch(
+                PlaybackAction::LoadPagedSongs(SongsSource::Playlist(self.id.clone()), batch)
+                    .into(),
+            );
+            self.dispatcher
+                .dispatch(PlaybackAction::Load(id.to_string()).into());
         }
     }
 
@@ -218,7 +265,9 @@ impl PlaylistModel for PlaylistDetailsModel {
         let song = PlaylistModel::song_list_model(self).get(id)?;
         let song = song.description();
         let group = SimpleActionGroup::new();
-        for a in song.make_artist_actions(self.dispatcher.box_clone(), None) { group.add_action(&a); }
+        for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
+            group.add_action(&a);
+        }
         group.add_action(&song.make_album_action(self.dispatcher.box_clone(), None));
         group.add_action(&song.make_link_action(None));
         group.add_action(&song.make_queue_action(self.dispatcher.box_clone(), None));
@@ -231,7 +280,10 @@ impl PlaylistModel for PlaylistDetailsModel {
         let menu = gio::Menu::new();
         menu.append(Some(&*labels::VIEW_ALBUM), Some("song.view_album"));
         for artist in song.artists.iter() {
-            menu.append(Some(&labels::more_from_label(&artist.name)), Some(&format!("song.view_artist_{}", artist.id)));
+            menu.append(
+                Some(&labels::more_from_label(&artist.name)),
+                Some(&format!("song.view_artist_{}", artist.id)),
+            );
         }
         menu.append(Some(&*labels::COPY_LINK), Some("song.copy_link"));
         menu.append(Some(&*labels::ADD_TO_QUEUE), Some("song.queue"));
@@ -240,11 +292,17 @@ impl PlaylistModel for PlaylistDetailsModel {
 }
 
 impl SimpleHeaderBarModel for PlaylistDetailsModel {
-    fn title(&self) -> Option<String> { PageModel::get_title(self) }
-    fn title_updated(&self, event: &AppEvent) -> bool { PageModel::should_refresh_details(self, event) }
+    fn title(&self) -> Option<String> {
+        PageModel::get_title(self)
+    }
+    fn title_updated(&self, event: &AppEvent) -> bool {
+        PageModel::should_refresh_details(self, event)
+    }
 
     fn selection_context(&self) -> Option<SelectionContext> {
-        if !feature_flags::is_enabled(FeatureFlag::SelectMode) { return None; }
+        if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
+            return None;
+        }
         if self.is_playlist_editable() {
             Some(SelectionContext::EditablePlaylist(self.id.clone()))
         } else {
@@ -254,6 +312,7 @@ impl SimpleHeaderBarModel for PlaylistDetailsModel {
 
     fn select_all(&self) {
         let songs: Vec<SongDescription> = PlaylistModel::song_list_model(self).collect();
-        self.dispatcher.dispatch(SelectionAction::Select(songs).into());
+        self.dispatcher
+            .dispatch(SelectionAction::Select(songs).into());
     }
 }

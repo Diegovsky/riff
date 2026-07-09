@@ -121,7 +121,9 @@ mod imp {
 
             if orientation == gtk::Orientation::Horizontal {
                 let w = match layout {
-                    CardLayout::Horizontal => px + HORIZONTAL_GAP + (HORIZONTAL_LABEL_WIDTH_SCALE * px as f32) as i32,
+                    CardLayout::Horizontal => {
+                        px + HORIZONTAL_GAP + (HORIZONTAL_LABEL_WIDTH_SCALE * px as f32) as i32
+                    }
                     _ => px,
                 };
                 return (w, w, -1, -1);
@@ -130,8 +132,10 @@ mod imp {
             // Vertical measurement
             match layout {
                 CardLayout::Horizontal => {
-                    let (label_min, _, _, _) =
-                        self.label_box.measure(gtk::Orientation::Vertical, (HORIZONTAL_LABEL_WIDTH_SCALE * px as f32) as i32);
+                    let (label_min, _, _, _) = self.label_box.measure(
+                        gtk::Orientation::Vertical,
+                        (HORIZONTAL_LABEL_WIDTH_SCALE * px as f32) as i32,
+                    );
                     let h = px.max(label_min);
                     (h, h, -1, -1)
                 }
@@ -181,10 +185,13 @@ mod imp {
                             self.label_box.measure(gtk::Orientation::Vertical, label_w);
                         let label_h = label_min.min(height);
                         let label_y = (height - label_h) / 2;
-                        let transform = gtk::gsk::Transform::new().translate(
-                            &gtk::graphene::Point::new((px + HORIZONTAL_GAP) as f32, label_y as f32),
-                        );
-                        self.label_box.allocate(label_w, label_h, -1, Some(transform));
+                        let transform =
+                            gtk::gsk::Transform::new().translate(&gtk::graphene::Point::new(
+                                (px + HORIZONTAL_GAP) as f32,
+                                label_y as f32,
+                            ));
+                        self.label_box
+                            .allocate(label_w, label_h, -1, Some(transform));
                     }
                 }
             }
@@ -218,7 +225,13 @@ impl CardWidget {
     }
 
     /// Create a card pre-bound to a model, ready for display.
-    pub fn for_model(model: &CardModel, worker: Worker, shape: ImageShape, layout: CardLayout, size: CardSize) -> Self {
+    pub fn for_model(
+        model: &CardModel,
+        worker: Worker,
+        shape: ImageShape,
+        layout: CardLayout,
+        size: CardSize,
+    ) -> Self {
         let widget = Self::new(shape, layout);
         widget.set_image_size(size);
         widget.set_layout(layout);
@@ -238,7 +251,11 @@ impl CardWidget {
 
     /// Update the layout orientation, adjusting label visibility and alignment.
     pub fn set_layout(&self, layout: CardLayout) {
-        for l in &[CardLayout::Vertical, CardLayout::ImageOnly, CardLayout::Horizontal] {
+        for l in &[
+            CardLayout::Vertical,
+            CardLayout::ImageOnly,
+            CardLayout::Horizontal,
+        ] {
             self.remove_css_class(l.css_class());
         }
         self.add_css_class(layout.css_class());

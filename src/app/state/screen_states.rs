@@ -1,7 +1,9 @@
 use std::borrow::Cow;
 use std::cmp::PartialEq;
 
-use super::{pagination::Pagination, BrowserAction, BrowserEvent, PaginationTarget, UpdatableState};
+use super::{
+    pagination::Pagination, BrowserAction, BrowserEvent, PaginationTarget, UpdatableState,
+};
 use crate::app::models::*;
 use crate::app::ListStore;
 
@@ -79,9 +81,7 @@ impl UpdatableState for DetailsState {
                 self.songs.add(*batch.clone()).commit();
                 vec![BrowserEvent::AlbumTracksAppended(id.clone())]
             }
-            BrowserAction::ConsumeNextPage(PaginationTarget::AlbumTracks(id))
-                if id == &self.id =>
-            {
+            BrowserAction::ConsumeNextPage(PaginationTarget::AlbumTracks(id)) if id == &self.id => {
                 self.next_tracks_page.next_offset_take();
                 vec![]
             }
@@ -148,7 +148,8 @@ impl UpdatableState for PlaylistDetailsState {
                 vec![BrowserEvent::PlaylistDetailsLoaded(self.id.clone())]
             }
             BrowserAction::AppendPlaylistTracks(id, song_batch) if id == &self.id => {
-                self.next_tracks_page.set_loaded_count(song_batch.songs.len());
+                self.next_tracks_page
+                    .set_loaded_count(song_batch.songs.len());
                 self.songs.add(*song_batch.clone()).commit();
                 vec![BrowserEvent::PlaylistTracksAppended(id.clone())]
             }
@@ -361,7 +362,8 @@ impl UpdatableState for HomeState {
                 }
             }
             BrowserAction::AppendSavedTracks(song_batch) => {
-                self.next_saved_tracks_page.set_loaded_count(song_batch.songs.len());
+                self.next_saved_tracks_page
+                    .set_loaded_count(song_batch.songs.len());
                 if self.saved_tracks.add(*song_batch.clone()).commit() {
                     vec![BrowserEvent::SavedTracksUpdated]
                 } else {

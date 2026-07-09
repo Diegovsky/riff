@@ -6,8 +6,10 @@ use gettextrs::gettext;
 use std::ops::Deref;
 use std::rc::Rc;
 
-use crate::app::components::{CardListModel, HasHeaderBarModel, HeaderImageShape, ImageShape, PageModel, SimpleHeaderBarModel};
 use crate::app::components::DetailsPageModel;
+use crate::app::components::{
+    CardListModel, HasHeaderBarModel, HeaderImageShape, ImageShape, PageModel, SimpleHeaderBarModel,
+};
 use crate::app::models::*;
 use crate::app::state::{BrowserAction, BrowserEvent, SelectionContext};
 use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, ListStore, PaginationTarget};
@@ -74,17 +76,24 @@ impl PageModel for UserDetailsModel {
         let api = self.app_model.get_spotify();
 
         let state = self.app_model.get_state();
-        let Some(next_page) = state.browser.user_state(&self.id).map(|s| s.next_page.clone()) else {
+        let Some(next_page) = state
+            .browser
+            .user_state(&self.id)
+            .map(|s| s.next_page.clone())
+        else {
             return;
         };
         drop(state);
 
-        let Some(offset) = next_page.next_offset else { return };
+        let Some(offset) = next_page.next_offset else {
+            return;
+        };
         let id = next_page.data;
         let batch_size = next_page.batch_size;
 
-        self.app_model
-            .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::UserPlaylists(id.clone())).into());
+        self.app_model.update_state(
+            BrowserAction::ConsumeNextPage(PaginationTarget::UserPlaylists(id.clone())).into(),
+        );
 
         self.dispatcher
             .call_spotify_and_dispatch(move || async move {
@@ -135,8 +144,12 @@ impl CardListModel for UserDetailsModel {
 
 impl SimpleHeaderBarModel for UserDetailsModel {
     fn title(&self) -> Option<String> {
-        Some(format!("Profile \u{2014} {}", &*self.app_model
-            .map_state_opt(|s| s.browser.user_state(&self.id)?.user.as_ref())?))
+        Some(format!(
+            "Profile \u{2014} {}",
+            &*self
+                .app_model
+                .map_state_opt(|s| s.browser.user_state(&self.id)?.user.as_ref())?
+        ))
     }
 
     fn title_updated(&self, event: &AppEvent) -> bool {

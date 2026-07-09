@@ -150,7 +150,11 @@ mod tests {
                 assert!(!creds.access_token.is_empty());
             }
             Err(e) => {
-                assert!(e.to_string().contains("Empty keyring"), "Unexpected error: {}", e);
+                assert!(
+                    e.to_string().contains("Empty keyring"),
+                    "Unexpected error: {}",
+                    e
+                );
             }
         }
     }

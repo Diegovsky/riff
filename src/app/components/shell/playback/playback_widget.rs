@@ -111,7 +111,9 @@ impl PlaybackWidget {
         widget.now_playing.set_visible(true);
         widget.now_playing.set_title_and_artist(title, artist);
         widget.mobile_now_playing.set_visible(true);
-        widget.mobile_now_playing.set_title_and_artist(title, artist);
+        widget
+            .mobile_now_playing
+            .set_title_and_artist(title, artist);
     }
 
     pub fn reset_info(&self) {

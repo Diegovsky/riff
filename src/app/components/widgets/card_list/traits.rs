@@ -17,12 +17,18 @@ pub trait CardListPageModel: CardListModel {
 
     fn empty_title(&self) -> String;
     fn empty_description(&self) -> String;
-    fn empty_icon(&self) -> &str { "emblem-music-symbolic" }
+    fn empty_icon(&self) -> &str {
+        "emblem-music-symbolic"
+    }
 
     // Sort capabilities
 
     fn available_sort_orders(&self) -> &[SortOrder] {
-        &[SortOrder::RecentlyAdded, SortOrder::Alphabetic, SortOrder::Creator]
+        &[
+            SortOrder::RecentlyAdded,
+            SortOrder::Alphabetic,
+            SortOrder::Creator,
+        ]
     }
 
     // Event handling

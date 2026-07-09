@@ -80,13 +80,22 @@ mod imp {
 mod tests {
     use super::*;
     use crate::app::models::{
-        AlbumDescription, ArtistRef, ArtistSummary, ImageSet, PlaylistDescription, SongBatch, UserRef,
+        AlbumDescription, ArtistRef, ArtistSummary, ImageSet, PlaylistDescription, SongBatch,
+        UserRef,
     };
 
     #[test]
     fn test_new_with_all_fields() {
         let img = "https://example.com/img.jpg".to_string();
-        let card = CardModel::new("abc123", Some(&img), "My Title", "My Subtitle", None, None, None);
+        let card = CardModel::new(
+            "abc123",
+            Some(&img),
+            "My Title",
+            "My Subtitle",
+            None,
+            None,
+            None,
+        );
         assert_eq!(card.id(), "abc123");
         assert_eq!(card.image(), Some(img));
         assert_eq!(card.title(), "My Title");
@@ -136,8 +145,14 @@ mod tests {
             id: "album1".to_string(),
             title: "Album Title".to_string(),
             artists: vec![
-                ArtistRef { id: "a1".to_string(), name: "Artist A".to_string() },
-                ArtistRef { id: "a2".to_string(), name: "Artist B".to_string() },
+                ArtistRef {
+                    id: "a1".to_string(),
+                    name: "Artist A".to_string(),
+                },
+                ArtistRef {
+                    id: "a2".to_string(),
+                    name: "Artist B".to_string(),
+                },
             ],
             release_date: Some("2023-05-01".to_string()),
             art: ImageSet::from_images(vec![(Some(300), "https://img.com/cover.jpg".to_string())]),
@@ -159,7 +174,10 @@ mod tests {
             title: "My Playlist".to_string(),
             art: None,
             songs: SongBatch::empty(),
-            owner: UserRef { id: "user1".to_string(), display_name: "John".to_string() },
+            owner: UserRef {
+                id: "user1".to_string(),
+                display_name: "John".to_string(),
+            },
         };
         let card = CardModel::from(&playlist);
         assert_eq!(card.id(), "pl1");
@@ -173,7 +191,10 @@ mod tests {
         let artist = ArtistSummary {
             id: "art1".to_string(),
             name: "Cool Artist".to_string(),
-            photo: ImageSet::from_images(vec![(Some(300), "https://img.com/photo.jpg".to_string())]),
+            photo: ImageSet::from_images(vec![(
+                Some(300),
+                "https://img.com/photo.jpg".to_string(),
+            )]),
             popularity: 85,
         };
         let card = CardModel::from(&artist);

@@ -249,22 +249,21 @@ impl AppState {
                     LoginAction::RemoveUserPlaylist(id.clone()),
                     &mut self.logged_user,
                 );
-                let mut more_events = forward_action(
-                    BrowserAction::RemovePlaylist(id),
-                    &mut self.browser,
-                );
+                let mut more_events =
+                    forward_action(BrowserAction::RemovePlaylist(id), &mut self.browser);
                 events.append(&mut more_events);
                 events
             }
             AppAction::BrowserAction(BrowserAction::SavePlaylist(id)) => {
                 let mut events = forward_action(
-                    LoginAction::PrependUserPlaylist(vec![PlaylistSummary { id: id.clone(), title: String::new() }]),
+                    LoginAction::PrependUserPlaylist(vec![PlaylistSummary {
+                        id: id.clone(),
+                        title: String::new(),
+                    }]),
                     &mut self.logged_user,
                 );
-                let mut more_events = forward_action(
-                    BrowserAction::SavePlaylist(id),
-                    &mut self.browser,
-                );
+                let mut more_events =
+                    forward_action(BrowserAction::SavePlaylist(id), &mut self.browser);
                 events.append(&mut more_events);
                 events
             }
@@ -273,10 +272,8 @@ impl AppState {
                     LoginAction::RemoveUserPlaylist(id.clone()),
                     &mut self.logged_user,
                 );
-                let mut more_events = forward_action(
-                    BrowserAction::UnsavePlaylist(id),
-                    &mut self.browser,
-                );
+                let mut more_events =
+                    forward_action(BrowserAction::UnsavePlaylist(id), &mut self.browser);
                 events.append(&mut more_events);
                 events
             }

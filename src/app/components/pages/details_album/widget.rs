@@ -9,7 +9,9 @@ use std::rc::Rc;
 use super::release_details::ReleaseDetailsDialog;
 use super::DetailsModel;
 
-use crate::app::components::{Component, DetailsPageComponent, EventListener, HasHeaderBarModel, PageModel};
+use crate::app::components::{
+    Component, DetailsPageComponent, EventListener, HasHeaderBarModel, PageModel,
+};
 use crate::app::dispatch::Worker;
 use crate::app::AppEvent;
 
@@ -21,11 +23,8 @@ pub struct Details {
 
 impl Details {
     pub fn new(model: Rc<DetailsModel>, worker: Worker) -> Self {
-        let mut component = DetailsPageComponent::new(
-            model.clone(),
-            model.to_headerbar_model(),
-            worker,
-        );
+        let mut component =
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), worker);
         component.create_playlist(None);
 
         let modal = ReleaseDetailsDialog::new();

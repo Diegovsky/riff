@@ -84,8 +84,7 @@ impl ScreenFactory {
     }
 
     pub fn make_saved_artists(&self) -> impl ListenerComponent {
-        let model =
-            SavedArtistsModel::new(Rc::clone(&self.app_model), self.dispatcher.box_clone());
+        let model = SavedArtistsModel::new(Rc::clone(&self.app_model), self.dispatcher.box_clone());
         let screen_model = DefaultHeaderBarModel::new(
             Some(gettext("Artists")),
             None,

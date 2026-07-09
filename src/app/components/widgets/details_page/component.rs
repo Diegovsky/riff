@@ -3,7 +3,10 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use super::{is_playback_event, DetailsPage, PageModel};
-use crate::app::components::{CardLayout, CardList, CardListModel, CardSize, Component, EmbeddedCardList, EventListener, HeaderBarModel, Playlist, PlaylistModel, SortOrder};
+use crate::app::components::{
+    CardLayout, CardList, CardListModel, CardSize, Component, EmbeddedCardList, EventListener,
+    HeaderBarModel, Playlist, PlaylistModel, SortOrder,
+};
 use crate::app::dispatch::Worker;
 use crate::app::{ActionDispatcher, AppEvent};
 
@@ -30,7 +33,13 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let page = DetailsPage::new(model.header_image_shape(), &content);
         let headerbar = page.create_headerbar_listener(headerbar_model);
-        let mut c = Self { model, worker, page, content, children: vec![headerbar] };
+        let mut c = Self {
+            model,
+            worker,
+            page,
+            content,
+            children: vec![headerbar],
+        };
         c.wire();
         c
     }
@@ -53,7 +62,11 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         let listview = gtk::ListView::new(None::<gtk::NoSelection>, None::<gtk::ListItemFactory>);
         listview.set_margin_bottom(16);
         self.content.append(&listview);
-        let playlist = Box::new(Playlist::new(listview, self.model.clone(), self.worker.clone()));
+        let playlist = Box::new(Playlist::new(
+            listview,
+            self.model.clone(),
+            self.worker.clone(),
+        ));
         self.children.push(playlist);
     }
 
@@ -83,7 +96,12 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         let card_list = Rc::new(CardList::new());
         card_list.widget().set_margin_bottom(16);
         self.content.append(card_list.widget());
-        card_list.bind(&self.model, self.worker.clone(), CardLayout::Vertical, CardSize::Large);
+        card_list.bind(
+            &self.model,
+            self.worker.clone(),
+            CardLayout::Vertical,
+            CardSize::Large,
+        );
         card_list.show_placeholders();
 
         let embedded = EmbeddedCardList::new(
@@ -185,7 +203,8 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
                 self.page.header().set_like_visible(false);
             }
         }
-        self.page.load_artwork_or_finish(self.model.get_artwork().as_ref(), &self.worker);
+        self.page
+            .load_artwork_or_finish(self.model.get_artwork().as_ref(), &self.worker);
     }
 
     /// Standard event handling. Returns true if the event was consumed.
@@ -193,7 +212,9 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         if self.model.should_refresh_details(event) {
             self.refresh_details();
             if self.model.has_play_button() {
-                self.page.header().set_playing(self.model.source_is_playing());
+                self.page
+                    .header()
+                    .set_playing(self.model.source_is_playing());
             }
             return true;
         }
