@@ -28,7 +28,7 @@ jobs:
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: riff-${{ matrix.variant.arch }}.flatpak
-          manifest-path: dev.diegovsky.Riff.snapshots.json
+          manifest-path: flatpak/dev.diegovsky.Riff.snapshots.json
           cache-key: flatpak-builder-${{ matrix.variant.arch }}-${{ github.sha }}
           arch: ${{ matrix.variant.arch }}
 

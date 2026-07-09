@@ -68,6 +68,31 @@ Translations are managed using `gettext` and are available in the `po/` subdirec
 
 If you feel like it, you are welcome to open a PR to be added to the `TRANSLATORS` file!
 
+## Project structure
+
+An overview of the directories and their responsibilities:
+
+| Directory | Responsibility |
+| --- | --- |
+| `src/` | Rust source code and bundled UI assets. |
+| `src/api/` | Spotify Web API layer. |
+| `src/app/` | Core application logic and state. |
+| `src/app/state/` | The centralized application state. |
+| `src/app/models/` | Presentation models that bind state to the UI. |
+| `src/app/components/` | Wrappers around GTK widgets. |
+| `src/connect/` | Spotify Connect support. |
+| `src/player/` | Local playback, login, and token storage. |
+| `src/dbus/` | MPRIS / D-Bus integration. |
+| `data/` | Application data installed on the system. |
+| `po/` | Translations. |
+| `scripts/` | Developer and tooling scripts. |
+| `flatpak/` | Flatpak packaging. |
+| `doc/` | Developer documentation. |
+| `subprojects/` | Meson subproject wrap files. |
+| `.github/` | GitHub configuration. |
+
+See [`doc/Design.md`](doc/Design.md) for a deeper explanation of the data flow and architecture.
+
 ## Building
 
 ### Dependencies
@@ -75,14 +100,14 @@ If you feel like it, you are welcome to open a PR to be added to the `TRANSLATOR
 You can install the required development dependencies by running:
 
 ```
-./setup-dev.sh
+./scripts/setup-dev.sh
 ```
 
 ### With GNOME Builder and flatpak
 
 Pre-requisite: install the `org.freedesktop.Sdk.Extension.rust-stable` SDK extension with flatpak. Builder might do this for you automatically, but it will install an older version; make sure  the version installed matches the version of the Freedesktop SDK GNOME uses.
 
-Open the project in GNOME Builder and make the `dev.diegovsky.Riff.development.json` configuration active. Then build :)
+Open the project in GNOME Builder and make the `flatpak/dev.diegovsky.Riff.snapshots.json` configuration active. Then build :)
 
 ### Manually
 
