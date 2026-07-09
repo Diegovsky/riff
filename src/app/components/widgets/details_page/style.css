@@ -33,7 +33,7 @@
   background-color: @skeleton_color;
   color: transparent;
   border-radius: 4px;
-  min-width: 24ch;
+  min-width: 192px;
   animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 
@@ -41,7 +41,7 @@
   background-color: @skeleton_color;
   color: transparent;
   border-radius: 4px;
-  min-width: 12ch;
+  min-width: 96px;
   animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 
@@ -49,7 +49,7 @@
   background-color: @skeleton_color;
   color: transparent;
   border-radius: 4px;
-  min-width: 8ch;
+  min-width: 64px;
   animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 
