@@ -16,10 +16,9 @@ use librespot::playback::player::{Player, PlayerEvent, PlayerEventChannel};
 use crate::app::models::RepeatMode;
 use crate::player::AppPlayerDelegate;
 
-use super::oauth2::{AuthcodeChallenge, RiffOauthClient};
+use super::oauth2::{AuthcodeChallenge, OAuthError, RiffOauthClient};
 use super::{Command, TokenStore};
 use crate::app::credentials;
-use crate::player::oauth2::OAuthError;
 use crate::settings::RiffSettings;
 use std::env;
 use std::error::Error;
@@ -256,6 +255,21 @@ impl SpotifyPlayer {
         &mut self,
         credentials: credentials::Credentials,
     ) -> Result<(), SpotifyError> {
+        // Check if the account is premium before connecting to librespot.
+        // librespot will crash the process for free accounts, so we must
+        // catch this early and report a graceful error instead.
+        let is_premium = crate::api::check_premium(&credentials.access_token)
+            .await
+            .unwrap_or(false);
+        if !is_premium {
+            warn!("Account is not premium, aborting login");
+            return Err(SpotifyError::LoginFailed);
+        }
+
+        // Only persist credentials to the keyring after confirming premium status.
+        // This prevents non-premium accounts from being saved and retried on next launch.
+        self.oauth_client.save_credentials(&credentials).await;
+
         let creds = Credentials::with_access_token(&credentials.access_token);
         let new_session = create_session(&creds, self.settings.ap_port).await?;
         let username = new_session.username();

@@ -136,3 +136,85 @@ statuspage {
   background-color: rgba(0, 255, 100, 0.1);
   border: 1px solid rgba(0, 255, 100, 0.5);
 }
+
+/* === Login Page === */
+
+window.login-window {
+  border: 3px solid rgba(255, 0, 0, 0.5);
+}
+
+/* Outer vertical Box (direct child of the window) */
+window.login-window > box {
+  background-color: rgba(255, 0, 0, 0.05);
+  border: 2px solid rgba(255, 0, 0, 0.3);
+}
+
+/* HeaderBar */
+window.login-window headerbar {
+  background-color: rgba(128, 0, 128, 0.1);
+  border: 2px dashed rgba(128, 0, 128, 0.5);
+}
+
+/* WindowHandle */
+window.login-window windowhandle {
+  background-color: rgba(0, 0, 255, 0.05);
+  border: 2px solid rgba(0, 0, 255, 0.3);
+}
+
+/* Clamp */
+window.login-window clamp {
+  border: 3px dashed rgba(200, 0, 200, 0.6);
+}
+
+/* Main content Box inside the clamp */
+window.login-window clamp > box {
+  background-color: rgba(255, 255, 0, 0.05);
+  border: 2px solid rgba(200, 200, 0, 0.4);
+}
+
+/* App icon */
+window.login-window clamp > box > image {
+  background-color: rgba(0, 150, 255, 0.15);
+  border: 2px solid rgba(0, 150, 255, 0.5);
+}
+
+/* Title/subtitle Box */
+window.login-window clamp > box > box {
+  background-color: rgba(0, 200, 100, 0.1);
+  border: 2px solid rgba(0, 200, 100, 0.5);
+}
+
+/* Labels inside the title/subtitle Box */
+window.login-window clamp > box > box > label {
+  background-color: rgba(255, 100, 200, 0.15);
+  border: 1px solid rgba(255, 100, 200, 0.6);
+}
+
+/* Status Stack */
+window.login-window stack {
+  background-color: rgba(0, 200, 255, 0.1);
+  border: 2px solid rgba(0, 200, 255, 0.5);
+}
+
+/* Boxes inside the stack pages */
+window.login-window stack > * > box {
+  background-color: rgba(255, 165, 0, 0.15);
+  border: 1px solid rgba(255, 165, 0, 0.6);
+}
+
+/* Icons inside the stack */
+window.login-window stack image {
+  background-color: rgba(255, 50, 50, 0.15);
+  border: 1px solid rgba(255, 50, 50, 0.5);
+}
+
+/* Labels inside the stack */
+window.login-window stack label {
+  background-color: rgba(150, 0, 255, 0.15);
+  border: 1px solid rgba(150, 0, 255, 0.5);
+}
+
+/* Login button */
+window.login-window button {
+  border: 2px solid rgba(0, 200, 0, 0.6);
+}
