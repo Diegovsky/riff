@@ -305,6 +305,7 @@ impl WithImages for Artist {
 pub struct User {
     pub id: String,
     pub display_name: String,
+    pub product: Option<String>,
     pub images: Option<Vec<Image>>,
 }
 

@@ -108,6 +108,22 @@ where
         client.send_req(request.body(body).unwrap()).await
     }
 
+    /// Send a request authenticated with an explicit access token, bypassing the TokenStore.
+    /// Used during login when the token hasn't been persisted yet.
+    pub(crate) async fn send_with_token(
+        self,
+        token: &str,
+    ) -> Result<SpotifyResponse<R>, SpotifyApiError> {
+        let Self {
+            client,
+            mut request,
+            body,
+            ..
+        } = self;
+        request = request.header("Authorization", format!("Bearer {token}"));
+        client.send_req(request.body(body).unwrap()).await
+    }
+
     pub(crate) async fn send_no_response(self) -> Result<(), SpotifyApiError> {
         let Self {
             client,
@@ -562,6 +578,12 @@ impl SpotifyClient {
         self.request()
             .method(Method::GET)
             .uri("/v1/search".to_string(), Some(&query.into_query_string()))
+    }
+
+    pub(crate) fn get_me(&self) -> SpotifyRequest<'_, (), User> {
+        self.request()
+            .method(Method::GET)
+            .uri("/v1/me".to_string(), None)
     }
 
     pub(crate) fn get_user(&self, id: &str) -> SpotifyRequest<'_, (), User> {
