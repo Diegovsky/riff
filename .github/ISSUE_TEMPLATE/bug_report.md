@@ -22,15 +22,25 @@ If applicable, add screenshots to help explain your problem.
 
 **General information:**
  - Distribution:
- - Installation method [e. g. built from source, installed from Flathub...]:
- - Version [e.g. 0.1.0]:
- - Device used [e. g. desktop, phone...]:
+ - Installation method [e.g. Flatpak, built from source]:
+ - Riff Version:
+ - Arch [e.g. x86_64, aarch64]:
+ - Desktop [e.g. GNOME, KDE]:
+ - Display server [e.g. wayland, x11]:
+ - Device used [e.g. desktop, phone]:
 
-**Stack trace:**
-If applicable, run the application from a terminal and paste relevant log output.
+**Logs:**
+Please paste relevant log output below. You can retrieve logs with:
+```sh
+journalctl --user _COMM=riff --since="1 hour ago" --no-pager
 ```
-flatpak run --env=RUST_BACKTRACE=full dev.diegovsky.Riff
+<details><summary>Log output</summary>
+
 ```
+(paste logs here)
+```
+
+</details>
 
 **Additional context**
 Add any other context about the problem here.
