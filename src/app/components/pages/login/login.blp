@@ -6,6 +6,8 @@ template $LoginWindow : Adw.Window {
   default-width: 360;
   default-height: 100;
 
+  styles ["login-window"]
+
   Box {
     hexpand: true;
     margin-bottom: 24;
@@ -34,10 +36,10 @@ template $LoginWindow : Adw.Window {
           Image {
             icon-name: "dev.diegovsky.Riff";
             pixel-size: 128;
-            margin-bottom: 20;
+            margin-bottom: 12;
           }
 
-          Box{
+          Box {
             hexpand: true;
             orientation: vertical;
             spacing: 4;
@@ -49,8 +51,8 @@ template $LoginWindow : Adw.Window {
             }
 
             Label {
-              /* Translators: Login window title, must mention Premium (a premium account is required). */
-              label: _("Log in with your Spotify Account. A Spotify Premium subscription is required to use the app.");
+              /* Translators: Login window subtitle */
+              label: _("Log in with your Spotify Account");
               wrap: true;
               wrap-mode: word;
               halign: center;
@@ -58,19 +60,55 @@ template $LoginWindow : Adw.Window {
               styles ["body"]
             }
           }
-          
-          Revealer auth_error_container {
-            vexpand: true;
-            transition-type: slide_up;
 
-            Label {
-              /* Translators: This error is shown when authentication fails. */
-              label: _("An error occured when trying to connect.");
-              halign: center;
-              justify: center;
-              wrap: true;
-              wrap-mode: word;
-              styles ["error"]
+          /* Status area: shows either the premium notice or an auth error, never both */
+          Stack status_stack {
+            transition-type: crossfade;
+            transition-duration: 200;
+            visible-child-name: "notice";
+
+            StackPage {
+              name: "notice";
+              child: Box {
+                orientation: horizontal;
+                halign: center;
+                spacing: 8;
+
+                Image {
+                  icon-name: "dialog-warning-symbolic";
+                  pixel-size: 16;
+                  valign: center;
+                  styles ["warning"]
+                }
+
+                Label {
+                  /* Translators: Premium requirement notice shown on the login page. */
+                  label: _("A Spotify Premium subscription is required.");
+                  styles ["caption", "warning"]
+                }
+              };
+            }
+
+            StackPage {
+              name: "error";
+              child: Box {
+                orientation: horizontal;
+                halign: center;
+                spacing: 8;
+
+                Image {
+                  icon-name: "dialog-warning-symbolic";
+                  pixel-size: 16;
+                  valign: center;
+                  styles ["error"]
+                }
+
+                Label {
+                  /* Translators: This error is shown when a non-premium account is detected. */
+                  label: _("Your account does not have a Spotify Premium subscription.");
+                  styles ["caption", "error"]
+                }
+              };
             }
           }
 

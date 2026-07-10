@@ -22,7 +22,7 @@ mod imp {
         pub login_with_spotify_button: TemplateChild<gtk::Button>,
 
         #[template_child]
-        pub auth_error_container: TemplateChild<gtk::Revealer>,
+        pub status_stack: TemplateChild<gtk::Stack>,
     }
 
     #[glib::object_subclass]
@@ -83,7 +83,9 @@ impl LoginWindow {
 
     fn show_auth_error(&self, shown: bool) {
         let widget = self.imp();
-        widget.auth_error_container.set_reveal_child(shown);
+        widget
+            .status_stack
+            .set_visible_child_name(if shown { "error" } else { "notice" });
     }
 }
 
@@ -135,6 +137,7 @@ impl Login {
     }
 
     fn hide(&self) {
+        self.login_window.show_auth_error(false);
         self.window().set_visible(false);
     }
 

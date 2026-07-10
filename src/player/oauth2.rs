@@ -155,12 +155,15 @@ impl RiffOauthClient {
             ),
         };
 
-        self.token_store.set(token.clone()).await;
         Ok(token)
     }
 
     pub async fn clear_credentials(&self) {
         self.token_store.clear().await;
+    }
+
+    pub async fn save_credentials(&self, creds: &Credentials) {
+        self.token_store.set(creds.clone()).await;
     }
 
     pub async fn get_valid_token(&self) -> Result<Credentials, OAuthError> {
