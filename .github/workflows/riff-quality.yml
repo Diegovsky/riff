@@ -26,6 +26,18 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+  blueprint-lint:
+    name: "Blueprint Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get -y update && sudo apt-get -y install blueprint-compiler libxml2-utils python3 gir1.2-gtk-4.0 gir1.2-adw-1
+
+      - name: Run blueprint lint
+        run: ./scripts/lint-blueprints.sh
+
   shellcheck:
     name: "ShellCheck"
     runs-on: ubuntu-latest
