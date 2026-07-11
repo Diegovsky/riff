@@ -76,44 +76,47 @@ impl AppPlaybackStateListener {
         }
     }
 
-    fn update_for(&self, event: &PlaybackEvent) -> Option<MprisStateUpdate> {
+    fn update_for(&self, event: &PlaybackEvent) -> Vec<MprisStateUpdate> {
         match event {
             PlaybackEvent::PlaybackPaused => {
-                Some(MprisStateUpdate::SetPlaying(PlaybackStatus::Paused))
+                vec![MprisStateUpdate::SetPlaying(PlaybackStatus::Paused)]
             }
             PlaybackEvent::PlaybackResumed => {
-                Some(MprisStateUpdate::SetPlaying(PlaybackStatus::Playing))
+                vec![MprisStateUpdate::SetPlaying(PlaybackStatus::Playing)]
             }
             PlaybackEvent::PlaybackStopped => {
-                Some(MprisStateUpdate::SetPlaying(PlaybackStatus::Stopped))
+                vec![MprisStateUpdate::SetPlaying(PlaybackStatus::Stopped)]
             }
             PlaybackEvent::TrackChanged(_) => {
                 let current = self.make_track_meta();
                 let (has_prev, has_next) = self.has_prev_next();
-                Some(MprisStateUpdate::SetCurrentTrack {
-                    has_prev,
-                    has_next,
-                    current,
-                })
+                vec![
+                    MprisStateUpdate::SetCurrentTrack {
+                        has_prev,
+                        has_next,
+                        current,
+                    },
+                    MprisStateUpdate::SetPlaying(PlaybackStatus::Playing),
+                ]
             }
             PlaybackEvent::RepeatModeChanged(_) => {
                 let loop_status = self.loop_status();
                 let (has_prev, has_next) = self.has_prev_next();
-                Some(MprisStateUpdate::SetLoopStatus {
+                vec![MprisStateUpdate::SetLoopStatus {
                     has_prev,
                     has_next,
                     loop_status,
-                })
+                }]
             }
             PlaybackEvent::ShuffleChanged(shuffled) => {
-                Some(MprisStateUpdate::SetShuffled(*shuffled))
+                vec![MprisStateUpdate::SetShuffled(*shuffled)]
             }
             PlaybackEvent::TrackSeeked(pos) | PlaybackEvent::SeekSynced(pos) => {
                 let pos = 1000 * (*pos as u128);
-                Some(MprisStateUpdate::SetPositionMs(pos))
+                vec![MprisStateUpdate::SetPositionMs(pos)]
             }
-            PlaybackEvent::VolumeSet(vol) => Some(MprisStateUpdate::SetVolume(*vol)),
-            _ => None,
+            PlaybackEvent::VolumeSet(vol) => vec![MprisStateUpdate::SetVolume(*vol)],
+            _ => vec![],
         }
     }
 }
@@ -121,7 +124,7 @@ impl AppPlaybackStateListener {
 impl EventListener for AppPlaybackStateListener {
     fn on_event(&mut self, event: &AppEvent) {
         if let AppEvent::PlaybackEvent(event) = event {
-            if let Some(update) = self.update_for(event) {
+            for update in self.update_for(event) {
                 if let Err(e) = self.sender.unbounded_send(update) {
                     log::error!("Could not send event to DBUS server: {e}");
                 }

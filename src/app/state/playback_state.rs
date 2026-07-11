@@ -404,10 +404,7 @@ impl UpdatableState for PlaybackState {
             }
             PlaybackAction::Next => {
                 if let Some(id) = self.play_next() {
-                    vec![
-                        PlaybackEvent::TrackChanged(id),
-                        PlaybackEvent::PlaybackResumed,
-                    ]
+                    vec![PlaybackEvent::TrackChanged(id)]
                 } else {
                     self.stop();
                     vec![PlaybackEvent::PlaybackStopped]
@@ -419,20 +416,14 @@ impl UpdatableState for PlaybackState {
             }
             PlaybackAction::Previous => {
                 if let Some(id) = self.play_prev() {
-                    vec![
-                        PlaybackEvent::TrackChanged(id),
-                        PlaybackEvent::PlaybackResumed,
-                    ]
+                    vec![PlaybackEvent::TrackChanged(id)]
                 } else {
                     vec![PlaybackEvent::TrackSeeked(0)]
                 }
             }
             PlaybackAction::Load(id) => {
                 if self.play(&id) {
-                    vec![
-                        PlaybackEvent::TrackChanged(id),
-                        PlaybackEvent::PlaybackResumed,
-                    ]
+                    vec![PlaybackEvent::TrackChanged(id)]
                 } else {
                     vec![]
                 }

@@ -247,6 +247,7 @@ where
                 self.update_list();
             }
             AppEvent::PlaybackEvent(PlaybackEvent::TrackChanged(_)) => {
+                Self::set_paused(&self.listview, self.model.is_paused());
                 self.update_list();
             }
             AppEvent::PlaybackEvent(
