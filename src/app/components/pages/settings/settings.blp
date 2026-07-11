@@ -6,6 +6,42 @@ template $SettingsWindow : Adw.PreferencesDialog {
 
   Adw.PreferencesPage {
     Adw.PreferencesGroup {
+      /* Translators: Header for a group of preference items regarding the application's appearance and behavior */
+
+      title: _("General");
+
+      Adw.ComboRow theme {
+        /* Translators: Title for an item in preferences */
+
+        title: _("Theme");
+        model: StringList {
+          strings [
+            _("Light"),
+            _("Dark"),
+            _("System")
+          ]
+        };
+      }
+
+      Adw.ComboRow close_behavior {
+        /* Translators: Title for an item in preferences */
+
+        title: _("Close Window Behavior");
+
+        /* Translators: Description for the close window behavior preference */
+
+        subtitle: _("What should Riff do if you close it while audio is playing?");
+        model: StringList {
+          strings [
+            _("Ask"),
+            _("Continue in background"),
+            _("Stop and quit")
+          ]
+        };
+      }
+    }
+
+    Adw.PreferencesGroup {
       /* Translators: Header for a group of preference items regarding audio */
 
       title: _("Audio");
@@ -62,25 +98,6 @@ template $SettingsWindow : Adw.PreferencesDialog {
           margin-top: 12;
           margin-bottom: 12;
         }
-      }
-    }
-
-    Adw.PreferencesGroup {
-      /* Translators: Header for a group of preference items regarding the application's appearance */
-
-      title: _("Appearance");
-
-      Adw.ComboRow theme {
-        /* Translators: Title for an item in preferences */
-
-        title: _("Theme");
-        model: StringList {
-          strings [
-            _("Light"),
-            _("Dark"),
-            _("System")
-          ]
-        };
       }
     }
 

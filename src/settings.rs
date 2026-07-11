@@ -13,6 +13,24 @@ use librespot::playback::config::Bitrate;
 
 const SETTINGS: &str = "dev.diegovsky.Riff";
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CloseWindowBehavior {
+    #[default]
+    Ask,
+    MinimizeToBackground,
+    StopAndQuit,
+}
+
+impl CloseWindowBehavior {
+    pub fn from_gsettings_enum(value: i32) -> Self {
+        match value {
+            1 => Self::MinimizeToBackground,
+            2 => Self::StopAndQuit,
+            _ => Self::Ask,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct WindowGeometry {
     pub width: i32,
