@@ -63,7 +63,6 @@ template $PlaybackWidget : Box {
     }
 
     child: Stack layout-stack {
-      visible-child-name: "desktop";
       vhomogeneous: false;
       hhomogeneous: false;
 
@@ -107,7 +106,6 @@ template $PlaybackWidget : Box {
           }
 
           Stack volume-stack {
-            visible-child-name: "slider";
             hexpand: true;
             halign: end;
 
@@ -130,11 +128,6 @@ template $PlaybackWidget : Box {
                   show-fill-level: true;
                   restrict-to-fill-level: false;
                   value-pos: left;
-                  layout {
-                    column-span: "1";
-                    column: 2;
-                    row: "0";
-                  }
 
                   styles [
                     'volume-slider'
