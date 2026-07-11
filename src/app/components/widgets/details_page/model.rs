@@ -354,9 +354,9 @@ mod tests {
     }
 
     #[test]
-    fn test_is_playback_event_other() {
+    fn test_is_playback_event_track_changed() {
         let event = AppEvent::PlaybackEvent(PlaybackEvent::TrackChanged("x".to_string()));
-        assert_eq!(is_playback_event(&event), None);
+        assert_eq!(is_playback_event(&event), Some(true));
     }
 
     #[test]

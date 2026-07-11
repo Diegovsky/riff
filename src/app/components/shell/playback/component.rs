@@ -182,6 +182,7 @@ impl EventListener for PlaybackControl {
                 self.update_shuffled();
             }
             AppEvent::PlaybackEvent(PlaybackEvent::TrackChanged(_)) => {
+                self.update_playing();
                 self.update_current_info();
             }
             AppEvent::PlaybackEvent(PlaybackEvent::PlaybackStopped) => {

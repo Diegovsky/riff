@@ -105,11 +105,12 @@ pub trait PageModel {
 }
 
 /// Check if a playback event means we should update the play button.
-/// Returns `Some(true)` for resumed, `Some(false)` for paused, `None` otherwise.
+/// Returns `Some(true)` for resumed/track changed, `Some(false)` for paused, `None` otherwise.
 pub fn is_playback_event(event: &AppEvent) -> Option<bool> {
     match event {
         AppEvent::PlaybackEvent(PlaybackEvent::PlaybackPaused) => Some(false),
-        AppEvent::PlaybackEvent(PlaybackEvent::PlaybackResumed) => Some(true),
+        AppEvent::PlaybackEvent(PlaybackEvent::PlaybackResumed)
+        | AppEvent::PlaybackEvent(PlaybackEvent::TrackChanged(_)) => Some(true),
         _ => None,
     }
 }
