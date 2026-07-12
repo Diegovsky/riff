@@ -40,6 +40,9 @@ mod imp {
 
         #[template_child]
         pub theme: TemplateChild<libadwaita::ComboRow>,
+
+        #[template_child]
+        pub close_behavior: TemplateChild<libadwaita::ComboRow>,
     }
 
     #[glib::object_subclass]
@@ -212,6 +215,36 @@ impl SettingsDialog {
                         0 => "light",
                         1 => "dark",
                         2 => "system",
+                        _ => unreachable!(),
+                    }
+                    .to_variant()
+                })
+            })
+            .build();
+
+        let close_behavior = widget
+            .close_behavior
+            .downcast_ref::<libadwaita::ComboRow>()
+            .unwrap();
+        settings
+            .bind("close-window-behavior", close_behavior, "selected")
+            .mapping(|variant, _| {
+                variant.str().map(|s| {
+                    match s {
+                        "ask" => 0,
+                        "minimize-to-background" => 1,
+                        "stop-and-quit" => 2,
+                        _ => unreachable!(),
+                    }
+                    .to_value()
+                })
+            })
+            .set_mapping(|value, _| {
+                value.get::<u32>().ok().map(|u| {
+                    match u {
+                        0 => "ask",
+                        1 => "minimize-to-background",
+                        2 => "stop-and-quit",
                         _ => unreachable!(),
                     }
                     .to_variant()

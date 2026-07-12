@@ -15,6 +15,11 @@
     <value value="1" nick="dark" />
     <value value="2" nick="system" />
   </enum>
+  <enum id="dev.diegovsky.Riff.CloseWindowBehavior">
+    <value value="0" nick="ask" />
+    <value value="1" nick="minimize-to-background" />
+    <value value="2" nick="stop-and-quit" />
+  </enum>
   <schema id="dev.diegovsky.Riff" path="/dev/diegovsky/Riff/">
     <key name='theme-preference' enum='dev.diegovsky.Riff.ThemePref'>
       <default>'system'</default>
@@ -31,6 +36,10 @@
     <key name="window-is-maximized" type="b">
       <default>false</default>
       <summary>A flag to enable maximized mode</summary>
+    </key>
+    <key name='close-window-behavior' enum='dev.diegovsky.Riff.CloseWindowBehavior'>
+      <default>'ask'</default>
+      <summary>Behavior when the window close button is pressed while playing</summary>
     </key>
     <key name='player-bitrate' enum='dev.diegovsky.Riff.Bitrate'>
       <default>'160'</default>
