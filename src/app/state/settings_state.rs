@@ -38,12 +38,18 @@ impl UpdatableState for SettingsState {
     fn update_with(&mut self, action: std::borrow::Cow<Self::Action>) -> Vec<Self::Event> {
         match action.into_owned() {
             SettingsAction::ChangeSettings => {
-                let old_settings = &self.settings;
                 let new_settings = RiffSettings::new_from_gsettings().unwrap_or_default();
-                let player_settings_changed =
-                    new_settings.player_settings != old_settings.player_settings;
+                // Only emit a reload event for changes that require recreating
+                // the librespot player. EQ, mono, pan, and pitch changes are
+                // pushed live via the GSettings watcher in PlayerNotifier and
+                // never need a reload.
+                let needs_reload = self
+                    .settings
+                    .player_settings
+                    .requires_reload(&new_settings.player_settings);
                 self.settings = new_settings;
-                if player_settings_changed {
+
+                if needs_reload {
                     vec![SettingsEvent::PlayerSettingsChanged.into()]
                 } else {
                     vec![]

@@ -88,6 +88,76 @@ flowchart TD
 
 *The player subsystem.*
 
+## The audio engine: a DSP pipeline
+
+The `SpotifyPlayer` drives librespot, which decodes compressed audio into
+interleaved `f64` PCM and hands each block to a librespot `Sink`. Rather than
+writing those samples straight to the audio backend (PulseAudio / ALSA /
+GStreamer), Riff inserts a processing layer — the **audio engine**
+(`src/audio_engine/`) — between librespot and the backend.
+
+The audio engine is built around three pieces:
+
+- **`AudioBuffer`** — a block of interleaved PCM carrying its `channels` and
+  `sample_rate`, so each stage is self-describing.
+- **`Processor`** — a trait for a single in-place DSP stage. Each processor
+  exposes `is_active()` (a diagnostic hint) and `process()`.
+- **`ProcessorChain`** — an ordered list of processors applied in sequence.
+
+The `CaptureSink` implements librespot's `Sink` trait; this is the boundary
+where audio enters the pipeline. It wraps decoded samples in an `AudioBuffer`,
+runs them through the chain, and forwards the result to the real backend sink.
+Encoded/passthrough packets are forwarded untouched.
+
+```mermaid
+flowchart LR
+    decoder["librespot decoder"]
+    capture["CaptureSink\n(librespot Sink)"]
+    eq["EqProcessor"]
+    mono["MonoProcessor"]
+    pitch["PitchProcessor"]
+    mix["MixProcessor"]
+    backend["backend Sink\n(PulseAudio / ALSA / GStreamer)"]
+
+    decoder -- AudioPacket --> capture
+    capture -- AudioBuffer --> eq
+    eq --> mono --> pitch --> mix
+    mix -- AudioBuffer --> backend
+
+    style capture fill:#1DB954,color:#fff
+```
+
+*The audio engine pipeline. Stages run in a fixed order.*
+
+The chain currently contains a 10-band parametric equalizer, a mono downmix,
+and stubs for pitch shifting and source mixing. New DSP features are added by
+implementing `Processor` and inserting a stage into the chain.
+
+**Live updates without interrupting playback.** Each processor is paired with a
+*controller* (e.g. `EqController`, `MonoController`) that the `SpotifyPlayer`
+holds and updates in response to `Command`s such as `SetEqualizer` and
+`SetMono`. Controllers use a lock-free generation counter: the audio thread
+cheaply checks the counter on every buffer and only takes a lock (or rebuilds
+filters) when something actually changed. Because the chain always calls every
+processor's `process()` — which refreshes its own configuration before
+self-gating any expensive work — a stage that is toggled on mid-playback is
+picked up on the very next buffer, and settings changes never require
+recreating the librespot player.
+
+## Authentication
+
+Everything related to obtaining and persisting Spotify credentials lives in
+`src/auth/`, a peer module to `player` and `api`:
+
+- **`RiffOauthClient`** drives the OAuth2 authorization-code (PKCE) login flow,
+  spawning a short-lived local HTTP server to receive the redirect callback
+  (`login.html` is served as the browser-facing confirmation page).
+- **`TokenStore`** persists credentials securely via the Secret Service
+  (libsecret / GNOME Keyring) and caches them in memory.
+
+The `player` subsystem uses `RiffOauthClient` to log in and refresh tokens,
+while the `api` layer uses `TokenStore` to authenticate Web API requests.
+
 ## Another listener: the MPRIS subsystem
 
 Similarly, the MPRIS subsystem follows that same pattern. It spawns a small DBUS server that translates DBUS messages to actions, and an `AppPlaybackStateListener` listens to incoming events.

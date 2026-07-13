@@ -20,6 +20,28 @@
     <value value="1" nick="minimize-to-background" />
     <value value="2" nick="stop-and-quit" />
   </enum>
+  <enum id="dev.diegovsky.Riff.VolumeCurve">
+    <value value="0" nick="log" />
+    <value value="1" nick="linear" />
+    <value value="2" nick="cubic" />
+  </enum>
+  <enum id="dev.diegovsky.Riff.NormalisationType">
+    <value value="0" nick="auto" />
+    <value value="1" nick="track" />
+    <value value="2" nick="album" />
+  </enum>
+  <enum id="dev.diegovsky.Riff.NormalisationMethod">
+    <value value="0" nick="dynamic" />
+    <value value="1" nick="basic" />
+  </enum>
+  <enum id="dev.diegovsky.Riff.AudioFormat">
+    <value value="0" nick="s16" />
+    <value value="1" nick="s24" />
+    <value value="2" nick="s24_3" />
+    <value value="3" nick="s32" />
+    <value value="4" nick="f32" />
+    <value value="5" nick="f64" />
+  </enum>
   <schema id="dev.diegovsky.Riff" path="/dev/diegovsky/Riff/">
     <key name='theme-preference' enum='dev.diegovsky.Riff.ThemePref'>
       <default>'system'</default>
@@ -61,6 +83,110 @@
       <default>0</default>
       <summary>Port to communicate with Spotify's server (access point). Setting to 0 (default) allows Riff to use servers running on any port.</summary>
     </key>
+    <key name='volume-curve' enum='dev.diegovsky.Riff.VolumeCurve'>
+      <default>'log'</default>
+      <summary>Volume slider curvature (log, linear, or cubic)</summary>
+    </key>
+    <key name='normalisation' type='b'>
+      <default>false</default>
+      <summary>Enable volume normalisation between tracks</summary>
+    </key>
+    <key name='normalisation-type' enum='dev.diegovsky.Riff.NormalisationType'>
+      <default>'auto'</default>
+      <summary>Normalisation type (auto, track, or album)</summary>
+    </key>
+    <key name='normalisation-method' enum='dev.diegovsky.Riff.NormalisationMethod'>
+      <default>'dynamic'</default>
+      <summary>Normalisation method (dynamic or basic)</summary>
+    </key>
+    <key name='normalisation-pregain-db' type='d'>
+      <default>0.0</default>
+      <summary>Normalisation pre-gain in dB</summary>
+    </key>
+    <key name='normalisation-threshold-dbfs' type='d'>
+      <default>-2.0</default>
+      <summary>Normalisation threshold in dBFS</summary>
+    </key>
+    <key name='normalisation-attack-ms' type='d'>
+      <default>5.0</default>
+      <summary>Normalisation attack time in milliseconds</summary>
+    </key>
+    <key name='normalisation-release-ms' type='d'>
+      <default>100.0</default>
+      <summary>Normalisation release time in milliseconds</summary>
+    </key>
+    <key name='normalisation-knee-db' type='d'>
+      <default>5.0</default>
+      <summary>Normalisation knee width in dB</summary>
+    </key>
+    <key name='audio-format' enum='dev.diegovsky.Riff.AudioFormat'>
+      <default>'s16'</default>
+      <summary>Audio sample format (bit depth)</summary>
+    </key>
+    <key name='mono-audio' type='b'>
+      <default>false</default>
+      <summary>Mix stereo audio to mono (both speakers play the same signal)</summary>
+    </key>
+    <key name='pan' type='d'>
+      <default>0.0</default>
+      <range min='-1.0' max='1.0'/>
+      <summary>Stereo balance (-1.0 = full left, 0.0 = center, 1.0 = full right)</summary>
+    </key>
+    <key name='pitch-cents' type='d'>
+      <default>0.0</default>
+      <range min='-100.0' max='100.0'/>
+      <summary>Pitch shift in cents (1 cent = 1/100 of a semitone; 0 = no shift)</summary>
+    </key>
+    <key name='eq-band-0' type='d'>
+      <default>0.0</default>
+      <range min='-12.0' max='12.0'/>
+      <summary>EQ gain for 31 Hz band (dB)</summary>
+    </key>
+    <key name='eq-band-1' type='d'>
+      <default>0.0</default>
+      <range min='-12.0' max='12.0'/>
+      <summary>EQ gain for 62 Hz band (dB)</summary>
+    </key>
+    <key name='eq-band-2' type='d'>
+      <default>0.0</default>
+      <range min='-12.0' max='12.0'/>
+      <summary>EQ gain for 125 Hz band (dB)</summary>
+    </key>
+    <key name='eq-band-3' type='d'>
+      <default>0.0</default>
+      <range min='-12.0' max='12.0'/>
+      <summary>EQ gain for 250 Hz band (dB)</summary>
+    </key>
+    <key name='eq-band-4' type='d'>
+      <default>0.0</default>
+      <range min='-12.0' max='12.0'/>
+      <summary>EQ gain for 500 Hz band (dB)</summary>
+    </key>
+    <key name='eq-band-5' type='d'>
+      <default>0.0</default>
+      <range min='-12.0' max='12.0'/>
+      <summary>EQ gain for 1 kHz band (dB)</summary>
+    </key>
+    <key name='eq-band-6' type='d'>
+      <default>0.0</default>
+      <range min='-12.0' max='12.0'/>
+      <summary>EQ gain for 2 kHz band (dB)</summary>
+    </key>
+    <key name='eq-band-7' type='d'>
+      <default>0.0</default>
+      <range min='-12.0' max='12.0'/>
+      <summary>EQ gain for 4 kHz band (dB)</summary>
+    </key>
+    <key name='eq-band-8' type='d'>
+      <default>0.0</default>
+      <range min='-12.0' max='12.0'/>
+      <summary>EQ gain for 8 kHz band (dB)</summary>
+    </key>
+    <key name='eq-band-9' type='d'>
+      <default>0.0</default>
+      <range min='-12.0' max='12.0'/>
+      <summary>EQ gain for 16 kHz band (dB)</summary>
+    </key>
     <key name='volume' type='d'>
       <default>0.7</default>
       <summary>The playback volume</summary>
@@ -97,6 +223,10 @@
     <key name="feature-debug-skeleton" type="b">
       <default>false</default>
       <summary>Toggle between loaded content and skeleton loading states</summary>
+    </key>
+    <key name="feature-normalisation" type="b">
+      <default>false</default>
+      <summary>Show audio normalisation settings for fine-tuning loudness between tracks</summary>
     </key>
     <key name="card-layout" type="s">
       <choices>

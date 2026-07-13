@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 use std::str::FromStr;
 use thiserror::Error;
 
-use crate::player::TokenStore;
+use crate::auth::TokenStore;
 
 pub use super::api_models::*;
 use super::cache::CacheError;

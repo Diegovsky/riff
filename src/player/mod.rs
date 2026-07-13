@@ -5,14 +5,10 @@ use url::Url;
 
 use crate::app::state::{LoginAction, PlaybackAction};
 use crate::app::AppAction;
+use crate::auth::TokenStore;
 #[allow(clippy::module_inception)]
 mod player;
 pub use player::*;
-
-mod oauth2;
-
-mod token_store;
-pub use token_store::*;
 
 #[derive(Debug, Clone)]
 pub enum Command {
@@ -29,6 +25,10 @@ pub enum Command {
     PlayerSetVolume(f64),
     PlayerPreload(SpotifyUri),
     ReloadSettings,
+    SetEqualizer { bands: [f64; 10] },
+    SetMono { enabled: bool },
+    SetPan { pan: f64 },
+    SetPitch { cents: f64 },
 }
 
 #[derive(Clone)]
