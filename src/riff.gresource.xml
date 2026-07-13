@@ -9,6 +9,9 @@
     <file alias="components/login.ui">app/components/pages/login/login.ui</file>
     <!-- settings -->
     <file alias="components/settings.ui">app/components/pages/settings/settings.ui</file>
+    <file alias="components/equalizer.ui">app/components/pages/settings/equalizer.ui</file>
+    <file alias="components/pan.ui">app/components/pages/settings/pan.ui</file>
+    <file alias="components/pitch.ui">app/components/pages/settings/pitch.ui</file>
     <!-- search -->
     <file alias="components/search.ui">app/components/pages/search/search.ui</file>
     <!-- card -->

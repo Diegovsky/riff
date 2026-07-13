@@ -10,14 +10,22 @@ use librespot::playback::mixer::softmixer::SoftMixer;
 use librespot::playback::mixer::{Mixer, MixerConfig};
 
 use librespot::playback::audio_backend;
-use librespot::playback::config::{AudioFormat, Bitrate, PlayerConfig, VolumeCtrl};
+use librespot::playback::audio_backend::Sink;
+use librespot::playback::config::{
+    AudioFormat, Bitrate, NormalisationMethod, NormalisationType, PlayerConfig, VolumeCtrl,
+};
 use librespot::playback::player::{Player, PlayerEvent, PlayerEventChannel};
 
 use crate::app::models::RepeatMode;
+use crate::audio_engine::{
+    CaptureSink, EqController, EqProcessor, MixController, MixProcessor, MonoController,
+    MonoProcessor, PanController, PanProcessor, PitchController, PitchProcessor, ProcessorChain,
+};
 use crate::player::AppPlayerDelegate;
 
-use super::oauth2::{AuthcodeChallenge, OAuthError, RiffOauthClient};
-use super::{Command, TokenStore};
+use crate::auth::{AuthcodeChallenge, OAuthError, RiffOauthClient, TokenStore};
+
+use super::Command;
 use crate::app::credentials;
 use crate::settings::RiffSettings;
 use std::env;
@@ -55,7 +63,20 @@ pub enum AudioBackend {
     Alsa(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VolumeCurveType {
+    Log,
+    Linear,
+    Cubic,
+}
+
+impl Default for VolumeCurveType {
+    fn default() -> Self {
+        Self::Log
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SpotifyPlayerSettings {
     pub bitrate: Bitrate,
     pub backend: AudioBackend,
@@ -65,6 +86,35 @@ pub struct SpotifyPlayerSettings {
     pub shuffle: bool,
     pub repeat: RepeatMode,
     pub volume: f64,
+
+    // Volume curve
+    pub volume_curve: VolumeCurveType,
+
+    // Normalization
+    pub normalisation: bool,
+    pub normalisation_type: NormalisationType,
+    pub normalisation_method: NormalisationMethod,
+    pub normalisation_pregain_db: f64,
+    pub normalisation_threshold_dbfs: f64,
+    pub normalisation_attack_ms: f64,
+    pub normalisation_release_ms: f64,
+    pub normalisation_knee_db: f64,
+
+    // Audio format
+    pub audio_format: AudioFormat,
+
+    // Mono audio
+    pub mono_audio: bool,
+
+    // Stereo pan / balance (-1.0 = full left, 0.0 = center, 1.0 = full right).
+    // Always enabled; centered has no effect.
+    pub pan: f64,
+
+    // Pitch shift in cents (1 cent = 1/100 semitone). 0.0 = no shift.
+    pub pitch_cents: f64,
+
+    // Equalizer. Active whenever any band is non-zero; flat = passthrough.
+    pub eq_bands: [f64; 10],
 }
 
 impl Default for SpotifyPlayerSettings {
@@ -78,7 +128,70 @@ impl Default for SpotifyPlayerSettings {
             gapless: true,
             backend: AudioBackend::PulseAudio,
             ap_port: None,
+
+            volume_curve: VolumeCurveType::Log,
+
+            normalisation: false,
+            normalisation_type: NormalisationType::Auto,
+            normalisation_method: NormalisationMethod::Dynamic,
+            normalisation_pregain_db: 0.0,
+            normalisation_threshold_dbfs: -2.0,
+            normalisation_attack_ms: 5.0,
+            normalisation_release_ms: 100.0,
+            normalisation_knee_db: 5.0,
+
+            audio_format: AudioFormat::default(),
+
+            mono_audio: false,
+
+            pan: 0.0,
+
+            pitch_cents: 0.0,
+
+            eq_bands: [0.0; 10],
         }
+    }
+}
+
+impl SpotifyPlayerSettings {
+    /// Whether a change from `self` to `other` requires recreating the librespot
+    /// player (which interrupts playback). Equalizer, mono, pan, and pitch
+    /// settings are excluded: they are applied live via their controllers and
+    /// never require a reload.
+    pub fn requires_reload(&self, other: &Self) -> bool {
+        /// Epsilon for comparing normalisation parameters. Values come from
+        /// GtkSpinRow adjustments (step = 0.5), so a threshold well below the
+        /// smallest meaningful step avoids spurious reloads from FP rounding.
+        const EPS: f64 = 1.0e-9;
+
+        #[inline]
+        fn f64_changed(a: f64, b: f64) -> bool {
+            (a - b).abs() > EPS
+        }
+
+        self.bitrate != other.bitrate
+            || self.backend != other.backend
+            || self.gapless != other.gapless
+            || self.ap_port != other.ap_port
+            || self.volume_curve != other.volume_curve
+            || self.normalisation != other.normalisation
+            || self.normalisation_type != other.normalisation_type
+            || self.normalisation_method != other.normalisation_method
+            || f64_changed(
+                self.normalisation_pregain_db,
+                other.normalisation_pregain_db,
+            )
+            || f64_changed(
+                self.normalisation_threshold_dbfs,
+                other.normalisation_threshold_dbfs,
+            )
+            || f64_changed(self.normalisation_attack_ms, other.normalisation_attack_ms)
+            || f64_changed(
+                self.normalisation_release_ms,
+                other.normalisation_release_ms,
+            )
+            || f64_changed(self.normalisation_knee_db, other.normalisation_knee_db)
+            || self.audio_format != other.audio_format
     }
 }
 
@@ -87,6 +200,21 @@ pub struct SpotifyPlayer {
     player: Option<Arc<Player>>,
     mixer: Option<Box<dyn Mixer>>,
     session: Option<Session>,
+
+    // Shared equalizer configuration, updated live without recreating the player.
+    eq_controller: EqController,
+
+    // Shared mono audio setting, updated live without recreating the player.
+    mono_controller: MonoController,
+
+    // Shared pan/balance configuration, updated live without recreating the player.
+    pan_controller: PanController,
+
+    // Shared pitch-shift setting (stub), updated live without recreating the player.
+    pitch_controller: PitchController,
+
+    // Shared mixer setting (stub), updated live without recreating the player.
+    mix_controller: MixController,
 
     // Auth related stuff
     oauth_client: Arc<RiffOauthClient>,
@@ -104,11 +232,21 @@ impl SpotifyPlayer {
         token_store: TokenStore,
         command_sender: UnboundedSender<Command>,
     ) -> Self {
+        let eq_controller = EqController::new(settings.eq_bands);
+        let mono_controller = MonoController::new(settings.mono_audio);
+        let pan_controller = PanController::new(settings.pan);
+        let pitch_controller = PitchController::new(settings.pitch_cents);
+        let mix_controller = MixController::new(false);
         Self {
             settings,
             mixer: None,
             player: None,
             session: None,
+            eq_controller,
+            mono_controller,
+            pan_controller,
+            pitch_controller,
+            mix_controller,
             oauth_client: Arc::new(RiffOauthClient::new(token_store)),
             auth_challenge: None,
             command_sender,
@@ -137,6 +275,30 @@ impl SpotifyPlayer {
                 if let Some(mixer) = self.mixer.as_mut() {
                     mixer_set_volume(&mut **mixer, volume);
                 }
+                Ok(())
+            }
+            Command::SetEqualizer { bands } => {
+                // Live update: no player/session recreation, no playback interruption.
+                self.settings.eq_bands = bands;
+                self.eq_controller.update(bands);
+                Ok(())
+            }
+            Command::SetMono { enabled } => {
+                // Live update: no player/session recreation, no playback interruption.
+                self.settings.mono_audio = enabled;
+                self.mono_controller.update(enabled);
+                Ok(())
+            }
+            Command::SetPan { pan } => {
+                // Live update: no player/session recreation, no playback interruption.
+                self.settings.pan = pan;
+                self.pan_controller.update(pan);
+                Ok(())
+            }
+            Command::SetPitch { cents } => {
+                // Live update: no player/session recreation, no playback interruption.
+                self.settings.pitch_cents = cents;
+                self.pitch_controller.update(cents);
                 Ok(())
             }
             Command::PlayerResume => {
@@ -238,6 +400,9 @@ impl SpotifyPlayer {
                 let settings = RiffSettings::new_from_gsettings().unwrap_or_default();
                 self.settings = settings.player_settings;
 
+                // Clear the mixer so it gets recreated with updated volume curve/dB range
+                self.mixer.take();
+
                 let session = self.session.take().ok_or(SpotifyError::PlayerNotReady)?;
                 let new_player = self.create_player(session);
                 tokio::task::spawn(player_setup_delegate(
@@ -301,22 +466,57 @@ impl SpotifyPlayer {
 
     fn create_player(&mut self, session: Session) -> Arc<Player> {
         let backend = self.settings.backend.clone();
+        let audio_format = self.settings.audio_format;
+
+        // Convert attack/release from milliseconds to coefficients
+        let normalisation_attack_cf = librespot::playback::player::duration_to_coefficient(
+            std::time::Duration::from_secs_f64(self.settings.normalisation_attack_ms / 1000.0),
+        );
+        let normalisation_release_cf = librespot::playback::player::duration_to_coefficient(
+            std::time::Duration::from_secs_f64(self.settings.normalisation_release_ms / 1000.0),
+        );
 
         let player_config = PlayerConfig {
             gapless: self.settings.gapless,
             bitrate: self.settings.bitrate,
+            normalisation: self.settings.normalisation,
+            normalisation_type: self.settings.normalisation_type,
+            normalisation_method: self.settings.normalisation_method,
+            normalisation_pregain_db: self.settings.normalisation_pregain_db,
+            normalisation_threshold_dbfs: self.settings.normalisation_threshold_dbfs,
+            normalisation_attack_cf,
+            normalisation_release_cf,
+            normalisation_knee_db: self.settings.normalisation_knee_db,
             ..Default::default()
         };
         info!("bitrate: {:?}", &player_config.bitrate);
+        info!(
+            "volume curve: {:?}, dB range: {:.1}",
+            self.settings.volume_curve,
+            VolumeCtrl::DEFAULT_DB_RANGE
+        );
+        if player_config.normalisation {
+            info!(
+                "normalisation: type={:?}, method={:?}, pregain={:.1}dB",
+                player_config.normalisation_type,
+                player_config.normalisation_method,
+                player_config.normalisation_pregain_db
+            );
+        }
 
         let volume = self.settings.volume;
+        let volume_curve = self.settings.volume_curve;
         let soft_volume = self
             .mixer
             .get_or_insert_with(|| {
+                let volume_ctrl = match volume_curve {
+                    VolumeCurveType::Log => VolumeCtrl::Log(VolumeCtrl::DEFAULT_DB_RANGE),
+                    VolumeCurveType::Linear => VolumeCtrl::Linear,
+                    VolumeCurveType::Cubic => VolumeCtrl::Cubic(VolumeCtrl::DEFAULT_DB_RANGE),
+                };
                 let mut mix = Box::new(
                     SoftMixer::open(MixerConfig {
-                        // This value feels reasonable to me. Feel free to change it
-                        volume_ctrl: VolumeCtrl::Log(VolumeCtrl::DEFAULT_DB_RANGE / 2.0),
+                        volume_ctrl,
                         ..Default::default()
                     })
                     .expect("Failed to create soft mixer"),
@@ -326,22 +526,43 @@ impl SpotifyPlayer {
             })
             .get_soft_volume();
 
-        Player::new(player_config, session, soft_volume, move || match backend {
-            AudioBackend::GStreamer(pipeline) => {
-                let backend = audio_backend::find(Some("gstreamer".to_string())).unwrap();
-                backend(Some(pipeline), AudioFormat::default())
-            }
-            AudioBackend::PulseAudio => {
-                info!("using pulseaudio");
-                env::set_var("PULSE_PROP_application.name", "Riff");
-                let backend = audio_backend::find(Some("pulseaudio".to_string())).unwrap();
-                backend(None, AudioFormat::default())
-            }
-            AudioBackend::Alsa(device) => {
-                info!("using alsa ({})", &device);
-                let backend = audio_backend::find(Some("alsa".to_string())).unwrap();
-                backend(Some(device), AudioFormat::default())
-            }
+        let eq_controller = self.eq_controller.clone();
+        let mono_controller = self.mono_controller.clone();
+        let pan_controller = self.pan_controller.clone();
+        let pitch_controller = self.pitch_controller.clone();
+        let mix_controller = self.mix_controller.clone();
+
+        Player::new(player_config, session, soft_volume, move || {
+            let sink: Box<dyn Sink> = match backend {
+                AudioBackend::GStreamer(pipeline) => {
+                    let backend = audio_backend::find(Some("gstreamer".to_string())).unwrap();
+                    backend(Some(pipeline), audio_format)
+                }
+                AudioBackend::PulseAudio => {
+                    info!("using pulseaudio");
+                    env::set_var("PULSE_PROP_application.name", "Riff");
+                    let backend = audio_backend::find(Some("pulseaudio".to_string())).unwrap();
+                    backend(None, audio_format)
+                }
+                AudioBackend::Alsa(device) => {
+                    info!("using alsa ({})", &device);
+                    let backend = audio_backend::find(Some("alsa".to_string())).unwrap();
+                    backend(Some(device), audio_format)
+                }
+            };
+
+            // Route decoded audio through the audio engine pipeline before it
+            // reaches the backend. The chain runs in a fixed order; each stage
+            // passes audio through untouched while disabled and applies live
+            // updates via its controller otherwise.
+            let chain = ProcessorChain::new()
+                .with(Box::new(EqProcessor::new(eq_controller)))
+                .with(Box::new(MonoProcessor::new(mono_controller)))
+                .with(Box::new(PanProcessor::new(pan_controller)))
+                .with(Box::new(PitchProcessor::new(pitch_controller)))
+                .with(Box::new(MixProcessor::new(mix_controller)));
+
+            CaptureSink::wrap(sink, chain)
         })
     }
 
@@ -426,6 +647,11 @@ async fn player_setup_delegate(mut channel: PlayerEventChannel, delegate: AppPla
     }
 }
 
+/// Maps a 0.0–1.0 volume slider value to the mixer's u16 volume.
+///
+/// The VolumeCtrl curve (configured in create_player) determines the dB mapping.
+/// The curve's db_range parameter (derived from volume_min_db/volume_max_db settings)
+/// controls how many dB of dynamic range the slider spans.
 fn mixer_set_volume(mixer: &mut dyn Mixer, volume: f64) {
     mixer.set_volume((VolumeCtrl::MAX_VOLUME as f64 * volume) as u16);
 }

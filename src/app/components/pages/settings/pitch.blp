@@ -1,0 +1,45 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $PitchWidget : Adw.PreferencesGroup {
+  title: _("Pitch Shift");
+  description: _("Shift the pitch up or down in cents (1 cent = 1/100 of a semitone)");
+
+  header-suffix: ToggleButton pitch_lock {
+    valign: center;
+    icon-name: "changes-allow-symbolic";
+    tooltip-text: _("Lock the pitch to prevent accidental changes");
+
+    styles [
+      "flat",
+    ]
+  };
+
+  Gtk.Box {
+    orientation: vertical;
+    spacing: 4;
+    margin-top: 12;
+    margin-bottom: 12;
+
+    Scale pitch_cents {
+      orientation: horizontal;
+      draw-value: true;
+      value-pos: bottom;
+      digits: 0;
+      round-digits: 0;
+      hexpand: true;
+      adjustment: Adjustment {
+        lower: -100.0;
+        upper: 100.0;
+        value: 0.0;
+        step-increment: 1.0;
+        page-increment: 10.0;
+      };
+      marks [
+        mark (-100.0, bottom, _("-100")),
+        mark (0, bottom, _("0")),
+        mark (100.0, bottom, _("+100")),
+      ]
+    }
+  }
+}

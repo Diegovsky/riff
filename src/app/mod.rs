@@ -1,5 +1,6 @@
+use crate::auth::TokenStore;
 use crate::settings::{RiffSettings, StateTracker};
-use crate::{api::CachedSpotifyClient, feature_flags, player::TokenStore};
+use crate::{api::CachedSpotifyClient, feature_flags};
 use futures::channel::mpsc::UnboundedSender;
 use gtk::prelude::*;
 use std::rc::Rc;

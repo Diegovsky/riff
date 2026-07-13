@@ -5,11 +5,11 @@ use crate::{
         state::{PlaybackAction, PlaybackEvent},
         AppAction, AppEvent, BrowserEvent,
     },
-    player::{AudioBackend, SpotifyPlayerSettings},
+    player::{AudioBackend, SpotifyPlayerSettings, VolumeCurveType},
 };
 use gio::prelude::SettingsExt;
 use libadwaita::ColorScheme;
-use librespot::playback::config::Bitrate;
+use librespot::playback::config::{AudioFormat, Bitrate, NormalisationMethod, NormalisationType};
 
 const SETTINGS: &str = "dev.diegovsky.Riff";
 
@@ -99,6 +99,67 @@ impl SpotifyPlayerSettings {
             "none" | _ => RepeatMode::None,
         };
 
+        // Volume curve
+        let volume_curve = match settings.enum_("volume-curve") {
+            0 => VolumeCurveType::Log,
+            1 => VolumeCurveType::Linear,
+            2 => VolumeCurveType::Cubic,
+            _ => VolumeCurveType::Log,
+        };
+
+        // Normalization
+        let normalisation = settings.boolean("normalisation");
+        let normalisation_type = match settings.enum_("normalisation-type") {
+            0 => NormalisationType::Auto,
+            1 => NormalisationType::Track,
+            2 => NormalisationType::Album,
+            _ => NormalisationType::Auto,
+        };
+        let normalisation_method = match settings.enum_("normalisation-method") {
+            0 => NormalisationMethod::Dynamic,
+            1 => NormalisationMethod::Basic,
+            _ => NormalisationMethod::Dynamic,
+        };
+        let normalisation_pregain_db = settings.double("normalisation-pregain-db");
+        let normalisation_threshold_dbfs = settings.double("normalisation-threshold-dbfs");
+        let normalisation_attack_ms = settings.double("normalisation-attack-ms");
+        let normalisation_release_ms = settings.double("normalisation-release-ms");
+        let normalisation_knee_db = settings.double("normalisation-knee-db");
+
+        // Audio format
+        let audio_format = match settings.enum_("audio-format") {
+            0 => AudioFormat::S16,
+            1 => AudioFormat::S24,
+            2 => AudioFormat::S24_3,
+            3 => AudioFormat::S32,
+            4 => AudioFormat::F32,
+            5 => AudioFormat::F64,
+            _ => AudioFormat::S16,
+        };
+
+        // Equalizer (active whenever any band is non-zero)
+        let eq_bands = [
+            settings.double("eq-band-0"),
+            settings.double("eq-band-1"),
+            settings.double("eq-band-2"),
+            settings.double("eq-band-3"),
+            settings.double("eq-band-4"),
+            settings.double("eq-band-5"),
+            settings.double("eq-band-6"),
+            settings.double("eq-band-7"),
+            settings.double("eq-band-8"),
+            settings.double("eq-band-9"),
+        ];
+
+        // Mono audio
+        let mono_audio = settings.boolean("mono-audio");
+
+        // Stereo pan / balance (always enabled; centered has no effect)
+        let pan = settings.double("pan");
+
+        // Pitch shift in cents (0.0 = no shift)
+        let pitch_cents = settings.double("pitch-cents");
+
         Some(Self {
             volume,
             repeat,
@@ -108,6 +169,27 @@ impl SpotifyPlayerSettings {
             backend,
             gapless,
             ap_port,
+
+            volume_curve,
+
+            normalisation,
+            normalisation_type,
+            normalisation_method,
+            normalisation_pregain_db,
+            normalisation_threshold_dbfs,
+            normalisation_attack_ms,
+            normalisation_release_ms,
+            normalisation_knee_db,
+
+            audio_format,
+
+            mono_audio,
+
+            pan,
+
+            pitch_cents,
+
+            eq_bands,
         })
     }
     pub fn actions(&self) -> Vec<AppAction> {

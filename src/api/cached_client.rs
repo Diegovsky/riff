@@ -3,7 +3,7 @@ use super::cache::{CacheExpiry, CacheManager, CachePolicy, FetchResult};
 use super::client::*;
 use crate::app::models::*;
 use crate::app::state::CARD_BATCH_SIZE;
-use crate::player::TokenStore;
+use crate::auth::TokenStore;
 use futures::future::BoxFuture;
 use futures::{join, FutureExt};
 use regex::Regex;

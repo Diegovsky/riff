@@ -80,8 +80,10 @@ An overview of the directories and their responsibilities:
 | `src/app/state/` | The centralized application state. |
 | `src/app/models/` | Presentation models that bind state to the UI. |
 | `src/app/components/` | Wrappers around GTK widgets. |
+| `src/auth/` | Authentication: OAuth2 login flow and secure token storage. |
+| `src/audio_engine/` | DSP pipeline between librespot and the audio backend (EQ, mono, pitch, mixing). |
 | `src/connect/` | Spotify Connect support. |
-| `src/player/` | Local playback, login, and token storage. |
+| `src/player/` | Local playback and librespot session management. |
 | `src/dbus/` | MPRIS / D-Bus integration. |
 | `data/` | Application data installed on the system. |
 | `po/` | Translations. |

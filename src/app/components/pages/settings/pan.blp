@@ -1,0 +1,45 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $PanWidget : Adw.PreferencesGroup {
+  title: _("Stereo Pan");
+  description: _("Adjust the balance between the left and right channels");
+
+  header-suffix: ToggleButton pan_lock {
+    valign: center;
+    icon-name: "changes-allow-symbolic";
+    tooltip-text: _("Lock the balance to prevent accidental changes");
+
+    styles [
+      "flat",
+    ]
+  };
+
+  Gtk.Box {
+    orientation: vertical;
+    spacing: 4;
+    margin-top: 12;
+    margin-bottom: 12;
+
+    Scale pan_balance {
+      orientation: horizontal;
+      draw-value: true;
+      value-pos: bottom;
+      digits: 2;
+      round-digits: 2;
+      hexpand: true;
+      adjustment: Adjustment {
+        lower: -1.0;
+        upper: 1.0;
+        value: 0.0;
+        step-increment: 0.05;
+        page-increment: 0.1;
+      };
+      marks [
+        mark (-1.0, bottom, _("Left")),
+        mark (0, bottom, _("Center")),
+        mark (1.0, bottom, _("Right")),
+      ]
+    }
+  }
+}

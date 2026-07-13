@@ -7,7 +7,7 @@ pub mod cache;
 pub use cached_client::{CachedSpotifyClient, SpotifyApiClient, SpotifyResult};
 pub use client::SpotifyApiError;
 
-use crate::player::TokenStore;
+use crate::auth::TokenStore;
 use client::SpotifyClient;
 
 pub async fn clear_user_cache() -> Option<()> {
