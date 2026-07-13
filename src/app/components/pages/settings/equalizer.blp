@@ -1,0 +1,330 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $EqualizerWidget : Adw.PreferencesGroup {
+  title: _("Equalizer");
+  description: _("Adjust gain per frequency band (−12 to +12 dB)");
+
+  header-suffix: ToggleButton eq_lock {
+    valign: center;
+    icon-name: "changes-allow-symbolic";
+    tooltip-text: _("Lock the equalizer bands to prevent accidental changes");
+
+    styles [
+      "flat",
+    ]
+  };
+
+  Gtk.Box eq_bands_box {
+    orientation: horizontal;
+    homogeneous: true;
+    spacing: 2;
+    margin-top: 12;
+    margin-bottom: 12;
+    height-request: 220;
+
+    styles [
+      "eq-graph",
+    ]
+
+    Gtk.Box {
+      orientation: vertical;
+      spacing: 4;
+
+      Scale eq_band_0 {
+        orientation: vertical;
+        inverted: true;
+        draw-value: true;
+        value-pos: bottom;
+        digits: 1;
+        round-digits: 1;
+        vexpand: true;
+        adjustment: Adjustment {
+          lower: -12.0;
+          upper: 12.0;
+          value: 0.0;
+          step-increment: 0.5;
+          page-increment: 1.0;
+        };
+        marks [
+          mark (0, right, ""),
+        ]
+      }
+
+      Label {
+        label: _("31");
+        styles [ "caption", "dim-label" ]
+      }
+    }
+
+    Gtk.Box {
+      orientation: vertical;
+      spacing: 4;
+
+      Scale eq_band_1 {
+        orientation: vertical;
+        inverted: true;
+        draw-value: true;
+        value-pos: bottom;
+        digits: 1;
+        round-digits: 1;
+        vexpand: true;
+        adjustment: Adjustment {
+          lower: -12.0;
+          upper: 12.0;
+          value: 0.0;
+          step-increment: 0.5;
+          page-increment: 1.0;
+        };
+        marks [
+          mark (0, right, ""),
+        ]
+      }
+
+      Label {
+        label: _("62");
+        styles [ "caption", "dim-label" ]
+      }
+    }
+
+    Gtk.Box {
+      orientation: vertical;
+      spacing: 4;
+
+      Scale eq_band_2 {
+        orientation: vertical;
+        inverted: true;
+        draw-value: true;
+        value-pos: bottom;
+        digits: 1;
+        round-digits: 1;
+        vexpand: true;
+        adjustment: Adjustment {
+          lower: -12.0;
+          upper: 12.0;
+          value: 0.0;
+          step-increment: 0.5;
+          page-increment: 1.0;
+        };
+        marks [
+          mark (0, right, ""),
+        ]
+      }
+
+      Label {
+        label: _("125");
+        styles [ "caption", "dim-label" ]
+      }
+    }
+
+    Gtk.Box {
+      orientation: vertical;
+      spacing: 4;
+
+      Scale eq_band_3 {
+        orientation: vertical;
+        inverted: true;
+        draw-value: true;
+        value-pos: bottom;
+        digits: 1;
+        round-digits: 1;
+        vexpand: true;
+        adjustment: Adjustment {
+          lower: -12.0;
+          upper: 12.0;
+          value: 0.0;
+          step-increment: 0.5;
+          page-increment: 1.0;
+        };
+        marks [
+          mark (0, right, ""),
+        ]
+      }
+
+      Label {
+        label: _("250");
+        styles [ "caption", "dim-label" ]
+      }
+    }
+
+    Gtk.Box {
+      orientation: vertical;
+      spacing: 4;
+
+      Scale eq_band_4 {
+        orientation: vertical;
+        inverted: true;
+        draw-value: true;
+        value-pos: bottom;
+        digits: 1;
+        round-digits: 1;
+        vexpand: true;
+        adjustment: Adjustment {
+          lower: -12.0;
+          upper: 12.0;
+          value: 0.0;
+          step-increment: 0.5;
+          page-increment: 1.0;
+        };
+        marks [
+          mark (0, right, ""),
+        ]
+      }
+
+      Label {
+        label: _("500");
+        styles [ "caption", "dim-label" ]
+      }
+    }
+
+    Gtk.Box {
+      orientation: vertical;
+      spacing: 4;
+
+      Scale eq_band_5 {
+        orientation: vertical;
+        inverted: true;
+        draw-value: true;
+        value-pos: bottom;
+        digits: 1;
+        round-digits: 1;
+        vexpand: true;
+        adjustment: Adjustment {
+          lower: -12.0;
+          upper: 12.0;
+          value: 0.0;
+          step-increment: 0.5;
+          page-increment: 1.0;
+        };
+        marks [
+          mark (0, right, ""),
+        ]
+      }
+
+      Label {
+        label: _("1k");
+        styles [ "caption", "dim-label" ]
+      }
+    }
+
+    Gtk.Box {
+      orientation: vertical;
+      spacing: 4;
+
+      Scale eq_band_6 {
+        orientation: vertical;
+        inverted: true;
+        draw-value: true;
+        value-pos: bottom;
+        digits: 1;
+        round-digits: 1;
+        vexpand: true;
+        adjustment: Adjustment {
+          lower: -12.0;
+          upper: 12.0;
+          value: 0.0;
+          step-increment: 0.5;
+          page-increment: 1.0;
+        };
+        marks [
+          mark (0, right, ""),
+        ]
+      }
+
+      Label {
+        label: _("2k");
+        styles [ "caption", "dim-label" ]
+      }
+    }
+
+    Gtk.Box {
+      orientation: vertical;
+      spacing: 4;
+
+      Scale eq_band_7 {
+        orientation: vertical;
+        inverted: true;
+        draw-value: true;
+        value-pos: bottom;
+        digits: 1;
+        round-digits: 1;
+        vexpand: true;
+        adjustment: Adjustment {
+          lower: -12.0;
+          upper: 12.0;
+          value: 0.0;
+          step-increment: 0.5;
+          page-increment: 1.0;
+        };
+        marks [
+          mark (0, right, ""),
+        ]
+      }
+
+      Label {
+        label: _("4k");
+        styles [ "caption", "dim-label" ]
+      }
+    }
+
+    Gtk.Box {
+      orientation: vertical;
+      spacing: 4;
+
+      Scale eq_band_8 {
+        orientation: vertical;
+        inverted: true;
+        draw-value: true;
+        value-pos: bottom;
+        digits: 1;
+        round-digits: 1;
+        vexpand: true;
+        adjustment: Adjustment {
+          lower: -12.0;
+          upper: 12.0;
+          value: 0.0;
+          step-increment: 0.5;
+          page-increment: 1.0;
+        };
+        marks [
+          mark (0, right, ""),
+        ]
+      }
+
+      Label {
+        label: _("8k");
+        styles [ "caption", "dim-label" ]
+      }
+    }
+
+    Gtk.Box {
+      orientation: vertical;
+      spacing: 4;
+
+      Scale eq_band_9 {
+        orientation: vertical;
+        inverted: true;
+        draw-value: true;
+        value-pos: bottom;
+        digits: 1;
+        round-digits: 1;
+        vexpand: true;
+        adjustment: Adjustment {
+          lower: -12.0;
+          upper: 12.0;
+          value: 0.0;
+          step-increment: 0.5;
+          page-increment: 1.0;
+        };
+        marks [
+          mark (0, right, ""),
+        ]
+      }
+
+      Label {
+        label: _("16k");
+        styles [ "caption", "dim-label" ]
+      }
+    }
+  }
+}

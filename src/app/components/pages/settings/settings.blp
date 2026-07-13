@@ -77,6 +77,7 @@ template $SettingsWindow : Adw.PreferencesDialog {
         /* Translators: Title for an item in preferences */
 
         title: _("Audio Quality");
+        subtitle: _("Streaming bitrate from Spotify (higher uses more bandwidth)");
         model: StringList {
           strings [
             _("Normal"),
@@ -86,10 +87,26 @@ template $SettingsWindow : Adw.PreferencesDialog {
         };
       }
 
+      Adw.ComboRow audio_format {
+        title: _("Audio Format");
+        subtitle: _("Sample bit depth for audio output");
+        model: StringList {
+          strings [
+            "S16 (16-bit)",
+            "S24 (24-bit)",
+            "S24_3 (24-bit packed)",
+            "S32 (32-bit)",
+            "F32 (32-bit float)",
+            "F64 (64-bit float)",
+          ]
+        };
+      }
+
       Adw.ActionRow gapless_playback {
         /* Translators: Title for an item in preferences */
 
         title: _("Gapless playback");
+        subtitle: _("Eliminates silence between consecutive tracks");
         name: "gapless_playback_row";
         activatable-widget: gapless_playback_switch;
         visible: true;
@@ -99,7 +116,131 @@ template $SettingsWindow : Adw.PreferencesDialog {
           margin-bottom: 12;
         }
       }
+
+      Adw.ComboRow volume_curve {
+        title: _("Volume Curve");
+        subtitle: _("Controls how the volume slider responds");
+        model: StringList {
+          strings [
+            _("Logarithmic"),
+            _("Linear"),
+            _("Cubic"),
+          ]
+        };
+      }
+
+      Adw.SwitchRow mono_audio_switch {
+        title: _("Mono Audio");
+        subtitle: _("Mix left and right channels together so both speakers play the same audio");
+      }
+
     }
+
+    Adw.PreferencesGroup normalisation_group {
+      title: _("Normalisation");
+      description: _("Adjust volume levels between tracks for consistent loudness");
+
+      Adw.SwitchRow normalisation_switch {
+        title: _("Enable Normalisation");
+        subtitle: _("Automatically adjust volume between tracks");
+      }
+
+      Adw.ComboRow normalisation_type {
+        title: _("Normalisation Type");
+        subtitle: _("How gain values are selected");
+        sensitive: bind normalisation_switch.active;
+        model: StringList {
+          strings [
+            _("Auto"),
+            _("Track"),
+            _("Album"),
+          ]
+        };
+      }
+
+      Adw.ComboRow normalisation_method {
+        title: _("Normalisation Method");
+        subtitle: _("Basic clips peaks, Dynamic uses a limiter");
+        sensitive: bind normalisation_switch.active;
+        model: StringList {
+          strings [
+            _("Dynamic"),
+            _("Basic"),
+          ]
+        };
+      }
+
+      Adw.SpinRow normalisation_pregain {
+        title: _("Pre-gain (dB)");
+        subtitle: _("Additional gain applied before normalisation");
+        sensitive: bind normalisation_switch.active;
+        adjustment: Adjustment {
+          lower: -10.0;
+          upper: 10.0;
+          value: 0.0;
+          step-increment: 0.5;
+          page-increment: 1.0;
+        };
+      }
+
+      Adw.SpinRow normalisation_threshold {
+        title: _("Threshold (dBFS)");
+        subtitle: _("Ceiling for dynamic normalisation");
+        sensitive: bind normalisation_switch.active;
+        adjustment: Adjustment {
+          lower: -10.0;
+          upper: 0.0;
+          value: -2.0;
+          step-increment: 0.5;
+          page-increment: 1.0;
+        };
+      }
+
+      Adw.SpinRow normalisation_attack {
+        title: _("Attack (ms)");
+        subtitle: _("How quickly the limiter reacts to peaks");
+        sensitive: bind normalisation_switch.active;
+        adjustment: Adjustment {
+          lower: 1.0;
+          upper: 500.0;
+          value: 5.0;
+          step-increment: 1.0;
+          page-increment: 10.0;
+        };
+      }
+
+      Adw.SpinRow normalisation_release {
+        title: _("Release (ms)");
+        subtitle: _("How quickly the limiter recovers after peaks");
+        sensitive: bind normalisation_switch.active;
+        adjustment: Adjustment {
+          lower: 1.0;
+          upper: 1000.0;
+          value: 100.0;
+          step-increment: 5.0;
+          page-increment: 50.0;
+        };
+      }
+
+      Adw.SpinRow normalisation_knee {
+        title: _("Knee (dB)");
+        subtitle: _("Width of the soft knee for the limiter");
+        sensitive: bind normalisation_switch.active;
+        adjustment: Adjustment {
+          lower: 0.0;
+          upper: 10.0;
+          value: 5.0;
+          step-increment: 0.5;
+          page-increment: 1.0;
+        };
+      }
+    }
+
+    $EqualizerWidget equalizer {}
+
+    $PanWidget pan {}
+
+    $PitchWidget pitch {}
 
     Adw.PreferencesGroup {
       /* Translators: Header for a group of preference items regarding network */
