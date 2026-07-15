@@ -77,18 +77,22 @@ impl SongListModel {
     }
 
     fn notify_changes(&self, changes: impl IntoIterator<Item = ListRangeUpdate> + 'static) {
-        // Eh, not great but that works
+        // items_changed MUST be emitted synchronously, immediately after the
+        // backing SongList mutates. GTK's ListModel contract requires that the
+        // model never be observable in a state where n_items() disagrees with
+        // what GTK's item trackers expect. Deferring this signal (e.g. via
+        // idle_add) let the frame clock process crossing/redraw events against a
+        // torn model, causing a SIGSEGV in gtk_list_item_manager_ensure_items.
+        //
+        // Emitting synchronously is safe here even though we are inside
+        // AppState's borrow_mut, because the ListView bind callback is now
+        // self-contained: it reads only the SongModel handed to it by GTK and
+        // never calls back into AppModel::get_state(). See Playlist::new.
         if cfg!(not(test)) {
-            glib::source::idle_add_local_once(clone!(
-                #[weak(rename_to = s)]
-                self,
-                move || {
-                    for ListRangeUpdate(a, b, c) in changes.into_iter() {
-                        debug!("pos {}, removed {}, added {}", a, b, c);
-                        s.items_changed(a as u32, b as u32, c as u32);
-                    }
-                }
-            ));
+            for ListRangeUpdate(a, b, c) in changes.into_iter() {
+                debug!("pos {}, removed {}, added {}", a, b, c);
+                self.items_changed(a as u32, b as u32, c as u32);
+            }
         }
     }
 

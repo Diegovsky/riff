@@ -225,9 +225,7 @@ impl PlaylistModel for DetailsModel {
         }
     }
 
-    fn actions_for(&self, id: &str) -> Option<gio::ActionGroup> {
-        let song = PlaylistModel::song_list_model(self).get(id)?;
-        let song = song.description();
+    fn actions_for(&self, song: &SongDescription) -> Option<gio::ActionGroup> {
         let group = SimpleActionGroup::new();
         for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
             group.add_action(&a);
@@ -237,9 +235,7 @@ impl PlaylistModel for DetailsModel {
         Some(group.upcast())
     }
 
-    fn menu_for(&self, id: &str) -> Option<gio::MenuModel> {
-        let song = PlaylistModel::song_list_model(self).get(id)?;
-        let song = song.description();
+    fn menu_for(&self, song: &SongDescription) -> Option<gio::MenuModel> {
         let menu = gio::Menu::new();
         for artist in song.artists.iter() {
             menu.append(
