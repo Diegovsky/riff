@@ -216,6 +216,7 @@ impl Hash for SongDescription {
 pub struct SongState {
     pub is_playing: bool,
     pub is_selected: bool,
+    pub is_liked: bool,
 }
 
 // A batch of SONGS

@@ -128,6 +128,28 @@ row:hover .song__menu--enabled, .song__menu--enabled:checked {
   opacity: 1;
 }
 
+/* Like button */
+.song__like {
+  opacity: 0;
+  transition: opacity 150ms ease;
+  min-width: 24px;
+  min-height: 24px;
+  margin-right: 8px;
+}
+
+row:hover .song__like {
+  opacity: 0.6;
+}
+
+row:hover .song__like:hover {
+  opacity: 1;
+}
+
+.song--liked .song__like {
+  opacity: 1;
+  color: alpha(currentColor, 0.55);
+}
+
 
 /* Song Labels */
 .song--playing label.title {
