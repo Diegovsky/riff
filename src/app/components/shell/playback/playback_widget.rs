@@ -290,9 +290,17 @@ impl PlaybackWidget {
     where
         F: Fn(f64) + Clone + 'static,
     {
+        let debouncer = Debouncer::new();
         let widget = self.imp();
-        widget
-            .volume_slider
-            .connect_value_changed(move |scale| f(scale.value()));
+        widget.volume_slider.connect_value_changed(move |scale| {
+            // Debounce dispatch: a single mouse-wheel flick emits a burst of
+            // high-resolution scroll deltas, each firing `value_changed`.
+            // Without this, every delta would fan out to the mixer, the Web
+            // API, dconf and an MPRIS `PropertiesChanged` D-Bus signal, which
+            // can flood GNOME Shell's media controls and hang the session.
+            let value = scale.value();
+            let f = f.clone();
+            debouncer.debounce(100, move || f(value));
+        });
     }
 }
