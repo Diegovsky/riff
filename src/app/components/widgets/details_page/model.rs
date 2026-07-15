@@ -4,7 +4,9 @@ use std::rc::Rc;
 
 use crate::app::dispatch::ActionDispatcher;
 use crate::app::models::SongListModel;
-use crate::app::state::{PlaybackAction, SelectionAction, SelectionContext, SelectionState};
+use crate::app::state::{
+    BrowserAction, PlaybackAction, SelectionAction, SelectionContext, SelectionState,
+};
 use crate::app::{AppAction, AppModel, AppState};
 use crate::feature_flags::{self, FeatureFlag};
 
@@ -27,6 +29,13 @@ macro_rules! impl_playlist_model_base {
         }
         fn selection(&self) -> Option<Box<dyn Deref<Target = SelectionState> + '_>> {
             self.base.selection()
+        }
+        fn is_song_liked(&self, id: &str) -> bool {
+            self.base.is_song_liked(id)
+        }
+        fn toggle_song_like(&self, id: &str) {
+            let songs = PlaylistModel::song_list_model(self);
+            self.base.toggle_song_like(&songs, id);
         }
     };
 }
@@ -181,6 +190,40 @@ impl DetailsPageModel {
         };
         if let Some(song) = song_list.index(index) {
             play_song_at(index, &song.get_id());
+        }
+    }
+
+    // Liked song helpers
+
+    pub fn is_song_liked(&self, id: &str) -> bool {
+        let state = self.app_model.get_state();
+        if let Some(home) = state.browser.home_state() {
+            return home.saved_tracks.get(id).is_some();
+        }
+        false
+    }
+
+    pub fn toggle_song_like(&self, song_list: &SongListModel, id: &str) {
+        let Some(song) = song_list.get(id) else {
+            return;
+        };
+        let song_desc = song.into_description();
+        let song_id = song_desc.id.clone();
+        let api = self.app_model.get_spotify();
+        let is_liked = self.is_song_liked(id);
+
+        if is_liked {
+            self.dispatcher
+                .call_spotify_and_dispatch(move || async move {
+                    api.remove_saved_tracks(vec![song_id.clone()]).await?;
+                    Ok(BrowserAction::RemoveSavedTracks(vec![song_id]).into())
+                });
+        } else {
+            self.dispatcher
+                .call_spotify_and_dispatch(move || async move {
+                    api.save_tracks(vec![song_id]).await?;
+                    Ok(BrowserAction::SaveTracks(vec![song_desc]).into())
+                });
         }
     }
 }

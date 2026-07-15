@@ -14,6 +14,7 @@ mod imp {
     use super::*;
 
     const SONG_CLASS: &str = "song--playing";
+    const LIKED_CLASS: &str = "song--liked";
 
     #[derive(Debug, Default, CompositeTemplate)]
     #[template(resource = "/dev/diegovsky/Riff/components/song.ui")]
@@ -37,10 +38,15 @@ mod imp {
         pub song_length: TemplateChild<gtk::Label>,
 
         #[template_child]
+        pub like_btn: TemplateChild<gtk::Button>,
+
+        #[template_child]
         pub menu_btn: TemplateChild<gtk::MenuButton>,
 
         #[template_child]
         pub song_cover: TemplateChild<gtk::Image>,
+
+        pub like_handler_id: std::cell::RefCell<Option<glib::SignalHandlerId>>,
     }
 
     #[glib::object_subclass]
@@ -59,9 +65,10 @@ mod imp {
     }
 
     lazy_static! {
-        static ref PROPERTIES: [glib::ParamSpec; 2] = [
+        static ref PROPERTIES: [glib::ParamSpec; 3] = [
             glib::ParamSpecBoolean::builder("playing").build(),
-            glib::ParamSpecBoolean::builder("selected").build()
+            glib::ParamSpecBoolean::builder("selected").build(),
+            glib::ParamSpecBoolean::builder("liked").build()
         ];
     }
 
@@ -88,6 +95,20 @@ mod imp {
                         .expect("type conformity checked by `Object::set_property`");
                     self.song_checkbox.set_active(is_selected);
                 }
+                "liked" => {
+                    let is_liked: bool = value
+                        .get()
+                        .expect("type conformity checked by `Object::set_property`");
+                    if is_liked {
+                        self.obj().add_css_class(LIKED_CLASS);
+                        self.like_btn.set_icon_name("starred-symbolic");
+                        self.like_btn.set_tooltip_text(Some("Unlike"));
+                    } else {
+                        self.obj().remove_css_class(LIKED_CLASS);
+                        self.like_btn.set_icon_name("non-starred-symbolic");
+                        self.like_btn.set_tooltip_text(Some("Like"));
+                    }
+                }
                 _ => unimplemented!(),
             }
         }
@@ -96,6 +117,7 @@ mod imp {
             match pspec.name() {
                 "playing" => self.obj().has_css_class(SONG_CLASS).to_value(),
                 "selected" => self.song_checkbox.is_active().to_value(),
+                "liked" => self.obj().has_css_class(LIKED_CLASS).to_value(),
                 _ => unimplemented!(),
             }
         }
@@ -144,6 +166,25 @@ impl SongWidget {
         }
     }
 
+    pub fn connect_like<F: Fn() + 'static>(&self, f: F) {
+        let widget = self.imp();
+        // Disconnect previous handler to avoid stacking handlers on widget reuse
+        if let Some(old_id) = widget.like_handler_id.borrow_mut().take() {
+            widget.like_btn.disconnect(old_id);
+        }
+        let handler_id = widget.like_btn.connect_clicked(move |_| {
+            f();
+        });
+        widget.like_handler_id.replace(Some(handler_id));
+    }
+
+    pub fn disconnect_like(&self) {
+        let widget = self.imp();
+        if let Some(handler_id) = widget.like_handler_id.borrow_mut().take() {
+            widget.like_btn.disconnect(handler_id);
+        }
+    }
+
     fn set_show_cover(&self, show_cover: bool) {
         let song_class = "song--cover";
         if show_cover {
@@ -187,6 +228,7 @@ impl SongWidget {
         model.bind_duration(&*widget.song_length, "label");
         model.bind_playing(self, "playing");
         model.bind_selected(self, "selected");
+        model.bind_liked(self, "liked");
 
         self.set_show_cover(show_cover);
         if show_cover {

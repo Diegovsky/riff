@@ -96,6 +96,27 @@ template $SongWidget : Grid {
     ]
   }
 
+  Button like_btn {
+    icon-name: "non-starred-symbolic";
+    has-frame: false;
+    hexpand: false;
+    halign: center;
+    valign: center;
+    tooltip-text: "Like";
+
+    layout {
+      row-span: "2";
+      column: "3";
+      row: "0";
+    }
+
+    styles [
+      "circular",
+      "flat",
+      "song__like",
+    ]
+  }
+
   Label song_length {
     sensitive: false;
     label: "0∶00";
@@ -106,7 +127,7 @@ template $SongWidget : Grid {
 
     layout {
       row-span: "2";
-      column: "3";
+      column: "4";
       row: "0";
     }
 
@@ -127,7 +148,7 @@ template $SongWidget : Grid {
 
     layout {
       row-span: "2";
-      column: "4";
+      column: "5";
       row: "0";
     }
 

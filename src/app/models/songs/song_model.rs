@@ -27,12 +27,20 @@ impl SongModel {
         self.set_property("selected", is_selected);
     }
 
+    pub fn set_liked(&self, is_liked: bool) {
+        self.set_property("liked", is_liked);
+    }
+
     pub fn get_playing(&self) -> bool {
         self.property("playing")
     }
 
     pub fn get_selected(&self) -> bool {
         self.property("selected")
+    }
+
+    pub fn get_liked(&self) -> bool {
+        self.property("liked")
     }
 
     pub fn get_id(&self) -> String {
@@ -82,6 +90,14 @@ impl SongModel {
     pub fn bind_selected(&self, o: &impl ObjectType, property: &str) {
         self.imp().push_binding(
             self.bind_property("selected", o, property)
+                .flags(glib::BindingFlags::DEFAULT | glib::BindingFlags::SYNC_CREATE)
+                .build(),
+        );
+    }
+
+    pub fn bind_liked(&self, o: &impl ObjectType, property: &str) {
+        self.imp().push_binding(
+            self.bind_property("liked", o, property)
                 .flags(glib::BindingFlags::DEFAULT | glib::BindingFlags::SYNC_CREATE)
                 .build(),
         );
@@ -150,7 +166,7 @@ mod imp {
     }
 
     lazy_static! {
-        static ref PROPERTIES: [glib::ParamSpec; 8] = [
+        static ref PROPERTIES: [glib::ParamSpec; 9] = [
             glib::ParamSpecString::builder("id").read_only().build(),
             glib::ParamSpecUInt::builder("index").read_only().build(),
             glib::ParamSpecString::builder("title").read_only().build(),
@@ -167,6 +183,9 @@ mod imp {
             glib::ParamSpecBoolean::builder("selected")
                 .readwrite()
                 .build(),
+            glib::ParamSpecBoolean::builder("liked")
+                .readwrite()
+                .build(),
         ];
     }
 
@@ -181,20 +200,45 @@ mod imp {
                     let is_playing = value
                         .get()
                         .expect("type conformity checked by `Object::set_property`");
-                    let SongState { is_selected, .. } = self.state.get();
+                    let SongState {
+                        is_selected,
+                        is_liked,
+                        ..
+                    } = self.state.get();
                     self.state.set(SongState {
                         is_playing,
                         is_selected,
+                        is_liked,
                     });
                 }
                 "selected" => {
                     let is_selected = value
                         .get()
                         .expect("type conformity checked by `Object::set_property`");
-                    let SongState { is_playing, .. } = self.state.get();
+                    let SongState {
+                        is_playing,
+                        is_liked,
+                        ..
+                    } = self.state.get();
                     self.state.set(SongState {
                         is_playing,
                         is_selected,
+                        is_liked,
+                    });
+                }
+                "liked" => {
+                    let is_liked = value
+                        .get()
+                        .expect("type conformity checked by `Object::set_property`");
+                    let SongState {
+                        is_playing,
+                        is_selected,
+                        ..
+                    } = self.state.get();
+                    self.state.set(SongState {
+                        is_playing,
+                        is_selected,
+                        is_liked,
                     });
                 }
                 _ => unimplemented!(),
@@ -251,6 +295,7 @@ mod imp {
                     .to_value(),
                 "playing" => self.state.get().is_playing.to_value(),
                 "selected" => self.state.get().is_selected.to_value(),
+                "liked" => self.state.get().is_liked.to_value(),
                 _ => unimplemented!(),
             }
         }
