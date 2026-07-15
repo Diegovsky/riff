@@ -228,10 +228,7 @@ impl PlaylistModel for NowPlayingModel {
         self.base.toggle_song_like(&songs, id);
     }
 
-    fn actions_for(&self, id: &str) -> Option<gio::ActionGroup> {
-        let queue = self.queue();
-        let song = queue.songs().get(id)?;
-        let song = song.description();
+    fn actions_for(&self, song: &SongDescription) -> Option<gio::ActionGroup> {
         let group = SimpleActionGroup::new();
         for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
             group.add_action(&a);
@@ -242,10 +239,7 @@ impl PlaylistModel for NowPlayingModel {
         Some(group.upcast())
     }
 
-    fn menu_for(&self, id: &str) -> Option<gio::MenuModel> {
-        let queue = self.queue();
-        let song = queue.songs().get(id)?;
-        let song = song.description();
+    fn menu_for(&self, song: &SongDescription) -> Option<gio::MenuModel> {
         let menu = gio::Menu::new();
         menu.append(Some(&*labels::VIEW_ALBUM), Some("song.view_album"));
         for artist in song.artists.iter() {
