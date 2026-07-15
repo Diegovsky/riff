@@ -20,7 +20,11 @@ Tab completion:
     Run `spotify-cli --setup-completions` to enable tab completion for
     API endpoints in your shell. Supports bash and zsh.
 
-Dependencies: pip install secretstorage requests rich
+Dependencies:
+    If you want to use pip:
+        pip install .
+    With uv:
+        uv sync
 """
 
 import argparse
@@ -34,49 +38,24 @@ import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import (
+    parse_qs,
+    urlparse,
+    urlsplit,
+    urljoin,
+    urlunsplit,
+    SplitResult,
+    urlencode,
+)
+
+import secretstorage
+import requests
+from rich.console import Console
+from rich.json import JSON as RichJSON
 
 
-# --- Dependency Imports ---
-
-def _check_imports():
-    """Lazy-check required dependencies. Called after argparse so --help works."""
-    global requests, secretstorage, HAS_RICH
-    global Console, RichJSON, console
-
-    try:
-        import requests as _requests
-        requests = _requests
-    except ImportError:
-        sys.exit("Error: 'requests' is required. Install with: pip install requests")
-
-    try:
-        import secretstorage as _secretstorage
-        secretstorage = _secretstorage
-    except ImportError:
-        sys.exit("Error: 'secretstorage' is required. Install with: pip install secretstorage")
-
-    try:
-        from rich.console import Console as _Console
-        from rich.json import JSON as _RichJSON
-        Console = _Console
-        RichJSON = _RichJSON
-        HAS_RICH = True
-    except ImportError:
-        HAS_RICH = False
-        Console = None
-        RichJSON = None
-
-    console = Console(stderr=True) if HAS_RICH else None
-
-
-# These will be set by _check_imports()
-requests = None
-secretstorage = None
-HAS_RICH = False
-Console = None
-RichJSON = None
-console = None
+HAS_RICH = True
+console = Console(stderr=True)
 
 # --- Constants (shared with Riff) ---
 
@@ -108,7 +87,9 @@ DEFAULT_PAGE_LIMIT = 2
 
 # OpenAPI spec for endpoint discovery
 OPENAPI_SPEC_URL = "https://raw.githubusercontent.com/sonallux/spotify-web-api/main/official-spotify-open-api.yml"
-CACHE_DIR = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "spotify-cli")
+CACHE_DIR = os.path.join(
+    os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "spotify-cli"
+)
 ENDPOINTS_CACHE = os.path.join(CACHE_DIR, "endpoints.json")
 # Cache for 24 hours
 ENDPOINTS_CACHE_TTL = 24 * 3600
@@ -204,7 +185,10 @@ def get_endpoint_help(path):
     if not os.path.exists(spec_cache):
         fetch_endpoints(quiet=True)
     if not os.path.exists(spec_cache):
-        print("Could not load API spec. Try again after running a request.", file=sys.stderr)
+        print(
+            "Could not load API spec. Try again after running a request.",
+            file=sys.stderr,
+        )
         return
 
     with open(spec_cache) as f:
@@ -228,7 +212,9 @@ def get_endpoint_help(path):
     block_lines = []
     for i in range(path_line_idx + 1, len(lines)):
         line = lines[i]
-        if re.match(r"^  /[^:]+:", line) or (line and not line.startswith(" ") and ":" in line):
+        if re.match(r"^  /[^:]+:", line) or (
+            line and not line.startswith(" ") and ":" in line
+        ):
             break
         block_lines.append(line)
 
@@ -289,9 +275,15 @@ def _parse_methods_from_block(block_lines):
         if method_match:
             if current:
                 methods.append(current)
-            current = {"method": method_match.group(1).upper(), "summary": None,
-                       "description": "", "parameters": [], "deprecated": False,
-                       "_in_desc": False, "_in_params": False}
+            current = {
+                "method": method_match.group(1).upper(),
+                "summary": None,
+                "description": "",
+                "parameters": [],
+                "deprecated": False,
+                "_in_desc": False,
+                "_in_params": False,
+            }
             continue
 
         if not current:
@@ -299,7 +291,7 @@ def _parse_methods_from_block(block_lines):
 
         if re.match(r"^\s+deprecated:\s*true", line):
             current["deprecated"] = True
-        elif (m := re.match(r"^\s+summary:\s*\|?\s*(.+)", line)):
+        elif m := re.match(r"^\s+summary:\s*\|?\s*(.+)", line):
             current["summary"] = m.group(1).strip()
         elif re.match(r"^\s+description:\s*\|", line):
             current["_in_desc"] = True
@@ -313,11 +305,23 @@ def _parse_methods_from_block(block_lines):
             current["_in_params"] = True
             current["_in_desc"] = False
         elif current["_in_params"]:
-            if (m := re.match(r"^\s+- name:\s*(.+)", line)):
-                current["parameters"].append({"name": m.group(1).strip(), "in": "query", "required": False})
-            elif (m := re.match(r"^\s+- \$ref:\s*['\"]#/components/parameters/(\w+)['\"]", line)):
-                current["parameters"].append({"name": _ref_to_param_name(m.group(1)), "in": "query", "required": False})
-            elif (m := re.match(r"^\s+required:\s*(true|false)", line)) and current["parameters"]:
+            if m := re.match(r"^\s+- name:\s*(.+)", line):
+                current["parameters"].append(
+                    {"name": m.group(1).strip(), "in": "query", "required": False}
+                )
+            elif m := re.match(
+                r"^\s+- \$ref:\s*['\"]#/components/parameters/(\w+)['\"]", line
+            ):
+                current["parameters"].append(
+                    {
+                        "name": _ref_to_param_name(m.group(1)),
+                        "in": "query",
+                        "required": False,
+                    }
+                )
+            elif (m := re.match(r"^\s+required:\s*(true|false)", line)) and current[
+                "parameters"
+            ]:
                 current["parameters"][-1]["required"] = m.group(1) == "true"
             elif (m := re.match(r"^\s+in:\s*(\w+)", line)) and current["parameters"]:
                 current["parameters"][-1]["in"] = m.group(1)
@@ -345,7 +349,9 @@ def _match_endpoint_pattern(user_path, endpoint_list):
         ep_parts = ep.split("/")
         if len(ep_parts) != len(user_parts):
             continue
-        if all(ep_p.startswith("{") or up == ep_p for up, ep_p in zip(user_parts, ep_parts)):
+        if all(
+            ep_p.startswith("{") or up == ep_p for up, ep_p in zip(user_parts, ep_parts)
+        ):
             return ep
     return None
 
@@ -353,6 +359,7 @@ def _match_endpoint_pattern(user_path, endpoint_list):
 def _ref_to_param_name(ref_name):
     """Convert a parameter $ref name like 'QueryMarket' to 'market'."""
     import re
+
     # Strip prefix (Path, Query)
     name = re.sub(r"^(Query|Path)", "", ref_name)
     # CamelCase to lowercase with hyphens
@@ -363,18 +370,40 @@ def _ref_to_param_name(ref_name):
 def _fallback_endpoints():
     """Minimal hardcoded endpoint list as fallback."""
     return [
-        "v1/me", "v1/me/playlists", "v1/me/albums", "v1/me/tracks",
-        "v1/me/following", "v1/me/top/artists", "v1/me/top/tracks",
-        "v1/me/player", "v1/me/player/play", "v1/me/player/pause",
-        "v1/me/player/next", "v1/me/player/previous", "v1/me/player/shuffle",
-        "v1/me/player/repeat", "v1/me/player/volume", "v1/me/player/queue",
-        "v1/me/player/recently-played", "v1/me/player/currently-playing",
-        "v1/me/player/devices", "v1/albums/{id}", "v1/albums/{id}/tracks",
-        "v1/artists/{id}", "v1/artists/{id}/albums", "v1/artists/{id}/top-tracks",
-        "v1/artists/{id}/related-artists", "v1/playlists/{playlist_id}",
-        "v1/playlists/{playlist_id}/tracks", "v1/tracks/{id}", "v1/search",
-        "v1/browse/new-releases", "v1/browse/categories", "v1/recommendations",
-        "v1/users/{user_id}", "v1/users/{user_id}/playlists",
+        "v1/me",
+        "v1/me/playlists",
+        "v1/me/albums",
+        "v1/me/tracks",
+        "v1/me/following",
+        "v1/me/top/artists",
+        "v1/me/top/tracks",
+        "v1/me/player",
+        "v1/me/player/play",
+        "v1/me/player/pause",
+        "v1/me/player/next",
+        "v1/me/player/previous",
+        "v1/me/player/shuffle",
+        "v1/me/player/repeat",
+        "v1/me/player/volume",
+        "v1/me/player/queue",
+        "v1/me/player/recently-played",
+        "v1/me/player/currently-playing",
+        "v1/me/player/devices",
+        "v1/albums/{id}",
+        "v1/albums/{id}/tracks",
+        "v1/artists/{id}",
+        "v1/artists/{id}/albums",
+        "v1/artists/{id}/top-tracks",
+        "v1/artists/{id}/related-artists",
+        "v1/playlists/{playlist_id}",
+        "v1/playlists/{playlist_id}/tracks",
+        "v1/tracks/{id}",
+        "v1/search",
+        "v1/browse/new-releases",
+        "v1/browse/categories",
+        "v1/recommendations",
+        "v1/users/{user_id}",
+        "v1/users/{user_id}/playlists",
     ]
 
 
@@ -387,22 +416,26 @@ def get_completions_for(prefix):
 
 # --- Shell Completion ---
 
+
 def generate_bash_completion():
     """Generate a bash completion script for spotify-cli."""
     script_path = os.path.abspath(__file__)
     script_name = os.path.basename(__file__)
     # Build a deduplicated list of names to register completion for
-    names = list(dict.fromkeys([
-        "spotify-cli",
-        script_name,
-        script_path,
-        f"./{script_name}",
-        f"./scripts/{script_name}",
-        f"scripts/{script_name}",
-    ]))
+    names = list(
+        dict.fromkeys(
+            [
+                "spotify-cli",
+                script_name,
+                script_path,
+                f"./{script_name}",
+                f"./scripts/{script_name}",
+                f"scripts/{script_name}",
+            ]
+        )
+    )
     complete_lines = "\n".join(
-        f'complete -o nospace -F _spotify_cli_completions {name}'
-        for name in names
+        f"complete -o nospace -F _spotify_cli_completions {name}" for name in names
     )
     return f'''# Bash completion for spotify-cli
 # Source this file or add to ~/.bashrc:
@@ -490,8 +523,7 @@ def setup_shell_completions():
         try:
             ppid = os.getppid()
             result = subprocess.run(
-                ["ps", "-p", str(ppid), "-o", "comm="],
-                capture_output=True, text=True
+                ["ps", "-p", str(ppid), "-o", "comm="], capture_output=True, text=True
             )
             detected = result.stdout.strip()
             if detected in ("bash", "zsh"):
@@ -500,7 +532,10 @@ def setup_shell_completions():
             pass
 
     if shell_name not in ("bash", "zsh"):
-        print(f"Could not detect your shell (got: {shell_name or 'unknown'}).", file=sys.stderr)
+        print(
+            f"Could not detect your shell (got: {shell_name or 'unknown'}).",
+            file=sys.stderr,
+        )
         print("Supported shells: bash, zsh", file=sys.stderr)
         print(f"\nYou can manually generate a completion script with:", file=sys.stderr)
         print(f"  {script_path} --completions bash", file=sys.stderr)
@@ -519,7 +554,9 @@ def setup_shell_completions():
         rc_file = os.path.expanduser("~/.bashrc")
         source_line = f'eval "$("{script_path}" --completions bash)"'
         # Prefer the completions directory if it exists or can be created
-        use_dir = os.path.isdir(os.path.dirname(completion_dir)) or os.path.isdir(completion_dir)
+        use_dir = os.path.isdir(os.path.dirname(completion_dir)) or os.path.isdir(
+            completion_dir
+        )
 
         if use_dir:
             if not _install_completion_file(
@@ -548,7 +585,10 @@ def setup_shell_completions():
         else:
             # Offer both options
             print(f"\nI can set up completions in one of two ways:", file=sys.stderr)
-            print(f"  1. Create {completion_dir}/ and add it to fpath (recommended)", file=sys.stderr)
+            print(
+                f"  1. Create {completion_dir}/ and add it to fpath (recommended)",
+                file=sys.stderr,
+            )
             print(f"  2. Add a source line to {rc_file}", file=sys.stderr)
             try:
                 choice = input("\nWhich option? [1/2] ").strip()
@@ -571,7 +611,9 @@ def setup_shell_completions():
     # Pre-fetch endpoints so first tab press is fast
     print("\nPre-caching API endpoints...", file=sys.stderr)
     endpoints = fetch_endpoints()
-    print(f"Done! {len(endpoints)} endpoints available for completion.", file=sys.stderr)
+    print(
+        f"Done! {len(endpoints)} endpoints available for completion.", file=sys.stderr
+    )
     print(f"\nRestart your shell or run: exec {shell_name}", file=sys.stderr)
 
 
@@ -679,6 +721,14 @@ def parse_args():
     parser.add_argument(
         "-X", "--method", default="GET", help="HTTP method (default: GET)"
     )
+    parser.add_argument(
+        "-p",
+        "--param",
+        help="Add a search param to the URL",
+        action="append",
+        default=[],
+        dest="params",
+    )
     parser.add_argument("-d", "--data", help="Request body (JSON string)")
     parser.add_argument(
         "--raw", action="store_true", help="Output raw JSON without syntax highlighting"
@@ -713,6 +763,28 @@ def parse_args():
         help="List API endpoints matching PREFIX (used by shell completion)",
     )
     return parser.parse_args()
+
+
+def build_url(args: argparse.Namespace) -> str:
+    # Auto-prepend Spotify API base URL if not a full URL
+    SPOTIFY_API_BASE = "https://api.spotify.com"
+    url: SplitResult = urlsplit(args.url)
+
+    params = args.params
+    if url.query:
+        params += url.query.split("&")
+    params: list[list[str]] = [par.split("=") for par in params]
+    params: dict[str, str] = {par[0]: par[1] for par in params}
+
+    if not url.scheme:
+        url = url._replace(scheme=SPOTIFY_API_BASE, path=f"/{url.path}")
+
+    # Add default page limit if not already specified
+    if args.method.upper() == "GET":
+        params["limit"] = str(DEFAULT_PAGE_LIMIT)
+
+    query = urlencode(params)
+    return urlunsplit(url._replace(query=query)).removesuffix("/")
 
 
 # --- Keyring (Secret Service / D-Bus) — shared with Riff ---
@@ -756,8 +828,10 @@ def save_credentials(creds):
         for item in collection.search_items(KEYRING_ATTRS):
             item.delete()
         collection.create_item(
-            "Spotify Credentials", KEYRING_ATTRS,
-            json.dumps(creds).encode("utf-8"), replace=True
+            "Spotify Credentials",
+            KEYRING_ATTRS,
+            json.dumps(creds).encode("utf-8"),
+            replace=True,
         )
         return True
     except Exception:
@@ -841,7 +915,9 @@ def do_oauth_pkce_flow(verbose=False):
         "code_challenge_method": "S256",
         "code_challenge": code_challenge,
     }
-    auth_request_url = f"{AUTH_URL}?{'&'.join(f'{k}={v}' for k, v in auth_params.items())}"
+    auth_request_url = (
+        f"{AUTH_URL}?{'&'.join(f'{k}={v}' for k, v in auth_params.items())}"
+    )
 
     # Start local server to catch the redirect
     server = HTTPServer(("127.0.0.1", 8898), OAuthCallbackHandler)
@@ -849,7 +925,9 @@ def do_oauth_pkce_flow(verbose=False):
     server_thread.start()
 
     print("Opening browser for Spotify login...", file=sys.stderr)
-    print(f"If the browser doesn't open, visit:\n  {auth_request_url}\n", file=sys.stderr)
+    print(
+        f"If the browser doesn't open, visit:\n  {auth_request_url}\n", file=sys.stderr
+    )
     webbrowser.open(auth_request_url)
 
     # Wait for the callback
@@ -882,7 +960,9 @@ def do_oauth_pkce_flow(verbose=False):
 
     resp = requests.post(TOKEN_URL, data=token_data)
     if resp.status_code != 200:
-        print(f"Token exchange failed ({resp.status_code}): {resp.text}", file=sys.stderr)
+        print(
+            f"Token exchange failed ({resp.status_code}): {resp.text}", file=sys.stderr
+        )
         return None
 
     token_json = resp.json()
@@ -1048,7 +1128,9 @@ def _truncate_long_arrays(data):
             if isinstance(value, list) and len(value) > TRUNCATE_THRESHOLD:
                 # Check if it's an array of scalars (strings, numbers, bools)
                 if all(isinstance(item, (str, int, float, bool)) for item in value):
-                    result[key] = value[:TRUNCATE_THRESHOLD] + [f"... ({len(value)} total)"]
+                    result[key] = value[:TRUNCATE_THRESHOLD] + [
+                        f"... ({len(value)} total)"
+                    ]
                 else:
                     result[key] = [_truncate_long_arrays(item) for item in value]
             elif isinstance(value, (dict, list)):
@@ -1088,7 +1170,12 @@ def find_next_url(data):
             return data["next"]
         # Check nested objects that might have pagination
         for key, value in data.items():
-            if isinstance(value, dict) and "next" in value and value["next"] and "items" in value:
+            if (
+                isinstance(value, dict)
+                and "next" in value
+                and value["next"]
+                and "items" in value
+            ):
                 return value["next"]
     return None
 
@@ -1150,9 +1237,6 @@ def main():
             print(ep)
         return
 
-    # Lazy-load dependencies (so --help works without them)
-    _check_imports()
-
     # Handle --logout
     if args.logout:
         if not clear_credentials():
@@ -1178,26 +1262,13 @@ def main():
     if not args.url:
         sys.exit("Error: URL or path is required. Use --help for usage.")
 
-    # Auto-prepend Spotify API base URL if not a full URL
-    SPOTIFY_API_BASE = "https://api.spotify.com"
-    url = args.url
-    parsed_url = urlparse(url)
-    if not parsed_url.scheme:
-        # It's a path — prepend the base URL
-        url = f"{SPOTIFY_API_BASE}/{url.lstrip('/')}"
-
-    # Add default page limit if not already specified
-    if "limit=" not in url and args.method.upper() == "GET":
-        separator = "&" if "?" in url else "?"
-        url = f"{url}{separator}limit={DEFAULT_PAGE_LIMIT}"
-
     creds = get_valid_credentials(verbose=args.verbose)
     if not creds:
         sys.exit("Error: Could not obtain valid credentials.")
 
     # Make the request
     method = args.method.upper()
-    current_url = url
+    current_url = build_url(args)
     page_num = 1
 
     while True:
@@ -1213,17 +1284,21 @@ def main():
             if new_creds:
                 creds = new_creds
                 resp = make_request(
-                    current_url, method, args.data, creds["access_token"], verbose=args.verbose
+                    current_url,
+                    method,
+                    args.data,
+                    creds["access_token"],
+                    verbose=args.verbose,
                 )
             else:
-                sys.exit("Error: Authentication failed. Try --logout and re-authenticate.")
+                sys.exit(
+                    "Error: Authentication failed. Try --logout and re-authenticate."
+                )
 
         # Handle rate limiting
         if resp.status_code == 429:
             retry_after = int(resp.headers.get("Retry-After", 5))
-            print(
-                f"Rate limited. Retrying in {retry_after}s...", file=sys.stderr
-            )
+            print(f"Rate limited. Retrying in {retry_after}s...", file=sys.stderr)
             time.sleep(retry_after)
             continue
 
@@ -1266,7 +1341,9 @@ def main():
 
         # Prompt for next page
         try:
-            answer = input(f"\n--- Page {page_num}{info_str} --- Fetch next page? [Y/n] ")
+            answer = input(
+                f"\n--- Page {page_num}{info_str} --- Fetch next page? [Y/n] "
+            )
         except (EOFError, KeyboardInterrupt):
             print("", file=sys.stderr)
             break
