@@ -219,6 +219,15 @@ impl PlaylistModel for NowPlayingModel {
         self.enable_selection_with_context(self.current_selection_context())
     }
 
+    fn is_song_liked(&self, id: &str) -> bool {
+        self.base.is_song_liked(id)
+    }
+
+    fn toggle_song_like(&self, id: &str) {
+        let songs = PlaylistModel::song_list_model(self);
+        self.base.toggle_song_like(&songs, id);
+    }
+
     fn actions_for(&self, id: &str) -> Option<gio::ActionGroup> {
         let queue = self.queue();
         let song = queue.songs().get(id)?;

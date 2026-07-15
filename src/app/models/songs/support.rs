@@ -242,7 +242,12 @@ impl SongList {
             });
         self.last_batch_key = batches.len().saturating_sub(1);
         self.batches = batches;
-        let removed = ids.len();
+        // Drop the removed songs from the id->model lookup as well, otherwise
+        // `get()` would keep returning stale entries after removal.
+        let removed = ids
+            .iter()
+            .filter(|id| self.indexed_songs.remove(*id).is_some())
+            .count();
         self.total = self.total.saturating_sub(removed);
         self.total_loaded = self.total_loaded.saturating_sub(removed);
         // Lazy computation of the affected range, basically assume everything has changed
@@ -625,6 +630,21 @@ mod tests {
         assert_eq!(list_iter.next().unwrap().description().id, "song2");
         assert_eq!(list_iter.next().unwrap().description().id, "song3");
         assert!(list_iter.next().is_none());
+    }
+
+    #[test]
+    fn test_remove_clears_lookup() {
+        let mut list = SongList::new_from_initial_batch(batch(0));
+        list.add(batch(1));
+
+        assert!(list.get("song0").is_some());
+
+        list.remove(&["song0".to_string()]);
+
+        // `get` must not return songs that were removed, otherwise callers
+        // relying on membership (e.g. liked-song checks) get stale results.
+        assert!(list.get("song0").is_none());
+        assert!(list.get("song1").is_some());
     }
 
     #[test]

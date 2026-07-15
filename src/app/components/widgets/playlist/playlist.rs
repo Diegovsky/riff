@@ -6,7 +6,7 @@ use std::rc::Rc;
 use crate::app::components::utils::{ancestor, AnimatorDefault};
 use crate::app::components::{Component, EventListener, SongWidget};
 use crate::app::models::{SongListModel, SongModel, SongState};
-use crate::app::state::{PlaybackEvent, SelectionEvent, SelectionState};
+use crate::app::state::{BrowserEvent, PlaybackEvent, SelectionEvent, SelectionState};
 use crate::app::{AppEvent, Worker};
 
 pub trait PlaylistModel {
@@ -49,15 +49,23 @@ pub trait PlaylistModel {
             .unwrap_or(false)
     }
 
+    fn is_song_liked(&self, _id: &str) -> bool {
+        false
+    }
+
+    fn toggle_song_like(&self, _id: &str) {}
+
     fn song_state(&self, id: &str) -> SongState {
         let is_playing = self.current_song_id().map(|s| s.eq(id)).unwrap_or(false);
         let is_selected = self
             .selection()
             .map(|s| s.is_song_selected(id))
             .unwrap_or(false);
+        let is_liked = self.is_song_liked(id);
         SongState {
             is_selected,
             is_playing,
+            is_liked,
         }
     }
 
@@ -113,9 +121,18 @@ where
                 let widget = item.child().unwrap().downcast::<SongWidget>().unwrap();
                 widget.bind(&song_model, worker.clone(), model.show_song_covers());
 
-                let id = &song_model.get_id();
-                widget.set_actions(model.actions_for(id).as_ref());
-                widget.set_menu(model.menu_for(id).as_ref());
+                let id = song_model.get_id();
+                widget.set_actions(model.actions_for(&id).as_ref());
+                widget.set_menu(model.menu_for(&id).as_ref());
+
+                let like_id = id.clone();
+                widget.connect_like(clone!(
+                    #[weak]
+                    model,
+                    move || {
+                        model.toggle_song_like(&like_id);
+                    }
+                ));
             }
         ));
 
@@ -123,6 +140,8 @@ where
             let item = item.downcast_ref::<gtk::ListItem>().unwrap();
             let song_model = item.item().unwrap().downcast::<SongModel>().unwrap();
             song_model.unbind_all();
+            let widget = item.child().unwrap().downcast::<SongWidget>().unwrap();
+            widget.disconnect_like();
         });
 
         listview.connect_activate(clone!(
@@ -230,10 +249,12 @@ impl SongModel {
         SongState {
             is_playing,
             is_selected,
+            is_liked,
         }: SongState,
     ) {
         self.set_playing(is_playing);
         self.set_selected(is_selected);
+        self.set_liked(is_liked);
     }
 }
 
@@ -257,6 +278,9 @@ where
             }
             AppEvent::SelectionEvent(SelectionEvent::SelectionModeChanged(_)) => {
                 Self::set_selection_active(&self.listview, self.model.is_selection_enabled());
+                self.update_list();
+            }
+            AppEvent::BrowserEvent(BrowserEvent::SavedTracksUpdated) => {
                 self.update_list();
             }
             _ => {}
