@@ -15,8 +15,7 @@
     "--socket=pulseaudio",
     "--filesystem=xdg-run/pipewire-0:ro",
     "--device=dri",
-    "--talk-name=org.freedesktop.secrets",
-    "--own-name=org.mpris.MediaPlayer2.Riff"
+    "--talk-name=org.freedesktop.secrets"
   ],
   "separate-locales": false,
   "build-options": {
@@ -27,29 +26,13 @@
       "RUST_LOG": "riff=debug"
     },
     "strip": false,
-    "no-debuginfo": true
+    "no-debuginfo": false
   },
-  "cleanup": [
-    "/include",
-    "/lib/pkgconfig",
-    "/man",
-    "/share/doc",
-    "/share/gtk-doc",
-    "/share/man",
-    "/share/pkgconfig",
-    "*.la",
-    "*.a"
-  ],
   "modules": [
     {
       "name": "riff",
+      "builddir": true,
       "buildsystem": "meson",
-      "build-options": {
-        "append-path": "/usr/lib/sdk/rust-stable/bin",
-        "env": {
-          "CARGO_NET_OFFLINE": "true"
-        }
-      },
       "config-opts": [
         "-Doffline=true",
         "-Dbuildtype=debug"

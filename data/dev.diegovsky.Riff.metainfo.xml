@@ -58,6 +58,12 @@
   </screenshots>
 
   <releases>
+    <release version="26.06" date="2026-06-15">
+        <description>
+            TODO!
+        </description>
+    </release>
+
     <release version="26.03" date="2026-03-25">
         <description>
             <p>This new maintenance release brings simple but fundamental changes.</p>
