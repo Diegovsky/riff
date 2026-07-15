@@ -19,6 +19,9 @@ pub struct PlaybackState {
     repeat: RepeatMode,
     is_playing: bool,
     is_shuffled: bool,
+    // Last volume that was applied (0.0..=1.0). Initialised to a sentinel
+    // outside the valid range so the first `SetVolume` always propagates.
+    volume: f64,
 }
 
 // Most mutatings methods shouldn't be pub
@@ -284,6 +287,7 @@ impl Default for PlaybackState {
             repeat: RepeatMode::None,
             is_playing: false,
             is_shuffled: false,
+            volume: -1.0,
         }
     }
 }
@@ -472,7 +476,17 @@ impl UpdatableState for PlaybackState {
                 vec![PlaybackEvent::SeekSynced(pos)]
             }
             PlaybackAction::SetVolume(volume) => {
-                vec![PlaybackEvent::VolumeSet(volume)]
+                // Idempotency guard: only emit (and thus touch dconf, the
+                // mixer, the Web API and MPRIS/D-Bus) when the volume actually
+                // changes. Rapid volume input (e.g. mouse-wheel scrolling the
+                // slider) would otherwise fan out a storm of `VolumeSet` events
+                // and MPRIS `PropertiesChanged` signals.
+                if self.volume == volume {
+                    vec![]
+                } else {
+                    self.volume = volume;
+                    vec![PlaybackEvent::VolumeSet(volume)]
+                }
             }
 
             PlaybackAction::SetAvailableDevices(list) => {
