@@ -117,6 +117,7 @@ impl SearchResultsWidget {
         results: &ResultSection,
         store: &gio::ListStore,
         shape: ImageShape,
+        size: CardSize,
         on_pressed: F,
     ) where
         F: Fn(&CardModel) + Clone + 'static,
@@ -124,13 +125,7 @@ impl SearchResultsWidget {
         let store_clone = store.clone();
         results.bind_model(Some(store), move |item| {
             wrap_flowbox_item(item, |model: &CardModel| {
-                CardWidget::for_model(
-                    model,
-                    worker.clone(),
-                    shape,
-                    CardLayout::Vertical,
-                    CardSize::Large,
-                )
+                CardWidget::for_model(model, worker.clone(), shape, CardLayout::Vertical, size)
             })
         });
         results.connect_child_activated(move |_, child| {
@@ -183,6 +178,7 @@ impl SearchResults {
             &widget.imp().album_results,
             &album_results_model,
             ImageShape::Square,
+            CardSize::Large,
             clone!(
                 #[weak]
                 model,
@@ -195,6 +191,7 @@ impl SearchResults {
             &widget.imp().artist_results,
             &artist_results_model,
             ImageShape::Round,
+            CardSize::Large,
             clone!(
                 #[weak]
                 model,
@@ -207,6 +204,7 @@ impl SearchResults {
             &widget.imp().track_results,
             &track_results_model,
             ImageShape::Square,
+            CardSize::Medium,
             clone!(
                 #[weak]
                 model,
