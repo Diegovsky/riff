@@ -9,10 +9,10 @@ use super::{
     SAVED_PLAYLISTS_SECTION,
 };
 use crate::app::models::{CardModel, PlaylistSummary};
-use crate::app::state::ScreenName;
+use crate::app::state::{PlaybackAction, ScreenName};
 use crate::app::{
     ActionDispatcher, AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Component,
-    EventListener, PaginationTarget,
+    EventListener, PaginationTarget, SongsSource,
 };
 use crate::feature_flags::{self, FeatureFlag};
 
@@ -96,6 +96,48 @@ impl SidebarModel {
                 api.unfollow_playlist(&id).await?;
                 Ok(AppAction::RemovePlaylist(id))
             })
+    }
+
+    pub(super) fn play_playlist(&self, id: String) {
+        let api = self.app_model.get_spotify();
+        let source = SongsSource::Playlist(id.clone());
+        self.dispatcher
+            .call_spotify_and_dispatch_many(move || async move {
+                let batch = api.get_playlist_tracks(&id, 0, 100).await?;
+                let first_id = batch.songs.first().map(|s| s.id.clone());
+                let mut actions: Vec<AppAction> = vec![
+                    PlaybackAction::SetShuffled(false).into(),
+                    PlaybackAction::LoadPagedSongs(source, batch).into(),
+                ];
+                if let Some(track_id) = first_id {
+                    actions.push(PlaybackAction::Load(track_id).into());
+                }
+                Ok(actions)
+            });
+    }
+
+    pub(super) fn shuffle_playlist(&self, id: String) {
+        let api = self.app_model.get_spotify();
+        let source = SongsSource::Playlist(id.clone());
+        self.dispatcher
+            .call_spotify_and_dispatch_many(move || async move {
+                let batch = api.get_playlist_tracks(&id, 0, 100).await?;
+                let len = batch.songs.len();
+                let track_id = if len > 0 {
+                    let index = rand::random::<usize>() % len;
+                    Some(batch.songs[index].id.clone())
+                } else {
+                    None
+                };
+                let mut actions: Vec<AppAction> = vec![
+                    PlaybackAction::SetShuffled(true).into(),
+                    PlaybackAction::LoadPagedSongs(source, batch).into(),
+                ];
+                if let Some(track_id) = track_id {
+                    actions.push(PlaybackAction::Load(track_id).into());
+                }
+                Ok(actions)
+            });
     }
 
     fn navigate(&self, dest: SidebarDestination) {
@@ -211,7 +253,14 @@ impl Sidebar {
         ));
 
         let context_menu = gtk::PopoverMenu::from_model(None::<&gio::MenuModel>);
-        context_menu.set_parent(&listbox);
+        // Parent the popover to the Box above the ScrolledWindow to avoid
+        // inheriting any scroll constraints that would add a scrollbar.
+        let sidebar_box = listbox
+            .ancestor(gtk::ScrolledWindow::static_type())
+            .and_then(|sw| sw.parent())
+            .and_downcast::<gtk::Box>()
+            .unwrap();
+        context_menu.set_parent(&sidebar_box);
         context_menu.set_has_arrow(false);
 
         let context_row: Rc<RefCell<Option<SidebarRow>>> = Default::default();
@@ -252,12 +301,20 @@ impl Sidebar {
                 context_row.replace(Some(row.clone()));
 
                 let actions = playlist_actions::build_playlist_actions(&id, &model);
-                listbox.insert_action_group("playlist", Some(&actions));
+                context_menu.insert_action_group("playlist", Some(&actions));
 
                 let is_owned = model.is_playlist_owned(&id);
                 context_menu.set_menu_model(Some(&playlist_actions::build_playlist_menu(is_owned)));
 
-                let rect = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
+                // Translate coordinates from listbox space to the popover parent (sidebar Box) space
+                let popover_parent = context_menu.parent().unwrap();
+                let translated = listbox
+                    .compute_point(
+                        &popover_parent,
+                        &gtk::graphene::Point::new(x as f32, y as f32),
+                    )
+                    .unwrap_or_else(|| gtk::graphene::Point::new(x as f32, y as f32));
+                let rect = gdk::Rectangle::new(translated.x() as i32, translated.y() as i32, 1, 1);
                 context_menu.set_pointing_to(Some(&rect));
                 context_menu.popup();
             }
