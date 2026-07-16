@@ -1,5 +1,6 @@
 // Domain models
 mod main;
+use glib::subclass::types::ObjectSubclassIsExt;
 pub use main::*;
 
 // Shared enums (used by UI, state, and settings)
@@ -97,6 +98,25 @@ impl From<&ArtistSummary> for CardModel {
             "",
             None,
             Some(artist.popularity),
+            None,
+        )
+    }
+}
+
+impl From<&SongDescription> for CardModel {
+    fn from(desc: &SongDescription) -> Self {
+        let photo = desc
+            .art
+            .as_ref()
+            .and_then(|s| s.best_for_width(IMAGE_SIZE))
+            .map(str::to_owned);
+        CardModel::new(
+            &desc.id,
+            photo.as_ref(),
+            &desc.title,
+            &desc.album.name,
+            None,
+            None,
             None,
         )
     }

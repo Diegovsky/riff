@@ -280,7 +280,7 @@ mod imp {
                     .song
                     .borrow()
                     .as_ref()
-                    .map(|s| format_duration(s.duration.into()))
+                    .map(|s| format_duration(s.duration_ms.into()))
                     .expect("song set at constructor")
                     .to_value(),
                 "art" => self

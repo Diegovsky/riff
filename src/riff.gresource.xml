@@ -14,6 +14,7 @@
     <file alias="components/pitch.ui">app/components/pages/settings/pitch.ui</file>
     <!-- search -->
     <file alias="components/search.ui">app/components/pages/search/search.ui</file>
+    <file alias="components/result_section.ui">app/components/pages/search/result_section.ui</file>
     <!-- card -->
     <file alias="components/card.css">app/components/widgets/card/card.css</file>
     <file alias="components/card.ui">app/components/widgets/card/card.ui</file>

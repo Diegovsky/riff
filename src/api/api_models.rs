@@ -47,34 +47,15 @@ pub struct Name<'a> {
     pub name: &'a str,
 }
 
-pub enum SearchType {
-    Artist,
-    Album,
-}
-
-impl SearchType {
-    fn into_string(self) -> &'static str {
-        match self {
-            Self::Artist => "artist",
-            Self::Album => "album",
-        }
-    }
-}
-
 pub struct SearchQuery {
     pub query: String,
-    pub types: Vec<SearchType>,
     pub limit: usize,
     pub offset: usize,
 }
 
 impl SearchQuery {
     pub fn into_query_string(self) -> String {
-        let mut types = self
-            .types
-            .into_iter()
-            .fold(String::new(), |acc, t| acc + t.into_string() + ",");
-        types.pop();
+        let types = "album,track,artist";
 
         let re = Regex::new(r"(\W|\s)+").unwrap();
         let query = re.replace_all(&self.query[..], " ");
@@ -430,8 +411,9 @@ impl FailibleTrackItem {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct RawSearchResults {
-    pub albums: Option<Page<Album>>,
-    pub artists: Option<Page<Artist>>,
+    pub albums: Page<Album>,
+    pub artists: Page<Artist>,
+    pub tracks: Page<TrackItem>,
 }
 
 impl From<Artist> for ArtistSummary {
@@ -565,7 +547,7 @@ where
                     title: name,
                     artists,
                     album: album_ref,
-                    duration: duration_ms as u32,
+                    duration_ms: duration_ms as u32,
                     art,
                 })
             })
@@ -720,5 +702,30 @@ mod tests {
         let deserialized: PlaylistTrack = serde_json::from_str(track).unwrap();
         let track_item: Option<TrackItem> = deserialized.try_into().ok();
         assert!(track_item.is_some());
+    }
+
+    #[test]
+    fn test_search_query_encoding() {
+        let query = SearchQuery {
+            query: "кириллица".to_string(),
+            limit: 5,
+            offset: 0,
+        };
+
+        assert_eq!(query.into_query_string(), "type=album,track,artist&q=%D0%BA%D0%B8%D1%80%D0%B8%D0%BB%D0%BB%D0%B8%D1%86%D0%B0&offset=0&limit=5&market=from_token");
+    }
+
+    #[test]
+    fn test_search_query_spaces_and_stuff() {
+        let query = SearchQuery {
+            query: "test??? wow".to_string(),
+            limit: 5,
+            offset: 0,
+        };
+
+        assert_eq!(
+            query.into_query_string(),
+            "type=album,track,artist&q=test+wow&offset=0&limit=5&market=from_token"
+        );
     }
 }

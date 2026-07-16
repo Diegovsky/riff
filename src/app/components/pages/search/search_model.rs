@@ -1,9 +1,10 @@
 use std::ops::Deref;
 use std::rc::Rc;
+use std::time::Duration;
 
 use crate::app::dispatch::ActionDispatcher;
 use crate::app::models::*;
-use crate::app::state::{AppAction, AppModel, BrowserAction};
+use crate::app::state::{AppAction, AppModel, BrowserAction, PlaybackAction};
 
 pub struct SearchResultsModel {
     app_model: Rc<AppModel>,
@@ -46,14 +47,17 @@ impl SearchResultsModel {
         }
     }
 
-    pub fn get_album_results(&self) -> Option<impl Deref<Target = Vec<AlbumDescription>> + '_> {
+    pub fn get_results(&self) -> Option<impl Deref<Target = SearchResults> + '_> {
         self.app_model
-            .map_state_opt(|s| Some(&s.browser.search_state()?.album_results))
+            .map_state_opt(|s| Some(&s.browser.search_state()?.results))
     }
-
-    pub fn get_artist_results(&self) -> Option<impl Deref<Target = Vec<ArtistSummary>> + '_> {
-        self.app_model
-            .map_state_opt(|s| Some(&s.browser.search_state()?.artist_results))
+    pub fn open_track(&self, song: SongDescription) {
+        self.dispatcher.dispatch_many(vec![
+            AppAction::ViewAlbum(song.album.id.clone()),
+            AppAction::PlaybackAction(PlaybackAction::LoadSongs(vec![song.clone()])),
+            AppAction::PlaybackAction(PlaybackAction::Load(song.id)),
+            AppAction::PlaybackAction(PlaybackAction::Play),
+        ]);
     }
 
     pub fn open_album(&self, id: String) {
