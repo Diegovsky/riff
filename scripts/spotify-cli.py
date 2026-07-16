@@ -27,6 +27,8 @@ Dependencies:
         uv sync
 """
 
+import textwrap
+
 import argparse
 import base64
 import hashlib
@@ -619,9 +621,12 @@ def setup_shell_completions():
 
 def _install_completion_file(shell_name, content, filepath, dirpath):
     """Install a completion script as a file, with user approval. Returns True if installed."""
-    print(f"\nI will:", file=sys.stderr)
-    print(f"  • Create directory: {dirpath}/ (if needed)", file=sys.stderr)
-    print(f"  • Write completion script to: {filepath}", file=sys.stderr)
+    print(
+        textwrap.dedent(f"""\nI will:
+      • Create directory: {dirpath}/ (if needed)
+      • Write completion script to: {filepath}"""),
+        file=sys.stderr,
+    )
 
     try:
         answer = input("\nProceed? [Y/n] ")
@@ -1216,6 +1221,8 @@ def main():
             return
 
     args = parse_args()
+    if not args.raw:
+        args.raw = sys.stdout.isatty()
 
     # Handle --completions (internal, used by the installed completion scripts)
     if args.completions:
@@ -1325,6 +1332,9 @@ def main():
 
         # Print the JSON
         print_json(data, raw=args.raw)
+
+        if not sys.stdout.isatty():
+            break
 
         # Check for pagination
         next_url = find_next_url(data)

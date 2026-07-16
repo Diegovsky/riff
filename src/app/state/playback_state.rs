@@ -564,7 +564,7 @@ mod tests {
                 id: "".to_string(),
                 name: "".to_string(),
             },
-            duration: 1000,
+            duration_ms: 1000,
             art: None,
             track_number: None,
         }

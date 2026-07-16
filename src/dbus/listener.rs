@@ -45,7 +45,7 @@ impl AppPlaybackStateListener {
             title,
             artists,
             album,
-            duration,
+            duration_ms: duration,
             art,
             ..
         } = self.app_model.get_state().playback.current_song()?;

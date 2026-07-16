@@ -7,3 +7,5 @@ pub use search_model::*;
 
 mod search_button;
 pub use search_button::*;
+
+mod result_section;

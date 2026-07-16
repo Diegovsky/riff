@@ -51,7 +51,7 @@ impl ImageSet {
 }
 
 // A batch of whatever
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Batch {
     // What offset does the batch start at
     pub offset: usize,
@@ -106,10 +106,11 @@ pub struct AlbumRef {
     pub name: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SearchResults {
     pub albums: Vec<AlbumDescription>,
     pub artists: Vec<ArtistSummary>,
+    pub tracks: SongBatch,
 }
 
 #[derive(Clone, Debug)]
@@ -192,7 +193,7 @@ pub struct SongDescription {
     pub title: String,
     pub artists: Vec<ArtistRef>,
     pub album: AlbumRef,
-    pub duration: u32,
+    pub duration_ms: u32,
     pub art: Option<ImageSet>,
 }
 
@@ -220,7 +221,7 @@ pub struct SongState {
 }
 
 // A batch of SONGS
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct SongBatch {
     pub songs: Vec<SongDescription>,
     pub batch: Batch,
@@ -340,7 +341,7 @@ mod tests {
                 id: "".to_string(),
                 name: "".to_string(),
             },
-            duration: 1000,
+            duration_ms: 1000,
             art: None,
             track_number: None,
         }

@@ -1,6 +1,6 @@
-use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
+use gtk::{prelude::*, FlowBox};
 use std::rc::Rc;
 
 use crate::app::components::utils::{wrap_flowbox_item, Debouncer};
@@ -8,10 +8,11 @@ use crate::app::components::{
     CardLayout, CardSize, CardWidget, Component, EventListener, ImageShape,
 };
 use crate::app::dispatch::Worker;
-use crate::app::models::CardModel;
+use crate::app::models::{CardModel, SongDescription};
 use crate::app::state::{AppEvent, BrowserEvent};
 
-use super::SearchResultsModel;
+use super::{result_section::ResultSection, SearchResultsModel};
+
 mod imp {
 
     use super::*;
@@ -35,10 +36,13 @@ mod imp {
         pub search_results: TemplateChild<gtk::Widget>,
 
         #[template_child]
-        pub albums_results: TemplateChild<gtk::FlowBox>,
+        pub album_results: TemplateChild<ResultSection>,
 
         #[template_child]
-        pub artist_results: TemplateChild<gtk::FlowBox>,
+        pub artist_results: TemplateChild<ResultSection>,
+
+        #[template_child]
+        pub track_results: TemplateChild<ResultSection>,
     }
 
     #[glib::object_subclass]
@@ -107,64 +111,36 @@ impl SearchResultsWidget {
         ));
     }
 
-    fn bind_albums_results<F>(&self, worker: Worker, store: &gio::ListStore, on_album_pressed: F)
-    where
-        F: Fn(String) + Clone + 'static,
+    fn bind_results<F>(
+        &self,
+        worker: Worker,
+        results: &ResultSection,
+        store: &gio::ListStore,
+        shape: ImageShape,
+        on_pressed: F,
+    ) where
+        F: Fn(&CardModel) + Clone + 'static,
     {
         let store_clone = store.clone();
-        self.imp()
-            .albums_results
-            .bind_model(Some(store), move |item| {
-                wrap_flowbox_item(item, |model: &CardModel| {
-                    CardWidget::for_model(
-                        model,
-                        worker.clone(),
-                        ImageShape::Square,
-                        CardLayout::Vertical,
-                        CardSize::Large,
-                    )
-                })
-            });
-        self.imp()
-            .albums_results
-            .connect_child_activated(move |_, child| {
-                let index = child.index() as u32;
-                if let Some(item) = store_clone.item(index) {
-                    if let Some(model) = item.downcast_ref::<CardModel>() {
-                        on_album_pressed(model.id());
-                    }
+        results.bind_model(Some(store), move |item| {
+            wrap_flowbox_item(item, |model: &CardModel| {
+                CardWidget::for_model(
+                    model,
+                    worker.clone(),
+                    shape,
+                    CardLayout::Vertical,
+                    CardSize::Large,
+                )
+            })
+        });
+        results.connect_child_activated(move |_, child| {
+            let index = child.index() as u32;
+            if let Some(item) = store_clone.item(index) {
+                if let Some(model) = item.downcast_ref::<CardModel>() {
+                    on_pressed(model);
                 }
-            });
-    }
-
-    fn bind_artists_results<F>(&self, worker: Worker, store: &gio::ListStore, on_artist_pressed: F)
-    where
-        F: Fn(String) + Clone + 'static,
-    {
-        let store_clone = store.clone();
-        self.imp()
-            .artist_results
-            .bind_model(Some(store), move |item| {
-                wrap_flowbox_item(item, |model: &CardModel| {
-                    CardWidget::for_model(
-                        model,
-                        worker.clone(),
-                        ImageShape::Round,
-                        CardLayout::Vertical,
-                        CardSize::Large,
-                    )
-                })
-            });
-        self.imp()
-            .artist_results
-            .connect_child_activated(move |_, child| {
-                let index = child.index() as u32;
-                if let Some(item) = store_clone.item(index) {
-                    if let Some(model) = item.downcast_ref::<CardModel>() {
-                        on_artist_pressed(model.id());
-                    }
-                }
-            });
+            }
+        });
     }
 }
 
@@ -173,6 +149,7 @@ pub struct SearchResults {
     model: Rc<SearchResultsModel>,
     album_results_model: gio::ListStore,
     artist_results_model: gio::ListStore,
+    track_results_model: gio::ListStore,
     debouncer: Debouncer,
 }
 
@@ -183,6 +160,7 @@ impl SearchResults {
 
         let album_results_model = gio::ListStore::new::<CardModel>();
         let artist_results_model = gio::ListStore::new::<CardModel>();
+        let track_results_model = gio::ListStore::new::<CardModel>();
 
         widget.connect_go_back(clone!(
             #[weak]
@@ -200,26 +178,47 @@ impl SearchResults {
             }
         ));
 
-        widget.bind_albums_results(
+        widget.bind_results(
             worker.clone(),
+            &widget.imp().album_results,
             &album_results_model,
+            ImageShape::Square,
             clone!(
                 #[weak]
                 model,
-                move |uri| {
-                    model.open_album(uri);
-                }
+                move |card_model| model.open_album(card_model.id())
             ),
         );
 
-        widget.bind_artists_results(
-            worker,
+        widget.bind_results(
+            worker.clone(),
+            &widget.imp().artist_results,
             &artist_results_model,
+            ImageShape::Round,
             clone!(
                 #[weak]
                 model,
-                move |id| {
-                    model.open_artist(id);
+                move |card_model| model.open_artist(card_model.id())
+            ),
+        );
+
+        widget.bind_results(
+            worker,
+            &widget.imp().track_results,
+            &track_results_model,
+            ImageShape::Square,
+            clone!(
+                #[weak]
+                model,
+                move |card_model| {
+                    model.open_track(
+                        card_model
+                            .data()
+                            .expect("Card data missing")
+                            .downcast_ref::<SongDescription>()
+                            .unwrap()
+                            .clone(),
+                    )
                 }
             ),
         );
@@ -227,6 +226,7 @@ impl SearchResults {
         Self {
             widget,
             model,
+            track_results_model,
             album_results_model,
             artist_results_model,
             debouncer: Debouncer::new(),
@@ -234,17 +234,23 @@ impl SearchResults {
     }
 
     fn update_results(&self) {
-        if let Some(results) = self.model.get_album_results() {
-            self.album_results_model.remove_all();
-            for album in results.iter() {
-                self.album_results_model.append(&CardModel::from(album));
-            }
+        let Some(results) = self.model.get_results() else {
+            return;
+        };
+
+        self.album_results_model.remove_all();
+        for album in results.albums.iter() {
+            self.album_results_model.append(&CardModel::from(album));
         }
-        if let Some(results) = self.model.get_artist_results() {
-            self.artist_results_model.remove_all();
-            for artist in results.iter() {
-                self.artist_results_model.append(&CardModel::from(artist));
-            }
+        self.artist_results_model.remove_all();
+        for artist in results.artists.iter() {
+            self.artist_results_model.append(&CardModel::from(artist));
+        }
+
+        self.track_results_model.remove_all();
+        for track in results.tracks.songs.iter() {
+            self.track_results_model
+                .append(&CardModel::from(track).with_data(track.clone()));
         }
     }
 

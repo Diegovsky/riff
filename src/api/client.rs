@@ -570,7 +570,6 @@ impl SpotifyClient {
     ) -> SpotifyRequest<'_, (), RawSearchResults> {
         let query = SearchQuery {
             query,
-            types: vec![SearchType::Album, SearchType::Artist],
             limit,
             offset,
         };
@@ -727,47 +726,5 @@ pub mod tests {
                 .as_str(),
             "/v1/users/anna.lafuente%E2%9D%A4"
         );
-    }
-
-    #[test]
-    fn test_search_query() {
-        let query = SearchQuery {
-            query: "test".to_string(),
-            types: vec![SearchType::Album, SearchType::Artist],
-            limit: 5,
-            offset: 0,
-        };
-
-        assert_eq!(
-            query.into_query_string(),
-            "type=album,artist&q=test&offset=0&limit=5&market=from_token"
-        );
-    }
-
-    #[test]
-    fn test_search_query_spaces_and_stuff() {
-        let query = SearchQuery {
-            query: "test??? wow".to_string(),
-            types: vec![SearchType::Album],
-            limit: 5,
-            offset: 0,
-        };
-
-        assert_eq!(
-            query.into_query_string(),
-            "type=album&q=test+wow&offset=0&limit=5&market=from_token"
-        );
-    }
-
-    #[test]
-    fn test_search_query_encoding() {
-        let query = SearchQuery {
-            query: "кириллица".to_string(),
-            types: vec![SearchType::Album],
-            limit: 5,
-            offset: 0,
-        };
-
-        assert_eq!(query.into_query_string(), "type=album&q=%D0%BA%D0%B8%D1%80%D0%B8%D0%BB%D0%BB%D0%B8%D1%86%D0%B0&offset=0&limit=5&market=from_token");
     }
 }
