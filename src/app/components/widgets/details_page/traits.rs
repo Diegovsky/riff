@@ -64,6 +64,7 @@ pub trait PageModel {
     fn source_is_playing(&self) -> bool {
         false
     }
+    fn start_play(&self, _id: &str) {}
     fn toggle_play(&self) {}
     fn shuffle_play(&self) {}
 

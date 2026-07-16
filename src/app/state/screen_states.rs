@@ -81,6 +81,9 @@ impl UpdatableState for DetailsState {
                 self.songs.add(*batch.clone()).commit();
                 vec![BrowserEvent::AlbumTracksAppended(id.clone())]
             }
+            BrowserAction::PlaySong(id) => {
+                vec![BrowserEvent::SongPlaybackRequested(id.clone())]
+            }
             BrowserAction::ConsumeNextPage(PaginationTarget::AlbumTracks(id)) if id == &self.id => {
                 self.next_tracks_page.next_offset_take();
                 vec![]

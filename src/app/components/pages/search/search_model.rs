@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::time::Duration;
@@ -9,11 +10,13 @@ use crate::app::state::{AppAction, AppModel, BrowserAction, PlaybackAction};
 pub struct SearchResultsModel {
     app_model: Rc<AppModel>,
     dispatcher: Box<dyn ActionDispatcher>,
+    queued_song: RefCell<Option<SongDescription>>,
 }
 
 impl SearchResultsModel {
     pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
         Self {
+            queued_song: Default::default(),
             app_model,
             dispatcher,
         }
@@ -52,11 +55,17 @@ impl SearchResultsModel {
             .map_state_opt(|s| Some(&s.browser.search_state()?.results))
     }
     pub fn open_track(&self, song: SongDescription) {
-        self.dispatcher.dispatch_many(vec![
-            AppAction::ViewAlbum(song.album.id.clone()),
-            AppAction::PlaybackAction(PlaybackAction::PreloadNext(song.id)),
-            AppAction::PlaybackAction(PlaybackAction::Play),
-        ]);
+        self.queued_song.borrow_mut().replace(song.clone());
+        self.dispatcher
+            .dispatch(AppAction::ViewAlbum(song.album.id.clone()));
+    }
+    pub fn on_album_loaded(&self, id: &str) {
+        if let Some(song) = self.queued_song.borrow_mut().take() {
+            if song.album.id == id {
+                self.dispatcher
+                    .dispatch(BrowserAction::PlaySong(song.id.clone()).into())
+            }
+        }
     }
 
     pub fn open_album(&self, id: String) {

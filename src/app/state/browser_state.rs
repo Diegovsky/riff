@@ -37,6 +37,8 @@ pub enum BrowserAction {
     UpdatePlaylistName(PlaylistSummary),
     AppendPlaylistTracks(String, Box<SongBatch>),
     Search(String),
+    /// Used to tell the currently loaded Details screen to play a song
+    PlaySong(String),
     SetSearchResults(Box<SearchResults>),
     SetArtistDetails(Box<ArtistDescription>),
     AppendArtistReleases(String, Vec<AlbumDescription>),
@@ -90,6 +92,8 @@ pub enum BrowserEvent {
     NavigationPopped,
     NavigationPoppedTo(ScreenName),
     AlbumSaved(String),
+    /// Notifies a DetailsModel that a song is requested
+    SongPlaybackRequested(String),
     AlbumUnsaved(String),
     PlaylistSaved(String),
     PlaylistUnsaved(String),

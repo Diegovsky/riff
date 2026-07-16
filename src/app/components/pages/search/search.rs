@@ -282,6 +282,9 @@ impl EventListener for SearchResults {
             AppEvent::BrowserEvent(BrowserEvent::SearchResultsUpdated) => {
                 self.update_results();
             }
+            AppEvent::BrowserEvent(BrowserEvent::AlbumDetailsLoaded(id)) => {
+                self.model.on_album_loaded(id);
+            }
             _ => {}
         }
     }
