@@ -230,6 +230,7 @@ impl PlaylistModel for DetailsModel {
         for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
             group.add_action(&a);
         }
+
         group.add_action(&song.make_link_action(None));
         group.add_action(&song.make_queue_action(self.dispatcher.box_clone(), None));
         Some(group.upcast())

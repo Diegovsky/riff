@@ -277,6 +277,7 @@ impl App {
         // ...and notify every component that we know.
         // They'll be responsible for passing down these events, if they feel like it.
         for event in events.iter() {
+            info!("Event: {event:?}");
             for component in self.components.iter_mut() {
                 component.on_event(event);
             }
@@ -291,9 +292,7 @@ impl App {
         let app = &mut self;
         dispatch_loop
             .attach(move |action| {
-                if let AppAction::PlaybackAction(ref action) = action {
-                    info!("{action:#?}")
-                };
+                info!("Action: {action:?}");
                 app.handle(action);
             })
             .await;
