@@ -114,7 +114,7 @@ impl From<&SongDescription> for CardModel {
             &desc.id,
             photo.as_ref(),
             &desc.title,
-            &desc.album.name,
+            &desc.artists_name(),
             None,
             None,
             None,
