@@ -70,7 +70,7 @@ impl AppPlayerDelegate {
     }
 
     fn preload_next_track(&self) {
-        self.send(PlaybackAction::Preload.into())
+        self.send(PlaybackAction::PreloadNext.into())
     }
 
     fn login_challenge_started(&self, url: Url) {

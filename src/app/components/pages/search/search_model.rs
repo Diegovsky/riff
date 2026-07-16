@@ -54,8 +54,7 @@ impl SearchResultsModel {
     pub fn open_track(&self, song: SongDescription) {
         self.dispatcher.dispatch_many(vec![
             AppAction::ViewAlbum(song.album.id.clone()),
-            AppAction::PlaybackAction(PlaybackAction::LoadSongs(vec![song.clone()])),
-            AppAction::PlaybackAction(PlaybackAction::Load(song.id)),
+            AppAction::PlaybackAction(PlaybackAction::PreloadNext(song.id)),
             AppAction::PlaybackAction(PlaybackAction::Play),
         ]);
     }
