@@ -209,6 +209,16 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
 
     /// Standard event handling. Returns true if the event was consumed.
     pub fn handle_event(&self, event: &AppEvent) -> bool {
+        match event {
+            AppEvent::BrowserEvent(crate::app::BrowserEvent::SongPlaybackRequested(id))
+                if self.model.has_play_button() =>
+            {
+                self.model.start_play(id);
+                return true;
+            }
+            _ => (),
+        }
+
         if self.model.should_refresh_details(event) {
             self.refresh_details();
             if self.model.has_play_button() {

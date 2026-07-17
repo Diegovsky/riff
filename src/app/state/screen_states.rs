@@ -81,6 +81,9 @@ impl UpdatableState for DetailsState {
                 self.songs.add(*batch.clone()).commit();
                 vec![BrowserEvent::AlbumTracksAppended(id.clone())]
             }
+            BrowserAction::PlaySong(id) => {
+                vec![BrowserEvent::SongPlaybackRequested(id.clone())]
+            }
             BrowserAction::ConsumeNextPage(PaginationTarget::AlbumTracks(id)) if id == &self.id => {
                 self.next_tracks_page.next_offset_take();
                 vec![]
@@ -427,17 +430,15 @@ impl UpdatableState for HomeState {
 pub struct SearchState {
     pub name: ScreenName,
     pub query: String,
-    pub album_results: Vec<AlbumDescription>,
-    pub artist_results: Vec<ArtistSummary>,
+    pub results: SearchResults,
 }
 
 impl Default for SearchState {
     fn default() -> Self {
         Self {
             name: ScreenName::Search,
-            query: "".to_owned(),
-            album_results: vec![],
-            artist_results: vec![],
+            query: Default::default(),
+            results: Default::default(),
         }
     }
 }
@@ -453,8 +454,7 @@ impl UpdatableState for SearchState {
                 vec![BrowserEvent::SearchUpdated]
             }
             BrowserAction::SetSearchResults(results) => {
-                self.album_results = results.albums.clone();
-                self.artist_results = results.artists.clone();
+                self.results = *results.clone();
                 vec![BrowserEvent::SearchResultsUpdated]
             }
             _ => vec![],

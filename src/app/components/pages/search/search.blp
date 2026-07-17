@@ -43,65 +43,20 @@ template $SearchResultsWidget : Box {
         orientation: vertical;
         spacing: 8;
 
-        Expander {
-          margin-start: 4;
-          margin-end: 4;
-          expanded: true;
-          vexpand: false;
-          valign: start;
-
-          ScrolledWindow {
-            vscrollbar-policy: never;
-            propagate-natural-height: false;
-            FlowBox albums_results {
-              halign: start;
-              hexpand: true;
-              vexpand: false;
-              valign: start;
-              orientation: vertical;
-              max-children-per-line: 1;
-              selection-mode: none;
-              activate-on-single-click: true;
-            }
-          }
-
-          [label]
-          Label {
-            /* Translators: This is the title of a section of the search results */
-
-            label: _("Albums");
-          }
+        $ResultSection track_results {
+          /* Translators: This is the title of a section of the search results */
+          label: _("Tracks");
         }
 
-        Expander {
-          margin-start: 4;
-          margin-end: 4;
-          margin-bottom: 4;
-          expanded: true;
-          vexpand: false;
-          valign: start;
+        $ResultSection album_results {
+          /* Translators: This is the title of a section of the search results */
+          label: _("Albums");
 
-          ScrolledWindow {
-            vscrollbar-policy: never;
-            propagate-natural-height: false;
-            FlowBox artist_results {
-              halign: start;
-              hexpand: true;
-              vexpand: false;
-              valign: start;
-              orientation: vertical;
-              max-children-per-line: 1;
-              selection-mode: none;
-              activate-on-single-click: true;
-            }
-          }
+        }
+        $ResultSection artist_results {
+          /* Translators: This is the title of a section of the search results */
+          label: _("Artists");
 
-          [label]
-          Label {
-            /* Translators: This is the title of a section of the search results */
-
-            label: _("Artists");
-          }
         }
       }
     }

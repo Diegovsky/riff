@@ -45,6 +45,13 @@ macro_rules! impl_playlist_model_base {
 #[macro_export]
 macro_rules! impl_toggle_play {
     () => {
+        fn start_play(&self, id: &str) {
+            let songs = PlaylistModel::song_list_model(self);
+            match songs.find_index(id) {
+                Some(index) => PlaylistModel::play_song_at(self, index, id),
+                None => error!("Failed to play track {id}"),
+            }
+        }
         fn toggle_play(&self) {
             let songs = PlaylistModel::song_list_model(self);
             self.base
@@ -363,7 +370,7 @@ mod tests {
                 id: "".to_string(),
                 name: "".to_string(),
             },
-            duration: 1000,
+            duration_ms: 1000,
             art: None,
             track_number: None,
         }

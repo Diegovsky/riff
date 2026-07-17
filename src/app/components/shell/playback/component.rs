@@ -153,7 +153,7 @@ impl PlaybackControl {
         if let Some(song) = self.model.current_song() {
             self.widget
                 .set_title_and_artist(&song.title, &song.artists_name());
-            self.widget.set_song_duration(Some(song.duration as f64));
+            self.widget.set_song_duration(Some(song.duration_ms as f64));
             if let Some(url) = song.art.as_ref().and_then(|s| s.best_for_width(120)) {
                 self.widget
                     .set_artwork_from_url(url.to_owned(), &self.worker);

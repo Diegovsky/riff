@@ -306,12 +306,13 @@ pub enum PlaybackAction {
     // I can't remember the diff betweek Seek and SyncSeek right now. Probably the source of the action
     SyncSeek(u32),
     Load(String),
+    #[deprecated]
     LoadSongs(Vec<SongDescription>),
     LoadPagedSongs(SongsSource, SongBatch),
     SetVolume(f64),
     Next,
     Previous,
-    Preload,
+    PreloadNext,
     Queue(Vec<SongDescription>),
     Dequeue(String),
     SwitchDevice(Device),
@@ -432,7 +433,7 @@ impl UpdatableState for PlaybackState {
                     vec![]
                 }
             }
-            PlaybackAction::Preload => {
+            PlaybackAction::PreloadNext => {
                 if let Some(id) = self.next_id() {
                     vec![PlaybackEvent::Preload(id)]
                 } else {
@@ -564,7 +565,7 @@ mod tests {
                 id: "".to_string(),
                 name: "".to_string(),
             },
-            duration: 1000,
+            duration_ms: 1000,
             art: None,
             track_number: None,
         }

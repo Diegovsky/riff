@@ -5,6 +5,11 @@ use gio::prelude::*;
 use glib::subclass::prelude::*;
 use glib::Properties;
 
+use std::{
+    any::Any,
+    cell::{Cell, Ref, RefCell},
+};
+
 glib::wrapper! {
     pub struct CardModel(ObjectSubclass<imp::CardModel>);
 }
@@ -40,11 +45,25 @@ impl CardModel {
         }
         builder.build()
     }
+
+    pub fn with_data<T: Any>(self, data: T) -> Self {
+        self.imp().data.borrow_mut().replace(Box::new(data));
+        self
+    }
+
+    pub fn data(&self) -> Option<Ref<Box<dyn Any>>> {
+        // I couldn't think of a batter way to transpose Ref<Option> into Option<Ref>
+        let data = self.imp().data.borrow();
+        if data.is_none() {
+            return None;
+        }
+        Some(Ref::map(data, |data| data.as_ref().unwrap()))
+    }
 }
 
 mod imp {
+
     use super::*;
-    use std::cell::{Cell, RefCell};
 
     #[derive(Default, Properties)]
     #[properties(wrapper_type = super::CardModel)]
@@ -63,6 +82,8 @@ mod imp {
         popularity: Cell<u32>,
         #[property(get, set, name = "insertion-position")]
         insertion_position: Cell<u32>,
+
+        pub data: RefCell<Option<Box<dyn Any + 'static>>>,
     }
 
     #[glib::object_subclass]
