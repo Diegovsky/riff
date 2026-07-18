@@ -31,6 +31,7 @@ impl From<&AlbumDescription> for CardModel {
             album.release_date.as_deref(),
             Some(album.popularity),
             None,
+            album.album_type.as_deref(),
         )
     }
 }
@@ -53,6 +54,7 @@ impl From<&PlaylistDescription> for CardModel {
             art.as_ref(),
             &playlist.title,
             &playlist.owner.display_name,
+            None,
             None,
             None,
             None,
@@ -99,6 +101,7 @@ impl From<&ArtistSummary> for CardModel {
             None,
             Some(artist.popularity),
             None,
+            None,
         )
     }
 }
@@ -115,6 +118,7 @@ impl From<&SongDescription> for CardModel {
             photo.as_ref(),
             &desc.title,
             &desc.artists_name(),
+            None,
             None,
             None,
             None,

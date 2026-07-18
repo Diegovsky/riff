@@ -3,6 +3,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use super::card_view_menu::{effective_sort, CardViewMenu};
+use super::filter_toggle::FilterToggle;
 use super::page_widget::CardListWidget;
 use super::traits::CardListPageModel;
 use super::widget::CardList;
@@ -94,6 +95,31 @@ impl<M: CardListPageModel + 'static> CardListComponent<M> {
             Rc::clone(&card_list),
             dispatcher,
         );
+
+        // Create filter toggle if the model provides filter options
+        let filter_options = model.filter_options();
+        if !filter_options.is_empty() {
+            let status_page_ref = page_widget.status_page().clone();
+            let filter_widget = FilterToggle::new(
+                &filter_options,
+                Rc::clone(&card_list),
+                move |category, visible_count| {
+                    if category.is_empty() {
+                        status_page_ref.set_visible(false);
+                    } else if visible_count == 0 {
+                        status_page_ref
+                            .set_title(&gettextrs::gettext("No items found for this filter"));
+                        status_page_ref.set_visible(true);
+                    } else {
+                        status_page_ref.set_visible(false);
+                    }
+                },
+            );
+            filter_widget.set_margin_start(CARD_LIST_MARGIN);
+            filter_widget.set_margin_end(CARD_LIST_MARGIN);
+            filter_widget.set_margin_top(CARD_LIST_MARGIN);
+            page_widget.prepend(&filter_widget);
+        }
 
         Self {
             model,

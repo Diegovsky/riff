@@ -46,15 +46,20 @@ impl SortOrder {
     /// Translatable user-facing label for display in menus.
     pub fn label(self) -> String {
         match self {
-            // Translators: Sort option — show items in the order they were saved
+            // Translators: Sort option. Shows items in the order they were saved,
+            // with the most recently added items appearing first.
             Self::RecentlyAdded => gettext("Recently Added"),
-            // Translators: Sort option — alphabetical order by title
+            // Translators: Sort option. Orders items alphabetically by their title
+            // (A-Z, case-insensitive).
             Self::Alphabetic => gettext("Alphabetic"),
-            // Translators: Sort option — group by artist/creator name
+            // Translators: Sort option. Groups items by their artist or creator name,
+            // sorted alphabetically.
             Self::Creator => gettext("Creator"),
-            // Translators: Sort option — order by release date (newest first)
+            // Translators: Sort option. Orders items by their release date, with the
+            // newest releases appearing first.
             Self::DateReleased => gettext("Date Released"),
-            // Translators: Sort option — order by popularity score (highest first)
+            // Translators: Sort option. Orders items by their popularity score, with
+            // the most popular items appearing first.
             Self::Popularity => gettext("Popularity"),
         }
     }
@@ -130,6 +135,35 @@ impl CardLayout {
             Self::Vertical => "card--vertical",
             Self::ImageOnly => "card--image-only",
             Self::Horizontal => "card--horizontal",
+        }
+    }
+}
+
+/// A filter option for card lists.
+///
+/// Each option defines a user-facing label and a category string that is matched
+/// against `CardModel::category()`. An empty `category` means "show all" (no filtering).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FilterOption {
+    /// User-visible label (e.g., "Albums", "Singles").
+    pub label: String,
+    /// Category to match against `CardModel::category()`. Empty string = show all.
+    pub category: String,
+}
+
+impl FilterOption {
+    pub fn new(label: impl Into<String>, category: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            category: category.into(),
+        }
+    }
+
+    /// Create the "All" (no filter) option.
+    pub fn all(label: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            category: String::new(),
         }
     }
 }

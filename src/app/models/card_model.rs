@@ -23,6 +23,7 @@ impl CardModel {
         release_date: Option<&str>,
         popularity: Option<u32>,
         insertion_position: Option<u32>,
+        category: Option<&str>,
     ) -> CardModel {
         let title = if title.is_empty() && !id.is_empty() {
             gettext("Untitled")
@@ -42,6 +43,9 @@ impl CardModel {
         }
         if let Some(pos) = insertion_position {
             builder = builder.property("insertion-position", pos);
+        }
+        if let Some(cat) = category {
+            builder = builder.property("category", cat);
         }
         builder.build()
     }
@@ -82,6 +86,8 @@ mod imp {
         popularity: Cell<u32>,
         #[property(get, set, name = "insertion-position")]
         insertion_position: Cell<u32>,
+        #[property(get, set)]
+        category: RefCell<String>,
 
         pub data: RefCell<Option<Box<dyn Any + 'static>>>,
     }
@@ -116,6 +122,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         );
         assert_eq!(card.id(), "abc123");
         assert_eq!(card.image(), Some(img));
@@ -125,13 +132,13 @@ mod tests {
 
     #[test]
     fn test_new_without_image() {
-        let card = CardModel::new("id1", None, "Title", "Sub", None, None, None);
+        let card = CardModel::new("id1", None, "Title", "Sub", None, None, None, None);
         assert_eq!(card.image(), None);
     }
 
     #[test]
     fn test_set_properties() {
-        let card = CardModel::new("id", None, "old", "old", None, None, None);
+        let card = CardModel::new("id", None, "old", "old", None, None, None, None);
         card.set_title("new title".to_string());
         card.set_subtitle("new sub".to_string());
         assert_eq!(card.title(), "new title");
@@ -180,6 +187,7 @@ mod tests {
             songs: SongBatch::empty(),
             is_liked: false,
             popularity: 72,
+            album_type: Some("album".to_string()),
         };
         let card = CardModel::from(&album);
         assert_eq!(card.id(), "album1");
