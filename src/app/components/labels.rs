@@ -13,6 +13,12 @@ lazy_static! {
     // translators: This is part of a contextual menu attached to a single track; this entry removes a track from the play queue.
     pub static ref REMOVE_FROM_QUEUE: String = gettext("Remove from queue");
 
+    // translators: This is part of a contextual menu attached to a playlist in the sidebar; this entry starts playing the playlist from the first track.
+    pub static ref PLAY: String = gettext("Play");
+
+    // translators: This is part of a contextual menu attached to a playlist in the sidebar; this entry starts playing the playlist in shuffle mode.
+    pub static ref SHUFFLE: String = gettext("Shuffle");
+
     // translators: This is part of a contextual menu attached to a playlist in the sidebar; this entry deletes a playlist owned by the user.
     pub static ref DELETE_PLAYLIST: String = gettext("Delete playlist");
 
