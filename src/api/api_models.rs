@@ -233,6 +233,7 @@ pub struct Album {
     pub images: Vec<Image>,
     #[serde(default)]
     pub popularity: u32,
+    pub album_type: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -601,6 +602,7 @@ impl From<Album> for AlbumDescription {
             songs,
             is_liked: false,
             popularity: album.popularity,
+            album_type: album.album_type,
         }
     }
 }

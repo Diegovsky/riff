@@ -306,7 +306,7 @@ impl SpotifyClient {
         limit: usize,
     ) -> SpotifyRequest<'_, (), Page<Album>> {
         let query = make_query_params()
-            .append_pair("include_groups", "album,single")
+            .append_pair("include_groups", "album,single,compilation")
             .append_pair("country", "from_token")
             .append_pair("offset", &offset.to_string()[..])
             .append_pair("limit", &limit.to_string()[..])

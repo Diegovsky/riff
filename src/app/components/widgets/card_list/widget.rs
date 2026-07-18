@@ -1,13 +1,13 @@
 use gio::prelude::*;
 use gtk::prelude::*;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
 use std::ops::Deref;
 use std::rc::Rc;
 
 use crate::app::components::{CardLayout, CardSize, CardWidget, ImageShape, SortOrder};
 use crate::app::dispatch::Worker;
-use crate::app::models::CardModel;
+use crate::app::models::{CardModel, FilterOption};
 use crate::app::ListStore;
 
 // Constants
@@ -32,6 +32,11 @@ pub trait CardListModel {
     }
     fn open_item(&self, id: String);
     fn image_shape(&self) -> ImageShape;
+
+    /// Returns filter options for this card list. Empty = no filter UI.
+    fn filter_options(&self) -> Vec<FilterOption> {
+        vec![]
+    }
 }
 
 /// An embeddable FlowBox-based card grid.
@@ -43,6 +48,7 @@ pub struct CardList {
     current_layout: Rc<Cell<CardLayout>>,
     current_size: Rc<Cell<CardSize>>,
     current_sort: Rc<Cell<SortOrder>>,
+    current_filter: Rc<RefCell<String>>,
     next_position: Rc<Cell<u32>>,
     /// Number of placeholder children currently in the FlowBox.
     placeholder_count: Rc<Cell<u32>>,
@@ -67,6 +73,7 @@ impl CardList {
             current_layout: Rc::new(Cell::new(CardLayout::Vertical)),
             current_size: Rc::new(Cell::new(CardSize::Large)),
             current_sort: Rc::new(Cell::new(SortOrder::RecentlyAdded)),
+            current_filter: Rc::new(RefCell::new(String::new())),
             next_position: Rc::new(Cell::new(0)),
             placeholder_count: Rc::new(Cell::new(0)),
             source_signal: Cell::new(None),
@@ -107,6 +114,19 @@ impl CardList {
             let sort_ref = Rc::clone(&self.current_sort);
             self.flowbox
                 .set_sort_func(move |a, b| sort_children(sort_ref.get(), a, b).into());
+
+            // Install filter function
+            let filter_ref = Rc::clone(&self.current_filter);
+            self.flowbox.set_filter_func(move |child| {
+                let filter = filter_ref.borrow();
+                if filter.is_empty() {
+                    return true; // "All" - show everything
+                }
+                match get_model(child) {
+                    Some(card) => card.category() == *filter,
+                    None => true, // Show placeholders
+                }
+            });
 
             // Add existing items
             let mut counter = self.next_position.get().max(1);
@@ -250,6 +270,55 @@ impl CardList {
         self.flowbox.invalidate_sort();
     }
 
+    /// Change the active filter category. Empty string = show all.
+    ///
+    /// Preserves the FlowBox's current height as a minimum so the page doesn't
+    /// jump when fewer items are visible. The height is capped at the viewport
+    /// height (the ScrolledWindow's visible area) so it never extends beyond
+    /// what's on screen. The constraint is released when the filter is cleared
+    /// (showing all items).
+    pub fn set_filter(&self, category: &str) {
+        if category.is_empty() {
+            // Showing all - remove height constraint
+            self.flowbox.set_height_request(-1);
+        } else {
+            // Lock the current height before filtering so it doesn't shrink,
+            // but cap at the viewport height to avoid extending past the visible area.
+            let current_height = self.flowbox.height();
+            if current_height > 0 {
+                let viewport_height = self
+                    .flowbox
+                    .ancestor(gtk::ScrolledWindow::static_type())
+                    .and_then(|sw| sw.downcast::<gtk::ScrolledWindow>().ok())
+                    .map(|sw| sw.vadjustment().page_size() as i32)
+                    .unwrap_or(current_height);
+                let locked = current_height.min(viewport_height);
+                self.flowbox
+                    .set_height_request(self.flowbox.height_request().max(locked));
+            }
+        }
+        *self.current_filter.borrow_mut() = category.to_string();
+        self.flowbox.invalidate_filter();
+    }
+
+    /// Count the number of visible (non-placeholder) children after filtering.
+    ///
+    /// FlowBox filtering uses `set_child_visible` rather than `set_visible`,
+    /// so we must check `is_child_visible()` to detect filtered-out items.
+    pub fn visible_count(&self) -> usize {
+        let mut count = 0;
+        let mut child = self.flowbox.first_child();
+        while let Some(c) = child {
+            if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
+                if get_model(fb_child).is_some() && fb_child.is_child_visible() {
+                    count += 1;
+                }
+            }
+            child = c.next_sibling();
+        }
+        count
+    }
+
     /// Show placeholder skeleton cards (only if FlowBox is empty).
     pub fn show_placeholders(&self) {
         if self.flowbox.first_child().is_none() {
@@ -325,7 +394,7 @@ fn create_child_placeholder(layout: CardLayout, size: CardSize) -> gtk::FlowBoxC
     child.set_halign(gtk::Align::Fill);
     child.set_hexpand(true);
     child.set_child(Some(&widget));
-    // No model attached — get_model() returning None identifies this as a placeholder.
+    // No model attached - get_model() returning None identifies this as a placeholder.
     child
 }
 

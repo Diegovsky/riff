@@ -3,6 +3,7 @@
 // list), follow/unfollow, and playback. On 400/404 from the API, navigates
 // back (the artist may not exist or be inaccessible).
 
+use gettextrs::gettext;
 use gio::prelude::*;
 use gio::SimpleActionGroup;
 use std::ops::Deref;
@@ -186,6 +187,15 @@ impl CardListModel for ArtistDetailsModel {
 
     fn image_shape(&self) -> ImageShape {
         ImageShape::Square
+    }
+
+    fn filter_options(&self) -> Vec<FilterOption> {
+        vec![
+            FilterOption::all(gettext("All")),
+            FilterOption::new(gettext("Albums"), "album"),
+            FilterOption::new(gettext("Singles"), "single"),
+            FilterOption::new(gettext("Compilations"), "compilation"),
+        ]
     }
 }
 

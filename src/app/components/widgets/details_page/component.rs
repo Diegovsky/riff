@@ -5,7 +5,7 @@ use std::rc::Rc;
 use super::{is_playback_event, DetailsPage, PageModel};
 use crate::app::components::{
     CardLayout, CardList, CardListModel, CardSize, Component, EmbeddedCardList, EventListener,
-    HeaderBarModel, Playlist, PlaylistModel, SortOrder,
+    FilterToggle, HeaderBarModel, Playlist, PlaylistModel, SortOrder,
 };
 use crate::app::dispatch::Worker;
 use crate::app::{ActionDispatcher, AppEvent};
@@ -72,6 +72,7 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
 
     /// Create an [`EmbeddedCardList`] with view controls, appending it to the content box
     /// and registering it as an event listener. Packs the view button into the headerbar.
+    /// If the model provides filter options, a filter toggle bar is shown inline with the label.
     pub fn create_embedded_card_list(
         &mut self,
         label: Option<&str>,
@@ -83,19 +84,72 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
     ) where
         M: CardListModel,
     {
-        if let Some(text) = label {
+        let filter_options = self.model.filter_options();
+        let has_filters = !filter_options.is_empty();
+
+        let card_list = Rc::new(CardList::new());
+        card_list.widget().set_margin_bottom(16);
+
+        if has_filters {
+            // Header row: label (left, hexpand) + filter toggle (right, shrinkable)
+            let header_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+            header_row.set_margin_bottom(10);
+
+            if let Some(text) = label {
+                let lbl = gtk::Label::builder()
+                    .label(text)
+                    .halign(gtk::Align::Start)
+                    .hexpand(true)
+                    .css_classes(["title-4", "skeleton"])
+                    .build();
+                header_row.append(&lbl);
+            }
+
+            // Empty state label shown when a filter matches nothing
+            let empty_label = gtk::Label::builder()
+                .label("")
+                .halign(gtk::Align::Center)
+                .valign(gtk::Align::Center)
+                .margin_top(24)
+                .margin_bottom(24)
+                .css_classes(["dim-label"])
+                .visible(false)
+                .build();
+
+            let empty_label_ref = empty_label.clone();
+            let filter_widget = FilterToggle::new(
+                &filter_options,
+                Rc::clone(&card_list),
+                move |category, visible_count| {
+                    if category.is_empty() {
+                        empty_label_ref.set_visible(false);
+                    } else if visible_count == 0 {
+                        let msg = gettextrs::gettext("No items found for this filter");
+                        empty_label_ref.set_label(&msg);
+                        empty_label_ref.set_visible(true);
+                    } else {
+                        empty_label_ref.set_visible(false);
+                    }
+                },
+            );
+
+            header_row.append(&filter_widget);
+            self.content.append(&header_row);
+            self.content.append(&empty_label);
+        } else if let Some(text) = label {
+            // No filters - just append a plain label
             let lbl = gtk::Label::builder()
                 .label(text)
                 .halign(gtk::Align::Start)
+                .hexpand(true)
                 .css_classes(["title-4", "skeleton"])
                 .margin_bottom(10)
                 .build();
             self.content.append(&lbl);
         }
 
-        let card_list = Rc::new(CardList::new());
-        card_list.widget().set_margin_bottom(16);
         self.content.append(card_list.widget());
+
         card_list.bind(
             &self.model,
             self.worker.clone(),

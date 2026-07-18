@@ -1,0 +1,38 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $FilterToggleWidget : Adw.BreakpointBin {
+  width-request: 1;
+  height-request: 34;
+  hexpand: true;
+  overflow: visible;
+
+  Adw.Breakpoint {
+    condition("max-width: 360sp")
+
+    setters {
+      wide_box.visible: false;
+      menu_button.visible: true;
+    }
+  }
+
+  child: Box {
+    orientation: horizontal;
+    halign: end;
+    valign: center;
+
+    Box wide_box {
+      orientation: horizontal;
+
+      styles [
+        "linked",
+      ]
+    }
+
+    MenuButton menu_button {
+      label: _("Filter");
+      direction: down;
+      visible: false;
+    }
+  };
+}

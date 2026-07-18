@@ -123,6 +123,7 @@ pub struct AlbumDescription {
     pub songs: SongBatch,
     pub is_liked: bool,
     pub popularity: u32,
+    pub album_type: Option<String>,
 }
 
 impl AlbumDescription {
