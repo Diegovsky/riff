@@ -7,15 +7,13 @@ use libadwaita::prelude::*;
 
 use crate::app::components::{
     display_add_css_provider, EventListener, HeaderBarComponent, HeaderBarModel, HeaderBarWidget,
+    CLAMP_MAX_SIZE,
 };
 use crate::app::dispatch::Worker;
 use crate::app::loader::ImageLoader;
 use crate::app::models::ImageSet;
 
 use super::{DetailsHeader, HeaderImageShape, HEADER_IMAGE_SIZE};
-
-/// Maximum width (in pixels) for both the header and content clamps, keeping them aligned.
-const CLAMP_MAX_SIZE: i32 = 1600;
 
 // DetailsPage
 

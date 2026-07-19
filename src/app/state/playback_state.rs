@@ -456,6 +456,7 @@ impl UpdatableState for PlaybackState {
                 self.set_batch(Some(source), batch);
                 vec![PlaybackEvent::PlaylistChanged, PlaybackEvent::SourceChanged]
             }
+            #[allow(deprecated)]
             PlaybackAction::LoadSongs(tracks) => {
                 self.set_queue(tracks);
                 vec![PlaybackEvent::PlaylistChanged, PlaybackEvent::SourceChanged]

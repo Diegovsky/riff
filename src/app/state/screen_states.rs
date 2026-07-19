@@ -430,16 +430,37 @@ impl UpdatableState for HomeState {
 pub struct SearchState {
     pub name: ScreenName,
     pub query: String,
+    /// Active filter. `None` shows the combined multi-section results.
+    pub filter: Option<SearchType>,
+    /// Results for the combined ("all") view.
     pub results: SearchResults,
+    /// Card results for a scoped card view (artists/albums/playlists).
+    pub scope_cards: ListStore<CardModel>,
+    /// Track results for a scoped track view.
+    pub scope_tracks: SongListModel,
+    /// Pagination for the scoped view.
+    pub scope_page: Pagination<String>,
 }
 
 impl Default for SearchState {
     fn default() -> Self {
         Self {
             name: ScreenName::Search,
-            query: Default::default(),
-            results: Default::default(),
+            query: String::new(),
+            filter: None,
+            results: SearchResults::default(),
+            scope_cards: ListStore::new(),
+            scope_tracks: SongListModel::new(CARD_BATCH_SIZE as u32),
+            scope_page: Pagination::new(String::new(), CARD_BATCH_SIZE),
         }
+    }
+}
+
+impl SearchState {
+    fn reset_scope(&mut self) {
+        self.scope_cards.replace_all(std::iter::empty());
+        self.scope_tracks.clear().commit();
+        self.scope_page = Pagination::new(self.query.clone(), CARD_BATCH_SIZE);
     }
 }
 
@@ -451,14 +472,69 @@ impl UpdatableState for SearchState {
         match action.as_ref() {
             BrowserAction::Search(query) if query != &self.query => {
                 self.query = query.clone();
+                self.reset_scope();
                 vec![BrowserEvent::SearchUpdated]
+            }
+            BrowserAction::SetSearchFilter(filter) if filter != &self.filter => {
+                self.filter = *filter;
+                self.reset_scope();
+                vec![BrowserEvent::SearchFilterChanged]
             }
             BrowserAction::SetSearchResults(results) => {
                 self.results = *results.clone();
                 vec![BrowserEvent::SearchResultsUpdated]
             }
+            BrowserAction::SetSearchScopeResults(search_type, query, results)
+                if Some(*search_type) == self.filter && query == &self.query =>
+            {
+                match search_type {
+                    SearchType::Tracks => {
+                        self.scope_tracks.clear().commit();
+                        self.scope_tracks.add(results.tracks.clone()).commit();
+                        self.scope_page.reset_count(self.scope_tracks.partial_len());
+                    }
+                    other => {
+                        let cards = cards_from_results(*other, results);
+                        self.scope_cards.replace_all(cards.into_iter());
+                        self.scope_page.reset_count(self.scope_cards.len());
+                    }
+                }
+                vec![BrowserEvent::SearchScopeUpdated(*search_type)]
+            }
+            BrowserAction::AppendSearchScopeResults(search_type, query, results)
+                if Some(*search_type) == self.filter && query == &self.query =>
+            {
+                match search_type {
+                    SearchType::Tracks => {
+                        self.scope_page.set_loaded_count(results.tracks.songs.len());
+                        self.scope_tracks.add(results.tracks.clone()).commit();
+                    }
+                    other => {
+                        let cards = cards_from_results(*other, results);
+                        let loaded = cards.len();
+                        self.scope_cards.extend(cards.into_iter());
+                        self.scope_page.set_loaded_count(loaded);
+                    }
+                }
+                vec![BrowserEvent::SearchScopeUpdated(*search_type)]
+            }
+            BrowserAction::ConsumeNextPage(PaginationTarget::SearchScope) => {
+                self.scope_page.next_offset_take();
+                vec![]
+            }
             _ => vec![],
         }
+    }
+}
+
+/// Extract card models for a given search type from a `SearchResults`.
+fn cards_from_results(search_type: SearchType, results: &SearchResults) -> Vec<CardModel> {
+    match search_type {
+        SearchType::Albums => results.albums.iter().map(CardModel::from).collect(),
+        SearchType::Artists => results.artists.iter().map(CardModel::from).collect(),
+        SearchType::Playlists => results.playlists.iter().map(CardModel::from).collect(),
+        // Tracks are shown as a track list, not cards.
+        SearchType::Tracks => vec![],
     }
 }
 

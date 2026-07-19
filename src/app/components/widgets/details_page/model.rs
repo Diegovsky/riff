@@ -315,6 +315,7 @@ mod tests {
         stub_api_method!(unfollow_playlist(_id: &str) -> ());
         stub_api_method!(update_playlist_details(_id: &str, _name: String) -> ());
         stub_api_method!(search(_query: &str, _offset: usize, _limit: usize) -> SearchResults);
+        stub_api_method!(search_scoped(_query: &str, _search_type: SearchType, _offset: usize, _limit: usize) -> SearchResults);
         stub_api_method!(get_artist_albums(_id: &str, _offset: usize, _limit: usize) -> Vec<AlbumDescription>);
         stub_api_method!(get_user(_id: &str) -> UserDescription);
         stub_api_method!(get_user_playlists(_id: &str, _offset: usize, _limit: usize) -> Vec<PlaylistDescription>);
@@ -350,6 +351,7 @@ mod tests {
     fn make_model_playing() -> (DetailsPageModel, MockDispatcher) {
         let dispatcher = MockDispatcher::default();
         let app_model = Rc::new(AppModel::new(AppState::new(), Arc::new(MockApi)));
+        #[allow(deprecated)]
         app_model.update_state(PlaybackAction::LoadSongs(vec![song("s1"), song("s2")]).into());
         app_model.update_state(PlaybackAction::Load("s1".to_string()).into());
         let model = DetailsPageModel::new(

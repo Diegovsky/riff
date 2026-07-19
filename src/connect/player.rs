@@ -86,6 +86,7 @@ impl ConnectPlayer {
 
     async fn apply_remote_state(&self, state: &ConnectPlayerState) {
         if let Some(songs) = self.get_queue_if_changed().await {
+            #[allow(deprecated)]
             self.send_actions([PlaybackAction::LoadSongs(songs).into()]);
         }
 

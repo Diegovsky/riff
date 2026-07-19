@@ -129,7 +129,13 @@ impl ScreenFactory {
     pub fn make_search_results(&self) -> impl ListenerComponent {
         let model =
             SearchResultsModel::new(Rc::clone(&self.app_model), self.dispatcher.box_clone());
-        SearchResults::new(model, self.worker.clone())
+        SearchResults::new(
+            model,
+            self.worker.clone(),
+            Rc::clone(&self.shared_layout),
+            Rc::clone(&self.shared_size),
+            Rc::clone(&self.dispatcher),
+        )
     }
 
     pub fn make_artist_details(&self, id: String) -> impl ListenerComponent {
