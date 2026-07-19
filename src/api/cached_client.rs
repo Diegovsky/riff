@@ -14,6 +14,31 @@ use std::future::Future;
 
 pub type SpotifyResult<T> = Result<T, SpotifyApiError>;
 
+/// Convert a raw Spotify search response into the domain `SearchResults`.
+/// Each category is optional: scoped searches only populate one of them.
+fn raw_search_into_results(raw: RawSearchResults) -> SearchResults {
+    let albums = raw
+        .albums
+        .map(|page| page.into_iter().map(Into::into).collect())
+        .unwrap_or_default();
+    let artists = raw
+        .artists
+        .map(|page| page.into_iter().map(Into::into).collect())
+        .unwrap_or_default();
+    let playlists = raw
+        .playlists
+        .map(|page| page.into_iter().map(Into::into).collect())
+        .unwrap_or_default();
+    let tracks = raw.tracks.map(SongBatch::from).unwrap_or_default();
+
+    SearchResults {
+        albums,
+        artists,
+        playlists,
+        tracks,
+    }
+}
+
 pub trait SpotifyApiClient {
     fn get_artist(&self, id: &str) -> BoxFuture<SpotifyResult<ArtistDescription>>;
 
@@ -76,6 +101,16 @@ pub trait SpotifyApiClient {
     fn search(
         &self,
         query: &str,
+        offset: usize,
+        limit: usize,
+    ) -> BoxFuture<SpotifyResult<SearchResults>>;
+
+    /// Search restricted to a single category. Only the field of `SearchResults`
+    /// matching `search_type` is populated.
+    fn search_scoped(
+        &self,
+        query: &str,
+        search_type: SearchType,
         offset: usize,
         limit: usize,
     ) -> BoxFuture<SpotifyResult<SearchResults>>;
@@ -215,6 +250,30 @@ impl CachedSpotifyClient {
             debug!("Forcing cache");
             CachePolicy::IgnoreExpiry
         }
+    }
+
+    /// Shared implementation for `search` and `search_scoped`: run a search for
+    /// the given comma-separated `types` and map the raw response into the
+    /// domain `SearchResults`.
+    fn search_types(
+        &self,
+        query: &str,
+        types: &'static str,
+        offset: usize,
+        limit: usize,
+    ) -> BoxFuture<SpotifyResult<SearchResults>> {
+        let query = query.to_owned();
+        Box::pin(async move {
+            let raw = self
+                .client
+                .search(query, types, offset, limit)
+                .send()
+                .await?
+                .deserialize()
+                .ok_or(SpotifyApiError::NoContent)?;
+
+            Ok(raw_search_into_results(raw))
+        })
     }
 
     async fn wrap_write<T, O, F>(write: &F, etag: Option<String>) -> SpotifyResult<FetchResult>
@@ -663,37 +722,17 @@ impl SpotifyApiClient for CachedSpotifyClient {
         offset: usize,
         limit: usize,
     ) -> BoxFuture<SpotifyResult<SearchResults>> {
-        let query = query.to_owned();
+        self.search_types(query, "album,track,artist,playlist", offset, limit)
+    }
 
-        Box::pin(async move {
-            let results = self
-                .client
-                .search(query, offset, limit)
-                .send()
-                .await?
-                .deserialize()
-                .ok_or(SpotifyApiError::NoContent)?;
-
-            let albums = results
-                .albums
-                .into_iter()
-                .map(|saved| saved.into())
-                .collect::<Vec<AlbumDescription>>();
-
-            let artists = results
-                .artists
-                .into_iter()
-                .map(|saved| saved.into())
-                .collect::<Vec<ArtistSummary>>();
-
-            let tracks = SongBatch::from(results.tracks);
-
-            Ok(SearchResults {
-                albums,
-                artists,
-                tracks,
-            })
-        })
+    fn search_scoped(
+        &self,
+        query: &str,
+        search_type: SearchType,
+        offset: usize,
+        limit: usize,
+    ) -> BoxFuture<SpotifyResult<SearchResults>> {
+        self.search_types(query, search_type.spotify_type(), offset, limit)
     }
 
     fn get_user_playlists(

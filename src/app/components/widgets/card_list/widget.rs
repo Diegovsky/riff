@@ -18,6 +18,12 @@ const ROW_SPACING: u32 = 6;
 const COLUMN_SPACING: u32 = 6;
 const PLACEHOLDER_COUNT: u32 = 50;
 
+/// Gap between image and labels in horizontal card layout (matches CardWidget).
+const HORIZONTAL_GAP: i32 = 12;
+
+/// Label width multiplier for horizontal card layout (matches CardWidget).
+const HORIZONTAL_LABEL_WIDTH_SCALE: f32 = 1.8;
+
 /// Key used to attach a CardModel to a FlowBoxChild via GObject unsafe data.
 const MODEL_DATA_KEY: &str = "card-model";
 
@@ -50,6 +56,8 @@ pub struct CardList {
     current_sort: Rc<Cell<SortOrder>>,
     current_filter: Rc<RefCell<String>>,
     next_position: Rc<Cell<u32>>,
+    /// Maximum number of rows to display. None means unlimited.
+    max_rows: Rc<Cell<Option<u32>>>,
     /// Number of placeholder children currently in the FlowBox.
     placeholder_count: Rc<Cell<u32>>,
     /// Signal connection to the source store, disconnected on drop.
@@ -68,13 +76,45 @@ impl CardList {
         flowbox.set_selection_mode(gtk::SelectionMode::None);
         flowbox.set_activate_on_single_click(true);
         flowbox.set_valign(gtk::Align::Start);
+
+        let max_rows = Rc::new(Cell::new(None));
+        let current_size = Rc::new(Cell::new(CardSize::Large));
+        let current_layout = Rc::new(Cell::new(CardLayout::Vertical));
+        let current_filter = Rc::new(RefCell::new(String::new()));
+
+        // Re-apply the row limit every frame using the FlowBox's actual
+        // laid-out geometry. GTK4 FlowBox doesn't emit a resize signal, and the
+        // real column count (after theme padding, spacing rounding, and
+        // hexpand distribution) can differ from a pixel-math estimate. Reading
+        // the children's allocated positions each frame keeps the row limit
+        // correct across resizes, card size/layout changes, and content loads.
+        // `set_visible` is a no-op when the value is unchanged, so a steady
+        // state does not trigger relayouts.
+        let max_rows_for_tick = Rc::clone(&max_rows);
+        let current_size_for_tick = Rc::clone(&current_size);
+        let current_layout_for_tick = Rc::clone(&current_layout);
+        let current_filter_for_tick = Rc::clone(&current_filter);
+        flowbox.add_tick_callback(move |fb, _| {
+            if let Some(rows) = max_rows_for_tick.get() {
+                apply_grid_constraint(
+                    fb,
+                    rows,
+                    current_size_for_tick.get(),
+                    current_layout_for_tick.get(),
+                    &current_filter_for_tick.borrow(),
+                );
+            }
+            glib::ControlFlow::Continue
+        });
+
         Self {
             flowbox,
-            current_layout: Rc::new(Cell::new(CardLayout::Vertical)),
-            current_size: Rc::new(Cell::new(CardSize::Large)),
+            current_layout,
+            current_size,
             current_sort: Rc::new(Cell::new(SortOrder::RecentlyAdded)),
-            current_filter: Rc::new(RefCell::new(String::new())),
+            current_filter,
             next_position: Rc::new(Cell::new(0)),
+            max_rows,
             placeholder_count: Rc::new(Cell::new(0)),
             source_signal: Cell::new(None),
             activation_signal: Cell::new(None),
@@ -147,6 +187,8 @@ impl CardList {
             let current_layout = Rc::clone(&self.current_layout);
             let current_size = Rc::clone(&self.current_size);
             let placeholder_count = Rc::clone(&self.placeholder_count);
+            let constraint = Rc::clone(&self.max_rows);
+            let current_filter = Rc::clone(&self.current_filter);
             let worker_clone = worker.clone();
             let handler_id =
                 inner.connect_items_changed(move |source, position, removed, added| {
@@ -199,6 +241,17 @@ impl CardList {
                         }
                         next_pos.set(ctr);
                     }
+
+                    // Re-apply the row limit after any change
+                    if let Some(rows) = constraint.get() {
+                        apply_grid_constraint(
+                            &flowbox,
+                            rows,
+                            size,
+                            layout,
+                            &current_filter.borrow(),
+                        );
+                    }
                 });
             self.source_signal.set(Some((inner, handler_id)));
 
@@ -246,6 +299,7 @@ impl CardList {
             }
             child = c.next_sibling();
         }
+        self.apply_constraint();
     }
 
     pub fn update_layout(&self, layout: CardLayout) {
@@ -262,6 +316,7 @@ impl CardList {
             }
             child = c.next_sibling();
         }
+        self.apply_constraint();
     }
 
     /// Change the sort order. Reorders existing children in-place (no flash).
@@ -319,16 +374,70 @@ impl CardList {
         count
     }
 
+    /// Set the maximum number of rows to display.
+    ///
+    /// Cards that don't fit within the given number of rows will be hidden.
+    /// Pass `None` to remove the limit and show all cards.
+    /// The row limit is applied after sorting and category filtering.
+    pub fn set_max_rows(&self, max_rows: Option<u32>) {
+        self.max_rows.set(max_rows);
+        self.apply_constraint();
+    }
+
+    /// Re-apply the current row limit, showing/hiding children as needed.
+    ///
+    /// If no limit is active, all children are made visible.
+    pub fn apply_constraint(&self) {
+        let Some(rows) = self.max_rows.get() else {
+            // No limit - make all children visible
+            let mut child = self.flowbox.first_child();
+            while let Some(c) = child {
+                if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
+                    fb_child.set_visible(true);
+                }
+                child = c.next_sibling();
+            }
+            return;
+        };
+
+        apply_grid_constraint(
+            &self.flowbox,
+            rows,
+            self.current_size.get(),
+            self.current_layout.get(),
+            &self.current_filter.borrow(),
+        );
+    }
+
     /// Show placeholder skeleton cards (only if FlowBox is empty).
+    ///
+    /// Inserts slightly more placeholders than strictly needed (one extra row's
+    /// worth) so the constrained area is never left under-filled if the column
+    /// estimate is low. The per-frame reconcile in the tick callback hides any
+    /// overflow once the real geometry is known.
     pub fn show_placeholders(&self) {
         if self.flowbox.first_child().is_none() {
             let layout = self.current_layout.get();
             let size = self.current_size.get();
-            for _ in 0..PLACEHOLDER_COUNT {
+            let count = self.placeholder_insert_count(size, layout);
+            for _ in 0..count {
                 let child = create_child_placeholder(layout, size);
                 self.flowbox.insert(&child, -1);
             }
-            self.placeholder_count.set(PLACEHOLDER_COUNT);
+            self.placeholder_count.set(count);
+            self.apply_constraint();
+        }
+    }
+
+    /// Compute how many placeholders to insert given the current row limit.
+    ///
+    /// Returns `PLACEHOLDER_COUNT` when there is no row limit. Otherwise inserts
+    /// `(rows + 1) * columns` so a low column estimate never under-fills the
+    /// constrained rows; excess placeholders are hidden by the reconcile pass.
+    fn placeholder_insert_count(&self, size: CardSize, layout: CardLayout) -> u32 {
+        match self.max_rows.get() {
+            Some(rows) => (rows + 1) * estimated_columns(&self.flowbox, size, layout),
+            None => PLACEHOLDER_COUNT,
         }
     }
 
@@ -451,5 +560,144 @@ fn compare_cards(sort: SortOrder, a: &CardModel, b: &CardModel) -> Ordering {
             .cmp(&b.subtitle().to_ascii_lowercase()),
         SortOrder::DateReleased => b.release_date().cmp(&a.release_date()),
         SortOrder::Popularity => b.popularity().cmp(&a.popularity()),
+    }
+}
+
+/// Padding applied to each card container via CSS (`.container { padding: 6px }`).
+/// Both left and right padding contribute to the effective width.
+const CARD_CONTAINER_PADDING: i32 = 6;
+
+/// Determine the number of columns in the first (top) row from the FlowBox's
+/// actual laid-out geometry.
+///
+/// This reads the allocated Y position of each currently-visible child: all
+/// children in the top row share the same Y. Counting them yields the true
+/// column count as GTK actually laid it out, which is more reliable than a
+/// pixel-math estimate (it accounts for theme padding, spacing rounding, and
+/// hexpand distribution).
+///
+/// The top row is always fully populated (overflow is hidden from the end), so
+/// this stays correct even when lower rows are hidden. Returns `None` if the
+/// FlowBox hasn't been allocated yet.
+fn measured_columns(flowbox: &gtk::FlowBox) -> Option<u32> {
+    if flowbox.width() <= 0 {
+        return None;
+    }
+
+    // The Y position of each child relative to the FlowBox. Children in the top
+    // row share the smallest Y. `compute_bounds` returns positions in the
+    // target's coordinate space (here, the FlowBox itself).
+    let child_top = |fb_child: &gtk::FlowBoxChild| -> Option<i32> {
+        fb_child
+            .compute_bounds(flowbox)
+            .map(|bounds| bounds.y().round() as i32)
+    };
+
+    // Find the minimum Y among visible children (the top row).
+    let mut min_y = i32::MAX;
+    let mut child = flowbox.first_child();
+    while let Some(c) = child {
+        if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
+            if fb_child.is_visible() {
+                if let Some(y) = child_top(fb_child) {
+                    if y < min_y {
+                        min_y = y;
+                    }
+                }
+            }
+        }
+        child = c.next_sibling();
+    }
+
+    if min_y == i32::MAX {
+        return None;
+    }
+
+    // Count visible children sitting on the top row.
+    let mut count = 0u32;
+    let mut child = flowbox.first_child();
+    while let Some(c) = child {
+        if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
+            if fb_child.is_visible() && child_top(fb_child) == Some(min_y) {
+                count += 1;
+            }
+        }
+        child = c.next_sibling();
+    }
+
+    (count > 0).then_some(count)
+}
+
+/// Compute the effective width a single card occupies in the FlowBox, including
+/// the column spacing and CSS container padding. Accounts for horizontal layout
+/// being wider than vertical or image-only layouts.
+///
+/// Used as a fallback for computing columns before the FlowBox is laid out; once
+/// allocated, `measured_columns` is preferred.
+fn effective_card_width(size: CardSize, layout: CardLayout) -> i32 {
+    let px = size.pixel_size();
+    let card_content_width = match layout {
+        CardLayout::Horizontal => {
+            px + HORIZONTAL_GAP + (HORIZONTAL_LABEL_WIDTH_SCALE * px as f32) as i32
+        }
+        _ => px,
+    };
+    card_content_width + (CARD_CONTAINER_PADDING * 2) + COLUMN_SPACING as i32
+}
+
+/// Estimate the column count from pixel math when actual geometry isn't
+/// available yet (FlowBox not laid out).
+fn estimated_columns(flowbox: &gtk::FlowBox, size: CardSize, layout: CardLayout) -> u32 {
+    let eff_width = effective_card_width(size, layout);
+    let allocated_width = flowbox.width();
+    if allocated_width > 0 && eff_width > 0 {
+        let cols = (allocated_width + COLUMN_SPACING as i32) / eff_width;
+        cols.max(1) as u32
+    } else {
+        flowbox.max_children_per_line()
+    }
+}
+
+/// Apply a row limit to a FlowBox, hiding children that overflow.
+///
+/// Prefers the real column count from `measured_columns` (actual laid-out
+/// geometry) and falls back to a pixel-math estimate when the FlowBox hasn't
+/// been allocated yet. The maximum visible count is `rows * columns`. Both real
+/// cards (with a model) and placeholders (without) are counted and hidden when
+/// they exceed the limit.
+fn apply_grid_constraint(
+    flowbox: &gtk::FlowBox,
+    max_rows: u32,
+    size: CardSize,
+    layout: CardLayout,
+    filter: &str,
+) {
+    let cols =
+        measured_columns(flowbox).unwrap_or_else(|| estimated_columns(flowbox, size, layout));
+
+    let max_visible = (max_rows * cols) as usize;
+
+    let mut visible_index = 0;
+    let mut child = flowbox.first_child();
+    while let Some(c) = child {
+        if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
+            match get_model(fb_child) {
+                Some(card) => {
+                    let passes_filter = filter.is_empty() || card.category() == *filter;
+                    if passes_filter {
+                        fb_child.set_visible(visible_index < max_visible);
+                        visible_index += 1;
+                    } else {
+                        fb_child.set_visible(false);
+                    }
+                }
+                None => {
+                    // Placeholder - count it toward the limit too
+                    fb_child.set_visible(visible_index < max_visible);
+                    visible_index += 1;
+                }
+            }
+        }
+        child = c.next_sibling();
     }
 }

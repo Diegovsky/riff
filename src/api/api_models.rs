@@ -49,14 +49,13 @@ pub struct Name<'a> {
 
 pub struct SearchQuery {
     pub query: String,
+    pub types: String,
     pub limit: usize,
     pub offset: usize,
 }
 
 impl SearchQuery {
     pub fn into_query_string(self) -> String {
-        let types = "album,track,artist";
-
         let re = Regex::new(r"(\W|\s)+").unwrap();
         let query = re.replace_all(&self.query[..], " ");
 
@@ -67,6 +66,7 @@ impl SearchQuery {
             .append_pair("market", "from_token")
             .finish();
 
+        let types = &self.types;
         format!("type={types}&{serialized}")
     }
 }
@@ -412,9 +412,14 @@ impl FailibleTrackItem {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct RawSearchResults {
-    pub albums: Page<Album>,
-    pub artists: Page<Artist>,
-    pub tracks: Page<TrackItem>,
+    #[serde(default)]
+    pub albums: Option<Page<Album>>,
+    #[serde(default)]
+    pub artists: Option<Page<Artist>>,
+    #[serde(default)]
+    pub tracks: Option<Page<TrackItem>>,
+    #[serde(default)]
+    pub playlists: Option<Page<Playlist>>,
 }
 
 impl From<Artist> for ArtistSummary {
@@ -710,6 +715,7 @@ mod tests {
     fn test_search_query_encoding() {
         let query = SearchQuery {
             query: "кириллица".to_string(),
+            types: "album,track,artist".to_string(),
             limit: 5,
             offset: 0,
         };
@@ -721,6 +727,7 @@ mod tests {
     fn test_search_query_spaces_and_stuff() {
         let query = SearchQuery {
             query: "test??? wow".to_string(),
+            types: "album,track,artist".to_string(),
             limit: 5,
             offset: 0,
         };
@@ -728,6 +735,21 @@ mod tests {
         assert_eq!(
             query.into_query_string(),
             "type=album,track,artist&q=test+wow&offset=0&limit=5&market=from_token"
+        );
+    }
+
+    #[test]
+    fn test_search_query_scoped_type() {
+        let query = SearchQuery {
+            query: "daft punk".to_string(),
+            types: "playlist".to_string(),
+            limit: 20,
+            offset: 40,
+        };
+
+        assert_eq!(
+            query.into_query_string(),
+            "type=playlist&q=daft+punk&offset=40&limit=20&market=from_token"
         );
     }
 }

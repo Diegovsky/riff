@@ -1,6 +1,5 @@
 // Domain models
 mod main;
-use glib::subclass::types::ObjectSubclassIsExt;
 pub use main::*;
 
 // Shared enums (used by UI, state, and settings)

@@ -110,7 +110,33 @@ pub struct AlbumRef {
 pub struct SearchResults {
     pub albums: Vec<AlbumDescription>,
     pub artists: Vec<ArtistSummary>,
+    pub playlists: Vec<PlaylistDescription>,
     pub tracks: SongBatch,
+}
+
+/// The category a scoped ("sub") search page searches within.
+///
+/// Selecting a filter on the main search page opens a dedicated page scoped to
+/// one of these categories, using the Spotify search API restricted to the
+/// matching `type`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchType {
+    Artists,
+    Albums,
+    Playlists,
+    Tracks,
+}
+
+impl SearchType {
+    /// The Spotify search API `type` query value.
+    pub fn spotify_type(self) -> &'static str {
+        match self {
+            Self::Artists => "artist",
+            Self::Albums => "album",
+            Self::Playlists => "playlist",
+            Self::Tracks => "track",
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

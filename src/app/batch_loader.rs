@@ -18,6 +18,8 @@ pub enum SongsSource {
     Album(String),
     Artist(String),
     SavedTracks,
+    /// Songs shown on a scoped track search page, keyed by the search query.
+    Search(String),
 }
 
 impl PartialEq for SongsSource {
@@ -27,6 +29,7 @@ impl PartialEq for SongsSource {
             (Self::Album(l), Self::Album(r)) => l == r,
             (Self::Artist(l), Self::Artist(r)) => l == r,
             (Self::SavedTracks, Self::SavedTracks) => true,
+            (Self::Search(l), Self::Search(r)) => l == r,
             _ => false,
         }
     }
@@ -74,8 +77,11 @@ impl BatchLoader {
         let Batch {
             offset, batch_size, ..
         } = query.batch;
-        if matches!(&query.source, SongsSource::Artist(_)) {
-            error!("Artist top tracks are not paginated and should not be batch-loaded");
+        if matches!(
+            &query.source,
+            SongsSource::Artist(_) | SongsSource::Search(_)
+        ) {
+            error!("This source is not paginated and should not be batch-loaded");
             return None;
         }
 
@@ -83,7 +89,7 @@ impl BatchLoader {
             SongsSource::Playlist(id) => api.get_playlist_tracks(id, offset, batch_size),
             SongsSource::SavedTracks => api.get_saved_tracks(offset, batch_size),
             SongsSource::Album(id) => api.get_album_tracks(id, offset, batch_size),
-            SongsSource::Artist(_) => unreachable!(),
+            SongsSource::Artist(_) | SongsSource::Search(_) => unreachable!(),
         };
 
         let result = match do_fetch().await {

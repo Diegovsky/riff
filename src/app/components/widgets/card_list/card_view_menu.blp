@@ -41,24 +41,29 @@ template $CardViewMenuPopover : Popover {
       }
     }
 
-    Separator {
-      orientation: horizontal;
-      margin-top: 6;
-      margin-bottom: 6;
-    }
-
-    Label sort_label {
-      label: _("Sort By");
-      halign: start;
-
-      styles [
-        "heading",
-      ]
-    }
-
-    Box sort_box {
+    Box sort_section {
       orientation: vertical;
       spacing: 6;
+
+      Separator {
+        orientation: horizontal;
+        margin-top: 6;
+        margin-bottom: 6;
+      }
+
+      Label sort_label {
+        label: _("Sort By");
+        halign: start;
+
+        styles [
+          "heading",
+        ]
+      }
+
+      Box sort_box {
+        orientation: vertical;
+        spacing: 6;
+      }
     }
   }
 }

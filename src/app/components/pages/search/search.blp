@@ -19,9 +19,92 @@ template $SearchResultsWidget : Box {
     }
 
     [title]
-    SearchEntry search_entry {
-      receives-default: true;
-      can-focus: true;
+    Adw.Clamp {
+      maximum-size: 740;
+      hexpand: true;
+
+      child: Box search_box {
+        orientation: horizontal;
+        spacing: 0;
+
+        styles [
+          "linked",
+          "search-bar-container",
+        ]
+
+        SearchEntry search_entry {
+          hexpand: true;
+          receives-default: true;
+          can-focus: true;
+        }
+
+        MenuButton filter_button {
+          icon-name: "nautilus-search-filters-symbolic";
+          tooltip-text: _("Filter");
+          focus-on-click: false;
+          can-focus: false;
+
+          popover: Popover filter_popover {
+            child: Box {
+              orientation: vertical;
+              spacing: 12;
+              margin-start: 12;
+              margin-end: 12;
+              margin-top: 12;
+              margin-bottom: 12;
+
+              Label {
+                label: _("Filter by type");
+                hexpand: true;
+                xalign: 0;
+                valign: baseline;
+
+                styles [
+                  "heading",
+                ]
+              }
+
+              Adw.WrapBox {
+                child-spacing: 6;
+                line-spacing: 6;
+                natural-line-length: 300;
+
+                ToggleButton filter_artists {
+                  child: Adw.ButtonContent {
+                    icon-name: "avatar-default-symbolic";
+                    label: _("_Artist");
+                    use-underline: true;
+                  };
+                }
+
+                ToggleButton filter_albums {
+                  child: Adw.ButtonContent {
+                    icon-name: "media-optical-symbolic";
+                    label: _("A_lbums");
+                    use-underline: true;
+                  };
+                }
+
+                ToggleButton filter_playlists {
+                  child: Adw.ButtonContent {
+                    icon-name: "playlist2-symbolic";
+                    label: _("_Playlists");
+                    use-underline: true;
+                  };
+                }
+
+                ToggleButton filter_songs {
+                  child: Adw.ButtonContent {
+                    icon-name: "audio-x-generic-symbolic";
+                    label: _("_Songs");
+                    use-underline: true;
+                  };
+                }
+              }
+            };
+          };
+        }
+      };
     }
   }
 
@@ -34,30 +117,15 @@ template $SearchResultsWidget : Box {
       hexpand: true;
       vexpand: true;
       hscrollbar-policy: never;
-      Box {
+
+      Box results_box {
         vexpand: false;
-        margin-start: 8;
-        margin-end: 8;
-        margin-top: 8;
-        margin-bottom: 8;
+        margin-start: 12;
+        margin-end: 12;
+        margin-top: 12;
+        margin-bottom: 12;
         orientation: vertical;
-        spacing: 8;
-
-        $ResultSection track_results {
-          /* Translators: This is the title of a section of the search results */
-          label: _("Tracks");
-        }
-
-        $ResultSection album_results {
-          /* Translators: This is the title of a section of the search results */
-          label: _("Albums");
-
-        }
-        $ResultSection artist_results {
-          /* Translators: This is the title of a section of the search results */
-          label: _("Artists");
-
-        }
+        spacing: 16;
       }
     }
 

@@ -565,11 +565,13 @@ impl SpotifyClient {
     pub(crate) fn search(
         &self,
         query: String,
+        types: &str,
         offset: usize,
         limit: usize,
     ) -> SpotifyRequest<'_, (), RawSearchResults> {
         let query = SearchQuery {
             query,
+            types: types.to_string(),
             limit,
             offset,
         };

@@ -141,23 +141,6 @@ where
     })
 }
 
-pub fn wrap_flowbox_item<
-    Model: IsA<glib::Object>,
-    Widget: IsA<gtk::Widget>,
-    F: Fn(&Model) -> Widget,
->(
-    item: &glib::Object,
-    f: F,
-) -> gtk::Widget {
-    let item = item.downcast_ref::<Model>().unwrap();
-    let widget = f(item);
-    let child = gtk::FlowBoxChild::new();
-    child.set_halign(gtk::Align::Fill);
-    child.set_hexpand(true);
-    child.set_child(Some(&widget));
-    child.upcast::<gtk::Widget>()
-}
-
 pub fn format_duration(duration: f64) -> String {
     let seconds = (duration / 1000.0) as i32;
     let hours = seconds.div_euclid(3600);

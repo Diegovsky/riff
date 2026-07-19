@@ -1,4 +1,4 @@
-mod card_view_menu;
+pub mod card_view_menu;
 mod component;
 mod filter_toggle;
 mod page_widget;

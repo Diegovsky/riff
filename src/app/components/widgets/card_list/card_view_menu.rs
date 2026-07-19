@@ -21,6 +21,8 @@ mod imp {
         #[template_child]
         pub increase_btn: TemplateChild<gtk::Button>,
         #[template_child]
+        pub sort_section: TemplateChild<gtk::Box>,
+        #[template_child]
         pub sort_box: TemplateChild<gtk::Box>,
     }
 
@@ -117,6 +119,9 @@ impl CardViewMenu {
             Rc::clone(&card_list),
             Rc::clone(&dispatcher),
         );
+
+        // Hide the entire sort section if no sort options are available.
+        imp.sort_section.set_visible(!available_sorts.is_empty());
 
         // Sync button sensitivity when popover opens
         let size_ref = Rc::clone(&size);
