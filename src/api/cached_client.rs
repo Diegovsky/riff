@@ -44,6 +44,8 @@ pub trait SpotifyApiClient {
 
     fn get_album(&self, id: &str) -> BoxFuture<SpotifyResult<AlbumFullDescription>>;
 
+    fn get_track(&self, id: &str) -> BoxFuture<SpotifyResult<SongDescription>>;
+
     fn get_album_tracks(
         &self,
         id: &str,
@@ -181,6 +183,7 @@ enum RiffCacheKey<'a> {
     Album(&'a str),
     AlbumLiked(&'a str),
     AlbumTracks(&'a str, usize, usize),
+    Track(&'a str),
     Playlist(&'a str),
     PlaylistTracks(&'a str, usize, usize),
     ArtistAlbums(&'a str, usize, usize),
@@ -200,6 +203,7 @@ impl RiffCacheKey<'_> {
             Self::AlbumTracks(id, offset, limit) => {
                 format!("album_item_{id}_{offset}_{limit}.json")
             }
+            Self::Track(id) => format!("track_{id}.json"),
             Self::AlbumLiked(id) => format!("album_liked_{id}.json"),
             Self::Playlist(id) => format!("playlist_{id}.json"),
             Self::PlaylistTracks(id, offset, limit) => {
@@ -530,6 +534,20 @@ impl SpotifyApiClient for CachedSpotifyClient {
             album.description.is_liked = liked?[0];
 
             Ok(album)
+        })
+    }
+
+    fn get_track(&self, id: &str) -> BoxFuture<SpotifyResult<SongDescription>> {
+        let id = id.to_owned();
+
+        Box::pin(async move {
+            let track: TrackItem = self
+                .cache_get_or_write(RiffCacheKey::Track(&id), None, |etag| {
+                    self.client.get_track(&id).etag(etag).send()
+                })
+                .await?;
+
+            Ok(track.into())
         })
     }
 

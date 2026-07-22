@@ -53,7 +53,7 @@
   animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 
-.details-page-content .details-header .circular:not(.play__button):not(.like__button):not(.shuffle__button):not(.info__button) {
+.details-page-content .details-header .circular:not(.play__button):not(.like__button):not(.shuffle__button):not(.info__button):not(.share__button) {
   background-color: @skeleton_color;
   color: transparent;
   opacity: 0;
@@ -63,6 +63,7 @@
 .details-page-content:not(.details-page--loaded) .details-header .play__button,
 .details-page-content:not(.details-page--loaded) .details-header .shuffle__button,
 .details-page-content:not(.details-page--loaded) .details-header .like__button,
+.details-page-content:not(.details-page--loaded) .details-header .share__button,
 .details-page-content:not(.details-page--loaded) .details-header .edit__button {
   background-color: @skeleton_color;
   color: transparent;
@@ -101,7 +102,7 @@
   min-width: unset;
 }
 
-.details-page--loaded .details-header .circular:not(.play__button):not(.like__button):not(.shuffle__button):not(.info__button) {
+.details-page--loaded .details-header .circular:not(.play__button):not(.like__button):not(.shuffle__button):not(.info__button):not(.share__button) {
   animation: none;
   background-color: transparent;
   color: inherit;

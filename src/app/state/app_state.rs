@@ -7,7 +7,7 @@ use crate::app::state::{
     playback_state::{PlaybackAction, PlaybackEvent, PlaybackState},
     selection_state::{SelectionAction, SelectionContext, SelectionEvent, SelectionState},
     settings_state::{SettingsAction, SettingsEvent, SettingsState},
-    ScreenName, UpdatableState,
+    ScreenName, SpotifyLink, UpdatableState,
 };
 
 // It's a big one...
@@ -42,28 +42,19 @@ pub enum AppAction {
 
 // Not actual actions, just neat wrappers
 impl AppAction {
-    // An action to open a Spotify URI
+    // An action to open a Spotify URI or an open.spotify.com URL.
+    // Track links are not resolvable synchronously (they need an API lookup to
+    // find the containing album), so they are handled separately by the caller.
     #[allow(non_snake_case)]
     pub fn OpenURI(uri: String) -> Option<Self> {
         debug!("parsing {}", &uri);
-        let mut parts = uri.split(':');
-        if parts.next()? != "spotify" {
-            return None;
-        }
-
-        // Might start with /// because of https://gitlab.gnome.org/GNOME/glib/-/issues/1886/
-        let action = parts
-            .next()?
-            .strip_prefix("///")
-            .filter(|p| !p.is_empty())?;
-        let data = parts.next()?;
-
-        match action {
-            "album" => Some(Self::ViewAlbum(data.to_string())),
-            "artist" => Some(Self::ViewArtist(data.to_string())),
-            "playlist" => Some(Self::ViewPlaylist(data.to_string())),
-            "user" => Some(Self::ViewUser(data.to_string())),
-            _ => None,
+        match SpotifyLink::parse(&uri)? {
+            SpotifyLink::Album(id) => Some(Self::ViewAlbum(id)),
+            SpotifyLink::Artist(id) => Some(Self::ViewArtist(id)),
+            SpotifyLink::Playlist(id) => Some(Self::ViewPlaylist(id)),
+            SpotifyLink::User(id) => Some(Self::ViewUser(id)),
+            // Tracks require an async album lookup; not handled here.
+            SpotifyLink::Track(_) => None,
         }
     }
 

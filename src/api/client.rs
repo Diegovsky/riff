@@ -368,6 +368,15 @@ impl SpotifyClient {
             .uri(format!("/v1/albums/{id}"), None)
     }
 
+    pub(crate) fn get_track(&self, id: &str) -> SpotifyRequest<'_, (), TrackItem> {
+        let query = make_query_params()
+            .append_pair("market", "from_token")
+            .finish();
+        self.request()
+            .method(Method::GET)
+            .uri(format!("/v1/tracks/{id}"), Some(&query))
+    }
+
     pub(crate) fn get_album_tracks(
         &self,
         id: &str,

@@ -7,6 +7,7 @@ mod playback_state;
 mod screen_states;
 mod selection_state;
 mod settings_state;
+mod spotify_link;
 
 pub use app_model::AppModel;
 pub use app_state::*;
@@ -16,6 +17,7 @@ pub use playback_state::*;
 pub use screen_states::*;
 pub use selection_state::*;
 pub use settings_state::*;
+pub use spotify_link::SpotifyLink;
 
 pub trait UpdatableState {
     type Action: Clone;

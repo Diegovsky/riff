@@ -571,6 +571,20 @@ impl TryFrom<Album> for SongBatch {
     }
 }
 
+impl From<TrackItem> for SongDescription {
+    /// Convert a single fetched track (e.g. from `GET /v1/tracks/{id}`) into the
+    /// domain `SongDescription`. The track carries its own album, so the
+    /// resulting song always has a valid `album` reference.
+    fn from(track: TrackItem) -> Self {
+        let batch: SongBatch = Page::new(vec![track]).into();
+        batch
+            .songs
+            .into_iter()
+            .next()
+            .expect("a fetched track always yields exactly one song")
+    }
+}
+
 impl From<FullAlbum> for AlbumFullDescription {
     fn from(full_album: FullAlbum) -> Self {
         let description = full_album.album.into();
@@ -751,5 +765,29 @@ mod tests {
             query.into_query_string(),
             "type=playlist&q=daft+punk&offset=40&limit=20&market=from_token"
         );
+    }
+
+    #[test]
+    fn test_track_item_into_song_description() {
+        // Shape returned by GET /v1/tracks/{id}: a track with a nested album.
+        let track = r#"{
+            "id": "track123",
+            "uri": "spotify:track:track123",
+            "name": "Some Song",
+            "duration_ms": 210000,
+            "track_number": 3,
+            "artists": [{"id": "artist1", "name": "Artist"}],
+            "album": {
+                "id": "album456",
+                "name": "Some Album",
+                "artists": [{"id": "artist1", "name": "Artist"}],
+                "images": [{"height": 64, "url": "http://img", "width": 64}]
+            }
+        }"#;
+        let deserialized: TrackItem = serde_json::from_str(track).unwrap();
+        let song: SongDescription = deserialized.into();
+        assert_eq!(song.id, "track123");
+        assert_eq!(song.album.id, "album456");
+        assert_eq!(song.title, "Some Song");
     }
 }

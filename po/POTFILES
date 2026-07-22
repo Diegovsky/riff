@@ -9,6 +9,7 @@ src/app/models/card_enums.rs
 src/app/components/mod.rs
 src/app/components/navigation/factory.rs
 src/app/components/notification/mod.rs
+src/app/components/shell/clipboard_import/mod.rs
 src/app/components/pages/details_artist/widget.rs
 src/app/components/pages/details_playlist/model.rs
 src/app/components/pages/details_user/model.rs

@@ -216,6 +216,14 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             ));
         }
 
+        if self.model.has_share_button() {
+            self.page.header().connect_share(clone!(
+                #[weak(rename_to = m)]
+                self.model,
+                move || m.on_share_clicked()
+            ));
+        }
+
         if self.model.has_subtitle_link() {
             self.page.header().connect_subtitle_clicked(clone!(
                 #[weak(rename_to = m)]

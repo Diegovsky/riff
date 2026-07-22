@@ -112,6 +112,14 @@ impl PageModel for UserDetailsModel {
     fn should_refresh_details(&self, event: &AppEvent) -> bool {
         matches!(event, AppEvent::BrowserEvent(BrowserEvent::UserDetailsUpdated(id)) if id == &self.id)
     }
+
+    fn has_share_button(&self) -> bool {
+        true
+    }
+
+    fn on_share_clicked(&self) {
+        self.share_link(&format!("https://open.spotify.com/user/{}", self.id));
+    }
 }
 
 impl CardListModel for UserDetailsModel {

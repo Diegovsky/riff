@@ -48,6 +48,9 @@ mod imp {
         pub like_button: TemplateChild<gtk::Button>,
 
         #[template_child]
+        pub share_button: TemplateChild<gtk::Button>,
+
+        #[template_child]
         pub info_button: TemplateChild<gtk::Button>,
 
         #[template_child]
@@ -239,6 +242,12 @@ impl DetailsHeader {
     pub fn connect_info<F: Fn() + 'static>(&self, f: F) {
         self.widget.imp().info_button.set_visible(true);
         self.widget.imp().info_button.connect_clicked(move |_| f());
+    }
+
+    /// Connect a handler to the share button. Also makes the button visible.
+    pub fn connect_share<F: Fn() + 'static>(&self, f: F) {
+        self.widget.imp().share_button.set_visible(true);
+        self.widget.imp().share_button.connect_clicked(move |_| f());
     }
 
     /// Connect a handler to the edit button. Also makes the button visible.
