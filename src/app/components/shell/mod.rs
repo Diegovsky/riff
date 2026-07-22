@@ -17,6 +17,9 @@ pub use notification::*;
 pub mod window;
 pub use window::*;
 
+pub mod clipboard_import;
+pub use clipboard_import::*;
+
 pub mod headerbar;
 pub use headerbar::*;
 

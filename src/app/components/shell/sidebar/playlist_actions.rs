@@ -36,10 +36,7 @@ fn make_copy_link_action(id: &str) -> gio::SimpleAction {
     let id = id.to_owned();
     action.connect_activate(move |_, _| {
         let link = format!("https://open.spotify.com/playlist/{id}");
-        let clipboard = gdk::Display::default().unwrap().clipboard();
-        clipboard
-            .set_content(Some(&gdk::ContentProvider::for_value(&link.to_value())))
-            .expect("Failed to set clipboard content");
+        crate::app::components::copy_link_to_clipboard(&link);
     });
     action
 }

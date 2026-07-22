@@ -168,6 +168,14 @@ impl PageModel for DetailsModel {
         true
     }
 
+    fn has_share_button(&self) -> bool {
+        true
+    }
+
+    fn on_share_clicked(&self) {
+        self.share_link(&format!("https://open.spotify.com/album/{}", self.id));
+    }
+
     fn has_subtitle_link(&self) -> bool {
         true
     }

@@ -102,6 +102,15 @@ impl DetailsPageModel {
         &*self.dispatcher
     }
 
+    /// Copy a shareable link to the clipboard and show a confirmation toast.
+    pub fn share_link(&self, link: &str) {
+        crate::app::components::copy_link_to_clipboard(link);
+        self.dispatcher
+            .dispatch(AppAction::ShowNotification(gettextrs::gettext(
+                "Link copied to clipboard",
+            )));
+    }
+
     // Playback state helpers
 
     pub fn is_paused(&self) -> bool {
@@ -298,6 +307,7 @@ mod tests {
     impl SpotifyApiClient for MockApi {
         stub_api_method!(get_artist(_id: &str) -> ArtistDescription);
         stub_api_method!(get_album(_id: &str) -> AlbumFullDescription);
+        stub_api_method!(get_track(_id: &str) -> SongDescription);
         stub_api_method!(get_album_tracks(_id: &str, _offset: usize, _limit: usize) -> SongBatch);
         stub_api_method!(get_playlist(_id: &str) -> PlaylistDescription);
         stub_api_method!(get_playlist_tracks(_id: &str, _offset: usize, _limit: usize) -> SongBatch);

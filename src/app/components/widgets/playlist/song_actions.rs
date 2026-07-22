@@ -1,4 +1,3 @@
-use gdk::prelude::*;
 use gio::SimpleAction;
 
 use crate::app::models::SongDescription;
@@ -37,10 +36,7 @@ impl SongDescription {
         let copy_link = SimpleAction::new(name.unwrap_or("copy_link"), None);
         copy_link.connect_activate(move |_, _| {
             let link = format!("https://open.spotify.com/track/{track_id}");
-            let clipboard = gdk::Display::default().unwrap().clipboard();
-            clipboard
-                .set_content(Some(&gdk::ContentProvider::for_value(&link.to_value())))
-                .expect("Failed to set clipboard content");
+            crate::app::components::copy_link_to_clipboard(&link);
         });
         copy_link
     }

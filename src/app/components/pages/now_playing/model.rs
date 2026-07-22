@@ -163,6 +163,17 @@ impl PageModel for NowPlayingModel {
         }
     }
 
+    fn has_share_button(&self) -> bool {
+        true
+    }
+
+    fn on_share_clicked(&self) {
+        if let Some(song) = self.current_song() {
+            self.base
+                .share_link(&format!("https://open.spotify.com/track/{}", song.id));
+        }
+    }
+
     fn should_refresh_details(&self, event: &AppEvent) -> bool {
         matches!(
             event,

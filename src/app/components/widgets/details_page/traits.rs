@@ -88,6 +88,13 @@ pub trait PageModel {
     }
     fn on_info_clicked(&self) {}
 
+    // Share button
+
+    fn has_share_button(&self) -> bool {
+        false
+    }
+    fn on_share_clicked(&self) {}
+
     // Subtitle click
 
     fn has_subtitle_link(&self) -> bool {

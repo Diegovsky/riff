@@ -146,6 +146,19 @@ template $DetailsHeaderWidget : Box {
             ]
           }
 
+          Button share_button {
+            icon-name: "folder-publicshare-symbolic";
+            halign: center;
+            valign: center;
+            visible: false;
+            tooltip-text: _("Copy link");
+
+            styles [
+              "circular",
+              "share__button",
+            ]
+          }
+
           Box {
             hexpand: true;
           }

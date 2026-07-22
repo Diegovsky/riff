@@ -117,6 +117,7 @@ impl App {
                 worker.clone(),
             ),
             App::make_search_button(builder, dispatcher.box_clone()),
+            App::make_clipboard_import(builder, Rc::clone(model), dispatcher.box_clone()),
             App::make_user_menu(builder, Rc::clone(model), dispatcher),
             App::make_notification(builder),
         ];
@@ -259,6 +260,15 @@ impl App {
     fn make_notification(builder: &gtk::Builder) -> Box<Notification> {
         let toast_overlay: libadwaita::ToastOverlay = builder.object("main").unwrap();
         Box::new(Notification::new(toast_overlay))
+    }
+
+    fn make_clipboard_import(
+        builder: &gtk::Builder,
+        app_model: Rc<AppModel>,
+        dispatcher: Box<dyn ActionDispatcher>,
+    ) -> Box<ClipboardImport> {
+        let window: libadwaita::ApplicationWindow = builder.object("window").unwrap();
+        Box::new(ClipboardImport::new(window, dispatcher, app_model))
     }
 
     // Main handler called in a loop
