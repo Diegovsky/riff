@@ -109,6 +109,28 @@ template $LoginWindow : Adw.Window {
                 }
               };
             }
+
+            StackPage {
+              name: "login_error";
+              child: Box {
+                orientation: horizontal;
+                halign: center;
+                spacing: 8;
+
+                Image {
+                  icon-name: "dialog-error-symbolic";
+                  pixel-size: 16;
+                  valign: center;
+                  styles ["error"]
+                }
+
+                Label {
+                  /* Translators: This error is shown when login fails due to a network or API error. */
+                  label: _("Login failed. Please check your connection and try again.");
+                  styles ["caption", "error"]
+                }
+              };
+            }
           }
 
           Button login_with_spotify_button {

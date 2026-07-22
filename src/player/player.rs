@@ -36,6 +36,7 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub enum SpotifyError {
     LoginFailed,
+    NotPremium,
     LoggedOut,
     PlayerNotReady,
     TechnicalError,
@@ -47,6 +48,7 @@ impl fmt::Display for SpotifyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::LoginFailed => write!(f, "Login failed!"),
+            Self::NotPremium => write!(f, "A Spotify Premium subscription is required."),
             Self::LoggedOut => write!(f, "You are logged out!"),
             Self::PlayerNotReady => write!(f, "Player is not responding."),
             Self::TechnicalError => {
@@ -350,16 +352,19 @@ impl SpotifyPlayer {
                 Ok(())
             }
             Command::Restore => {
-                let credentials =
-                    self.oauth_client
-                        .get_valid_token()
-                        .await
-                        .map_err(|e| match e {
-                            OAuthError::LoggedOut => SpotifyError::LoggedOut,
-                            _ => SpotifyError::LoginFailed,
-                        })?;
+                info!("Attempting to restore session from stored credentials");
+                let credentials = self.oauth_client.get_valid_token().await.map_err(|e| {
+                    error!("Failed to get valid token during restore: {e:?}");
+                    match e {
+                        OAuthError::LoggedOut => SpotifyError::LoggedOut,
+                        _ => SpotifyError::LoginFailed,
+                    }
+                })?;
 
-                info!("Restoring session");
+                info!(
+                    "Restoring session (token expires at {:?})",
+                    credentials.token_expiry_time
+                );
                 self.initial_login(credentials).await
             }
             Command::InitLogin => {
@@ -384,16 +389,24 @@ impl SpotifyPlayer {
             }
             Command::CompleteLogin => {
                 let Some(challenge) = self.auth_challenge.take() else {
+                    error!("CompleteLogin called but no auth challenge was pending");
                     return Err(SpotifyError::LoginFailed);
                 };
 
+                info!("Exchanging auth code for token");
                 let credentials = self
                     .oauth_client
                     .exchange_authcode(challenge)
                     .await
-                    .map_err(|_| SpotifyError::LoginFailed)?;
+                    .map_err(|e| {
+                        error!("Auth code exchange failed: {e:?}");
+                        SpotifyError::LoginFailed
+                    })?;
 
-                info!("Login with OAuth2");
+                info!(
+                    "Login with OAuth2 (token expires at {:?})",
+                    credentials.token_expiry_time
+                );
                 self.initial_login(credentials).await
             }
             Command::ReloadSettings => {
@@ -423,12 +436,16 @@ impl SpotifyPlayer {
         // Check if the account is premium before connecting to librespot.
         // librespot will crash the process for free accounts, so we must
         // catch this early and report a graceful error instead.
-        let is_premium = crate::api::check_premium(&credentials.access_token)
-            .await
-            .unwrap_or(false);
-        if !is_premium {
-            warn!("Account is not premium, aborting login");
-            return Err(SpotifyError::LoginFailed);
+        match crate::api::check_premium(&credentials.access_token).await {
+            Ok(true) => {}
+            Ok(false) => {
+                warn!("Account is not premium, aborting login");
+                return Err(SpotifyError::NotPremium);
+            }
+            Err(e) => {
+                error!("Premium check failed: {e:?}");
+                return Err(SpotifyError::LoginFailed);
+            }
         }
 
         // Only persist credentials to the keyring after confirming premium status.
@@ -436,8 +453,19 @@ impl SpotifyPlayer {
         self.oauth_client.save_credentials(&credentials).await;
 
         let creds = Credentials::with_access_token(&credentials.access_token);
-        let new_session = create_session(&creds, self.settings.ap_port).await?;
+        info!(
+            "Creating librespot session (ap_port: {:?})",
+            self.settings.ap_port
+        );
+        let new_session = match create_session(&creds, self.settings.ap_port).await {
+            Ok(s) => s,
+            Err(e) => {
+                error!("Failed to create librespot session: {e:?}");
+                return Err(e);
+            }
+        };
         let username = new_session.username();
+        info!("Session created successfully for user: {username}");
 
         let oauth_client = Arc::clone(&self.oauth_client);
         let session = new_session.clone();
@@ -596,11 +624,18 @@ async fn create_session_with_port(
     )
     .map_err(|e| dbg!(e))
     .ok();
+    debug!("Connecting librespot session (ap_port={:?})", ap_port);
     let session = Session::new(session_config, cache);
     match session.connect(credentials.clone(), true).await {
-        Ok(_) => Ok(session),
+        Ok(_) => {
+            info!("librespot session connected successfully");
+            Ok(session)
+        }
         Err(err) => {
-            warn!("Login failure: {}", err);
+            error!(
+                "librespot session connect failed (ap_port={:?}): {}",
+                ap_port, err
+            );
             Err(SpotifyError::LoginFailed)
         }
     }

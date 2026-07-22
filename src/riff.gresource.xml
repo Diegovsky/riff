@@ -51,10 +51,10 @@
     <file alias="components/create_playlist.ui">app/components/shell/sidebar/create_playlist.ui</file>
   </gresource>
   <gresource prefix="/dev/diegovsky/Riff/icons/scalable/actions/">
-    <file compressed="true" preprocess="xml-stripblanks" alias="music-queue-symbolic.svg">app/components/widgets/selection/icons/music-queue-symbolic.svg</file>
-    <file compressed="true" preprocess="xml-stripblanks" alias="playlist2-symbolic.svg">app/components/widgets/selection/icons/playlist2-symbolic.svg</file>
-    <file compressed="true" preprocess="xml-stripblanks" alias="library-music-symbolic.svg">app/components/shell/sidebar/icons/library-music-symbolic.svg</file>
-    <file compressed="true" preprocess="xml-stripblanks" alias="nautilus-search-filters-symbolic.svg">app/components/pages/search/icons/nautilus-search-filters-symbolic.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="music-queue-symbolic.svg">app/icons/music-queue-symbolic.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="playlist2-symbolic.svg">app/icons/playlist2-symbolic.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="library-music-symbolic.svg">app/icons/library-music-symbolic.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="nautilus-search-filters-symbolic.svg">app/icons/nautilus-search-filters-symbolic.svg</file>
   </gresource>
 	<gresource prefix="/dev/diegovsky/Riff/icons/scalable/actions/">
 	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-paused-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-paused-symbolic.svg</file>

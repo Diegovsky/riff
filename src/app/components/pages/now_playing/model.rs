@@ -12,7 +12,7 @@ use crate::app::components::{
     labels, DetailsPageModel, DeviceSelectorModel, HasHeaderBarModel, HeaderImageShape, PageModel,
     PlaylistModel, SimpleHeaderBarModel,
 };
-use crate::app::models::{ImageSet, SongDescription, SongListModel};
+use crate::app::models::{ArtistRef, ImageSet, SongDescription, SongListModel};
 use crate::app::state::Device;
 use crate::app::state::{
     PlaybackAction, PlaybackEvent, PlaybackState, SelectionAction, SelectionContext, SelectionState,
@@ -150,17 +150,15 @@ impl PageModel for NowPlayingModel {
         }
     }
 
-    fn has_subtitle_link(&self) -> bool {
-        true
+    fn get_subtitle_links(&self) -> Vec<ArtistRef> {
+        self.current_song()
+            .map(|song| song.artists.clone())
+            .unwrap_or_default()
     }
 
-    fn on_subtitle_clicked(&self) {
-        if let Some(song) = self.current_song() {
-            if let Some(artist) = song.artists.first() {
-                self.dispatcher
-                    .dispatch(AppAction::ViewArtist(artist.id.clone()));
-            }
-        }
+    fn navigate_to_subtitle_link(&self, id: &str) {
+        self.dispatcher
+            .dispatch(AppAction::ViewArtist(id.to_string()));
     }
 
     fn has_share_button(&self) -> bool {

@@ -56,9 +56,9 @@ impl SidebarDestination {
     pub fn icon(&self) -> &'static str {
         match self {
             Self::Library => "library-music-symbolic",
-            Self::SavedTracks => "starred-symbolic",
+            Self::SavedTracks => "audio-x-generic-symbolic",
             Self::NowPlaying => "music-queue-symbolic",
-            Self::SavedPlaylists => "view-app-grid-symbolic",
+            Self::SavedPlaylists => "playlist2-symbolic",
             Self::SavedArtists => "avatar-default-symbolic",
             Self::Playlist(_) => "playlist2-symbolic",
         }

@@ -133,7 +133,7 @@ impl HeaderBarWidget {
         if active {
             self.imp()
                 .selection_title
-                .set_title(&labels::n_songs_selected_label(0));
+                .set_title(&labels::n_tracks_selected_label(0));
             self.imp().selection_title.set_visible(true);
             self.imp().selection_header.set_visible(true);
         } else {
@@ -145,7 +145,7 @@ impl HeaderBarWidget {
     pub fn set_selection_count(&self, count: usize) {
         self.imp()
             .selection_title
-            .set_title(&labels::n_songs_selected_label(count));
+            .set_title(&labels::n_tracks_selected_label(count));
     }
 
     pub fn add_classes(&self, classes: &[&str]) {

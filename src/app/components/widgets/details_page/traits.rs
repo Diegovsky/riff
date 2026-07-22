@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::app::components::{
     HeaderBarModel, HeaderImageShape, SimpleHeaderBarModel, SimpleHeaderBarModelWrapper,
 };
-use crate::app::models::ImageSet;
+use crate::app::models::{ArtistRef, ImageSet};
 use crate::app::state::PlaybackEvent;
 use crate::app::AppEvent;
 
@@ -95,12 +95,17 @@ pub trait PageModel {
     }
     fn on_share_clicked(&self) {}
 
-    // Subtitle click
+    // Subtitle links
 
-    fn has_subtitle_link(&self) -> bool {
-        false
+    /// Returns a list of clickable links for the subtitle area.
+    /// Each entry is rendered as an independent button.
+    /// Returns an empty vec if the subtitle should not be clickable.
+    fn get_subtitle_links(&self) -> Vec<ArtistRef> {
+        vec![]
     }
-    fn on_subtitle_clicked(&self) {}
+
+    /// Navigate to a subtitle link target by ID (e.g. artist page or user page).
+    fn navigate_to_subtitle_link(&self, _id: &str) {}
 
     // Event handling
 

@@ -224,14 +224,6 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             ));
         }
 
-        if self.model.has_subtitle_link() {
-            self.page.header().connect_subtitle_clicked(clone!(
-                #[weak(rename_to = m)]
-                self.model,
-                move || m.on_subtitle_clicked()
-            ));
-        }
-
         self.page.connect_bottom_edge(clone!(
             #[weak(rename_to = m)]
             self.model,
@@ -255,6 +247,26 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             let subtitle = self.model.get_subtitle().unwrap_or_default();
             self.page.set_details(&title, &subtitle);
         }
+
+        // Set subtitle links if the model provides them
+        let links = self.model.get_subtitle_links();
+        if !links.is_empty() {
+            let artists: Vec<(String, String)> = links
+                .iter()
+                .map(|a| (a.id.clone(), a.name.clone()))
+                .collect();
+            self.page.header().set_subtitle_links(
+                &artists,
+                clone!(
+                    #[weak(rename_to = m)]
+                    self.model,
+                    move |id| {
+                        m.navigate_to_subtitle_link(id);
+                    }
+                ),
+            );
+        }
+
         if let Some(caption) = self.model.get_caption() {
             self.page.header().set_caption(&caption);
             self.page.header().set_caption_visible(true);

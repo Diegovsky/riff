@@ -202,15 +202,20 @@ impl PageModel for PlaylistDetailsModel {
         !self.is_playlist_editable()
     }
 
-    fn has_subtitle_link(&self) -> bool {
-        true
+    fn get_subtitle_links(&self) -> Vec<ArtistRef> {
+        self.get_playlist_info()
+            .map(|playlist| {
+                vec![ArtistRef {
+                    id: playlist.owner.id.clone(),
+                    name: playlist.owner.display_name.clone(),
+                }]
+            })
+            .unwrap_or_default()
     }
 
-    fn on_subtitle_clicked(&self) {
-        if let Some(playlist) = self.get_playlist_info() {
-            self.dispatcher
-                .dispatch(AppAction::ViewUser(playlist.owner.id.clone()));
-        }
+    fn navigate_to_subtitle_link(&self, id: &str) {
+        self.dispatcher
+            .dispatch(AppAction::ViewUser(id.to_string()));
     }
 
     fn has_share_button(&self) -> bool {

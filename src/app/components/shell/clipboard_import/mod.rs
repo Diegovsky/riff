@@ -106,9 +106,9 @@ impl ClipboardWatcher {
             SpotifyLink::User(_) => {
                 gettext("There's a Spotify profile link in your clipboard. Open it in Riff?")
             }
-            // translators: shown when a song/track link is found in the clipboard.
+            // translators: shown when a track link is found in the clipboard.
             SpotifyLink::Track(_) => {
-                gettext("There's a Spotify song link in your clipboard. Open it in Riff?")
+                gettext("There's a Spotify track link in your clipboard. Open it in Riff?")
             }
         };
 
