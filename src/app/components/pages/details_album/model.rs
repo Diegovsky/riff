@@ -176,17 +176,15 @@ impl PageModel for DetailsModel {
         self.share_link(&format!("https://open.spotify.com/album/{}", self.id));
     }
 
-    fn has_subtitle_link(&self) -> bool {
-        true
+    fn get_subtitle_links(&self) -> Vec<ArtistRef> {
+        self.get_album_info()
+            .map(|album| album.description.artists.clone())
+            .unwrap_or_default()
     }
 
-    fn on_subtitle_clicked(&self) {
-        if let Some(album) = self.get_album_info() {
-            if let Some(artist) = album.description.artists.first() {
-                self.dispatcher
-                    .dispatch(AppAction::ViewArtist(artist.id.clone()));
-            }
-        }
+    fn navigate_to_subtitle_link(&self, id: &str) {
+        self.dispatcher
+            .dispatch(AppAction::ViewArtist(id.to_string()));
     }
 
     fn should_refresh_details(&self, event: &AppEvent) -> bool {

@@ -101,7 +101,7 @@ impl SpotifyLink {
             Self::Artist(_) => "artist",
             Self::Playlist(_) => "playlist",
             Self::User(_) => "profile",
-            Self::Track(_) => "song",
+            Self::Track(_) => "track",
         }
     }
 }

@@ -43,7 +43,7 @@ impl NowPlaying {
         }
 
         let status_page = libadwaita::StatusPage::new();
-        status_page.set_title(&gettext("No song playing"));
+        status_page.set_title(&gettext("No track playing"));
         status_page.set_icon_name(Some("audio-x-generic-symbolic"));
 
         let stack = gtk::Stack::new();

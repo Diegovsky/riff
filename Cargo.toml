@@ -36,7 +36,7 @@ features = ["gnome_47", "blueprint"]
 
 [dependencies.libadwaita]
 version = "^0.7"
-features = ["v1_6"]
+features = ["v1_7"]
 
 [dependencies.gdk]
 version = "^0.9"

@@ -77,7 +77,7 @@ impl FeatureFlag {
     pub fn description(&self) -> &'static str {
         match self {
             FeatureFlag::SelectMode => {
-                "Enable selection mode to select multiple songs for queuing, saving, or removing."
+                "Enable selection mode to select multiple tracks for queuing, saving, or removing."
             }
             FeatureFlag::CreateNewPlaylist => "Enable the New Playlist button in the sidebar.",
             FeatureFlag::DeviceSelector => {

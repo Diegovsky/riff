@@ -24,6 +24,7 @@ pub enum LoginAction {
     PrependUserPlaylist(Vec<PlaylistSummary>),
     RemoveUserPlaylist(String),
     SetLoginFailure,
+    SetNotPremium,
     RefreshToken,
     TokenRefreshed,
     Logout,
@@ -50,6 +51,7 @@ pub enum LoginEvent {
     LoginCompleted,
     UserPlaylistsLoaded,
     LoginFailed,
+    NotPremium,
     FreshTokenRequested,
     RefreshTokenCompleted,
     LogoutCompleted,
@@ -94,6 +96,7 @@ impl UpdatableState for LoginState {
                 vec![LoginEvent::LoginCompleted.into()]
             }
             LoginAction::SetLoginFailure => vec![LoginEvent::LoginFailed.into()],
+            LoginAction::SetNotPremium => vec![LoginEvent::NotPremium.into()],
             LoginAction::RefreshToken => vec![LoginEvent::FreshTokenRequested.into()],
             LoginAction::TokenRefreshed => {
                 // translators: This notification is shown when, after some inactivity, the session is successfully restored. The user might have to repeat its last action.

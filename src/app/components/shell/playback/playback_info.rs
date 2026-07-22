@@ -66,8 +66,8 @@ impl PlaybackInfoWidget {
         let widget = self.imp();
         widget
             .song_title
-            // translators: Short text displayed instead of a song title when nothing plays
-            .set_text(&gettext("No song playing"));
+            // translators: Short text displayed instead of a track title when nothing plays
+            .set_text(&gettext("No track playing"));
         widget.song_artist.set_text("");
         widget.song_info_box.set_visible(false);
         widget

@@ -129,7 +129,7 @@ mod imp {
                 return (w, w, -1, -1);
             }
 
-            // Vertical measurement
+            // Vertical measurement.
             match layout {
                 CardLayout::Horizontal => {
                     let (label_min, _, _, _) = self.label_box.measure(
@@ -162,9 +162,10 @@ mod imp {
 
                     let label_h = height - px - LABEL_GAP;
                     if label_h > 0 {
-                        let transform = gtk::gsk::Transform::new()
-                            .translate(&gtk::graphene::Point::new(0.0, (px + LABEL_GAP) as f32));
-                        self.label_box.allocate(width, label_h, -1, Some(transform));
+                        let transform = gtk::gsk::Transform::new().translate(
+                            &gtk::graphene::Point::new(img_x as f32, (px + LABEL_GAP) as f32),
+                        );
+                        self.label_box.allocate(px, label_h, -1, Some(transform));
                     }
                 }
                 CardLayout::ImageOnly => {

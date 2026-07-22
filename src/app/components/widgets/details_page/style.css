@@ -143,6 +143,18 @@
   background-image: image(alpha(currentColor, 0.16));
 }
 
+/* Subtitle link buttons - individual artist/owner buttons */
+.subtitle-link-button {
+  padding: 0 4px;
+  min-height: 24px;
+  font-weight: normal;
+}
+
+.subtitle-link-button:hover {
+  border-radius: 6px;
+  background-image: image(alpha(currentColor, 0.16));
+}
+
 /* Caption label in headers - matches subtitle height for centering */
 .details-header .caption {
   min-height: 24px;

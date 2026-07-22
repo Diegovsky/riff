@@ -29,11 +29,16 @@ jobs:
   blueprint-lint:
     name: "Blueprint Lint"
     runs-on: ubuntu-latest
+    # Ubuntu's apt libadwaita typelib lags behind; run in a Fedora container
+    # that ships libadwaita 1.7 so blueprints using Adw 1.7 widgets (e.g.
+    # Adw.WrapBox) validate against the version the app actually builds against.
+    container:
+      image: fedora:42
     steps:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get -y update && sudo apt-get -y install blueprint-compiler libxml2-utils python3 gir1.2-gtk-4.0 gir1.2-adw-1
+        run: dnf install -y blueprint-compiler gtk4-devel libadwaita-devel libxml2 python3
 
       - name: Run blueprint lint
         run: ./scripts/lint-blueprints.sh

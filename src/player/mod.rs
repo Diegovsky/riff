@@ -59,6 +59,7 @@ impl AppPlayerDelegate {
 
     fn report_error(&self, error: SpotifyError) {
         self.send(match error {
+            SpotifyError::NotPremium => LoginAction::SetNotPremium.into(),
             SpotifyError::LoginFailed => LoginAction::SetLoginFailure.into(),
             SpotifyError::LoggedOut => LoginAction::Logout.into(),
             _ => AppAction::ShowNotification(format!("{error}")),

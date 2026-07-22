@@ -87,6 +87,16 @@ impl LoginWindow {
             .status_stack
             .set_visible_child_name(if shown { "error" } else { "notice" });
     }
+
+    fn show_login_error(&self) {
+        self.imp()
+            .status_stack
+            .set_visible_child_name("login_error");
+    }
+
+    fn reset_status(&self) {
+        self.imp().status_stack.set_visible_child_name("notice");
+    }
 }
 
 pub struct Login {
@@ -137,13 +147,18 @@ impl Login {
     }
 
     fn hide(&self) {
-        self.login_window.show_auth_error(false);
+        self.login_window.reset_status();
         self.window().set_visible(false);
+    }
+
+    fn reveal_not_premium(&self) {
+        self.show_self();
+        self.login_window.show_auth_error(true);
     }
 
     fn reveal_error(&self) {
         self.show_self();
-        self.login_window.show_auth_error(true);
+        self.login_window.show_login_error();
     }
 
     fn open_login_url(&self, url: Url) {
@@ -158,6 +173,9 @@ impl EventListener for Login {
         match event {
             AppEvent::LoginEvent(LoginEvent::LoginCompleted) => {
                 self.hide();
+            }
+            AppEvent::LoginEvent(LoginEvent::NotPremium) => {
+                self.reveal_not_premium();
             }
             AppEvent::LoginEvent(LoginEvent::LoginFailed) => {
                 self.reveal_error();

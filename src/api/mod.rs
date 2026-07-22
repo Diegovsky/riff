@@ -20,9 +20,40 @@ pub async fn clear_user_cache() -> Option<()> {
 /// Check whether the given access token belongs to a Spotify Premium account.
 /// This uses the standard API client infrastructure but authenticates with an
 /// explicit token (for use during login before credentials are persisted).
+///
+/// Returns Ok(true) for premium, Ok(false) for confirmed non-premium, or an
+/// Err if the API call itself failed (network, auth, rate-limit, etc.).
 pub async fn check_premium(token: &str) -> Result<bool, SpotifyApiError> {
+    debug!("Checking premium status via GET /v1/me");
     let client = SpotifyClient::new(TokenStore::new());
-    let response = client.get_me().send_with_token(token).await?;
-    let user: api_models::User = response.deserialize().ok_or(SpotifyApiError::NoContent)?;
-    Ok(user.product.as_deref() == Some("premium"))
+    let response = match client.get_me().send_with_token(token).await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("GET /v1/me request failed: {e:?}");
+            return Err(e);
+        }
+    };
+    let user: api_models::User = match response.deserialize() {
+        Some(u) => u,
+        None => {
+            error!("GET /v1/me returned success but body could not be deserialized");
+            return Err(SpotifyApiError::NoContent);
+        }
+    };
+    debug!(
+        "GET /v1/me succeeded: id={}, display_name={}, product={:?}",
+        user.id, user.display_name, user.product
+    );
+    Ok(match user.product.as_deref() {
+        Some("premium") => true,
+        // The product field may be absent if the Spotify app is in Development
+        // Mode (removed in the Feb 2026 API changes). Treat absent as premium
+        // and let librespot enforce the actual restriction at session creation.
+        None => true,
+        // Explicitly non-premium (e.g. "free", "open")
+        Some(other) => {
+            error!("Account product type is {:?}, not premium", other);
+            false
+        }
+    })
 }
