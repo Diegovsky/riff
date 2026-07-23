@@ -12,11 +12,11 @@
 
 use crate::app::credentials::Credentials;
 
-use log::{error, info, trace};
+use log::{error, info, trace, warn};
 use oauth2::reqwest::async_http_client;
 use oauth2::{
-    basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, CsrfToken, PkceCodeChallenge,
-    RedirectUrl, Scope, TokenResponse, TokenUrl,
+    basic::BasicClient, basic::BasicErrorResponseType, AuthUrl, AuthorizationCode, ClientId,
+    CsrfToken, PkceCodeChallenge, RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
 use oauth2::{PkceCodeVerifier, RefreshToken, RequestTokenError};
 use std::collections::HashMap;
@@ -47,6 +47,19 @@ playlist-modify-private,\
 user-modify-playback-state,\
 streaming,\
 playlist-modify-public";
+
+// Interval between background refresh retries. The refresh token stays valid
+// far longer than the access token, so on a transient failure we keep polling
+// rather than giving up. A 10s cadence is frequent enough to recover quickly
+// yet light enough to poll indefinitely through a longer outage.
+const REFRESH_POLL_INTERVAL: Duration = Duration::from_secs(10);
+
+// How long before expiry we start trying to refresh. This must be larger than
+// REFRESH_POLL_INTERVAL so that transient failures get retried while the
+// current token is still valid, leaving no window where playback runs on an
+// expired token. With a 60s lead and a 10s interval we get roughly six
+// attempts before the token actually expires.
+const REFRESH_LEAD_TIME: Duration = Duration::from_secs(60);
 
 pub struct RiffOauthClient {
     client: BasicClient,
@@ -175,44 +188,65 @@ impl RiffOauthClient {
         }
     }
 
+    /// Perform a single refresh-token exchange.
+    ///
+    /// This does not retry. A rejected refresh token (`invalid_grant`) is
+    /// fatal: the stored credentials are cleared and [`OAuthError::RefreshFailed`]
+    /// is returned. Any other failure is treated as transient
+    /// ([`OAuthError::RefreshTransient`]) and the credentials are left intact so
+    /// a caller can poll and try again later.
     pub async fn refresh_token(&self, old_token: Credentials) -> Result<Credentials, OAuthError> {
-        let Ok(token) = self
+        let refresh_token = old_token.refresh_token.clone();
+
+        match self
             .client
-            .exchange_refresh_token(&RefreshToken::new(old_token.refresh_token))
+            .exchange_refresh_token(&RefreshToken::new(refresh_token.clone()))
             .request_async(async_http_client)
             .await
-            .inspect_err(|e| {
-                if let RequestTokenError::ServerResponse(res) = e {
-                    error!(
-                        "An error occured while refreshing the token: {}",
-                        res.to_string()
-                    );
+        {
+            Ok(token) => {
+                // Spotify does not always return a new refresh token. When it
+                // is omitted, reuse the old one so we stay logged in.
+                let new_refresh_token = token
+                    .refresh_token()
+                    .map(|t| t.secret().to_string())
+                    .unwrap_or_else(|| refresh_token.clone());
+
+                let new_token = Credentials {
+                    access_token: token.access_token().secret().to_string(),
+                    refresh_token: new_refresh_token,
+                    token_expiry_time: Some(
+                        SystemTime::now()
+                            + token
+                                .expires_in()
+                                .unwrap_or_else(|| Duration::from_secs(3600)),
+                    ),
+                };
+
+                self.token_store.set(new_token.clone()).await;
+                Ok(new_token)
+            }
+            Err(e) => {
+                // A rejected refresh token will never succeed on retry, so
+                // treat it as fatal and clear the stored credentials. Anything
+                // else (network errors, 5xx, parse failures) is transient and
+                // must not discard the still-valid refresh token.
+                let fatal = matches!(
+                    &e,
+                    RequestTokenError::ServerResponse(res)
+                        if matches!(res.error(), BasicErrorResponseType::InvalidGrant)
+                );
+
+                if fatal {
+                    error!("Refresh token rejected by Spotify: {e}");
+                    self.token_store.clear().await;
+                    Err(OAuthError::RefreshFailed { e: e.to_string() })
+                } else {
+                    warn!("Transient error while refreshing token: {e}");
+                    Err(OAuthError::RefreshTransient { e: e.to_string() })
                 }
-            })
-        else {
-            self.token_store.clear().await;
-            return Err(OAuthError::NoRefreshToken);
-        };
-
-        let refresh_token = token
-            .refresh_token()
-            .ok_or(OAuthError::NoRefreshToken)?
-            .secret()
-            .to_string();
-
-        let new_token = Credentials {
-            access_token: token.access_token().secret().to_string(),
-            refresh_token,
-            token_expiry_time: Some(
-                SystemTime::now()
-                    + token
-                        .expires_in()
-                        .unwrap_or_else(|| Duration::from_secs(3600)),
-            ),
-        };
-
-        self.token_store.set(new_token.clone()).await;
-        Ok(new_token)
+            }
+        }
     }
 
     pub async fn refresh_token_at_expiry(&self) -> Result<Credentials, OAuthError> {
@@ -229,10 +263,25 @@ impl RiffOauthClient {
             "Refreshing token in approx {}min",
             duration.as_secs().div_euclid(60)
         );
-        tokio::time::sleep(duration.saturating_sub(Duration::from_secs(10))).await;
+        tokio::time::sleep(duration.saturating_sub(REFRESH_LEAD_TIME)).await;
 
-        info!("Refreshing token...");
-        self.refresh_token(old_token).await
+        // Long-poll the refresh: retry transient failures at a generous
+        // interval until we succeed. Only a fatal error (rejected refresh
+        // token) stops the poll and propagates to the caller.
+        loop {
+            info!("Refreshing token...");
+            match self.refresh_token(old_token.clone()).await {
+                Ok(new_token) => return Ok(new_token),
+                Err(OAuthError::RefreshTransient { e }) => {
+                    warn!(
+                        "Token refresh failed transiently ({e}); retrying in {}s",
+                        REFRESH_POLL_INTERVAL.as_secs()
+                    );
+                    tokio::time::sleep(REFRESH_POLL_INTERVAL).await;
+                }
+                Err(e) => return Err(e),
+            }
+        }
     }
 }
 
@@ -261,6 +310,12 @@ pub enum OAuthError {
 
     #[error("Spotify did not provide a refresh token")]
     NoRefreshToken,
+
+    #[error("Failed to refresh access token ({e})")]
+    RefreshFailed { e: String },
+
+    #[error("Transient error while refreshing access token ({e})")]
+    RefreshTransient { e: String },
 
     #[error("No saved token")]
     LoggedOut,
