@@ -3,6 +3,8 @@ use crate::app::AppEvent;
 use crate::feature_flags::{self, FeatureFlag};
 use crate::settings::RiffSettings;
 
+use std::rc::Rc;
+
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
@@ -46,6 +48,9 @@ mod imp {
 
         #[template_child]
         pub close_behavior: TemplateChild<libadwaita::ComboRow>,
+
+        #[template_child]
+        pub skip_explicit_switch: TemplateChild<libadwaita::SwitchRow>,
 
         #[template_child]
         pub volume_curve: TemplateChild<libadwaita::ComboRow>,
@@ -508,6 +513,16 @@ impl SettingsDialog {
                 })
             })
             .build();
+
+        // Skip explicit tracks (local preference). When the account locks the
+        // filter, `show_self` overrides this switch to on and disables it.
+        let skip_explicit_switch = widget
+            .skip_explicit_switch
+            .downcast_ref::<libadwaita::SwitchRow>()
+            .expect("skip_explicit_switch must be a SwitchRow");
+        settings
+            .bind("skip-explicit", skip_explicit_switch, "active")
+            .build();
     }
 
     fn bind_feature_flags(&self) {
@@ -570,34 +585,58 @@ impl SettingsDialog {
         self.imp().pan.lock();
         self.imp().pitch.lock();
     }
+
+    /// Apply the Spotify account's explicit content filter lock to the toggle.
+    ///
+    /// When the account has the filter locked (e.g. a family plan parental
+    /// control), the switch is forced on, made insensitive so it cannot be
+    /// changed, and given a tooltip explaining why. Otherwise the switch is
+    /// interactive and reflects the local preference.
+    fn set_explicit_filter_locked(&self, locked: bool) {
+        let switch = &self.imp().skip_explicit_switch;
+        if locked {
+            switch.set_active(true);
+            switch.set_sensitive(false);
+            switch.set_tooltip_text(Some(&gettextrs::gettext(
+                "Locked by a Family plan parental control and cannot be changed here.",
+            )));
+        } else {
+            switch.set_sensitive(true);
+            switch.set_tooltip_text(None);
+        }
+    }
 }
 
 pub struct Settings {
     parent: gtk::Window,
     settings_dialog: SettingsDialog,
+    model: Rc<SettingsModel>,
 }
 
 impl Settings {
     pub fn new(parent: gtk::Window, model: SettingsModel) -> Self {
         let settings_dialog = SettingsDialog::new();
+        let model = Rc::new(model);
 
+        let close_model = model.clone();
         settings_dialog.connect_close(move || {
             let new_settings = RiffSettings::new_from_gsettings().unwrap_or_default();
             // Only stop the player for changes that require a full reload.
             // Equalizer changes are applied live and must not interrupt playback.
-            if model
+            if close_model
                 .settings()
                 .player_settings
                 .requires_reload(&new_settings.player_settings)
             {
-                model.stop_player();
+                close_model.stop_player();
             }
-            model.set_settings();
+            close_model.set_settings();
         });
 
         Self {
             parent,
             settings_dialog,
+            model,
         }
     }
 
@@ -608,6 +647,10 @@ impl Settings {
     pub fn show_self(&self) {
         // Locks are UI-only and must not be stateful between openings.
         self.settings_dialog.reset_locks();
+        // Reflect the account's explicit content filter lock each time the
+        // dialog opens, since it becomes known only after login.
+        self.settings_dialog
+            .set_explicit_filter_locked(self.model.explicit_filter_locked());
         self.dialog().present(Some(&self.parent));
     }
 }

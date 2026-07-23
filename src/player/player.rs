@@ -89,6 +89,10 @@ pub struct SpotifyPlayerSettings {
     pub repeat: RepeatMode,
     pub volume: f64,
 
+    // Local user preference: skip tracks marked as explicit. Applied via the
+    // playback state, not librespot, so it never requires a player reload.
+    pub skip_explicit: bool,
+
     // Volume curve
     pub volume_curve: VolumeCurveType,
 
@@ -125,6 +129,8 @@ impl Default for SpotifyPlayerSettings {
             volume: 0.7,
             repeat: RepeatMode::None,
             shuffle: false,
+
+            skip_explicit: false,
 
             bitrate: Bitrate::Bitrate160,
             gapless: true,
@@ -223,6 +229,12 @@ pub struct SpotifyPlayer {
     auth_challenge: Option<AuthcodeChallenge>,
     command_sender: UnboundedSender<Command>,
 
+    // Cached "explicit filter locked" state for the account, so we avoid
+    // re-querying the profile once we know the filter is locked for the
+    // session (a locked filter cannot be unlocked without changing account
+    // settings, and forces skipping so explicit tracks are never attempted).
+    explicit_filter_locked: bool,
+
     // Receives feedback from commands or various events in the player
     delegate: AppPlayerDelegate,
 }
@@ -252,6 +264,7 @@ impl SpotifyPlayer {
             oauth_client: Arc::new(RiffOauthClient::new(token_store)),
             auth_challenge: None,
             command_sender,
+            explicit_filter_locked: false,
             delegate,
         }
     }
@@ -421,9 +434,62 @@ impl SpotifyPlayer {
                 tokio::task::spawn(player_setup_delegate(
                     new_player.get_player_event_channel(),
                     self.delegate.clone(),
+                    self.command_sender.clone(),
                 ));
                 self.player.replace(new_player);
 
+                Ok(())
+            }
+            Command::RecheckExplicitFilter => {
+                // Already locked for this session: skipping is forced and
+                // explicit tracks are never attempted, so no need to re-query.
+                if self.explicit_filter_locked {
+                    return Ok(());
+                }
+
+                // Run the profile lookup off the command loop so it never
+                // delays playback commands (e.g. loading the next track). The
+                // result comes back as ExplicitFilterRechecked.
+                let oauth_client = Arc::clone(&self.oauth_client);
+                let command_sender = self.command_sender.clone();
+                tokio::task::spawn(async move {
+                    let token = match oauth_client.get_valid_token().await {
+                        Ok(t) => t,
+                        Err(e) => {
+                            warn!("Explicit filter re-check: could not get token: {e:?}");
+                            return;
+                        }
+                    };
+                    match crate::api::check_user_profile(&token.access_token).await {
+                        Ok(profile) => {
+                            let _ =
+                                command_sender.unbounded_send(Command::ExplicitFilterRechecked {
+                                    filter_enabled: profile.explicit_filter_enabled,
+                                    filter_locked: profile.explicit_filter_locked,
+                                });
+                        }
+                        Err(e) => {
+                            warn!("Failed to re-check explicit content filter: {e:?}");
+                        }
+                    }
+                });
+                Ok(())
+            }
+            Command::ExplicitFilterRechecked {
+                filter_enabled,
+                filter_locked,
+            } => {
+                if filter_locked && !self.explicit_filter_locked {
+                    info!("Explicit content filter is now locked; syncing Riff's filter");
+                }
+                self.explicit_filter_locked = filter_locked;
+                self.delegate.set_explicit_filter_locked(filter_locked);
+                // When the account's filter is enabled (even if not locked),
+                // Spotify's servers reject explicit tracks. Enable client-side
+                // skipping so we never attempt to load them.
+                if filter_enabled {
+                    self.delegate.set_skip_explicit(true);
+                }
                 Ok(())
             }
         }
@@ -436,17 +502,38 @@ impl SpotifyPlayer {
         // Check if the account is premium before connecting to librespot.
         // librespot will crash the process for free accounts, so we must
         // catch this early and report a graceful error instead.
-        match crate::api::check_premium(&credentials.access_token).await {
-            Ok(true) => {}
-            Ok(false) => {
-                warn!("Account is not premium, aborting login");
-                return Err(SpotifyError::NotPremium);
-            }
+        let profile = match crate::api::check_user_profile(&credentials.access_token).await {
+            Ok(p) => p,
             Err(e) => {
-                error!("Premium check failed: {e:?}");
+                error!("User profile check failed: {e:?}");
                 return Err(SpotifyError::LoginFailed);
             }
+        };
+
+        if !profile.is_premium {
+            warn!("Account is not premium, aborting login");
+            return Err(SpotifyError::NotPremium);
         }
+
+        // Sync the explicit content filter from the user's Spotify account.
+        // When filter_enabled is true, Spotify's servers will reject explicit
+        // tracks (returning Unavailable to librespot). We must enable
+        // client-side skipping so Riff never attempts to load those tracks in
+        // the first place - avoiding a cascade of Unavailable rejections that
+        // can disrupt playback of non-explicit tracks too.
+        //
+        // A locked filter (e.g. a family plan parental control) additionally
+        // prevents the user from disabling the skip in Riff's settings.
+        if profile.explicit_filter_enabled {
+            info!("Spotify account has explicit content filter enabled");
+            self.delegate.set_skip_explicit(true);
+        }
+        if profile.explicit_filter_locked {
+            info!("Spotify account explicit content filter is locked");
+        }
+        self.explicit_filter_locked = profile.explicit_filter_locked;
+        self.delegate
+            .set_explicit_filter_locked(profile.explicit_filter_locked);
 
         // Only persist credentials to the keyring after confirming premium status.
         // This prevents non-premium accounts from being saved and retried on next launch.
@@ -467,6 +554,16 @@ impl SpotifyPlayer {
         let username = new_session.username();
         info!("Session created successfully for user: {username}");
 
+        // Disable librespot's built-in explicit content filtering. When the
+        // account has filter_enabled=true, Spotify sets the session attribute
+        // "filter-explicit-content" to "1". This causes the audio key server
+        // to deny decryption keys for ALL tracks (not just explicit ones),
+        // breaking playback entirely. We override it to "0" so librespot can
+        // load any track, and enforce the explicit filter ourselves at the
+        // playback-state level where we only skip tracks actually marked
+        // explicit.
+        new_session.set_user_attribute("filter-explicit-content", "0");
+
         let oauth_client = Arc::clone(&self.oauth_client);
         let session = new_session.clone();
         tokio::task::spawn(async move {
@@ -483,6 +580,7 @@ impl SpotifyPlayer {
         tokio::task::spawn(player_setup_delegate(
             new_player.get_player_event_channel(),
             self.delegate.clone(),
+            self.command_sender.clone(),
         ));
 
         self.player.replace(new_player);
@@ -664,11 +762,27 @@ async fn create_session(
     }
 }
 
-async fn player_setup_delegate(mut channel: PlayerEventChannel, delegate: AppPlayerDelegate) {
+async fn player_setup_delegate(
+    mut channel: PlayerEventChannel,
+    delegate: AppPlayerDelegate,
+    command_sender: UnboundedSender<Command>,
+) {
     while let Some(event) = channel.recv().await {
         match event {
             PlayerEvent::EndOfTrack { .. } => {
                 delegate.end_of_track_reached();
+            }
+            PlayerEvent::Unavailable { track_id, .. } => {
+                warn!(
+                    "Track unavailable (possibly explicit-filtered): {:?}, skipping",
+                    track_id
+                );
+                // Gracefully skip the track that could not be played.
+                delegate.end_of_track_reached();
+                // The account's explicit filter may have changed since login
+                // (e.g. a family plan parental control was just set). Re-query
+                // it so Riff's filter state stays in sync.
+                let _ = command_sender.unbounded_send(Command::RecheckExplicitFilter);
             }
             PlayerEvent::Playing { position_ms, .. } => {
                 delegate.notify_playback_state(position_ms);

@@ -75,6 +75,10 @@
       <default>true</default>
       <summary>A flag to enable gap-less playback</summary>
     </key>
+    <key name="skip-explicit" type="b">
+      <default>false</default>
+      <summary>Skip tracks marked as explicit</summary>
+    </key>
     <key name='alsa-device' type='s'>
       <default>'default'</default>
       <summary>Alsa device (if audio backend is 'alsa')</summary>

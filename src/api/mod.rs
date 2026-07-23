@@ -17,14 +17,20 @@ pub async fn clear_user_cache() -> Option<()> {
         .ok()
 }
 
-/// Check whether the given access token belongs to a Spotify Premium account.
-/// This uses the standard API client infrastructure but authenticates with an
-/// explicit token (for use during login before credentials are persisted).
+/// Result of checking the user's profile at login time.
+pub struct UserProfileCheck {
+    pub is_premium: bool,
+    pub explicit_filter_enabled: bool,
+    pub explicit_filter_locked: bool,
+}
+
+/// Check the user's profile via GET /v1/me.
+/// Returns premium status and whether the account has the explicit content
+/// filter enabled/locked.
 ///
-/// Returns Ok(true) for premium, Ok(false) for confirmed non-premium, or an
-/// Err if the API call itself failed (network, auth, rate-limit, etc.).
-pub async fn check_premium(token: &str) -> Result<bool, SpotifyApiError> {
-    debug!("Checking premium status via GET /v1/me");
+/// Returns Ok with the profile info, or Err if the API call itself failed.
+pub async fn check_user_profile(token: &str) -> Result<UserProfileCheck, SpotifyApiError> {
+    debug!("Checking user profile via GET /v1/me");
     let client = SpotifyClient::new(TokenStore::new());
     let response = match client.get_me().send_with_token(token).await {
         Ok(r) => r,
@@ -41,10 +47,14 @@ pub async fn check_premium(token: &str) -> Result<bool, SpotifyApiError> {
         }
     };
     debug!(
-        "GET /v1/me succeeded: id={}, display_name={}, product={:?}",
-        user.id, user.display_name, user.product
+        "GET /v1/me succeeded: id={}, display_name={}, product={:?}, explicit_filter={:?}",
+        user.id,
+        user.display_name,
+        user.product,
+        user.explicit_content.as_ref().map(|e| e.filter_enabled)
     );
-    Ok(match user.product.as_deref() {
+
+    let is_premium = match user.product.as_deref() {
         Some("premium") => true,
         // The product field may be absent if the Spotify app is in Development
         // Mode (removed in the Feb 2026 API changes). Treat absent as premium
@@ -55,5 +65,16 @@ pub async fn check_premium(token: &str) -> Result<bool, SpotifyApiError> {
             error!("Account product type is {:?}, not premium", other);
             false
         }
+    };
+
+    let (explicit_filter_enabled, explicit_filter_locked) = match &user.explicit_content {
+        Some(ec) => (ec.filter_enabled, ec.filter_locked),
+        None => (false, false),
+    };
+
+    Ok(UserProfileCheck {
+        is_premium,
+        explicit_filter_enabled,
+        explicit_filter_locked,
     })
 }

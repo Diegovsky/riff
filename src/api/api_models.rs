@@ -289,6 +289,13 @@ pub struct User {
     pub display_name: String,
     pub product: Option<String>,
     pub images: Option<Vec<Image>>,
+    pub explicit_content: Option<ExplicitContentSettings>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct ExplicitContentSettings {
+    pub filter_enabled: bool,
+    pub filter_locked: bool,
 }
 
 impl WithImages for User {
@@ -382,6 +389,8 @@ pub struct AlbumTrackItem {
     pub name: String,
     pub duration_ms: i64,
     pub artists: Vec<Artist>,
+    #[serde(default)]
+    pub explicit: bool,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -524,6 +533,7 @@ where
                     name,
                     duration_ms,
                     track_number,
+                    explicit,
                 } = track;
                 let artists = artists
                     .into_iter()
@@ -555,6 +565,7 @@ where
                     album: album_ref,
                     duration_ms: duration_ms as u32,
                     art,
+                    explicit,
                 })
             })
             .collect();

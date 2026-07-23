@@ -17,7 +17,10 @@ pub enum Command {
     CompleteLogin,
     RefreshToken,
     Logout,
-    PlayerLoad { track: SpotifyUri, resume: bool },
+    PlayerLoad {
+        track: SpotifyUri,
+        resume: bool,
+    },
     PlayerResume,
     PlayerPause,
     PlayerStop,
@@ -25,10 +28,27 @@ pub enum Command {
     PlayerSetVolume(f64),
     PlayerPreload(SpotifyUri),
     ReloadSettings,
-    SetEqualizer { bands: [f64; 10] },
-    SetMono { enabled: bool },
-    SetPan { pan: f64 },
-    SetPitch { cents: f64 },
+    SetEqualizer {
+        bands: [f64; 10],
+    },
+    SetMono {
+        enabled: bool,
+    },
+    SetPan {
+        pan: f64,
+    },
+    SetPitch {
+        cents: f64,
+    },
+    // Re-query the account's explicit content filter (e.g. after a track was
+    // rejected with ExplicitContentFiltered) and sync Riff's filter state.
+    RecheckExplicitFilter,
+    // Carries the result of an asynchronous explicit-filter re-check back into
+    // the command loop so the player can update its cached state.
+    ExplicitFilterRechecked {
+        filter_enabled: bool,
+        filter_locked: bool,
+    },
 }
 
 #[derive(Clone)]
@@ -55,6 +75,14 @@ impl AppPlayerDelegate {
 
     fn refresh_successful(&self) {
         self.send(LoginAction::TokenRefreshed.into())
+    }
+
+    fn set_explicit_filter_locked(&self, locked: bool) {
+        self.send(PlaybackAction::SetExplicitFilterLocked(locked).into())
+    }
+
+    fn set_skip_explicit(&self, skip: bool) {
+        self.send(PlaybackAction::SetSkipExplicit(skip).into())
     }
 
     fn report_error(&self, error: SpotifyError) {

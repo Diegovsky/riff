@@ -29,4 +29,11 @@ impl SettingsModel {
         let state = self.app_model.get_state();
         state.settings.settings.clone()
     }
+
+    /// Whether the logged-in Spotify account has locked its explicit content
+    /// filter (e.g. via a family plan parental control). When locked, the user
+    /// cannot disable explicit-track skipping in Riff.
+    pub fn explicit_filter_locked(&self) -> bool {
+        self.app_model.get_state().playback.explicit_filter_locked()
+    }
 }
