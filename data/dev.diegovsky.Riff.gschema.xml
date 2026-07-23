@@ -63,6 +63,10 @@
       <default>'ask'</default>
       <summary>Behavior when the window close button is pressed while playing</summary>
     </key>
+    <key name="inhibit-suspend" type="b">
+      <default>true</default>
+      <summary>Inhibit automatic system suspend while audio is playing</summary>
+    </key>
     <key name='player-bitrate' enum='dev.diegovsky.Riff.Bitrate'>
       <default>'160'</default>
       <summary>Songs bitrate (96, 160, 320kbps)</summary>

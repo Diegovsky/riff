@@ -68,6 +68,7 @@ impl App {
             ),
             Box::new(StateTracker::new_from_gsettings()),
             App::make_dbus(Rc::clone(&model), sender.clone()),
+            App::make_inhibitor(&builder, Rc::clone(&model)),
         ];
 
         Self {
@@ -177,6 +178,11 @@ impl App {
     ) -> Box<impl EventListener> {
         let window: libadwaita::ApplicationWindow = builder.object("window").unwrap();
         Box::new(MainWindow::new(settings.window.clone(), app_model, window))
+    }
+
+    fn make_inhibitor(builder: &gtk::Builder, app_model: Rc<AppModel>) -> Box<impl EventListener> {
+        let window: libadwaita::ApplicationWindow = builder.object("window").unwrap();
+        Box::new(crate::inhibitor::SuspendInhibitor::new(window, app_model))
     }
 
     fn make_navigation(
