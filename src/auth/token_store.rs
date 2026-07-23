@@ -6,8 +6,19 @@ use std::time::Duration;
 use crate::app::credentials::Credentials;
 
 const ATTRS: &[(&'static str, &'static str)] = &[("spot_credentials", "yes")];
-const MAX_KEYRING_RETRIES: u32 = 3;
-const KEYRING_RETRY_DELAY: Duration = Duration::from_millis(200);
+const MAX_KEYRING_RETRIES: u32 = 6;
+// Base delay used for exponential backoff between keyring retries.
+const KEYRING_RETRY_BASE_DELAY: Duration = Duration::from_millis(50);
+// Upper bound on the cumulative time spent sleeping across all retries.
+const KEYRING_MAX_TOTAL_DELAY: Duration = Duration::from_millis(800);
+
+/// Exponential backoff delay for a given (0-indexed) retry attempt.
+/// The base delay doubles on each successive attempt.
+fn backoff_delay(attempt: u32) -> Duration {
+    let base = KEYRING_RETRY_BASE_DELAY.as_millis() as u64;
+    let factor = 1u64.checked_shl(attempt).unwrap_or(u64::MAX);
+    Duration::from_millis(base.saturating_mul(factor))
+}
 
 struct InnerTokenStore {
     storage: RwLock<Option<Credentials>>,
@@ -23,8 +34,41 @@ impl TokenStore {
         }))
     }
 
-    async fn keyring() -> Keyring {
-        Keyring::new().await.expect("Failed to initialize keyring")
+    async fn keyring() -> Result<Keyring> {
+        let mut total_delay = Duration::ZERO;
+        let mut last_err = None;
+        for attempt in 0..MAX_KEYRING_RETRIES {
+            match Keyring::new().await {
+                Ok(keyring) => return Ok(keyring),
+                Err(e) => {
+                    warn!(
+                        "Failed to initialize keyring on attempt {}: {e}",
+                        attempt + 1
+                    );
+                    last_err = Some(e);
+                    if attempt < MAX_KEYRING_RETRIES - 1 {
+                        total_delay = Self::backoff_sleep(attempt, total_delay).await;
+                    }
+                }
+            }
+        }
+        Err(last_err
+            .map(anyhow::Error::from)
+            .unwrap_or_else(|| anyhow::anyhow!("Failed to initialize keyring")))
+    }
+
+    /// Sleep before the next retry using exponential backoff, keeping the
+    /// cumulative delay within [`KEYRING_MAX_TOTAL_DELAY`]. Returns the
+    /// updated total elapsed delay so the caller can carry the budget forward.
+    async fn backoff_sleep(attempt: u32, total_delay: Duration) -> Duration {
+        let remaining = KEYRING_MAX_TOTAL_DELAY.saturating_sub(total_delay);
+        if remaining.is_zero() {
+            return total_delay;
+        }
+        let delay = backoff_delay(attempt).min(remaining);
+        debug!("Retrying keyring operation in {}ms...", delay.as_millis());
+        tokio::time::sleep(delay).await;
+        total_delay + delay
     }
 
     pub fn get_cached_blocking(&self) -> Option<Credentials> {
@@ -36,7 +80,7 @@ impl TokenStore {
     }
 
     async fn retrieve(&self) -> Result<Credentials> {
-        let keyring = Self::keyring().await;
+        let keyring = Self::keyring().await?;
         if matches!(keyring, Keyring::File(_)) {
             // migrate keys if inside flatpak
             if let Err(e) = oo7::migrate(vec![ATTRS], true).await {
@@ -49,36 +93,44 @@ impl TokenStore {
             warn!("Failed to unlock keyring: {e}");
         }
 
-        // Retry to handle race with keyring daemon startup
+        // Retry on every failure mode (search errors, secret reads,
+        // deserialization, or an empty keyring) to handle races with the
+        // keyring daemon startup.
+        let mut total_delay = Duration::ZERO;
         let mut last_err = None;
         for attempt in 0..MAX_KEYRING_RETRIES {
-            let items = keyring.search_items(&ATTRS).await?;
-            match items.first() {
-                Some(item) => {
-                    let item_json = item.secret().await?;
-                    let creds = serde_json::from_slice(item_json.as_bytes())?;
-                    return Ok(creds);
-                }
-                None => {
-                    last_err = Some(anyhow::anyhow!("Empty keyring"));
+            match Self::try_retrieve(&keyring).await {
+                Ok(creds) => return Ok(creds),
+                Err(e) => {
+                    warn!(
+                        "Failed to retrieve credentials on attempt {}: {e}",
+                        attempt + 1
+                    );
+                    last_err = Some(e);
                     if attempt < MAX_KEYRING_RETRIES - 1 {
-                        debug!(
-                            "Keyring empty on attempt {}, retrying in {}ms...",
-                            attempt + 1,
-                            KEYRING_RETRY_DELAY.as_millis()
-                        );
-                        tokio::time::sleep(KEYRING_RETRY_DELAY).await;
+                        total_delay = Self::backoff_sleep(attempt, total_delay).await;
                     }
                 }
             }
         }
 
-        Err(last_err.unwrap())
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to retrieve credentials")))
+    }
+
+    // Perform a single credential lookup against the keyring.
+    async fn try_retrieve(keyring: &Keyring) -> Result<Credentials> {
+        let items = keyring.search_items(&ATTRS).await?;
+        let item = items
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("Empty keyring"))?;
+        let item_json = item.secret().await?;
+        let creds = serde_json::from_slice(item_json.as_bytes())?;
+        Ok(creds)
     }
 
     // Try to clear the credentials
     async fn logout(&self) -> Result<()> {
-        let result = Self::keyring().await.search_items(&ATTRS).await?;
+        let result = Self::keyring().await?.search_items(&ATTRS).await?;
         let Some(item) = result.first() else {
             warn!("Logout attempted, but keyring is empty");
             return Ok(());
@@ -92,7 +144,7 @@ impl TokenStore {
         info!("Saving credentials");
         let encoded = serde_json::to_vec(creds).unwrap();
         Self::keyring()
-            .await
+            .await?
             .create_item("Spotify Credentials", &ATTRS, &encoded, true)
             .await?;
         info!("Saved credentials");

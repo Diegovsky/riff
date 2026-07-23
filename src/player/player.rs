@@ -567,11 +567,24 @@ impl SpotifyPlayer {
         let oauth_client = Arc::clone(&self.oauth_client);
         let session = new_session.clone();
         tokio::task::spawn(async move {
+            // Scheduling loop: wait until the token is near expiry, refresh,
+            // reconnect, and repeat. The refresh itself long-polls transient
+            // failures inside refresh_token_at_expiry(), so an error surfaces
+            // here only when it is fatal (no stored token, or the refresh
+            // token was rejected and credentials were cleared). In that case
+            // there is nothing left to retry; exit and let a subsequent login
+            // spawn a fresh loop.
             loop {
-                if let Ok(token) = oauth_client.refresh_token_at_expiry().await {
-                    _ = session
-                        .connect(Credentials::with_access_token(token.access_token), true)
-                        .await;
+                match oauth_client.refresh_token_at_expiry().await {
+                    Ok(token) => {
+                        _ = session
+                            .connect(Credentials::with_access_token(token.access_token), true)
+                            .await;
+                    }
+                    Err(e) => {
+                        warn!("Token refresh loop stopping: {e}");
+                        break;
+                    }
                 }
             }
         });
