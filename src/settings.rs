@@ -93,6 +93,7 @@ impl SpotifyPlayerSettings {
 
         let volume = settings.double("volume");
         let shuffle = settings.boolean("shuffle");
+        let skip_explicit = settings.boolean("skip-explicit");
         let repeat = match settings.string("repeat").as_str() {
             "song" => RepeatMode::Song,
             "playlist" => RepeatMode::Playlist,
@@ -165,6 +166,8 @@ impl SpotifyPlayerSettings {
             repeat,
             shuffle,
 
+            skip_explicit,
+
             bitrate,
             backend,
             gapless,
@@ -198,6 +201,7 @@ impl SpotifyPlayerSettings {
             SetVolume(self.volume).into(),
             SetShuffled(self.shuffle).into(),
             SetRepeatMode(self.repeat).into(),
+            SetSkipExplicit(self.skip_explicit).into(),
         ]
     }
 }

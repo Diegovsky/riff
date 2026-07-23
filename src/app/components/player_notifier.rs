@@ -8,7 +8,8 @@ use librespot::core::SpotifyUri;
 
 use crate::app::components::EventListener;
 use crate::app::state::{
-    Device, LoginAction, LoginEvent, LoginStartedEvent, PlaybackEvent, SettingsEvent,
+    Device, LoginAction, LoginEvent, LoginStartedEvent, PlaybackAction, PlaybackEvent,
+    SettingsEvent,
 };
 use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, SongsSource};
 use crate::connect::ConnectCommand;
@@ -54,6 +55,7 @@ impl PlayerNotifier {
         connect_command_sender: UnboundedSender<ConnectCommand>,
     ) -> Self {
         let dsp_settings = Self::watch_dsp_settings(command_sender.clone());
+        Self::watch_skip_explicit_setting(&dsp_settings, dispatcher.as_ref());
         Self {
             app_model,
             dispatcher,
@@ -61,6 +63,17 @@ impl PlayerNotifier {
             connect_command_sender,
             _dsp_settings: dsp_settings,
         }
+    }
+
+    /// Watch the skip-explicit GSettings key (the preferences toggle) and
+    /// dispatch a PlaybackAction whenever it changes, so the playback state
+    /// stays in sync with the user's local preference.
+    fn watch_skip_explicit_setting(settings: &gio::Settings, dispatcher: &dyn ActionDispatcher) {
+        let d = dispatcher.box_clone();
+        settings.connect_changed(Some("skip-explicit"), move |settings, _| {
+            let skip = settings.boolean("skip-explicit");
+            d.dispatch(PlaybackAction::SetSkipExplicit(skip).into());
+        });
     }
 
     /// Watch the equalizer, mono-audio, pan, and pitch GSettings keys and push
@@ -216,6 +229,14 @@ impl PlayerNotifier {
             PlaybackEvent::PlaybackResumed => Some(Command::PlayerResume),
             PlaybackEvent::PlaybackStopped => Some(Command::PlayerStop),
             PlaybackEvent::VolumeSet(volume) => Some(Command::PlayerSetVolume(*volume)),
+            PlaybackEvent::SkipExplicitChanged(skip) => {
+                // Sync GSettings with the internal state so the UI toggle
+                // reflects changes forced by the account's explicit filter.
+                // GSettings deduplicates writes of the same value, so this
+                // won't cause an infinite loop with the watcher.
+                self._dsp_settings.set_boolean("skip-explicit", *skip).ok();
+                None
+            }
             PlaybackEvent::TrackChanged(id) => {
                 info!("track changed: {}", id);
                 SpotifyId::from_base62(id)

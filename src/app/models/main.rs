@@ -222,6 +222,7 @@ pub struct SongDescription {
     pub album: AlbumRef,
     pub duration_ms: u32,
     pub art: Option<ImageSet>,
+    pub explicit: bool,
 }
 
 impl SongDescription {
@@ -371,6 +372,7 @@ mod tests {
             duration_ms: 1000,
             art: None,
             track_number: None,
+            explicit: false,
         }
     }
 

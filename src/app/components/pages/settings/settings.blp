@@ -39,6 +39,16 @@ template $SettingsWindow : Adw.PreferencesDialog {
           ]
         };
       }
+
+      Adw.SwitchRow skip_explicit_switch {
+        /* Translators: Title for the skip explicit tracks toggle in preferences */
+
+        title: _("Skip Explicit Tracks");
+
+        /* Translators: Description for the skip explicit tracks toggle */
+
+        subtitle: _("Automatically skip tracks marked as explicit");
+      }
     }
 
     Adw.PreferencesGroup {

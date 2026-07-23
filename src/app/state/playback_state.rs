@@ -19,6 +19,11 @@ pub struct PlaybackState {
     repeat: RepeatMode,
     is_playing: bool,
     is_shuffled: bool,
+    // Whether to skip explicit tracks
+    skip_explicit: bool,
+    // Whether the Spotify account has locked the explicit filter (e.g. via a
+    // family plan parental control). When locked, skipping cannot be disabled.
+    explicit_filter_locked: bool,
     // Last volume that was applied (0.0..=1.0). Initialised to a sentinel
     // outside the valid range so the first `SetVolume` always propagates.
     volume: f64,
@@ -37,6 +42,10 @@ impl PlaybackState {
 
     pub fn is_shuffled(&self) -> bool {
         self.is_shuffled
+    }
+
+    pub fn explicit_filter_locked(&self) -> bool {
+        self.explicit_filter_locked
     }
 
     pub fn repeat_mode(&self) -> RepeatMode {
@@ -200,6 +209,58 @@ impl PlaybackState {
         })
     }
 
+    /// Advance to the next non-explicit track. If skip_explicit is enabled,
+    /// keeps skipping forward until a non-explicit track is found or no more
+    /// tracks remain. Always calls self.stop() before returning None.
+    fn play_next_skipping_explicit(&mut self) -> Option<String> {
+        if !self.skip_explicit {
+            return self.play_next();
+        }
+
+        // Limit iterations to avoid infinite loops in repeat mode with all-explicit playlists
+        let max_skips = self.songs.len();
+        for _ in 0..max_skips {
+            let id = match self.play_next() {
+                Some(id) => id,
+                None => {
+                    // No more tracks available - stop playback
+                    self.stop();
+                    return None;
+                }
+            };
+            if !self.current_song_is_explicit() {
+                return Some(id);
+            }
+            debug!("Skipping explicit track '{}'", id);
+        }
+        // All remaining tracks are explicit - stop playback
+        self.stop();
+        None
+    }
+
+    /// Returns true if the current song is marked as explicit.
+    fn current_song_is_explicit(&self) -> bool {
+        self.current_song().map(|s| s.explicit).unwrap_or(false)
+    }
+
+    /// If skipping is enabled and the current track is explicit, advance to the
+    /// next non-explicit track. Used when the filter is turned on (locally or by
+    /// the account) while an explicit track is already playing. Returns the
+    /// playback events to emit, if any.
+    fn skip_current_if_explicit(&mut self) -> Vec<PlaybackEvent> {
+        if self.skip_explicit && self.current_song_is_explicit() {
+            debug!("Filter enabled while an explicit track is current; skipping");
+            if let Some(next_id) = self.play_next_skipping_explicit() {
+                vec![PlaybackEvent::TrackChanged(next_id)]
+            } else {
+                // play_next_skipping_explicit already called self.stop()
+                vec![PlaybackEvent::PlaybackStopped]
+            }
+        } else {
+            vec![]
+        }
+    }
+
     pub fn next_index(&self) -> Option<usize> {
         // When shuffled, we can only play songs that are actually loaded
         let len = if self.is_shuffled {
@@ -228,6 +289,50 @@ impl PlaybackState {
                 None
             }
         })
+    }
+
+    /// Go to the previous non-explicit track. If skip_explicit is enabled,
+    /// keeps going backwards until a non-explicit track is found or no more
+    /// tracks remain. Returns Some(id) if a track was found, None if playback
+    /// should seek to start (position > 2s) or if all previous tracks are
+    /// explicit (in which case playback is stopped).
+    fn play_prev_skipping_explicit(&mut self) -> Option<String> {
+        if !self.skip_explicit {
+            return self.play_prev();
+        }
+
+        // Delegate the "more than 2 seconds in, seek to start" check to
+        // play_prev itself on the first call. If it returns None, that means
+        // it seeked to start (or there is no previous track) rather than
+        // changing track, so leave playback untouched.
+        let first = self.play_prev()?;
+        if !self.current_song_is_explicit() {
+            return Some(first);
+        }
+        debug!("Skipping explicit track '{}' (previous)", first);
+
+        // Continue skipping backwards. Force seek position to 0 before each
+        // call so play_prev doesn't trigger the "restart current track" path.
+        let max_skips = self.songs.len();
+        for _ in 1..max_skips {
+            self.seek_position.set(0, true);
+            let id = match self.play_prev() {
+                Some(id) => id,
+                None => {
+                    // Reached the beginning with only explicit tracks behind
+                    // us - stop playback.
+                    self.stop();
+                    return None;
+                }
+            };
+            if !self.current_song_is_explicit() {
+                return Some(id);
+            }
+            debug!("Skipping explicit track '{}' (previous)", id);
+        }
+        // All previous tracks are explicit - stop playback
+        self.stop();
+        None
     }
 
     pub fn prev_index(&self) -> Option<usize> {
@@ -287,6 +392,8 @@ impl Default for PlaybackState {
             repeat: RepeatMode::None,
             is_playing: false,
             is_shuffled: false,
+            skip_explicit: false,
+            explicit_filter_locked: false,
             volume: -1.0,
         }
     }
@@ -300,6 +407,12 @@ pub enum PlaybackAction {
     Stop,
     SetRepeatMode(RepeatMode),
     SetShuffled(bool),
+    SetSkipExplicit(bool),
+    // Sync the explicit content filter lock from the Spotify account profile.
+    // A locked filter (e.g. a family plan parental control) forces skipping on
+    // and prevents the user from disabling it. An unlocked account setting does
+    // not change the local preference, which defaults to off.
+    SetExplicitFilterLocked(bool),
     ToggleRepeat,
     ToggleShuffle,
     Seek(u32),
@@ -347,6 +460,10 @@ pub enum PlaybackEvent {
     PlaybackStopped,
     SwitchedDevice(Device),
     AvailableDevicesChanged,
+    /// Emitted when the skip_explicit preference changes (either locally or
+    /// forced by the account's explicit content filter). Used to sync GSettings
+    /// with the internal state.
+    SkipExplicitChanged(bool),
 }
 
 impl From<PlaybackEvent> for AppEvent {
@@ -403,12 +520,37 @@ impl UpdatableState for PlaybackState {
                 self.set_shuffled(shuffled);
                 vec![PlaybackEvent::ShuffleChanged(shuffled)]
             }
+            PlaybackAction::SetSkipExplicit(skip) => {
+                let changed = self.skip_explicit != skip;
+                self.skip_explicit = skip;
+                let mut events = Vec::new();
+                if changed {
+                    events.push(PlaybackEvent::SkipExplicitChanged(skip));
+                }
+                // If enabling while an explicit track is playing, skip it now.
+                events.extend(self.skip_current_if_explicit());
+                events
+            }
+            PlaybackAction::SetExplicitFilterLocked(locked) => {
+                self.explicit_filter_locked = locked;
+                let mut events = Vec::new();
+                // A locked account filter forces skipping on. An unlocked
+                // account leaves the local preference untouched (default off).
+                if locked && !self.skip_explicit {
+                    self.skip_explicit = true;
+                    events.push(PlaybackEvent::SkipExplicitChanged(true));
+                }
+                // If the filter just turned on while an explicit track is
+                // playing, skip it now.
+                events.extend(self.skip_current_if_explicit());
+                events
+            }
             PlaybackAction::ToggleShuffle => {
                 self.set_shuffled(!self.is_shuffled);
                 vec![PlaybackEvent::ShuffleChanged(self.is_shuffled)]
             }
             PlaybackAction::Next => {
-                if let Some(id) = self.play_next() {
+                if let Some(id) = self.play_next_skipping_explicit() {
                     vec![PlaybackEvent::TrackChanged(id)]
                 } else {
                     self.stop();
@@ -420,15 +562,34 @@ impl UpdatableState for PlaybackState {
                 vec![PlaybackEvent::PlaybackStopped]
             }
             PlaybackAction::Previous => {
-                if let Some(id) = self.play_prev() {
+                if let Some(id) = self.play_prev_skipping_explicit() {
                     vec![PlaybackEvent::TrackChanged(id)]
-                } else {
+                } else if self.list_position.is_some() {
+                    // A track is still loaded, so play_prev seeked to its start
+                    // rather than stopping. (list_position stays Some when
+                    // paused, so we can't rely on is_playing here.)
                     vec![PlaybackEvent::TrackSeeked(0)]
+                } else {
+                    // All previous tracks were explicit and playback was
+                    // stopped (stop() clears list_position).
+                    vec![PlaybackEvent::PlaybackStopped]
                 }
             }
             PlaybackAction::Load(id) => {
                 if self.play(&id) {
-                    vec![PlaybackEvent::TrackChanged(id)]
+                    // If skip_explicit is enabled and the loaded track is explicit,
+                    // skip forward to the next non-explicit track instead.
+                    if self.skip_explicit && self.current_song_is_explicit() {
+                        debug!("Requested explicit track '{}', skipping", id);
+                        if let Some(next_id) = self.play_next_skipping_explicit() {
+                            vec![PlaybackEvent::TrackChanged(next_id)]
+                        } else {
+                            // play_next_skipping_explicit already called self.stop()
+                            vec![PlaybackEvent::PlaybackStopped]
+                        }
+                    } else {
+                        vec![PlaybackEvent::TrackChanged(id)]
+                    }
                 } else {
                     vec![]
                 }
@@ -569,6 +730,7 @@ mod tests {
             duration_ms: 1000,
             art: None,
             track_number: None,
+            explicit: false,
         }
     }
 
@@ -956,5 +1118,263 @@ mod tests {
             !failed,
             "Playback stopped because shuffle picked an unloaded song index"
         );
+    }
+
+    fn explicit_song(id: &str) -> SongDescription {
+        SongDescription {
+            id: id.to_string(),
+            uri: "".to_string(),
+            title: "Explicit Title".to_string(),
+            artists: vec![],
+            album: AlbumRef {
+                id: "".to_string(),
+                name: "".to_string(),
+            },
+            duration_ms: 1000,
+            art: None,
+            track_number: None,
+            explicit: true,
+        }
+    }
+
+    #[test]
+    fn test_skip_explicit_next() {
+        let mut state = PlaybackState::default();
+        state.update_with(Cow::Owned(PlaybackAction::SetSkipExplicit(true)));
+        state.queue(vec![
+            song("1"),
+            explicit_song("2"),
+            explicit_song("3"),
+            song("4"),
+        ]);
+
+        state.play("1");
+        assert!(state.is_playing());
+        assert_eq!(state.current_song_id(), Some("1".to_string()));
+
+        // Next should skip the two explicit tracks and land on "4"
+        let events = state.update_with(Cow::Owned(PlaybackAction::Next));
+        assert!(state.is_playing());
+        assert_eq!(state.current_song_id(), Some("4".to_string()));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, PlaybackEvent::TrackChanged(id) if id == "4")));
+    }
+
+    #[test]
+    fn test_skip_explicit_load() {
+        let mut state = PlaybackState::default();
+        state.update_with(Cow::Owned(PlaybackAction::SetSkipExplicit(true)));
+        state.queue(vec![song("1"), explicit_song("2"), song("3")]);
+
+        // Trying to load an explicit track should skip forward to "3"
+        let events = state.update_with(Cow::Owned(PlaybackAction::Load("2".to_string())));
+        assert!(state.is_playing());
+        assert_eq!(state.current_song_id(), Some("3".to_string()));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, PlaybackEvent::TrackChanged(id) if id == "3")));
+    }
+
+    #[test]
+    fn test_skip_explicit_all_explicit_stops_playback() {
+        let mut state = PlaybackState::default();
+        state.update_with(Cow::Owned(PlaybackAction::SetSkipExplicit(true)));
+        state.queue(vec![song("1"), explicit_song("2"), explicit_song("3")]);
+
+        state.play("1");
+        assert!(state.is_playing());
+
+        // Next should try to advance but all remaining are explicit - stop
+        let events = state.update_with(Cow::Owned(PlaybackAction::Next));
+        assert!(!state.is_playing());
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, PlaybackEvent::PlaybackStopped)));
+    }
+
+    #[test]
+    fn test_skip_explicit_disabled_plays_explicit() {
+        let mut state = PlaybackState::default();
+        // skip_explicit is false by default
+        state.queue(vec![song("1"), explicit_song("2"), song("3")]);
+
+        state.play("1");
+        let events = state.update_with(Cow::Owned(PlaybackAction::Next));
+        assert!(state.is_playing());
+        // Should play the explicit track normally
+        assert_eq!(state.current_song_id(), Some("2".to_string()));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, PlaybackEvent::TrackChanged(id) if id == "2")));
+    }
+
+    #[test]
+    fn test_skip_explicit_previous() {
+        let mut state = PlaybackState::default();
+        state.update_with(Cow::Owned(PlaybackAction::SetSkipExplicit(true)));
+        state.queue(vec![
+            song("1"),
+            explicit_song("2"),
+            explicit_song("3"),
+            song("4"),
+        ]);
+
+        state.play("4");
+        assert!(state.is_playing());
+        assert_eq!(state.current_song_id(), Some("4".to_string()));
+
+        // Previous should skip the two explicit tracks and land on "1"
+        let events = state.update_with(Cow::Owned(PlaybackAction::Previous));
+        assert!(state.is_playing());
+        assert_eq!(state.current_song_id(), Some("1".to_string()));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, PlaybackEvent::TrackChanged(id) if id == "1")));
+    }
+
+    #[test]
+    fn test_account_explicit_filter_locked_forces_skip() {
+        let mut state = PlaybackState::default();
+        // Account has the filter locked (e.g. family plan control)
+        state.update_with(Cow::Owned(PlaybackAction::SetExplicitFilterLocked(true)));
+        assert!(state.skip_explicit);
+        assert!(state.explicit_filter_locked());
+
+        state.queue(vec![song("1"), explicit_song("2"), song("3")]);
+        state.play("1");
+        let events = state.update_with(Cow::Owned(PlaybackAction::Next));
+        assert_eq!(state.current_song_id(), Some("3".to_string()));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, PlaybackEvent::TrackChanged(id) if id == "3")));
+    }
+
+    #[test]
+    fn test_account_explicit_filter_unlocked_defaults_off() {
+        let mut state = PlaybackState::default();
+        // An unlocked account must not auto-enable skipping: default is off.
+        state.update_with(Cow::Owned(PlaybackAction::SetExplicitFilterLocked(false)));
+        assert!(!state.skip_explicit);
+        assert!(!state.explicit_filter_locked());
+    }
+
+    #[test]
+    fn test_account_explicit_filter_unlocked_preserves_local_pref() {
+        let mut state = PlaybackState::default();
+        // User locally enabled skipping
+        state.update_with(Cow::Owned(PlaybackAction::SetSkipExplicit(true)));
+        assert!(state.skip_explicit);
+
+        // An unlocked account should not disable the user's local preference.
+        state.update_with(Cow::Owned(PlaybackAction::SetExplicitFilterLocked(false)));
+        assert!(state.skip_explicit);
+        assert!(!state.explicit_filter_locked());
+    }
+
+    #[test]
+    fn test_enable_filter_skips_current_explicit_track() {
+        let mut state = PlaybackState::default();
+        state.queue(vec![song("1"), explicit_song("2"), song("3")]);
+        state.play("2");
+        assert_eq!(state.current_song_id(), Some("2".to_string()));
+        assert!(state.is_playing());
+
+        // Enabling the filter while an explicit track is playing skips it now.
+        let events = state.update_with(Cow::Owned(PlaybackAction::SetSkipExplicit(true)));
+        assert_eq!(state.current_song_id(), Some("3".to_string()));
+        assert!(state.is_playing());
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, PlaybackEvent::TrackChanged(id) if id == "3")));
+    }
+
+    #[test]
+    fn test_lock_filter_skips_current_explicit_track() {
+        let mut state = PlaybackState::default();
+        state.queue(vec![song("1"), explicit_song("2"), song("3")]);
+        state.play("2");
+        assert_eq!(state.current_song_id(), Some("2".to_string()));
+
+        // Account lock arriving mid-playback skips the current explicit track.
+        let events = state.update_with(Cow::Owned(PlaybackAction::SetExplicitFilterLocked(true)));
+        assert_eq!(state.current_song_id(), Some("3".to_string()));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, PlaybackEvent::TrackChanged(id) if id == "3")));
+    }
+
+    #[test]
+    fn test_enable_filter_leaves_non_explicit_current_track() {
+        let mut state = PlaybackState::default();
+        state.queue(vec![song("1"), explicit_song("2")]);
+        state.play("1");
+
+        // Current track is not explicit: enabling the filter does not skip.
+        let events = state.update_with(Cow::Owned(PlaybackAction::SetSkipExplicit(true)));
+        assert_eq!(state.current_song_id(), Some("1".to_string()));
+        // Only the state-change notification is emitted, no track change.
+        assert!(events
+            .iter()
+            .all(|e| matches!(e, PlaybackEvent::SkipExplicitChanged(true))));
+        assert_eq!(events.len(), 1);
+    }
+
+    #[test]
+    fn test_enable_filter_all_explicit_stops_playback() {
+        let mut state = PlaybackState::default();
+        state.queue(vec![explicit_song("1"), explicit_song("2")]);
+        state.play("1");
+        assert!(state.is_playing());
+
+        // Enabling the filter with only explicit tracks left stops playback.
+        let events = state.update_with(Cow::Owned(PlaybackAction::SetSkipExplicit(true)));
+        assert!(!state.is_playing());
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, PlaybackEvent::PlaybackStopped)));
+    }
+
+    #[test]
+    fn test_previous_while_paused_seeks_to_start() {
+        let mut state = PlaybackState::default();
+        state.queue(vec![song("1"), song("2")]);
+        state.play("2");
+        // Simulate being more than 2s into the track so Previous seeks to start.
+        state.seek_position.set(5000, true);
+        // Pause: is_playing becomes false, but list_position stays Some.
+        state.toggle_play();
+        assert!(!state.is_playing());
+
+        // Previous should seek to start, NOT stop playback.
+        let events = state.update_with(Cow::Owned(PlaybackAction::Previous));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, PlaybackEvent::TrackSeeked(0))));
+        assert!(!events
+            .iter()
+            .any(|e| matches!(e, PlaybackEvent::PlaybackStopped)));
+        assert_eq!(state.current_song_id(), Some("2".to_string()));
+    }
+
+    #[test]
+    fn test_skip_explicit_previous_all_explicit_stops_playback() {
+        let mut state = PlaybackState::default();
+        state.update_with(Cow::Owned(PlaybackAction::SetSkipExplicit(true)));
+        state.queue(vec![explicit_song("1"), explicit_song("2"), song("3")]);
+
+        state.play("3");
+        assert!(state.is_playing());
+
+        // Previous should try to go back but all previous tracks are explicit,
+        // so playback stops and PlaybackStopped is emitted (not TrackSeeked).
+        let events = state.update_with(Cow::Owned(PlaybackAction::Previous));
+        assert!(!state.is_playing());
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, PlaybackEvent::PlaybackStopped)));
+        assert!(!events
+            .iter()
+            .any(|e| matches!(e, PlaybackEvent::TrackSeeked(_))));
     }
 }

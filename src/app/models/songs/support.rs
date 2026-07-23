@@ -469,6 +469,7 @@ mod tests {
             duration_ms: 1000,
             art: None,
             track_number: None,
+            explicit: false,
         }
     }
 
