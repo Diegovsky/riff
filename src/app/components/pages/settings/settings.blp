@@ -40,6 +40,16 @@ template $SettingsWindow : Adw.PreferencesDialog {
         };
       }
 
+      Adw.SwitchRow inhibit_suspend_switch {
+        /* Translators: Title for the keep device awake toggle in preferences */
+
+        title: _("Keep Device Awake While Playing");
+
+        /* Translators: Description for the keep device awake toggle */
+
+        subtitle: _("Prevent the system from automatically suspending while audio is playing");
+      }
+
       Adw.SwitchRow skip_explicit_switch {
         /* Translators: Title for the skip explicit tracks toggle in preferences */
 

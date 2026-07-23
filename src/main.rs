@@ -24,6 +24,7 @@ mod config;
 mod connect;
 mod dbus;
 pub mod feature_flags;
+mod inhibitor;
 mod player;
 mod settings;
 

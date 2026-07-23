@@ -50,6 +50,9 @@ mod imp {
         pub close_behavior: TemplateChild<libadwaita::ComboRow>,
 
         #[template_child]
+        pub inhibit_suspend_switch: TemplateChild<libadwaita::SwitchRow>,
+
+        #[template_child]
         pub skip_explicit_switch: TemplateChild<libadwaita::SwitchRow>,
 
         #[template_child]
@@ -512,6 +515,15 @@ impl SettingsDialog {
                     .to_variant()
                 })
             })
+            .build();
+
+        // Keep device awake while playing (inhibit automatic system suspend).
+        let inhibit_suspend_switch = widget
+            .inhibit_suspend_switch
+            .downcast_ref::<libadwaita::SwitchRow>()
+            .expect("inhibit_suspend_switch must be a SwitchRow");
+        settings
+            .bind("inhibit-suspend", inhibit_suspend_switch, "active")
             .build();
 
         // Skip explicit tracks (local preference). When the account locks the
