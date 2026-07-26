@@ -173,6 +173,22 @@ impl PlaybackWidget {
         self.set_seek_position(value);
     }
 
+    /// Start the local clock that advances the seekbar once per second.
+    pub fn resume_seek_position(&self) {
+        let widget = self.imp();
+        widget.clock.start(clone!(
+            #[weak(rename_to = _self)]
+            self,
+            move || _self.increment_seek_position()
+        ));
+    }
+
+    /// Stop advancing the seekbar locally, freezing it at its current position.
+    /// Used when playback is paused, without altering anything else.
+    pub fn freeze_seek_position(&self) {
+        self.imp().clock.stop();
+    }
+
     pub fn connect_now_playing_clicked<F>(&self, f: F)
     where
         F: Fn() + Clone + 'static,
@@ -209,13 +225,9 @@ impl PlaybackWidget {
         widget.controls.set_playing(is_playing);
         widget.mobile_controls.set_playing(is_playing);
         if is_playing {
-            widget.clock.start(clone!(
-                #[weak(rename_to = _self)]
-                self,
-                move || _self.increment_seek_position()
-            ));
+            self.resume_seek_position();
         } else {
-            widget.clock.stop();
+            self.freeze_seek_position();
         }
     }
 

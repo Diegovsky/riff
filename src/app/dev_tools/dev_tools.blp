@@ -1,0 +1,146 @@
+using Gtk 4.0;
+
+// Developer tools menu (debug builds only). Loaded and wired up procedurally
+// by src/app/dev_tools.rs, which packs `dev_menu` into the sidebar header.
+MenuButton dev_menu {
+  icon-name: "preferences-other-symbolic";
+  focus-on-click: false;
+  can-focus: false;
+  visible: false;
+  tooltip-text: "Dev Tools";
+
+  popover: Popover {
+    child: Box {
+      orientation: vertical;
+      spacing: 6;
+      margin-top: 8;
+      margin-bottom: 8;
+      margin-start: 8;
+      margin-end: 8;
+
+      Label {
+        label: "Dev Toggles";
+        styles ["heading"]
+        halign: start;
+      }
+
+      Box {
+        orientation: horizontal;
+        spacing: 8;
+
+        Label {
+          label: "Force Skeleton";
+          hexpand: true;
+          halign: start;
+        }
+
+        Switch dev_skeleton_switch {}
+      }
+
+      Box {
+        orientation: horizontal;
+        spacing: 8;
+
+        Label {
+          label: "Debug CSS";
+          hexpand: true;
+          halign: start;
+        }
+
+        Switch dev_debug_css_switch {}
+      }
+
+      Separator {}
+
+      Label {
+        label: "Simulated Failures";
+        styles ["heading"]
+        halign: start;
+      }
+
+      Box {
+        orientation: horizontal;
+        spacing: 8;
+
+        Label {
+          label: "Simulate Offline";
+          hexpand: true;
+          halign: start;
+        }
+
+        Switch dev_offline_switch {}
+      }
+
+      Label {
+        label: "Inject API Error";
+        halign: start;
+      }
+
+      Box {
+        orientation: horizontal;
+        styles ["linked"]
+
+        ToggleButton dev_error_off {
+          label: "Off";
+          active: true;
+        }
+
+        ToggleButton dev_error_429 {
+          label: "429";
+          group: dev_error_off;
+        }
+
+        ToggleButton dev_error_401 {
+          label: "401";
+          group: dev_error_off;
+        }
+
+        ToggleButton dev_error_500 {
+          label: "500";
+          group: dev_error_off;
+        }
+
+        ToggleButton dev_error_nocontent {
+          label: "No Content";
+          group: dev_error_off;
+        }
+      }
+
+      Button dev_expire_token {
+        label: "Expire OAuth Token";
+      }
+
+      Button dev_kill_player {
+        label: "Kill Player";
+
+        styles ["destructive-action"]
+      }
+
+      Button dev_kill_session {
+        label: "Kill Librespot Session";
+
+        styles ["destructive-action"]
+      }
+
+      Separator {}
+
+      Label {
+        label: "Utilities";
+        styles ["heading"]
+        halign: start;
+      }
+
+      Button dev_test_toast {
+        label: "Test Toast";
+      }
+
+      Button dev_reload_css {
+        label: "Reload CSS";
+      }
+
+      Button dev_dump_state {
+        label: "Dump State to Log";
+      }
+    };
+  };
+}

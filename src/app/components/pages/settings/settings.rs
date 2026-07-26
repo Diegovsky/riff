@@ -545,10 +545,7 @@ impl SettingsDialog {
             "These settings require restarting the application to take effect.",
         ));
 
-        for flag in FeatureFlag::ALL
-            .iter()
-            .filter(|f| !f.is_debug_only() || cfg!(debug_assertions))
-        {
+        for flag in FeatureFlag::ALL.iter() {
             let row = libadwaita::SwitchRow::new();
             row.set_title(flag.title());
             row.set_subtitle(flag.description());

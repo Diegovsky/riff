@@ -1,8 +1,9 @@
+use crate::api::CachedSpotifyClient;
 use crate::auth::TokenStore;
+#[cfg(debug_assertions)]
+use crate::player::Command;
 use crate::settings::{RiffSettings, StateTracker};
-use crate::{api::CachedSpotifyClient, feature_flags};
 use futures::channel::mpsc::UnboundedSender;
-use gtk::prelude::*;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -28,6 +29,9 @@ pub use batch_loader::*;
 pub mod credentials;
 pub mod loader;
 
+#[cfg(debug_assertions)]
+mod dev_tools;
+
 pub mod rng;
 pub use rng::LazyRandomIndex;
 
@@ -43,6 +47,10 @@ pub struct App {
     // Allows sending actions that are handled by the model above
     sender: UnboundedSender<AppAction>,
     worker: Worker,
+    // Sends commands to the librespot player. Only the dev tools menu uses it,
+    // so it is compiled out of release builds entirely.
+    #[cfg(debug_assertions)]
+    player_command_sender: UnboundedSender<Command>,
 }
 
 impl App {
@@ -57,15 +65,23 @@ impl App {
         let spotify_client = Arc::new(CachedSpotifyClient::new(token_store.clone()));
         let model = Rc::new(AppModel::new(state, spotify_client));
 
+        let player_command_sender = crate::player::start_player_service(
+            settings.player_settings.clone(),
+            sender.clone(),
+            token_store,
+        );
+
+        let api = model.get_spotify();
+        let connect_command_sender = crate::connect::start_connect_server(api, sender.clone());
+
         // Non widget components
         let components: Vec<Box<dyn EventListener>> = vec![
-            App::make_player_notifier(
+            Box::new(PlayerNotifier::new(
                 Rc::clone(&model),
-                &settings,
                 Box::new(ActionDispatcherImpl::new(sender.clone(), worker.clone())),
-                sender.clone(),
-                token_store,
-            ),
+                player_command_sender.clone(),
+                connect_command_sender,
+            )),
             Box::new(StateTracker::new_from_gsettings()),
             App::make_dbus(Rc::clone(&model), sender.clone()),
             App::make_inhibitor(&builder, Rc::clone(&model)),
@@ -78,6 +94,8 @@ impl App {
             model,
             sender,
             worker,
+            #[cfg(debug_assertions)]
+            player_command_sender,
         }
     }
 
@@ -123,44 +141,11 @@ impl App {
             App::make_notification(builder),
         ];
 
-        // Wire up skeleton toggle button (debug-only feature)
-        if feature_flags::is_enabled(feature_flags::FeatureFlag::DebugSkeleton) {
-            let skeleton_toggle: gtk::ToggleButton = builder.object("skeleton_toggle").unwrap();
-            let window: libadwaita::ApplicationWindow = builder.object("window").unwrap();
-            skeleton_toggle.set_visible(true);
-            skeleton_toggle.connect_toggled(move |btn| {
-                if btn.is_active() {
-                    window.add_css_class("force-skeleton");
-                } else {
-                    window.remove_css_class("force-skeleton");
-                }
-            });
-        }
+        // Wire up dev tools menu (debug builds only)
+        #[cfg(debug_assertions)]
+        dev_tools::wire_dev_tools(builder, sender, &self.player_command_sender, model);
 
         self.components.append(&mut components);
-    }
-
-    // A component that listens to what's happening in the app, and translates it for the actual player
-    fn make_player_notifier(
-        app_model: Rc<AppModel>,
-        settings: &RiffSettings,
-        dispatcher: Box<dyn ActionDispatcher>,
-        sender: UnboundedSender<AppAction>,
-        token_store: TokenStore,
-    ) -> Box<impl EventListener> {
-        let api = app_model.get_spotify();
-        Box::new(PlayerNotifier::new(
-            app_model,
-            dispatcher,
-            // Either communications with the librespot player
-            crate::player::start_player_service(
-                settings.player_settings.clone(),
-                sender.clone(),
-                token_store,
-            ),
-            // or with a Spotify Connect device
-            crate::connect::start_connect_server(api, sender),
-        ))
     }
 
     // A component to handle anything DBUS related
@@ -264,7 +249,7 @@ impl App {
     }
 
     fn make_notification(builder: &gtk::Builder) -> Box<Notification> {
-        let toast_overlay: libadwaita::ToastOverlay = builder.object("main").unwrap();
+        let toast_overlay: libadwaita::ToastOverlay = builder.object("toast_overlay").unwrap();
         Box::new(Notification::new(toast_overlay))
     }
 

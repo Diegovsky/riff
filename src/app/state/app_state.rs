@@ -25,6 +25,7 @@ pub enum AppAction {
     Start,
     Raise,
     ShowNotification(String),
+    SetConnectionLost(bool),
     ViewNowPlaying,
     // Cross-state actions
     QueueSelection,
@@ -95,6 +96,7 @@ pub enum AppEvent {
     Started,
     Raised,
     NotificationShown(String),
+    ConnectionLostChanged(bool),
     PlaylistCreatedNotificationShown(String),
     NowPlayingShown,
     SettingsEvent(SettingsEvent),
@@ -103,6 +105,10 @@ pub enum AppEvent {
 // The actual state, split five-ways
 pub struct AppState {
     started: bool,
+    // Whether the app has lost its connection to Spotify. Driven by the
+    // player's session-health path; kept here as a single source of truth so
+    // the transient banner event is only emitted on an actual change.
+    connection_lost: bool,
     pub playback: PlaybackState,
     pub browser: BrowserState,
     pub selection: SelectionState,
@@ -114,6 +120,7 @@ impl AppState {
     pub fn new() -> Self {
         Self {
             started: false,
+            connection_lost: false,
             playback: Default::default(),
             browser: BrowserState::new(),
             selection: Default::default(),
@@ -131,6 +138,17 @@ impl AppState {
             // Couple of actions that don't mutate the state (not intested in keeping track of what they change)
             // they're here just to have a consistent way of doing things (always an Action)
             AppAction::ShowNotification(c) => vec![AppEvent::NotificationShown(c)],
+            AppAction::SetConnectionLost(lost) => {
+                // Real state, deduplicated: only emit the event (and move the
+                // banner) when the connection status actually changes, so
+                // repeated raise/clear calls from the reconnect path are no-ops.
+                if self.connection_lost == lost {
+                    vec![]
+                } else {
+                    self.connection_lost = lost;
+                    vec![AppEvent::ConnectionLostChanged(lost)]
+                }
+            }
             AppAction::ViewNowPlaying => vec![AppEvent::NowPlayingShown],
             AppAction::Raise => vec![AppEvent::Raised],
             // Cross-state actions: multiple "substates" are affected by these actions, that's why they're handled here

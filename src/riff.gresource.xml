@@ -2,6 +2,7 @@
 <gresources>
   <gresource prefix="/dev/diegovsky/Riff">
     <file>window.ui</file>
+    <file alias="dev_tools.ui">app/dev_tools/dev_tools.ui</file>
     <file>app.css</file>
     <file>debug.css</file>
     <file>skeleton_override.css</file>
