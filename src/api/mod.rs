@@ -7,6 +7,12 @@ pub mod cache;
 pub use cached_client::{CachedSpotifyClient, SpotifyApiClient, SpotifyResult};
 pub use client::SpotifyApiError;
 
+#[cfg(debug_assertions)]
+pub use client::{is_simulate_offline, set_simulate_offline};
+
+#[cfg(debug_assertions)]
+pub use client::set_injected_error;
+
 use crate::auth::TokenStore;
 use client::SpotifyClient;
 

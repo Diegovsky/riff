@@ -40,6 +40,19 @@ pub enum Command {
     SetPitch {
         cents: f64,
     },
+    // Rebuild the librespot session and player if the current session has
+    // died. librespot sessions are single-use: once the connection drops they
+    // are invalidated forever and a brand new session must be created.
+    // Requested by the session watchdog, the token refresh loop, or the
+    // player event handler when it detects a dead session. No-op when the
+    // session is healthy.
+    ReconnectSession,
+    // The player reported a track it could not load (librespot's Unavailable
+    // event). The command loop decides whether that means "reconnect and
+    // retry" (dead session) or "skip the track" (explicit-filtered or
+    // genuinely unavailable); the event listener can't make that call because
+    // it only holds a snapshot of the session that may have been replaced.
+    TrackUnavailable,
     // Re-query the account's explicit content filter (e.g. after a track was
     // rejected with ExplicitContentFiltered) and sync Riff's filter state.
     RecheckExplicitFilter,
@@ -49,6 +62,19 @@ pub enum Command {
         filter_enabled: bool,
         filter_locked: bool,
     },
+    // Dev tools only: destroy the librespot Player (the audio engine) while
+    // leaving the session alone. The health watchdog then rebuilds it.
+    #[cfg(debug_assertions)]
+    DevKillPlayer,
+    // Dev tools only: shut down the librespot Session (the connection to
+    // Spotify) while leaving the player alone. The health watchdog then
+    // reconnects, exercising the real reconnect path.
+    #[cfg(debug_assertions)]
+    DevKillSession,
+    // Dev tools only: backdate the cached OAuth token and force a refresh,
+    // exercising the token-refresh flow on demand.
+    #[cfg(debug_assertions)]
+    DevExpireToken,
 }
 
 #[derive(Clone)]
@@ -104,6 +130,10 @@ impl AppPlayerDelegate {
 
     fn login_challenge_started(&self, url: Url) {
         self.send(LoginAction::OpenLoginUrl(url).into())
+    }
+
+    fn set_connection_lost(&self, lost: bool) {
+        self.send(AppAction::SetConnectionLost(lost))
     }
 }
 

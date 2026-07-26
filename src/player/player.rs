@@ -4,7 +4,9 @@ use futures::stream::StreamExt;
 use librespot::core::authentication::Credentials;
 use librespot::core::cache::Cache;
 use librespot::core::config::SessionConfig;
+use librespot::core::error::ErrorKind;
 use librespot::core::session::Session;
+use librespot::core::SpotifyUri;
 
 use librespot::playback::mixer::softmixer::SoftMixer;
 use librespot::playback::mixer::{Mixer, MixerConfig};
@@ -31,7 +33,9 @@ use crate::settings::RiffSettings;
 use std::env;
 use std::error::Error;
 use std::fmt;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 #[derive(Debug)]
 pub enum SpotifyError {
@@ -229,6 +233,57 @@ pub struct SpotifyPlayer {
     auth_challenge: Option<AuthcodeChallenge>,
     command_sender: UnboundedSender<Command>,
 
+    // librespot sessions are single-use: once the connection to the access
+    // point drops, the session is invalidated forever and a brand new
+    // Session + Player must be built. The fields below let us detect that,
+    // resume playback where we left off, and throttle reconnect attempts.
+
+    // Playback state preserved across a rebuild:
+
+    // The last track loaded into the player, if any.
+    current_track: Option<SpotifyUri>,
+    // Whether the user paused playback; a rebuilt session must not start
+    // blasting music when the user had paused.
+    is_paused: bool,
+    // Whether the current track's playback was actually interrupted (a load
+    // failed on a dead session) and must be reloaded once a fresh session is
+    // in place. A dead session alone does NOT interrupt playback as track
+    // audio streams from the CDN over separate connections and buffered audio
+    // keeps playing. In these cases reconnects must leave the player alone.
+    track_needs_reload: bool,
+    // Last known playback position, updated live by the player event
+    // listener (player_setup_delegate) from another task.
+    last_position_ms: Arc<AtomicU32>,
+
+    // Reconnect backoff and the session-health watchdog:
+
+    // Exponential backoff for watchdog-driven reconnects, so a real network
+    // outage doesn't make us hammer Spotify's access points.
+    reconnect_attempts: u32,
+    next_reconnect_at: Option<Instant>,
+    // The session-health watchdog task is spawned once per service lifetime
+    // on first successful login.
+    watchdog_spawned: bool,
+
+    // Background task handles:
+
+    // Handle to the background token-refresh loop. Kept so it can be aborted
+    // before a fresh session is created, preventing duplicate refresh loops
+    // from accumulating across reconnects.
+    token_refresh_task: Option<tokio::task::JoinHandle<()>>,
+
+    // Flags shared with the player event task:
+
+    // Tells the player event handler to suppress skip actions while a
+    // reconnection is in progress. Without this, Unavailable events from
+    // librespot create a tight loop that can starve the system when the
+    // network is down.
+    connection_lost: Arc<AtomicBool>,
+    // Set by the player event listener when a track finishes (EndOfTrack)
+    // while the connection is down. Once the session is rebuilt, the player
+    // advances to the next track instead of sitting in silence.
+    advance_after_reconnect: Arc<AtomicBool>,
+
     // Cached "explicit filter locked" state for the account, so we avoid
     // re-querying the profile once we know the filter is locked for the
     // session (a locked filter cannot be unlocked without changing account
@@ -264,6 +319,25 @@ impl SpotifyPlayer {
             oauth_client: Arc::new(RiffOauthClient::new(token_store)),
             auth_challenge: None,
             command_sender,
+
+            // Playback state preserved across a rebuild.
+            current_track: None,
+            is_paused: false,
+            track_needs_reload: false,
+            last_position_ms: Arc::new(AtomicU32::new(0)),
+
+            // Reconnect backoff and the session-health watchdog.
+            reconnect_attempts: 0,
+            next_reconnect_at: None,
+            watchdog_spawned: false,
+
+            // Background task handles.
+            token_refresh_task: None,
+
+            // Flags shared with the player event task.
+            connection_lost: Arc::new(AtomicBool::new(false)),
+            advance_after_reconnect: Arc::new(AtomicBool::new(false)),
+
             explicit_filter_locked: false,
             delegate,
         }
@@ -317,51 +391,112 @@ impl SpotifyPlayer {
                 Ok(())
             }
             Command::PlayerResume => {
+                self.ensure_session_alive().await?;
+                self.is_paused = false;
                 self.get_player()?.play();
                 Ok(())
             }
             Command::PlayerPause => {
+                self.is_paused = true;
                 self.get_player()?.pause();
                 Ok(())
             }
             Command::PlayerStop => {
+                self.current_track = None;
+                self.is_paused = false;
+                self.track_needs_reload = false;
+                self.advance_after_reconnect.store(false, Ordering::Relaxed);
                 self.get_player()?.stop();
                 Ok(())
             }
             Command::PlayerSeek(position) => {
+                // Record the target first: if a rebuild has to reload the
+                // interrupted track, it picks it up directly at this position
+                // (a seek issued while the reloaded track is still loading
+                // would restart the load).
+                self.last_position_ms.store(position, Ordering::Relaxed);
+                self.ensure_session_alive().await?;
                 self.get_player()?.seek(position);
                 Ok(())
             }
             Command::PlayerLoad { track, resume } => {
                 debug!("Player: playing track {track}");
+                self.ensure_session_alive().await?;
+                self.current_track = Some(track.clone());
+                self.is_paused = !resume;
+                // Loading a new track supersedes any pending reload or deferred
+                // advancement of the previous one.
+                self.track_needs_reload = false;
+                self.advance_after_reconnect.store(false, Ordering::Relaxed);
+                self.last_position_ms.store(0, Ordering::Relaxed);
                 self.get_player_mut()?.load(track, resume, 0);
                 Ok(())
             }
             Command::PlayerPreload(track) => {
+                // No reconnect for preloads: they are opportunistic, and a
+                // dead session is handled when the track is actually loaded.
                 self.get_player_mut()?.preload(track);
                 Ok(())
             }
             Command::RefreshToken => {
-                let session = self.session.as_ref().ok_or(SpotifyError::PlayerNotReady)?;
-                let token = self
-                    .oauth_client
+                self.session.as_ref().ok_or(SpotifyError::PlayerNotReady)?;
+                // Refresh the OAuth token (used by the web API). The librespot
+                // session keeps its already-authenticated connection, so it
+                // only needs the new token if it has to be rebuilt. Sessions
+                // cannot be reconnected in place (see ensure_session_alive).
+                self.oauth_client
                     .get_valid_token()
                     .await
                     .map_err(|_| SpotifyError::LoginFailed)?;
-                let credentials = Credentials::with_access_token(token.access_token.clone());
-                session
-                    .connect(credentials, true)
-                    .await
-                    .map_err(|_| SpotifyError::LoginFailed)?;
+                self.ensure_session_alive().await?;
                 self.delegate.refresh_successful();
+                Ok(())
+            }
+            Command::ReconnectSession => {
+                // Requested by the session watchdog, the token refresh loop or
+                // TrackUnavailable when the session looks dead.
+                self.try_background_reconnect().await
+            }
+            Command::TrackUnavailable => {
+                // The player failed to load a track. A dead session makes
+                // every load fail this way; skipping in that state would
+                // cascade through the whole queue and end in silence, so
+                // reconnect and retry instead. Only a healthy session's
+                // verdict is trusted as "this track really can't be played".
+                if self.session_needs_rebuild() {
+                    warn!("Track load failed because the session died: reconnecting");
+                    // Playback of the current track really was interrupted;
+                    // the rebuild must reload it at the last known position.
+                    self.track_needs_reload = true;
+                    return self.try_background_reconnect().await;
+                }
+                warn!("Track unavailable, skipping");
+                // Gracefully skip the track that could not be played.
+                self.delegate.end_of_track_reached();
+                // The account explicit filter may have changed since login.
+                // Re-query it so Riff's filter state stays in sync.
+                let _ = self
+                    .command_sender
+                    .unbounded_send(Command::RecheckExplicitFilter);
                 Ok(())
             }
             Command::Logout => {
                 self.oauth_client.clear_credentials().await;
+                if let Some(handle) = self.token_refresh_task.take() {
+                    handle.abort();
+                }
                 if let Some(session) = self.session.take() {
                     session.shutdown();
                 }
                 let _ = self.player.take();
+                self.current_track = None;
+                self.is_paused = false;
+                self.track_needs_reload = false;
+                self.reconnect_attempts = 0;
+                self.next_reconnect_at = None;
+                self.connection_lost.store(false, Ordering::Relaxed);
+                self.advance_after_reconnect.store(false, Ordering::Relaxed);
+                self.delegate.set_connection_lost(false);
                 Ok(())
             }
             Command::Restore => {
@@ -429,14 +564,14 @@ impl SpotifyPlayer {
                 // Clear the mixer so it gets recreated with updated volume curve/dB range
                 self.mixer.take();
 
-                let session = self.session.take().ok_or(SpotifyError::PlayerNotReady)?;
-                let new_player = self.create_player(session);
-                tokio::task::spawn(player_setup_delegate(
-                    new_player.get_player_event_channel(),
-                    self.delegate.clone(),
-                    self.command_sender.clone(),
-                ));
-                self.player.replace(new_player);
+                // Keep the session: it stays valid across player reloads
+                // (only the player is recreated around it).
+                let session = self
+                    .session
+                    .as_ref()
+                    .ok_or(SpotifyError::PlayerNotReady)?
+                    .clone();
+                self.build_and_store_player(session);
 
                 Ok(())
             }
@@ -491,6 +626,49 @@ impl SpotifyPlayer {
                     self.delegate.set_skip_explicit(true);
                 }
                 Ok(())
+            }
+            #[cfg(debug_assertions)]
+            Command::DevKillPlayer => {
+                warn!("[dev] Killing librespot player (session left intact)");
+                // Drop the player so the audio engine is torn down. The
+                // session is still alive but now has no player; the health
+                // watchdog detects the missing player via session_needs_rebuild
+                // and rebuilds it (matching how a genuinely dead player
+                // recovers in production).
+                if let Some(player) = self.player.take() {
+                    player.stop();
+                }
+                Ok(())
+            }
+            #[cfg(debug_assertions)]
+            Command::DevKillSession => {
+                warn!("[dev] Killing librespot session (player left intact)");
+                // Shut the session down so it becomes invalid. It is left in
+                // place (not taken) so session_needs_rebuild sees it as dead
+                // and the watchdog reconnects, exercising the real reconnect
+                // path.
+                if let Some(session) = self.session.as_ref() {
+                    session.shutdown();
+                }
+                self.connection_lost.store(true, Ordering::Relaxed);
+                self.delegate.set_connection_lost(true);
+                Ok(())
+            }
+            #[cfg(debug_assertions)]
+            Command::DevExpireToken => {
+                warn!("[dev] Expiring cached OAuth token and forcing a refresh");
+                match self.oauth_client.dev_expire_and_refresh().await {
+                    Ok(_) => {
+                        info!("[dev] Token refresh succeeded");
+                        self.delegate.refresh_successful();
+                        Ok(())
+                    }
+                    Err(OAuthError::LoggedOut) => Err(SpotifyError::LoggedOut),
+                    Err(e) => {
+                        warn!("[dev] Token refresh failed: {e}");
+                        Err(SpotifyError::LoginFailed)
+                    }
+                }
             }
         }
     }
@@ -554,6 +732,66 @@ impl SpotifyPlayer {
         let username = new_session.username();
         info!("Session created successfully for user: {username}");
 
+        self.install_session(new_session);
+        self.reconnect_attempts = 0;
+        self.next_reconnect_at = None;
+
+        // Abort any refresh loop from a previous session so we never run more
+        // than one at a time.
+        if let Some(handle) = self.token_refresh_task.take() {
+            handle.abort();
+        }
+
+        let oauth_client = Arc::clone(&self.oauth_client);
+        let command_sender = self.command_sender.clone();
+        let refresh_task = tokio::task::spawn(async move {
+            // Scheduling loop: wait until the token is near expiry, refresh,
+            // and repeat. The refresh itself long-polls transient failures
+            // inside refresh_token_at_expiry(), so an error surfaces here only
+            // when it is fatal. In that case there is nothing left to retry;
+            // exit and let a subsequent login spawn a fresh loop.
+            //
+            // The librespot session is deliberately not touched here: it keeps
+            // its already-authenticated connection and cannot be reconnected
+            // in place anyway (librespot sessions are single-use). Instead,
+            // nudge the command loop, which rebuilds session + player if the
+            // session happens to have died in the meantime, using the token
+            // that was just stored.
+            loop {
+                match oauth_client.refresh_token_at_expiry().await {
+                    Ok(_) => {
+                        if command_sender
+                            .unbounded_send(Command::ReconnectSession)
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Token refresh loop stopping: {e}");
+                        break;
+                    }
+                }
+            }
+        });
+        self.token_refresh_task = Some(refresh_task);
+
+        self.spawn_session_watchdog();
+        self.delegate.token_login_successful(username);
+
+        Ok(())
+    }
+
+    /// Swap in a freshly connected session: apply session attributes, build (or
+    /// re-point) the player around it, and shut down the previous session (if
+    /// any). Shared between the initial login and session rebuilds after a
+    /// connection loss.
+    ///
+    /// Returns `true` when a brand new player had to be built (there was no
+    /// live player to reuse) and `false` when the existing, still-alive player
+    /// was simply re-pointed at the new session without interrupting playback.
+    /// Callers use this to decide whether the current track needs reloading.
+    fn install_session(&mut self, new_session: Session) -> bool {
         // Disable librespot's built-in explicit content filtering. When the
         // account has filter_enabled=true, Spotify sets the session attribute
         // "filter-explicit-content" to "1". This causes the audio key server
@@ -564,43 +802,221 @@ impl SpotifyPlayer {
         // explicit.
         new_session.set_user_attribute("filter-explicit-content", "0");
 
-        let oauth_client = Arc::clone(&self.oauth_client);
-        let session = new_session.clone();
+        if let Some(old_session) = self.session.take() {
+            if !old_session.is_invalid() {
+                old_session.shutdown();
+            }
+        }
+        self.session.replace(new_session.clone());
+
+        match self.player.as_ref() {
+            Some(player) if !player.is_invalid() => {
+                info!("Player still alive; swapping new session in without interruption");
+                player.set_session(new_session);
+                false
+            }
+            _ => {
+                self.build_and_store_player(new_session);
+                true
+            }
+        }
+    }
+
+    /// Whether the librespot session or player died and must be recreated.
+    /// librespot invalidates the session on any connection loss (network
+    /// blip, suspend/resume, keepalive timeout) and it can never be
+    /// reconnected; the player's command thread can also exit on its own.
+    fn session_needs_rebuild(&self) -> bool {
+        let session_dead = self.session.as_ref().is_some_and(|s| s.is_invalid());
+        // A live session with no player is a broken state: either the player's
+        // command thread exited, or the dev "kill player" tool dropped it.
+        // Treat the missing player as dead so the watchdog rebuilds it. In
+        // normal operation install_session always pairs a session with a
+        // player, so a None player alongside a live session never occurs there.
+        let player_dead = match self.player.as_ref() {
+            Some(p) => p.is_invalid(),
+            None => self.session.is_some(),
+        };
+        session_dead || player_dead
+    }
+
+    /// Rebuild the session if it died, before executing a playback command.
+    /// When logged out this is a no-op; the command then fails with
+    /// PlayerNotReady through get_player as before. User-initiated commands
+    /// bypass the reconnect backoff on purpose; an explicit action should
+    /// always try immediately.
+    async fn ensure_session_alive(&mut self) -> Result<(), SpotifyError> {
+        if self.session.is_none() || !self.session_needs_rebuild() {
+            return Ok(());
+        }
+        self.rebuild_session().await
+    }
+
+    /// Rebuild the librespot session in the background when it looks dead,
+    /// without disrupting playback that is still healthy.
+    ///
+    /// Called by the session watchdog, the token refresh loop and
+    /// TrackUnavailable. Does nothing if the user is logged out, if a backoff
+    /// retry is already scheduled, or if the session does not actually need a
+    /// rebuild. `LoggedOut` and `NotPremium` are propagated to the caller;
+    /// other (transient) failures are swallowed so the caller can keep going
+    /// while `rebuild_session` schedules its own retry.
+    async fn try_background_reconnect(&mut self) -> Result<(), SpotifyError> {
+        if self.session.is_none() {
+            // logged out; nothing to reconnect.
+            return Ok(());
+        }
+        if let Some(at) = self.next_reconnect_at {
+            if Instant::now() < at {
+                // A backoff retry is already scheduled; don't hammer the
+                // access points with parallel attempts.
+                return Ok(());
+            }
+        }
+        if !self.session_needs_rebuild() {
+            return Ok(());
+        }
+        match self.rebuild_session().await {
+            Ok(()) => {
+                self.delegate.refresh_successful();
+                Ok(())
+            }
+            Err(e @ (SpotifyError::LoggedOut | SpotifyError::NotPremium)) => Err(e),
+            Err(e) => {
+                warn!("Background session reconnect failed (will retry): {e}");
+                Ok(())
+            }
+        }
+    }
+
+    /// Create a brand new session after the previous one died. On transient
+    /// failure, schedules a retry with exponential back off.
+    ///
+    /// The current track is reloaded only when playback was actually interrupted:
+    /// either a load already failed on the dead session (track_needs_reload),
+    /// or the player itself died and had to be recreated. A dead session alone
+    /// does not stop audio (tracks stream from the CDN and buffered audio keeps
+    /// playing), so reloading unconditionally would yank playback backwards to a
+    /// stale position.
+    async fn rebuild_session(&mut self) -> Result<(), SpotifyError> {
+        info!("librespot session died; rebuilding session");
+        self.connection_lost.store(true, Ordering::Relaxed);
+        self.delegate.set_connection_lost(true);
+
+        let token = match self.oauth_client.get_valid_token().await {
+            Ok(t) => t,
+            Err(OAuthError::LoggedOut) => return Err(SpotifyError::LoggedOut),
+            Err(OAuthError::RefreshFailed { e }) => {
+                // The refresh token was rejected and credentials were cleared;
+                // reconnecting can never succeed until the user logs in again.
+                error!("Cannot rebuild session, credentials are gone: {e}");
+                return Err(SpotifyError::LoggedOut);
+            }
+            Err(e) => {
+                warn!("cannot rebuild session, token refresh failed: {e}");
+                self.schedule_reconnect_retry();
+                return Err(SpotifyError::TechnicalError);
+            }
+        };
+
+        let creds = Credentials::with_access_token(&token.access_token);
+        let new_session = match create_session(&creds, self.settings.ap_port).await {
+            Ok(s) => s,
+            Err(e) => {
+                error!("Session rebuild failed: {e:?}");
+                self.schedule_reconnect_retry();
+                return Err(e);
+            }
+        };
+
+        info!("Session rebuilt successfully");
+        let player_recreated = self.install_session(new_session);
+        self.reconnect_attempts = 0;
+        self.next_reconnect_at = None;
+        self.connection_lost.store(false, Ordering::Relaxed);
+        self.delegate.set_connection_lost(false);
+
+        if self.track_needs_reload || player_recreated {
+            self.track_needs_reload = false;
+            // A reload takes priority over deferred advancement: the track was
+            // interrupted mid-playback, not finished.
+            self.advance_after_reconnect.store(false, Ordering::Relaxed);
+            if let Some(track) = self.current_track.clone() {
+                let position_ms = self.last_position_ms.load(Ordering::Relaxed);
+                let resume = !self.is_paused;
+                info!("Resuming track after reconnect at {position_ms}ms (playing: {resume})");
+                self.get_player_mut()?.load(track, resume, position_ms);
+            }
+        } else if self.advance_after_reconnect.swap(false, Ordering::Relaxed) {
+            // The previous track finished (EndOfTrack) while the session was
+            // down. Now that we have a healthy session, advance to the next
+            // track in the queue.
+            info!("Advancing to next track after reconnect (track ended during outage)");
+            self.current_track = None;
+            self.delegate.end_of_track_reached();
+        }
+
+        Ok(())
+    }
+
+    /// Schedule the next reconnect attempt with a fast exponential backoff.
+    /// We retry aggressively so playback recovers quickly, and only back off
+    /// mildly (capped at a few seconds) so a long outage still doesn't hammer
+    /// Spotify's access points in a tight loop.
+    fn schedule_reconnect_retry(&mut self) {
+        self.reconnect_attempts = self.reconnect_attempts.saturating_add(1);
+        // 250ms, 500ms, 1s, 2s, 4s, then capped at 5s.
+        let exp = self.reconnect_attempts.saturating_sub(1).min(5);
+        let delay = Duration::from_millis(250 * (1u64 << exp)).min(Duration::from_secs(5));
+        self.next_reconnect_at = Some(Instant::now() + delay);
+        warn!("Next session reconnect attempt in {}ms", delay.as_millis());
+
+        let sender = self.command_sender.clone();
         tokio::task::spawn(async move {
-            // Scheduling loop: wait until the token is near expiry, refresh,
-            // reconnect, and repeat. The refresh itself long-polls transient
-            // failures inside refresh_token_at_expiry(), so an error surfaces
-            // here only when it is fatal (no stored token, or the refresh
-            // token was rejected and credentials were cleared). In that case
-            // there is nothing left to retry; exit and let a subsequent login
-            // spawn a fresh loop.
+            tokio::time::sleep(delay).await;
+            let _ = sender.unbounded_send(Command::ReconnectSession);
+        });
+    }
+
+    /// Spawn a periodic task that nudges the command loop to check session
+    /// health, so playback recovers from a dead session without waiting for
+    /// user input. Spawned once for the lifetime of the player service; the
+    /// ReconnectSession handler is a cheap no-op while the session is healthy.
+    fn spawn_session_watchdog(&mut self) {
+        if self.watchdog_spawned {
+            return;
+        }
+        self.watchdog_spawned = true;
+        let sender = self.command_sender.clone();
+        tokio::task::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(1));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            // The first tick fires immediately; skip it, we just logged in.
+            interval.tick().await;
             loop {
-                match oauth_client.refresh_token_at_expiry().await {
-                    Ok(token) => {
-                        _ = session
-                            .connect(Credentials::with_access_token(token.access_token), true)
-                            .await;
-                    }
-                    Err(e) => {
-                        warn!("Token refresh loop stopping: {e}");
-                        break;
-                    }
+                interval.tick().await;
+                if sender.unbounded_send(Command::ReconnectSession).is_err() {
+                    break;
                 }
             }
         });
+    }
 
-        let new_player = self.create_player(new_session.clone());
+    /// Build a fresh player around `session`, spawn its event-listener task,
+    /// and store it as the current player. Shared by every path that needs to
+    /// (re)create the player: initial login, session rebuilds, and settings
+    /// reloads.
+    fn build_and_store_player(&mut self, session: Session) {
+        let new_player = self.create_player(session);
         tokio::task::spawn(player_setup_delegate(
             new_player.get_player_event_channel(),
             self.delegate.clone(),
             self.command_sender.clone(),
+            Arc::clone(&self.last_position_ms),
+            Arc::clone(&self.connection_lost),
+            Arc::clone(&self.advance_after_reconnect),
         ));
-
         self.player.replace(new_player);
-        self.session.replace(new_session);
-        self.delegate.token_login_successful(username);
-
-        Ok(())
     }
 
     fn create_player(&mut self, session: Session) -> Arc<Player> {
@@ -626,6 +1042,11 @@ impl SpotifyPlayer {
             normalisation_attack_cf,
             normalisation_release_cf,
             normalisation_knee_db: self.settings.normalisation_knee_db,
+            // Periodic PositionChanged events keep the last known playback
+            // position fresh, so that resuming after a session rebuild
+            // continues where the user actually was (audio keeps playing
+            // from the CDN buffer long after the session itself dies).
+            position_update_interval: Some(std::time::Duration::from_secs(1)),
             ..Default::default()
         };
         info!("bitrate: {:?}", &player_config.bitrate);
@@ -747,7 +1168,16 @@ async fn create_session_with_port(
                 "librespot session connect failed (ap_port={:?}): {}",
                 ap_port, err
             );
-            Err(SpotifyError::LoginFailed)
+            // Distinguish rejected credentials from connectivity problems:
+            // only the latter should make the caller try other AP ports.
+            // librespot maps auth rejections to PermissionDenied (login
+            // failed) and Unauthenticated (bad/expired token)
+            match err.kind {
+                ErrorKind::PermissionDenied | ErrorKind::Unauthenticated => {
+                    Err(SpotifyError::LoginFailed)
+                }
+                _ => Err(SpotifyError::TechnicalError),
+            }
         }
     }
 }
@@ -756,6 +1186,16 @@ async fn create_session(
     credentials: &Credentials,
     ap_port: Option<u16>,
 ) -> Result<Session, SpotifyError> {
+    // Dev-tools: when simulating offline, block new librespot sessions too.
+    // The API client already rejects HTTP requests, but without this guard
+    // the session watchdog would happily reconnect to Spotify's access
+    // points, undermining the simulation.
+    #[cfg(debug_assertions)]
+    if crate::api::is_simulate_offline() {
+        warn!("Blocking librespot session creation (simulate offline is active)");
+        return Err(SpotifyError::TechnicalError);
+    }
+
     match ap_port {
         Some(_) => create_session_with_port(credentials, ap_port).await,
         None => {
@@ -779,26 +1219,54 @@ async fn player_setup_delegate(
     mut channel: PlayerEventChannel,
     delegate: AppPlayerDelegate,
     command_sender: UnboundedSender<Command>,
+    last_position_ms: Arc<AtomicU32>,
+    connection_lost: Arc<AtomicBool>,
+    advance_after_reconnect: Arc<AtomicBool>,
 ) {
     while let Some(event) = channel.recv().await {
         match event {
             PlayerEvent::EndOfTrack { .. } => {
-                delegate.end_of_track_reached();
+                if connection_lost.load(Ordering::Relaxed) {
+                    // The session is down (buffered audio just played out the
+                    // current track). Don't advance to the next song: loading
+                    // it would fail on the dead session anyway. Instead, mark
+                    // that we should advance once the session is rebuilt.
+                    warn!("Track ended while disconnected; will advance after reconnect");
+                    advance_after_reconnect.store(true, Ordering::Relaxed);
+                } else {
+                    delegate.end_of_track_reached();
+                }
             }
             PlayerEvent::Unavailable { track_id, .. } => {
-                warn!(
-                    "Track unavailable (possibly explicit-filtered): {:?}, skipping",
-                    track_id
-                );
-                // Gracefully skip the track that could not be played.
-                delegate.end_of_track_reached();
-                // The account's explicit filter may have changed since login
-                // (e.g. a family plan parental control was just set). Re-query
-                // it so Riff's filter state stays in sync.
-                let _ = command_sender.unbounded_send(Command::RecheckExplicitFilter);
+                // Defer to the command loop: whether this means "Skip the
+                // track" or "the session died, reconnect and retry" depends
+                // on the current session's health, which only the command
+                // loop knows (this task's session may already be stale).
+                warn!("Track could not be loaded: {track_id:?}");
+                let _ = command_sender.unbounded_send(Command::TrackUnavailable);
             }
             PlayerEvent::Playing { position_ms, .. } => {
+                // Audio is flowing again, so the session is definitely alive.
+                // Clear any lingering "connection lost" state, but only touch
+                // the delegate (and its UI) when the flag actually changes.
+                if connection_lost.swap(false, Ordering::Relaxed) {
+                    delegate.set_connection_lost(false);
+                }
+                last_position_ms.store(position_ms, Ordering::Relaxed);
                 delegate.notify_playback_state(position_ms);
+            }
+            PlayerEvent::Paused { position_ms, .. } => {
+                last_position_ms.store(position_ms, Ordering::Relaxed);
+            }
+            // Periodic position report during playback (enabled via
+            // PlayerConfig::position_update_interval). Keeps the resume
+            // position fresh so a rebuild after a long outage doesn't jump
+            // the track back to a stale position.
+            PlayerEvent::PositionChanged { position_ms, .. } => {
+                last_position_ms.store(position_ms, Ordering::Relaxed);
+            }
+            PlayerEvent::Seeked { position_ms, .. } => {
+                last_position_ms.store(position_ms, Ordering::Relaxed);
             }
             PlayerEvent::TimeToPreloadNextTrack { .. } => {
                 debug!("Requesting next track to be preloaded...");
@@ -807,6 +1275,7 @@ async fn player_setup_delegate(
             _ => {}
         }
     }
+    debug!("Player event channel closed (player was replaced or dropped)");
 }
 
 /// Maps a 0.0–1.0 volume slider value to the mixer's u16 volume.

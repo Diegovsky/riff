@@ -1,4 +1,3 @@
-use gettextrs::*;
 use std::borrow::Cow;
 use std::collections::HashSet;
 use url::Url;
@@ -99,11 +98,7 @@ impl UpdatableState for LoginState {
             LoginAction::SetNotPremium => vec![LoginEvent::NotPremium.into()],
             LoginAction::RefreshToken => vec![LoginEvent::FreshTokenRequested.into()],
             LoginAction::TokenRefreshed => {
-                // translators: This notification is shown when, after some inactivity, the session is successfully restored. The user might have to repeat its last action.
-                vec![
-                    AppEvent::NotificationShown(gettext("Connection restored")),
-                    LoginEvent::RefreshTokenCompleted.into(),
-                ]
+                vec![LoginEvent::RefreshTokenCompleted.into()]
             }
             LoginAction::Logout => {
                 self.user = None;

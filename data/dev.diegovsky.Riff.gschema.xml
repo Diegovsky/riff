@@ -224,14 +224,6 @@
       <default>false</default>
       <summary>Enable the device selector in the Now Playing headerbar</summary>
     </key>
-    <key name="feature-debug-css" type="b">
-      <default>false</default>
-      <summary>Show alignment and rendering debug overlays</summary>
-    </key>
-    <key name="feature-debug-skeleton" type="b">
-      <default>false</default>
-      <summary>Toggle between loaded content and skeleton loading states</summary>
-    </key>
     <key name="feature-normalisation" type="b">
       <default>false</default>
       <summary>Show audio normalisation settings for fine-tuning loudness between tracks</summary>

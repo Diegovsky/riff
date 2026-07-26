@@ -183,6 +183,18 @@ impl TokenStore {
         }
         self.0.storage.write().unwrap().take();
     }
+
+    /// Dev tools only: force the in-memory cached token to look expired by
+    /// backdating its expiry. The next `get_valid_token` will then take the
+    /// refresh path. Only the in-memory copy is touched; the keyring is left
+    /// alone and gets updated when the refresh succeeds.
+    #[cfg(debug_assertions)]
+    pub fn dev_expire_cached_token(&self) {
+        if let Some(creds) = self.0.storage.write().unwrap().as_mut() {
+            creds.token_expiry_time =
+                Some(std::time::SystemTime::now() - Duration::from_secs(3600));
+        }
+    }
 }
 
 #[cfg(test)]

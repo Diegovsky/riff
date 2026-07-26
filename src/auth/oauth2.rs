@@ -188,6 +188,15 @@ impl RiffOauthClient {
         }
     }
 
+    /// Dev tools only: backdate the cached token so it looks expired, then run
+    /// the normal valid-token path, which will refresh it against Spotify.
+    /// Exercises the full token-refresh flow on demand.
+    #[cfg(debug_assertions)]
+    pub async fn dev_expire_and_refresh(&self) -> Result<Credentials, OAuthError> {
+        self.token_store.dev_expire_cached_token();
+        self.get_valid_token().await
+    }
+
     /// Perform a single refresh-token exchange.
     ///
     /// This does not retry. A rejected refresh token (`invalid_grant`) is

@@ -21,16 +21,6 @@ pub enum FeatureFlag {
     */
     DeviceSelector,
     /*
-    Debug CSS shows alignment and rendering debug overlays to help identify layout issues.
-    Only available in debug builds.
-    */
-    DebugCss,
-    /*
-    Debug Skeleton adds a toggle button to the header bar that forces all pages into their
-    skeleton/loading state. Only available in debug builds.
-    */
-    DebugSkeleton,
-    /*
     Audio normalisation settings allow fine-tuning of loudness normalisation parameters
     (type, method, pre-gain, threshold, attack, release, knee). The feature is still
     being validated for usability before exposing to all users.
@@ -44,13 +34,7 @@ impl FeatureFlag {
         FeatureFlag::CreateNewPlaylist,
         FeatureFlag::DeviceSelector,
         FeatureFlag::Normalisation,
-        FeatureFlag::DebugCss,
-        FeatureFlag::DebugSkeleton,
     ];
-
-    pub fn is_debug_only(&self) -> bool {
-        matches!(self, FeatureFlag::DebugCss | FeatureFlag::DebugSkeleton)
-    }
 
     pub fn key(&self) -> &'static str {
         match self {
@@ -58,8 +42,6 @@ impl FeatureFlag {
             FeatureFlag::CreateNewPlaylist => "feature-create-new-playlist",
             FeatureFlag::DeviceSelector => "feature-device-selector",
             FeatureFlag::Normalisation => "feature-normalisation",
-            FeatureFlag::DebugCss => "feature-debug-css",
-            FeatureFlag::DebugSkeleton => "feature-debug-skeleton",
         }
     }
 
@@ -69,8 +51,6 @@ impl FeatureFlag {
             FeatureFlag::CreateNewPlaylist => "Create New Playlist",
             FeatureFlag::DeviceSelector => "Device Selector",
             FeatureFlag::Normalisation => "Audio Normalisation",
-            FeatureFlag::DebugCss => "Debug CSS",
-            FeatureFlag::DebugSkeleton => "Debug Skeleton",
         }
     }
 
@@ -86,37 +66,11 @@ impl FeatureFlag {
             FeatureFlag::Normalisation => {
                 "Show audio normalisation settings for fine-tuning loudness between tracks."
             }
-            FeatureFlag::DebugCss => "Show alignment and rendering debug overlays.",
-            FeatureFlag::DebugSkeleton => {
-                "Toggle between loaded content and skeleton loading states."
-            }
         }
     }
 }
 
 pub fn is_enabled(flag: FeatureFlag) -> bool {
-    if flag.is_debug_only() && !cfg!(debug_assertions) {
-        return false;
-    }
     let settings = gio::Settings::new(SETTINGS);
     settings.boolean(flag.key())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn debug_flags_are_debug_only() {
-        assert!(FeatureFlag::DebugCss.is_debug_only());
-        assert!(FeatureFlag::DebugSkeleton.is_debug_only());
-    }
-
-    #[test]
-    fn non_debug_flags_are_not_debug_only() {
-        assert!(!FeatureFlag::SelectMode.is_debug_only());
-        assert!(!FeatureFlag::CreateNewPlaylist.is_debug_only());
-        assert!(!FeatureFlag::DeviceSelector.is_debug_only());
-        assert!(!FeatureFlag::Normalisation.is_debug_only());
-    }
 }

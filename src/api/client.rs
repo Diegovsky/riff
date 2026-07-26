@@ -17,6 +17,75 @@ use super::cache::CacheError;
 
 const SPOTIFY_HOST: &str = "api.spotify.com";
 
+// Dev-tools only: a global switch to simulate the app being offline. When set,
+// every HTTP request in this client returns SpotifyApiError::Offline instead of
+// actually hitting the network. Only compiled into debug builds.
+#[cfg(debug_assertions)]
+static SIMULATE_OFFLINE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Toggle the simulated-offline state for the API client. Debug builds only.
+#[cfg(debug_assertions)]
+pub fn set_simulate_offline(offline: bool) {
+    SIMULATE_OFFLINE.store(offline, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether the API client is currently simulating being offline. Debug builds only.
+#[cfg(debug_assertions)]
+pub fn is_simulate_offline() -> bool {
+    SIMULATE_OFFLINE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+// Dev-tools only: inject a specific API error into every request instead of
+// hitting the network. The value is the dev menu dropdown index:
+// 0 = off, 1 = 429 rate limited, 2 = 401 invalid token, 3 = 500 server error,
+// 4 = no content. Only compiled into debug builds.
+#[cfg(debug_assertions)]
+static INJECTED_ERROR: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+/// Set the injected API error by dropdown index (0 disables). Debug builds only.
+#[cfg(debug_assertions)]
+pub fn set_injected_error(code: u8) {
+    INJECTED_ERROR.store(code, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// The currently injected API error, if any. Debug builds only.
+#[cfg(debug_assertions)]
+fn injected_error() -> Option<SpotifyApiError> {
+    match INJECTED_ERROR.load(std::sync::atomic::Ordering::Relaxed) {
+        1 => Some(SpotifyApiError::TooManyRequests),
+        2 => Some(SpotifyApiError::InvalidToken),
+        3 => Some(SpotifyApiError::BadStatus(
+            500,
+            "Injected server error".to_string(),
+        )),
+        4 => Some(SpotifyApiError::NoContent),
+        _ => None,
+    }
+}
+
+// How long a simulated failure waits before returning. Real requests take time
+// on the network, which naturally throttles the app's retry and pagination
+// loops. A simulated failure that returns instantly turns those loops into a
+// main-thread busy loop and freezes the UI, so we mimic real latency here.
+#[cfg(debug_assertions)]
+const SIMULATED_FAILURE_LATENCY: std::time::Duration = std::time::Duration::from_millis(200);
+
+/// If a dev-tools failure mode is active (offline or an injected error), wait a
+/// short while to mimic network latency and then return the error to inject.
+/// Returns `None` when no failure is being simulated. Debug builds only.
+#[cfg(debug_assertions)]
+async fn simulated_failure() -> Option<SpotifyApiError> {
+    let error = if is_simulate_offline() {
+        Some(SpotifyApiError::Offline)
+    } else {
+        injected_error()
+    };
+    if error.is_some() {
+        tokio::time::sleep(SIMULATED_FAILURE_LATENCY).await;
+    }
+    error
+}
+
 // https://url.spec.whatwg.org/#path-percent-encode-set
 const PATH_ENCODE_SET: &AsciiSet = &CONTROLS
     .add(b' ')
@@ -173,6 +242,9 @@ pub enum SpotifyApiError {
     NoContent,
     #[error("Request rate exceeded")]
     TooManyRequests,
+    #[cfg(debug_assertions)]
+    #[error("Network is unavailable (simulated offline)")]
+    Offline,
     #[error("Request failed ({0}): {1}")]
     BadStatus(u16, String),
     #[error(transparent)]
@@ -233,6 +305,11 @@ impl SpotifyClient {
     where
         B: Into<isahc::AsyncBody>,
     {
+        #[cfg(debug_assertions)]
+        if let Some(err) = simulated_failure().await {
+            return Err(err);
+        }
+
         let mut result = self.client.send_async(request).await?;
 
         let etag = result
@@ -275,6 +352,11 @@ impl SpotifyClient {
     where
         B: Into<isahc::AsyncBody>,
     {
+        #[cfg(debug_assertions)]
+        if let Some(err) = simulated_failure().await {
+            return Err(err);
+        }
+
         let mut result = self.client.send_async(request).await?;
         match result.status() {
             StatusCode::UNAUTHORIZED => Err(SpotifyApiError::InvalidToken),

@@ -50,77 +50,69 @@ Adw.ApplicationWindow window {
       }
     }
 
-    Adw.NavigationSplitView split_view {
+    Adw.ToastOverlay toast_overlay {
       vexpand: true;
 
-      sidebar: Adw.NavigationPage {
-        title: "Sidebar";
+      Adw.NavigationSplitView split_view {
+        vexpand: true;
 
-        child: Box {
-          orientation: vertical;
+        sidebar: Adw.NavigationPage {
+          title: "Sidebar";
 
-          Adw.HeaderBar {
-            styles ["flat"]
+          child: Box {
+            orientation: vertical;
 
-            Button search_button {
-              icon-name: "system-search-symbolic";
-              focus-on-click: false;
-              can-focus: false;
+            Adw.HeaderBar sidebar_header {
+              styles ["flat"]
+
+              Button search_button {
+                icon-name: "system-search-symbolic";
+                focus-on-click: false;
+                can-focus: false;
+              }
+
+              [title]
+              Adw.WindowTitle {
+                title: "Riff";
+              }
+
+              [end]
+              MenuButton user {
+                icon-name: "open-menu-symbolic";
+                focus-on-click: false;
+                can-focus: false;
+              }
             }
 
-            ToggleButton skeleton_toggle {
-              icon-name: "checkbox-mixed-symbolic";
-              focus-on-click: false;
-              can-focus: false;
-              visible: false;
-            }
+            ScrolledWindow {
+              hscrollbar-policy: never;
+              ListBox home_listbox {
+                width-request: 200;
+                vexpand: true;
 
-            [title]
-            Adw.WindowTitle {
-              title: "Riff";
+                styles [
+                  "navigation-sidebar",
+                ]
+              }
             }
-
-            [end]
-            MenuButton user {
-              icon-name: "open-menu-symbolic";
-              focus-on-click: false;
-              can-focus: false;
-            }
-          }
-
-          ScrolledWindow {
-            hscrollbar-policy: never;
-            ListBox home_listbox {
-              width-request: 200;
-              vexpand: true;
-
-              styles [
-                "navigation-sidebar",
-              ]
-            }
-          }
+          };
         };
-      };
 
-      content: Adw.NavigationPage {
-        tag: "main";
-        title: "Home";
+        content: Adw.NavigationPage {
+          tag: "content";
+          title: "Home";
 
-        child: Box {
-          orientation: vertical;
-
-          Adw.ToastOverlay main {
-            hexpand: true;
-            vexpand: true;
+          child: Box {
+            orientation: vertical;
 
             Stack navigation_stack {
+              hexpand: true;
+              vexpand: true;
               transition-type: slide_left_right;
             }
-          }
-
-
+          };
         };
-      };
+      }
     }
     Overlay {
       hexpand: true;

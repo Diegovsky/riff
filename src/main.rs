@@ -128,26 +128,6 @@ fn setup_gtk(settings: &settings::RiffSettings) {
         &provider,
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
-
-    if feature_flags::is_enabled(feature_flags::FeatureFlag::DebugSkeleton) {
-        let skeleton_provider = gtk::CssProvider::new();
-        skeleton_provider.load_from_resource("/dev/diegovsky/Riff/skeleton_override.css");
-        gtk::style_context_add_provider_for_display(
-            &gdk::Display::default().unwrap(),
-            &skeleton_provider,
-            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1,
-        );
-    }
-
-    if feature_flags::is_enabled(feature_flags::FeatureFlag::DebugCss) {
-        let debug_provider = gtk::CssProvider::new();
-        debug_provider.load_from_resource("/dev/diegovsky/Riff/debug.css");
-        gtk::style_context_add_provider_for_display(
-            &gdk::Display::default().unwrap(),
-            &debug_provider,
-            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
-    }
 }
 
 fn register_actions(app: &gtk::Application, sender: UnboundedSender<AppAction>) {

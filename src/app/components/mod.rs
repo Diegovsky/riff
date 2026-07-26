@@ -72,6 +72,13 @@ impl dyn ActionDispatcher {
                         "Rate limited by Spotify. Please wait a moment and try again.",
                     ))]
                 }
+                // Raised only by the dev "Simulate Offline" switch, which also
+                // kills the librespot session. The connection-lost banner is
+                // driven entirely by the player's session-health path (see
+                // SpotifyPlayer::set_connection_lost), so here we only suppress
+                // the generic error toast rather than touching the banner.
+                #[cfg(debug_assertions)]
+                Err(SpotifyApiError::Offline) => vec![],
                 Err(err) => {
                     error!("Spotify API error: {}", err);
                     vec![AppAction::ShowNotification(gettext(

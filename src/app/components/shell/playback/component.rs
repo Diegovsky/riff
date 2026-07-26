@@ -166,6 +166,22 @@ impl PlaybackControl {
     fn sync_seek(&self, pos: u32) {
         self.widget.set_seek_position(pos as f64);
     }
+
+    fn set_connection_lost(&self, lost: bool) {
+        // Do NOT freeze the seekbar during an outage. A dead session does not
+        // stop playback: buffered audio keeps streaming from the CDN, so the
+        // local clock stays in sync with what the user actually hears. Freezing
+        // it here left the seekbar behind, and since no Playing event fires when
+        // playback was never interrupted, it never resynced once the session
+        // came back. If playback really was interrupted, the reload after
+        // reconnect emits a SyncSeek that corrects the position. We only make
+        // sure the clock is running again on restore, in case playback was
+        // paused and resumed during the outage. The "reconnecting" indicator
+        // itself is shown as a persistent toast by the Notification component.
+        if !lost && self.model.is_playing() {
+            self.widget.resume_seek_position();
+        }
+    }
 }
 
 impl EventListener for PlaybackControl {
@@ -198,6 +214,9 @@ impl EventListener for PlaybackControl {
             }
             AppEvent::PlaybackEvent(PlaybackEvent::VolumeSet(value)) => {
                 self.widget.set_volume(*value)
+            }
+            AppEvent::ConnectionLostChanged(lost) => {
+                self.set_connection_lost(*lost);
             }
             _ => {}
         }
