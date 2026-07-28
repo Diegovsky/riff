@@ -30,8 +30,8 @@ use url::Url;
 
 use super::TokenStore;
 
-pub const CLIENT_ID: &str = "782ae96ea60f4cdf986a766049607005";
-pub const REDIRECT_URI: &str = "http://127.0.0.1:8898/login";
+pub const CLIENT_ID: &str = "69ae761c99634e4395fb20ae42104971";
+pub const REDIRECT_URI: &str = "http://127.0.0.1:8891/login";
 pub const SCOPES: &str = "user-read-private,\
 playlist-read-private,\
 playlist-read-collaborative,\

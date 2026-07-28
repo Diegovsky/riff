@@ -61,8 +61,8 @@ console = Console(stderr=True)
 
 # --- Constants (shared with Riff) ---
 
-CLIENT_ID = "782ae96ea60f4cdf986a766049607005"
-REDIRECT_URI = "http://127.0.0.1:8898/login"
+CLIENT_ID = "69ae761c99634e4395fb20ae42104971"
+REDIRECT_URI = "http://127.0.0.1:8891/login"
 AUTH_URL = "https://accounts.spotify.com/authorize"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 SCOPES = (
