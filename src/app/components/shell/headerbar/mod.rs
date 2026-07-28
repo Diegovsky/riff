@@ -4,8 +4,11 @@ pub use widget::*;
 mod component;
 pub use component::*;
 
+mod registrar;
+pub use registrar::*;
+
 use glib::prelude::*;
 
 pub fn expose_widgets() {
-    widget::HeaderBarWidget::static_type();
+    widget::AppHeaderBar::static_type();
 }

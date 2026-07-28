@@ -264,13 +264,6 @@ impl PlaylistModel for NowPlayingModel {
 }
 
 impl SimpleHeaderBarModel for NowPlayingModel {
-    fn title(&self) -> Option<String> {
-        Some(gettext("Now Playing"))
-    }
-    fn title_updated(&self, _: &AppEvent) -> bool {
-        false
-    }
-
     fn selection_context(&self) -> Option<SelectionContext> {
         if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
             return None;

@@ -301,13 +301,6 @@ impl PlaylistModel for PlaylistDetailsModel {
 }
 
 impl SimpleHeaderBarModel for PlaylistDetailsModel {
-    fn title(&self) -> Option<String> {
-        PageModel::get_title(self)
-    }
-    fn title_updated(&self, event: &AppEvent) -> bool {
-        PageModel::should_refresh_details(self, event)
-    }
-
     fn selection_context(&self) -> Option<SelectionContext> {
         if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
             return None;

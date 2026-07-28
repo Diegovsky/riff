@@ -5,107 +5,92 @@ template $SearchResultsWidget : Box {
   orientation: vertical;
   can-focus: true;
 
-  Adw.HeaderBar main_header {
-    show-end-title-buttons: true;
-    show-back-button: false;
+  Adw.Clamp search_bar {
+    maximum-size: 740;
+    hexpand: true;
 
-    Button go_back {
-      halign: start;
-      valign: center;
-      icon-name: "go-previous-symbolic";
-      has-frame: false;
-      focus-on-click: false;
-      can-focus: false;
-    }
+    child: Box search_box {
+      orientation: horizontal;
+      spacing: 0;
 
-    [title]
-    Adw.Clamp {
-      maximum-size: 740;
-      hexpand: true;
+      styles [
+        "linked",
+        "search-bar-container",
+      ]
 
-      child: Box search_box {
-        orientation: horizontal;
-        spacing: 0;
+      SearchEntry search_entry {
+        hexpand: true;
+        receives-default: true;
+        can-focus: true;
+      }
 
-        styles [
-          "linked",
-          "search-bar-container",
-        ]
+      MenuButton filter_button {
+        icon-name: "nautilus-search-filters-symbolic";
+        tooltip-text: _("Filter");
+        focus-on-click: false;
+        can-focus: false;
 
-        SearchEntry search_entry {
-          hexpand: true;
-          receives-default: true;
-          can-focus: true;
-        }
+        popover: Popover filter_popover {
+          child: Box {
+            orientation: vertical;
+            spacing: 12;
+            margin-start: 12;
+            margin-end: 12;
+            margin-top: 12;
+            margin-bottom: 12;
 
-        MenuButton filter_button {
-          icon-name: "nautilus-search-filters-symbolic";
-          tooltip-text: _("Filter");
-          focus-on-click: false;
-          can-focus: false;
+            Label {
+              label: _("Filter by type");
+              hexpand: true;
+              xalign: 0;
+              valign: baseline;
 
-          popover: Popover filter_popover {
-            child: Box {
-              orientation: vertical;
-              spacing: 12;
-              margin-start: 12;
-              margin-end: 12;
-              margin-top: 12;
-              margin-bottom: 12;
+              styles [
+                "heading",
+              ]
+            }
 
-              Label {
-                label: _("Filter by type");
-                hexpand: true;
-                xalign: 0;
-                valign: baseline;
+            Adw.WrapBox {
+              child-spacing: 6;
+              line-spacing: 6;
+              natural-line-length: 300;
 
-                styles [
-                  "heading",
-                ]
+              ToggleButton filter_artists {
+                child: Adw.ButtonContent {
+                  icon-name: "avatar-default-symbolic";
+                  label: _("_Artist");
+                  use-underline: true;
+                };
               }
 
-              Adw.WrapBox {
-                child-spacing: 6;
-                line-spacing: 6;
-                natural-line-length: 300;
-
-                ToggleButton filter_artists {
-                  child: Adw.ButtonContent {
-                    icon-name: "avatar-default-symbolic";
-                    label: _("_Artist");
-                    use-underline: true;
-                  };
-                }
-
-                ToggleButton filter_albums {
-                  child: Adw.ButtonContent {
-                    icon-name: "library-music-symbolic";
-                    label: _("_Albums");
-                    use-underline: true;
-                  };
-                }
-
-                ToggleButton filter_playlists {
-                  child: Adw.ButtonContent {
-                    icon-name: "playlist2-symbolic";
-                    label: _("_Playlists");
-                    use-underline: true;
-                  };
-                }
-
-                ToggleButton filter_songs {
-                  child: Adw.ButtonContent {
-                    icon-name: "audio-x-generic-symbolic";
-                    label: _("_Tracks");
-                    use-underline: true;
-                  };
-                }
+              ToggleButton filter_albums {
+                child: Adw.ButtonContent {
+                  icon-name: "library-music-symbolic";
+                  label: _("_Albums");
+                  use-underline: true;
+                };
               }
-            };
+
+              ToggleButton filter_playlists {
+                child: Adw.ButtonContent {
+                  icon-name: "playlist2-symbolic";
+                  label: _("_Playlists");
+                  use-underline: true;
+                };
+              }
+
+              ToggleButton filter_songs {
+                child: Adw.ButtonContent {
+                  icon-name: "audio-x-generic-symbolic";
+                  label: _("_Tracks");
+                  use-underline: true;
+                };
+              }
+            }
           };
-        }
-      };
-    }
+        };
+      }
+    };
   }
 
   Overlay overlay {

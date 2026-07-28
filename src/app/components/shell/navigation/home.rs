@@ -82,15 +82,8 @@ impl Component for HomePane {
 
 impl EventListener for HomePane {
     fn on_event(&mut self, event: &AppEvent) {
-        match event {
-            AppEvent::NowPlayingShown => {
-                self.stack
-                    .set_visible_child_name(SidebarDestination::NowPlaying.id());
-            }
-            AppEvent::BrowserEvent(BrowserEvent::HomeVisiblePageChanged(page)) => {
-                self.stack.set_visible_child_name(page);
-            }
-            _ => {}
+        if let AppEvent::BrowserEvent(BrowserEvent::HomeVisiblePageChanged(page)) = event {
+            self.stack.set_visible_child_name(page);
         }
         self.broadcast_event(event);
     }

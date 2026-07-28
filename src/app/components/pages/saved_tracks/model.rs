@@ -193,13 +193,6 @@ impl PlaylistModel for SavedTracksModel {
 }
 
 impl SimpleHeaderBarModel for SavedTracksModel {
-    fn title(&self) -> Option<String> {
-        Some(gettext("All Tracks"))
-    }
-    fn title_updated(&self, _: &AppEvent) -> bool {
-        false
-    }
-
     fn selection_context(&self) -> Option<SelectionContext> {
         if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
             return None;

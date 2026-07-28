@@ -4,7 +4,9 @@
 use std::rc::Rc;
 
 use super::SavedTracksModel;
-use crate::app::components::{Component, DetailsPageComponent, EventListener, HasHeaderBarModel};
+use crate::app::components::{
+    Component, DetailsPageComponent, EventListener, HasHeaderBarModel, HeaderRegistrar,
+};
 use crate::app::state::LoginEvent;
 use crate::app::{AppEvent, Worker};
 
@@ -15,9 +17,19 @@ pub struct SavedTracks {
 }
 
 impl SavedTracks {
-    pub fn new(model: Rc<SavedTracksModel>, worker: Worker) -> Self {
-        let mut component =
-            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), worker);
+    pub fn new(
+        model: Rc<SavedTracksModel>,
+        worker: Worker,
+        registrar: HeaderRegistrar,
+        name: String,
+    ) -> Self {
+        let mut component = DetailsPageComponent::new(
+            model.clone(),
+            model.to_headerbar_model(),
+            worker,
+            registrar,
+            name,
+        );
         component.create_playlist(None);
 
         Self { model, component }

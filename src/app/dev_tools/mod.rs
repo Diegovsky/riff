@@ -9,6 +9,8 @@ use gtk::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+mod panel_sizes;
+
 use super::state::{AppAction, AppModel};
 use crate::player::Command;
 
@@ -76,6 +78,10 @@ pub fn wire_dev_tools(
         }
         glib::Propagation::Proceed
     });
+
+    // Panel Sizes: overlay each major panel's pixel dimensions.
+    let dev_panel_sizes_switch: gtk::Switch = dev_builder.object("dev_panel_sizes_switch").unwrap();
+    panel_sizes::wire(builder, &dev_panel_sizes_switch);
 
     let dev_offline_switch: gtk::Switch = dev_builder.object("dev_offline_switch").unwrap();
     let player_sender = player_command_sender.clone();

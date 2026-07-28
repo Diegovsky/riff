@@ -45,7 +45,7 @@
     <!-- selection -->
     <file alias="components/selection_toolbar.ui">app/components/widgets/selection/selection_toolbar.ui</file>
     <file alias="components/selection_toolbar.css">app/components/widgets/selection/selection_toolbar.css</file>
-    <!-- headerbar -->
+    <!-- app header -->
     <file alias="components/headerbar.ui">app/components/shell/headerbar/headerbar.ui</file>
     <!-- sidebar -->
     <file alias="sidebar/sidebar_row.ui">app/components/shell/sidebar/sidebar_row.ui</file>

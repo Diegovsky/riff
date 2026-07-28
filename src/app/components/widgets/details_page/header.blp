@@ -1,32 +1,40 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $DetailsHeaderWidget : Box {
-  orientation: horizontal;
+template $DetailsHeaderWidget : Widget {
   valign: start;
-  vexpand: false;
 
   styles [
     "details-header",
   ]
 
-  Adw.BreakpointBin {
+  Adw.BreakpointBin breakpoint_bin {
     width-request: 1;
     height-request: 1;
     hexpand: true;
 
+    // Narrow: stack artwork above the text/buttons instead of beside them.
     Adw.Breakpoint {
-      condition("max-width: 550sp")
+      condition("max-width: 510sp")
 
+      setters {
+        header_box.orientation: vertical;
+        image_box.halign: center;
+        image_box.valign: start;
+        image_box.margin-end: 0;
+        image_box.margin-bottom: 8;
+      }
     }
 
-    child: Box {
+    child: Box header_box {
       orientation: horizontal;
 
       Box image_box {
         overflow: hidden;
         valign: center;
         margin-end: 12;
+        width-request: 200;
+        height-request: 200;
 
         styles [
           "details-header__image-box",
@@ -59,21 +67,27 @@ template $DetailsHeaderWidget : Box {
         }
       }
 
-      CenterBox {
+      Box content_box {
         orientation: vertical;
         hexpand: true;
+        // Don't propagate the spacers' vexpand: stay at natural height in the
+        // narrow (vertical) layout instead of the desktop artwork height.
+        vexpand: false;
 
-        [start]
-        Box {}
+        // Spacers only expand on desktop (box stretched to artwork height),
+        // centering text and pushing buttons down. In the narrow layout they
+        // collapse to zero so everything stacks tightly.
+        Box {
+          vexpand: true;
+        }
 
-        [center]
         Box info_box {
           orientation: vertical;
           hexpand: true;
 
           Label caption_label {
             halign: start;
-            opacity: 0;
+            visible: false;
 
             styles [
               "caption",
@@ -93,7 +107,7 @@ template $DetailsHeaderWidget : Box {
 
           Label subtitle_label {
             halign: start;
-            opacity: 0;
+            visible: false;
             ellipsize: end;
 
             styles [
@@ -104,6 +118,7 @@ template $DetailsHeaderWidget : Box {
           Box subtitle_links_box {
             orientation: horizontal;
             halign: start;
+            margin-start: -4;
             visible: false;
 
             styles [
@@ -112,11 +127,15 @@ template $DetailsHeaderWidget : Box {
           }
         }
 
-        [end]
+        Box {
+          vexpand: true;
+        }
+
         Box button_box {
           orientation: horizontal;
           spacing: 8;
           hexpand: true;
+          margin-top: 12;
 
           Button play_button {
             icon-name: "media-playback-start-symbolic";

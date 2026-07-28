@@ -6,16 +6,23 @@ Adw.ApplicationWindow window {
   default-height: 720;
 
   Adw.Breakpoint {
+    condition("max-width:764sp")
+
+    setters {
+      mobile_now_playing_container.visible: true;
+    }
+  }
+
+  Adw.Breakpoint {
     condition("max-width:550sp")
 
     setters {
+      mobile_now_playing_container.visible: true;
       split_view.collapsed: true;
     }
   }
 
-  Box {
-    orientation: vertical;
-
+  $ShellBox {
     ShortcutController {
       scope: local;
 
@@ -59,7 +66,7 @@ Adw.ApplicationWindow window {
         sidebar: Adw.NavigationPage {
           title: "Sidebar";
 
-          child: Box {
+          child: Box sidebar_panel {
             orientation: vertical;
 
             Adw.HeaderBar sidebar_header {
@@ -105,6 +112,9 @@ Adw.ApplicationWindow window {
           child: Box {
             orientation: vertical;
 
+            $AppHeaderBar app_header {
+            }
+
             Stack navigation_stack {
               hexpand: true;
               vexpand: true;
@@ -114,11 +124,30 @@ Adw.ApplicationWindow window {
         };
       }
     }
+
+    // Trailing children of ShellBox, pinned to the bottom at fixed height.
+    // See shell/window/shell_box.rs.
+    Box mobile_now_playing_container {
+      visible: false;
+      hexpand: true;
+
+      $PlaybackInfoMobileWidget mobile_now_playing {
+        visible: false;
+        hexpand: true;
+        height-request: 36;
+
+        styles [
+          "mobile-now-playing",
+        ]
+      }
+    }
+
     Overlay {
       hexpand: true;
 
       $PlaybackWidget playback {
         hexpand: "1";
+        vexpand: false;
       }
 
       [overlay]

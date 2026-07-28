@@ -51,152 +51,140 @@ template $PlaybackWidget : Box {
 
   Adw.BreakpointBin {
     width-request: 1;
-    height-request: 1;
+    height-request: 84;
     margin-top: 4;
 
     Adw.Breakpoint {
       condition("max-width:764sp")
 
       setters {
-        layout-stack.visible-child-name: "mobile";
+        now_playing_box.visible: false;
+        now_playing_button_box.visible: true;
+        volume_slider_box.visible: false;
+        volume_button.visible: true;
+        playback-center.margin-start: 16;
+        playback-center.margin-end: 16;
       }
     }
 
-    child: Stack layout-stack {
-      vhomogeneous: false;
-      hhomogeneous: false;
+    child: CenterBox playback-center {
+      halign: fill;
+      hexpand: true;
+      shrink-center-last: true;
+      height-request: 68;
+      margin-top: 8;
+      margin-bottom: 8;
+      margin-start: 8;
+      margin-end: 8;
 
-      StackPage {
-        name: "desktop";
-        child: Grid desktop-grid {
-          halign: fill;
-          hexpand: true;
-          column-homogeneous: true;
-          margin-top: 8;
-          margin-bottom: 8;
-          margin-start: 8;
-          margin-end: 8;
+      [start]
+      Box now_playing_start {
+        hexpand: true;
+        halign: start;
+        valign: center;
 
-          Box {
-            hexpand: true;
-            height-request: 68;
+        // Narrow mode replaces the track info with a compact button. The
+        // breakpoint toggles this box; the button inside is shown in code only
+        // when a track is playing.
+        Box now_playing_button_box {
+          visible: false;
+          valign: center;
 
-            layout {
-              column-span: "1";
-              column: "0";
-              row: "0";
-            }
-
-            $PlaybackInfoWidget now_playing {
-              receives-default: "1";
-              halign: "start";
-              valign: "center";
-              has-frame: "0";
-              visible: false;
-            }
-          }
-
-          $PlaybackControlsWidget controls {
-            halign: center;
-            layout {
-              column-span: "1";
-              column: "1";
-              row: "0";
-            }
-          }
-
-          Stack volume-stack {
-            hexpand: true;
-            halign: end;
-
-            layout {
-              column-span: "1";
-              column: "2";
-              row: "0";
-            }
-
-            StackPage {
-              name: 'slider';
-              child: Box {
-                width-request: 250;
-                Image {
-                  icon-name: 'multimedia-volume-control-symbolic';
-                }
-
-                Scale volume_slider {
-                  hexpand: true;
-                  show-fill-level: true;
-                  restrict-to-fill-level: false;
-                  value-pos: left;
-
-                  styles [
-                    'volume-slider'
-                  ]
-
-                  adjustment: Adjustment {
-                    lower: 0.0;
-                    value: 0.7;
-                    upper: 1.0;
-                    step-increment: 0.01;
-                    page-increment: 0.05;
-                  };
-                }
-              };
-            }
-          }
-        };
-      }
-
-      StackPage {
-        name: "mobile";
-        child: Box {
-          orientation: vertical;
-          halign: fill;
-          hexpand: true;
-
-          $PlaybackInfoMobileWidget mobile_now_playing {
+          Button now_playing_button {
             visible: false;
-            hexpand: true;
+            icon-name: "music-queue-symbolic";
+            tooltip-text: _("Now playing");
+            focus-on-click: false;
+            can-focus: false;
+            valign: center;
 
             styles [
-              "mobile-now-playing",
+              "flat",
             ]
           }
+        }
 
-          Box {
-            hexpand: true;
-            margin-top: 8;
-            margin-bottom: 8;
-            margin-start: 8;
-            margin-end: 8;
+        Box now_playing_box {
+          hexpand: true;
+          height-request: 68;
+          overflow: hidden;
+          halign: start;
 
-            $PlaybackControlsWidget mobile_controls {
-              halign: center;
-              valign: center;
-              hexpand: true;
-            }
-
-            MenuButton {
-              icon-name: 'multimedia-volume-control-symbolic';
-              halign: end;
-              valign: center;
-              direction: up;
-              focus-on-click: false;
-              can-focus: false;
-              styles [
-                "flat"
-              ]
-              popover: Popover {
-                child: Scale {
-                  inverted: true;
-                  orientation: vertical;
-                  height-request: 160;
-                  adjustment: bind volume_slider.adjustment;
-                };
-              };
-            }
+          $PlaybackInfoWidget now_playing {
+            receives-default: "1";
+            halign: "start";
+            valign: "center";
+            has-frame: "0";
+            visible: false;
           }
-        };
+        }
+      }
+
+      [center]
+      $PlaybackControlsWidget controls {
+        // Keep the control cluster at natural width. Its template sets
+        // hexpand:true, but with CenterBox shrink-center-last an expanding
+        // centre squeezes the start/end slots and pushes the volume off-edge.
+        hexpand: false;
+        halign: center;
+        valign: center;
+      }
+
+      [end]
+      Box {
+        hexpand: true;
+        halign: end;
+        valign: center;
+
+        Box volume_slider_box {
+          width-request: 250;
+
+          Image {
+            icon-name: 'multimedia-volume-control-symbolic';
+          }
+
+          Scale volume_slider {
+            hexpand: true;
+            show-fill-level: true;
+            restrict-to-fill-level: false;
+            value-pos: left;
+
+            styles [
+              'volume-slider'
+            ]
+
+            adjustment: Adjustment {
+              lower: 0.0;
+              value: 0.7;
+              upper: 1.0;
+              step-increment: 0.01;
+              page-increment: 0.05;
+            };
+          }
+        }
+
+        MenuButton volume_button {
+          visible: false;
+          icon-name: 'multimedia-volume-control-symbolic';
+          halign: end;
+          valign: center;
+          direction: up;
+          focus-on-click: false;
+          can-focus: false;
+
+          styles [
+            "flat"
+          ]
+
+          popover: Popover {
+            child: Scale {
+              inverted: true;
+              orientation: vertical;
+              height-request: 160;
+              adjustment: bind volume_slider.adjustment;
+            };
+          };
+        }
       }
     };
   }

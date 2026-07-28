@@ -10,7 +10,6 @@ use crate::app::Worker;
 
 use super::playback_controls::PlaybackControlsWidget;
 use super::playback_info::PlaybackInfoWidget;
-use super::playback_info_mobile::PlaybackInfoMobileWidget;
 
 mod imp {
 
@@ -23,13 +22,10 @@ mod imp {
         pub controls: TemplateChild<PlaybackControlsWidget>,
 
         #[template_child]
-        pub mobile_controls: TemplateChild<PlaybackControlsWidget>,
-
-        #[template_child]
         pub now_playing: TemplateChild<PlaybackInfoWidget>,
 
         #[template_child]
-        pub mobile_now_playing: TemplateChild<PlaybackInfoMobileWidget>,
+        pub now_playing_button: TemplateChild<gtk::Button>,
 
         #[template_child]
         pub seek_bar: TemplateChild<gtk::Scale>,
@@ -110,18 +106,14 @@ impl PlaybackWidget {
         let widget = self.imp();
         widget.now_playing.set_visible(true);
         widget.now_playing.set_title_and_artist(title, artist);
-        widget.mobile_now_playing.set_visible(true);
-        widget
-            .mobile_now_playing
-            .set_title_and_artist(title, artist);
+        widget.now_playing_button.set_visible(true);
     }
 
     pub fn reset_info(&self) {
         let widget = self.imp();
         widget.now_playing.set_visible(false);
         widget.now_playing.reset_info();
-        widget.mobile_now_playing.set_visible(false);
-        widget.mobile_now_playing.reset_info();
+        widget.now_playing_button.set_visible(false);
         self.set_song_duration(None);
     }
 
@@ -194,8 +186,12 @@ impl PlaybackWidget {
         F: Fn() + Clone + 'static,
     {
         let widget = self.imp();
-        let f_clone = f.clone();
-        widget.now_playing.connect_clicked(move |_| f_clone());
+        let f_info = f.clone();
+        widget.now_playing.connect_clicked(move |_| f_info());
+        let f_button = f.clone();
+        widget
+            .now_playing_button
+            .connect_clicked(move |_| f_button());
     }
 
     pub fn connect_seek<Seek>(&self, seek: Seek)
@@ -223,7 +219,6 @@ impl PlaybackWidget {
     pub fn set_playing(&self, is_playing: bool) {
         let widget = self.imp();
         widget.controls.set_playing(is_playing);
-        widget.mobile_controls.set_playing(is_playing);
         if is_playing {
             self.resume_seek_position();
         } else {
@@ -234,13 +229,11 @@ impl PlaybackWidget {
     pub fn set_repeat_mode(&self, mode: RepeatMode) {
         let widget = self.imp();
         widget.controls.set_repeat_mode(mode);
-        widget.mobile_controls.set_repeat_mode(mode);
     }
 
     pub fn set_shuffled(&self, shuffled: bool) {
         let widget = self.imp();
         widget.controls.set_shuffled(shuffled);
-        widget.mobile_controls.set_shuffled(shuffled);
     }
 
     pub fn set_seekbar_visible(&self, visible: bool) {
@@ -258,8 +251,7 @@ impl PlaybackWidget {
         F: Fn() + Clone + 'static,
     {
         let widget = self.imp();
-        widget.controls.connect_play_pause(f.clone());
-        widget.mobile_controls.connect_play_pause(f);
+        widget.controls.connect_play_pause(f);
     }
 
     pub fn connect_prev<F>(&self, f: F)
@@ -267,8 +259,7 @@ impl PlaybackWidget {
         F: Fn() + Clone + 'static,
     {
         let widget = self.imp();
-        widget.controls.connect_prev(f.clone());
-        widget.mobile_controls.connect_prev(f);
+        widget.controls.connect_prev(f);
     }
 
     pub fn connect_next<F>(&self, f: F)
@@ -276,8 +267,7 @@ impl PlaybackWidget {
         F: Fn() + Clone + 'static,
     {
         let widget = self.imp();
-        widget.controls.connect_next(f.clone());
-        widget.mobile_controls.connect_next(f);
+        widget.controls.connect_next(f);
     }
 
     pub fn connect_shuffle<F>(&self, f: F)
@@ -285,8 +275,7 @@ impl PlaybackWidget {
         F: Fn() + Clone + 'static,
     {
         let widget = self.imp();
-        widget.controls.connect_shuffle(f.clone());
-        widget.mobile_controls.connect_shuffle(f);
+        widget.controls.connect_shuffle(f);
     }
 
     pub fn connect_repeat<F>(&self, f: F)
@@ -294,8 +283,7 @@ impl PlaybackWidget {
         F: Fn() + Clone + 'static,
     {
         let widget = self.imp();
-        widget.controls.connect_repeat(f.clone());
-        widget.mobile_controls.connect_repeat(f);
+        widget.controls.connect_repeat(f);
     }
 
     pub fn connect_volume_changed<F>(&self, f: F)

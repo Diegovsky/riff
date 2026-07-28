@@ -9,7 +9,7 @@ use super::UserDetailsModel;
 
 use crate::app::components::{
     CardLayout, CardSize, Component, DetailsPageComponent, EventListener, HasHeaderBarModel,
-    SortOrder,
+    HeaderRegistrar, SortOrder,
 };
 use crate::app::{ActionDispatcher, AppEvent, Worker};
 
@@ -25,11 +25,18 @@ impl UserDetails {
         shared_layout: Rc<Cell<CardLayout>>,
         shared_size: Rc<Cell<CardSize>>,
         dispatcher: Rc<dyn ActionDispatcher>,
+        registrar: HeaderRegistrar,
+        name: String,
     ) -> Self {
         let model = Rc::new(model);
 
-        let mut component =
-            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), worker);
+        let mut component = DetailsPageComponent::new(
+            model.clone(),
+            model.to_headerbar_model(),
+            worker,
+            registrar,
+            name,
+        );
         component.create_embedded_card_list(
             Some(&gettext("Public Playlists")),
             "user_playlists",

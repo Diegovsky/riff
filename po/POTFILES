@@ -40,7 +40,7 @@ src/app/components/selection/selection_toolbar.blp
 src/app/components/pages/details_album/release_details.blp
 src/app/components/pages/login/login.blp
 src/app/components/details_page/header.blp
-src/app/components/headerbar/headerbar.blp
+src/app/components/shell/headerbar/headerbar.blp
 src/app/components/device_selector/device_selector.blp
 src/app/components/sidebar/create_playlist.blp
 src/app/components/sidebar/sidebar_row.blp

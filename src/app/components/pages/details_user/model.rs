@@ -151,19 +151,6 @@ impl CardListModel for UserDetailsModel {
 }
 
 impl SimpleHeaderBarModel for UserDetailsModel {
-    fn title(&self) -> Option<String> {
-        Some(format!(
-            "Profile \u{2014} {}",
-            &*self
-                .app_model
-                .map_state_opt(|s| s.browser.user_state(&self.id)?.user.as_ref())?
-        ))
-    }
-
-    fn title_updated(&self, event: &AppEvent) -> bool {
-        PageModel::should_refresh_details(self, event)
-    }
-
     fn selection_context(&self) -> Option<SelectionContext> {
         None
     }

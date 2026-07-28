@@ -1,14 +1,31 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $HeaderBarWidget : Adw.Bin {
-  [root]
+template $AppHeaderBar : Adw.Bin {
   Overlay overlay {
     hexpand: true;
 
     Adw.HeaderBar main_header {
       show-end-title-buttons: true;
       show-back-button: false;
+
+      // Flat: no background or separator, so the header blends into the content.
+      styles [
+        "flat",
+      ]
+
+      ToggleButton sidebar_toggle {
+        halign: start;
+        valign: center;
+        icon-name: "sidebar-show-symbolic";
+        action-name: "win.show-sidebar";
+        focus-on-click: false;
+        can-focus: false;
+
+        /* Translators: Tooltip for the button that shows/hides the sidebar. */
+
+        tooltip-text: _("Toggle Sidebar");
+      }
 
       Button go_back {
         receives-default: true;
@@ -18,12 +35,17 @@ template $HeaderBarWidget : Adw.Bin {
         has-frame: false;
         focus-on-click: false;
         can-focus: false;
+        visible: false;
+
+        /* Translators: Tooltip for the header bar button that navigates back. */
+
+        tooltip-text: _("Back");
       }
 
       [title]
-      Adw.WindowTitle title {
-        visible: true;
-        title: "RIff";
+      Stack title_stack {
+        hexpand: true;
+        hhomogeneous: false;
       }
 
       [end]
@@ -31,6 +53,12 @@ template $HeaderBarWidget : Adw.Bin {
         icon-name: "object-select-symbolic";
         focus-on-click: false;
         can-focus: false;
+        visible: false;
+      }
+
+      [end]
+      Stack end_stack {
+        hhomogeneous: false;
       }
     }
 

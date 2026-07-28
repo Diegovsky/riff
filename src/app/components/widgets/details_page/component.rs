@@ -5,7 +5,7 @@ use std::rc::Rc;
 use super::{is_playback_event, DetailsPage, PageModel};
 use crate::app::components::{
     CardLayout, CardList, CardListModel, CardSize, Component, EmbeddedCardList, EventListener,
-    FilterToggle, HeaderBarModel, Playlist, PlaylistModel, SortOrder,
+    FilterToggle, HeaderBarModel, HeaderRegistrar, Playlist, PlaylistModel, SortOrder,
 };
 use crate::app::dispatch::Worker;
 use crate::app::{ActionDispatcher, AppEvent};
@@ -18,6 +18,10 @@ pub struct DetailsPageComponent<M> {
     page: DetailsPage,
     content: gtk::Box,
     children: Vec<Box<dyn EventListener>>,
+    registrar: HeaderRegistrar,
+    name: String,
+    header_title: libadwaita::WindowTitle,
+    end_box: gtk::Box,
 }
 
 impl<M: PageModel + 'static> DetailsPageComponent<M> {
@@ -29,19 +33,38 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         model: Rc<M>,
         headerbar_model: Rc<H>,
         worker: Worker,
+        registrar: HeaderRegistrar,
+        name: String,
     ) -> Self {
         let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let page = DetailsPage::new(model.header_image_shape(), &content);
-        let headerbar = page.create_headerbar_listener(headerbar_model);
+
+        // Register this screen's header contribution: a scroll-revealed title,
+        // an end-button container, and the selection/back model.
+        let header_title = registrar.add_title_widget(&name);
+        page.connect_title_reveal(&header_title);
+        let end_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        registrar.add_end(&name, &end_box);
+        registrar.register_model(&name, headerbar_model);
+
         let mut c = Self {
             model,
             worker,
             page,
             content,
-            children: vec![headerbar],
+            children: vec![],
+            registrar,
+            name,
+            header_title,
+            end_box,
         };
         c.wire();
         c
+    }
+
+    /// Append a widget to this page's end area in the shared header.
+    pub fn add_header_end(&self, widget: &impl IsA<gtk::Widget>) {
+        self.end_box.append(widget);
     }
 
     /// Create a [`Playlist`] child, appending an optional label and a `ListView`
@@ -166,9 +189,7 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             shared_size,
             dispatcher,
         );
-        if let Some(hb) = self.page.headerbar() {
-            hb.pack_end(embedded.view_button());
-        }
+        self.add_header_end(embedded.view_button());
         self.children.push(Box::new(embedded));
     }
 
@@ -246,6 +267,8 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         if let Some(title) = self.model.get_title() {
             let subtitle = self.model.get_subtitle().unwrap_or_default();
             self.page.set_details(&title, &subtitle);
+            self.header_title.set_title(&title);
+            self.header_title.set_subtitle(&subtitle);
         }
 
         // Set subtitle links if the model provides them
@@ -329,6 +352,13 @@ impl<M: PageModel + 'static> Component for DetailsPageComponent<M> {
     }
     fn get_children(&mut self) -> Option<&mut Vec<Box<dyn EventListener>>> {
         Some(&mut self.children)
+    }
+}
+
+impl<M> Drop for DetailsPageComponent<M> {
+    fn drop(&mut self) {
+        // Unregister from the shared header so a re-push re-registers cleanly.
+        self.registrar.remove(&self.name);
     }
 }
 

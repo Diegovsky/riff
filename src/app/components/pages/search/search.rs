@@ -9,7 +9,7 @@ use crate::app::components::utils::Debouncer;
 use crate::app::components::widgets::card_list::card_view_menu::CardViewMenu;
 use crate::app::components::{
     display_add_css_provider, CardLayout, CardList, CardListModel, CardSize, CardWidget, Component,
-    EventListener, ImageShape, Playlist, SortOrder, CLAMP_MAX_SIZE,
+    EventListener, HeaderRegistrar, ImageShape, Playlist, SortOrder, CLAMP_MAX_SIZE,
 };
 use crate::app::dispatch::Worker;
 use crate::app::models::{CardModel, SearchType, SongDescription};
@@ -41,10 +41,7 @@ mod imp {
     #[template(resource = "/dev/diegovsky/Riff/components/search.ui")]
     pub struct SearchResultsWidget {
         #[template_child]
-        pub main_header: TemplateChild<libadwaita::HeaderBar>,
-
-        #[template_child]
-        pub go_back: TemplateChild<gtk::Button>,
+        pub search_bar: TemplateChild<libadwaita::Clamp>,
 
         #[template_child]
         pub search_entry: TemplateChild<gtk::SearchEntry>,
@@ -118,13 +115,6 @@ impl Default for SearchResultsWidget {
 impl SearchResultsWidget {
     pub fn new() -> Self {
         glib::Object::new()
-    }
-
-    pub fn connect_go_back<F>(&self, f: F)
-    where
-        F: Fn() + 'static,
-    {
-        self.imp().go_back.connect_clicked(move |_| f());
     }
 
     pub fn connect_search_updated<F>(&self, f: F)
@@ -330,6 +320,7 @@ pub struct SearchResults {
     worker: Worker,
     debouncer: Debouncer,
     children: Vec<Box<dyn EventListener>>,
+    registrar: HeaderRegistrar,
 }
 
 impl SearchResults {
@@ -339,11 +330,17 @@ impl SearchResults {
         layout: Rc<Cell<CardLayout>>,
         size: Rc<Cell<CardSize>>,
         dispatcher: Rc<dyn ActionDispatcher>,
+        registrar: HeaderRegistrar,
     ) -> Self {
         display_add_css_provider(resource!("/components/search.css"));
 
         let model = Rc::new(model);
         let widget = SearchResultsWidget::new();
+
+        // Move the search bar into the shared header as this screen's title.
+        let search_bar = widget.imp().search_bar.get();
+        widget.remove(&search_bar);
+        registrar.add_title("search", &search_bar);
 
         // --- Combined ("all") view: Tracks / Artists / Albums sections ---
         let all_box = gtk::Box::new(gtk::Orientation::Vertical, SECTION_SPACING);
@@ -509,13 +506,7 @@ impl SearchResults {
             Rc::clone(&track_card_list),
             Rc::clone(&dispatcher),
         );
-        widget.imp().main_header.pack_end(view_menu.widget());
-
-        widget.connect_go_back(clone!(
-            #[weak]
-            model,
-            move || model.go_back()
-        ));
+        registrar.add_end("search", view_menu.widget());
 
         widget.connect_search_updated(clone!(
             #[weak]
@@ -566,6 +557,7 @@ impl SearchResults {
             worker,
             debouncer: Debouncer::new(),
             children: vec![Box::new(scope_playlist)],
+            registrar,
         }
     }
 
@@ -660,6 +652,12 @@ impl SearchResults {
         if !matches!(self.model.get_filter(), Some(SearchType::Tracks)) {
             self.scope_card_list.remove_placeholders();
         }
+    }
+}
+
+impl Drop for SearchResults {
+    fn drop(&mut self) {
+        self.registrar.remove("search");
     }
 }
 

@@ -42,6 +42,7 @@ pub fn expose_custom_widgets() {
     shell::headerbar::expose_widgets();
     shell::device_selector::expose_widgets();
     widgets::details_page::expose_widgets();
+    shell::window::expose_widgets();
 }
 
 impl dyn ActionDispatcher {
