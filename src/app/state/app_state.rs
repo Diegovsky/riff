@@ -26,7 +26,6 @@ pub enum AppAction {
     Raise,
     ShowNotification(String),
     SetConnectionLost(bool),
-    ViewNowPlaying,
     // Cross-state actions
     QueueSelection,
     DequeueSelection,
@@ -98,7 +97,6 @@ pub enum AppEvent {
     NotificationShown(String),
     ConnectionLostChanged(bool),
     PlaylistCreatedNotificationShown(String),
-    NowPlayingShown,
     SettingsEvent(SettingsEvent),
 }
 
@@ -149,7 +147,6 @@ impl AppState {
                     vec![AppEvent::ConnectionLostChanged(lost)]
                 }
             }
-            AppAction::ViewNowPlaying => vec![AppEvent::NowPlayingShown],
             AppAction::Raise => vec![AppEvent::Raised],
             // Cross-state actions: multiple "substates" are affected by these actions, that's why they're handled here
             // Might need some clean-up

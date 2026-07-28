@@ -48,7 +48,7 @@
   border: 2px solid rgba(0, 100, 255, 0.6);
 }
 
-.details-header > breakpointbin > box > centerbox {
+.details-header > breakpointbin > box > box {
   background-color: rgba(150, 0, 255, 0.08);
   border: 2px solid rgba(150, 0, 255, 0.4);
 }

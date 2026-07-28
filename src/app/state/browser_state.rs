@@ -295,8 +295,16 @@ impl BrowserState {
         self.navigation.current().name()
     }
 
+    /// Whether a back button should be offered for the current screen.
+    ///
+    /// Only pushed detail screens (artist, album, playlist, user) get one.
+    /// Home sub-pages share the "home" screen, so there is nowhere to go back.
+    /// Search lives on the stack but is treated as top-level, so no back button.
     pub fn can_pop(&self) -> bool {
-        self.navigation.can_pop() || self.navigation_hidden
+        if matches!(self.current_screen(), ScreenName::Search) {
+            return false;
+        }
+        self.navigation.can_pop()
     }
 
     pub fn count(&self) -> usize {

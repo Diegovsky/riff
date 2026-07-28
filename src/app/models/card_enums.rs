@@ -93,9 +93,9 @@ impl CardSize {
     /// Returns the pixel dimension for this size variant.
     pub fn pixel_size(self) -> i32 {
         match self {
-            Self::Small => 100,
+            Self::Small => 90,
             Self::Medium => 140,
-            Self::Large => 180,
+            Self::Large => 200,
         }
     }
 

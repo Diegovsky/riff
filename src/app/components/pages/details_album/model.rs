@@ -257,13 +257,6 @@ impl PlaylistModel for DetailsModel {
 }
 
 impl SimpleHeaderBarModel for DetailsModel {
-    fn title(&self) -> Option<String> {
-        None
-    }
-    fn title_updated(&self, _: &AppEvent) -> bool {
-        false
-    }
-
     fn selection_context(&self) -> Option<SelectionContext> {
         if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
             return None;

@@ -4,6 +4,8 @@ use crate::auth::TokenStore;
 use crate::player::Command;
 use crate::settings::{RiffSettings, StateTracker};
 use futures::channel::mpsc::UnboundedSender;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -118,6 +120,11 @@ impl App {
             sender.unbounded_send(action).unwrap();
         }
 
+        // The app-wide header bar and the registry screens contribute to it.
+        let app_header: AppHeaderBar = builder.object("app_header").unwrap();
+        let header_models: HeaderModelRegistry = Rc::new(RefCell::new(HashMap::new()));
+        let registrar = HeaderRegistrar::new(app_header.clone(), Rc::clone(&header_models));
+
         // All components that will be available initially
         let mut components: Vec<Box<dyn EventListener>> = vec![
             App::make_window(&self.settings, builder, Rc::clone(model)),
@@ -134,6 +141,15 @@ impl App {
                 Rc::clone(model),
                 dispatcher.box_clone(),
                 worker.clone(),
+                registrar,
+            ),
+            // After navigation, so a pushed screen registers before the header
+            // refreshes.
+            App::make_app_header(
+                app_header,
+                Rc::clone(model),
+                dispatcher.box_clone(),
+                header_models,
             ),
             App::make_search_button(builder, dispatcher.box_clone()),
             App::make_clipboard_import(builder, Rc::clone(model), dispatcher.box_clone()),
@@ -165,6 +181,18 @@ impl App {
         Box::new(MainWindow::new(settings.window.clone(), app_model, window))
     }
 
+    // The app-wide header bar shared by every content screen.
+    fn make_app_header(
+        widget: AppHeaderBar,
+        app_model: Rc<AppModel>,
+        dispatcher: Box<dyn ActionDispatcher>,
+        models: HeaderModelRegistry,
+    ) -> Box<AppHeaderBarComponent> {
+        Box::new(AppHeaderBarComponent::new(
+            widget, app_model, dispatcher, models,
+        ))
+    }
+
     fn make_inhibitor(builder: &gtk::Builder, app_model: Rc<AppModel>) -> Box<impl EventListener> {
         let window: libadwaita::ApplicationWindow = builder.object("window").unwrap();
         Box::new(crate::inhibitor::SuspendInhibitor::new(window, app_model))
@@ -175,20 +203,28 @@ impl App {
         app_model: Rc<AppModel>,
         dispatcher: Box<dyn ActionDispatcher>,
         worker: Worker,
+        registrar: HeaderRegistrar,
     ) -> Box<Navigation> {
         let split_view: libadwaita::NavigationSplitView = builder.object("split_view").unwrap();
         let navigation_stack: gtk::Stack = builder.object("navigation_stack").unwrap();
         let home_listbox: gtk::ListBox = builder.object("home_listbox").unwrap();
+        let window: libadwaita::ApplicationWindow = builder.object("window").unwrap();
+
         let model = NavigationModel::new(Rc::clone(&app_model), dispatcher.box_clone());
         // This is where components that are not created initially will be assembled
-        let screen_factory =
-            ScreenFactory::new(Rc::clone(&app_model), dispatcher.box_clone(), worker);
+        let screen_factory = ScreenFactory::new(
+            Rc::clone(&app_model),
+            dispatcher.box_clone(),
+            worker,
+            registrar,
+        );
         Box::new(Navigation::new(
             model,
             split_view,
             navigation_stack,
             home_listbox,
             screen_factory,
+            window,
         ))
     }
 
@@ -219,6 +255,7 @@ impl App {
         Box::new(PlaybackControl::new(
             model,
             builder.object("playback").unwrap(),
+            builder.object("mobile_now_playing").unwrap(),
             worker,
         ))
     }

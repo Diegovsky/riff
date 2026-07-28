@@ -269,12 +269,6 @@ impl PlaylistModel for ArtistDetailsModel {
 }
 
 impl SimpleHeaderBarModel for ArtistDetailsModel {
-    fn title(&self) -> Option<String> {
-        PageModel::get_title(self)
-    }
-    fn title_updated(&self, event: &AppEvent) -> bool {
-        PageModel::should_refresh_details(self, event)
-    }
     fn selection_context(&self) -> Option<SelectionContext> {
         None
     }

@@ -30,11 +30,6 @@ impl SearchResultsModel {
         Rc::clone(&self.app_model)
     }
 
-    pub fn go_back(&self) {
-        self.dispatcher
-            .dispatch(BrowserAction::NavigationPop.into());
-    }
-
     pub fn search(&self, query: String) {
         self.dispatcher
             .dispatch(BrowserAction::Search(query).into());

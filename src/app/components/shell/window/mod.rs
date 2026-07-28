@@ -1,3 +1,6 @@
+mod shell_box;
+pub use shell_box::expose_widgets;
+
 use gettextrs::gettext;
 use gio::prelude::SettingsExt;
 use gtk::prelude::*;

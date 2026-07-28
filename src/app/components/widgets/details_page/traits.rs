@@ -19,7 +19,6 @@ pub trait HasHeaderBarModel:
     fn to_headerbar_model(self: &Rc<Self>) -> Rc<impl HeaderBarModel + 'static> {
         Rc::new(SimpleHeaderBarModelWrapper::new(
             self.clone(),
-            self.app_model.clone(),
             self.dispatcher.box_clone(),
         ))
     }
