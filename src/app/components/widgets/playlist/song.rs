@@ -2,9 +2,11 @@ use crate::app::components::display_add_css_provider;
 use crate::app::loader::ImageLoader;
 use crate::app::models::SongModel;
 use crate::app::Worker;
+use gdk::Rectangle;
 use gio::MenuModel;
 use glib::subclass::InitializingObject;
 
+use gtk::graphene::Point;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
@@ -163,7 +165,36 @@ impl SongWidget {
             let widget = self.imp();
             widget.menu_btn.set_menu_model(menu);
             widget.menu_btn.add_css_class("song__menu--enabled");
+            // Resets the pointing_to target when closing the popup.
+            // This prevents it from being messes up if it was opened by right click.
+            widget
+                .menu_btn
+                .popover()
+                .unwrap()
+                .connect_closed(|popover| {
+                    popover.set_pointing_to(None);
+                });
         }
+    }
+
+    /// Shows the menu popup anchored to the given coordinates.
+    ///
+    /// Note: coordinates are assumed to be relative to the widget.
+    pub fn show_menu(&self, x: f64, y: f64) {
+        let widget = self.imp();
+        let root = self.root().unwrap();
+
+        let point = self
+            .compute_point(&widget.menu_btn.get(), &Point::zero())
+            .unwrap();
+        let popover = widget.menu_btn.popover().unwrap();
+        popover.set_pointing_to(Some(&Rectangle::new(
+            (point.x() as f64 + x) as _,
+            (point.y() as f64 + y) as _,
+            1,
+            1,
+        )));
+        popover.popup();
     }
 
     pub fn connect_like<F: Fn() + 'static>(&self, f: F) {
