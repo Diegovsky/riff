@@ -1,5 +1,6 @@
+use gdk::ffi::GDK_BUTTON_SECONDARY;
 use gio::prelude::*;
-use gtk::prelude::*;
+use gtk::{prelude::*, GestureClick};
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -107,7 +108,19 @@ where
 
         factory.connect_setup(|_, item| {
             let item = item.downcast_ref::<gtk::ListItem>().unwrap();
-            item.set_child(Some(&SongWidget::new()));
+            let widget = SongWidget::new();
+            let control = GestureClick::builder()
+                .button(GDK_BUTTON_SECONDARY as _)
+                .build();
+            control.connect_pressed(clone!(
+                #[weak]
+                widget,
+                move |_, _, x, y| {
+                    widget.show_menu(x, y);
+                }
+            ));
+            widget.add_controller(control);
+            item.set_child(Some(&widget));
         });
 
         factory.connect_bind(clone!(
