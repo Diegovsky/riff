@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: Riff\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-07-28 21:32-0300\n"
-"Language: it\n"
+"Language: pt-br\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12,7 +12,7 @@ msgstr ""
 
 #: src/main.rs:91
 msgid "Failed to open link!"
-msgstr "Apertura del link fallita!"
+msgstr "Ocorreu uma falha ao abrir o link!"
 
 #: src/connect/player.rs:65
 msgid "Connection to device lost!"
@@ -33,7 +33,7 @@ msgstr ""
 #. translators: This notification is the default message for unhandled errors. Logs refer to console output.
 #: src/app/batch_loader.rs:114 src/app/components/mod.rs:87
 msgid "An error occured. Check logs for details!"
-msgstr "C'è stato un errore. Controlla i log per i dettagli!"
+msgstr "Ocorreu um erro. Verifique os logs para mais detalhes!"
 
 #. Translators: Sort option. Shows items in the order they were saved,
 #. with the most recently added items appearing first.
@@ -52,14 +52,14 @@ msgstr ""
 #: src/app/models/card_enums.rs:57
 #, fuzzy
 msgid "Creator"
-msgstr "Crea"
+msgstr "Criar"
 
 #. Translators: Sort option. Orders items by their release date, with the
 #. newest releases appearing first.
 #: src/app/models/card_enums.rs:60
 #, fuzzy
 msgid "Date Released"
-msgstr "Data di uscita"
+msgstr "Lançamento"
 
 #. Translators: Sort option. Orders items by their popularity score, with
 #. the most popular items appearing first.
@@ -74,24 +74,24 @@ msgstr ""
 #. translators: This is part of a contextual menu attached to a single track; this entry allows viewing the album containing a specific track.
 #: src/app/components/labels.rs:5
 msgid "View album"
-msgstr "Guarda l'album"
+msgstr "Ver álbum"
 
 #. translators: This is part of a contextual menu attached to a single track; the intent is to copy the link (public URL) to a specific track.
 #: src/app/components/labels.rs:8
 #: src/app/components/widgets/details_page/header.blp:184
 msgid "Copy link"
-msgstr "Copia link"
+msgstr "Copiar link"
 
 #. translators: This is part of a contextual menu attached to a single track; this entry adds a track at the end of the play queue.
 #: src/app/components/labels.rs:11
 #: src/app/components/widgets/selection/selection_toolbar.blp:52
 msgid "Add to queue"
-msgstr "Aggiungi alla coda di riproduzione"
+msgstr "Adicionar a fila"
 
 #. translators: This is part of a contextual menu attached to a single track; this entry removes a track from the play queue.
 #: src/app/components/labels.rs:14
 msgid "Remove from queue"
-msgstr "Rimuovi dalla coda di riproduzione"
+msgstr "Remover da fila"
 
 #. translators: This is part of a contextual menu attached to a playlist in the sidebar; this entry starts playing the playlist from the first track.
 #: src/app/components/labels.rs:17
@@ -99,52 +99,52 @@ msgstr "Rimuovi dalla coda di riproduzione"
 #: src/app/components/shell/playback/playback_controls.rs:70
 #: src/app/components/widgets/details_page/header.blp:145
 msgid "Play"
-msgstr "Riproduci"
+msgstr "Tocar"
 
 #. translators: This is part of a contextual menu attached to a playlist in the sidebar; this entry starts playing the playlist in shuffle mode.
 #: src/app/components/labels.rs:20
 #: src/app/components/shell/playback/playback_controls.blp:15
 #: src/app/components/widgets/details_page/header.blp:158
 msgid "Shuffle"
-msgstr "Mescola"
+msgstr "Ativar a ordem aleatória"
 
 #. translators: This is part of a contextual menu attached to a playlist in the sidebar; this entry deletes a playlist owned by the user.
 #: src/app/components/labels.rs:23
 #, fuzzy
 msgid "Delete playlist"
-msgstr "Nuova Playlist"
+msgstr "Deletar playlist"
 
 #. translators: This is part of a contextual menu attached to a playlist in the sidebar; this entry unfollows a playlist the user does not own.
 #: src/app/components/labels.rs:26
 #, fuzzy
 msgid "Unfollow playlist"
-msgstr "Playlist senza nome"
+msgstr "Desfavoritar playlist"
 
 #. translators: This is part of a larger text that says "Add to <playlist name>". This text should be as short as possible.
 #: src/app/components/labels.rs:33
 #, rust-format
 msgid "Add to {}"
-msgstr "Aggiungi a {}"
+msgstr "Adicionar a {}"
 
 #. translators: This shows up when in selection mode. This text should be as short as possible.
 #: src/app/components/labels.rs:42
 #, fuzzy, rust-format
 msgid "{} track selected"
 msgid_plural "{} tracks selected"
-msgstr[0] "{} brano selezionato"
-msgstr[1] "{} brani selezionati"
+msgstr[0] "{} música selecionada"
+msgstr[1] "{} músicas selecionadas"
 
 #. translators: This is part of a contextual menu attached to a single track; the full text is "More from <artist>".
 #: src/app/components/labels.rs:51
 #, rust-format
 msgid "More from {}"
-msgstr "Di più da {}"
+msgstr "Mais de {}"
 
 #. translators: This is part of a larger label that reads "<Album> by <Artist>"
 #: src/app/components/labels.rs:60
 #, rust-format
 msgid "{} by {}"
-msgstr "{} di {}"
+msgstr "{} por {}"
 
 #: src/app/components/shell/clipboard_import/mod.rs:91
 msgid "Open Spotify link?"
@@ -174,7 +174,7 @@ msgstr ""
 #: src/app/components/shell/clipboard_import/mod.rs:116
 #: src/app/components/shell/headerbar/headerbar.blp:82
 msgid "Cancel"
-msgstr "Annulla"
+msgstr "Cancelar"
 
 #: src/app/components/shell/clipboard_import/mod.rs:117
 msgid "Open"
@@ -182,15 +182,15 @@ msgstr ""
 
 #: src/app/components/pages/details_artist/widget.rs:39
 msgid "Top tracks"
-msgstr "Brani più popolari"
+msgstr "Melhores faixas"
 
 #: src/app/components/pages/details_artist/widget.rs:41
 msgid "Releases"
-msgstr "Releases"
+msgstr "Lançamentos"
 
 #: src/app/components/widgets/selection/component.rs:66
 msgid "Tracks saved!"
-msgstr "Tracce salvate!"
+msgstr "Faixas foram salvas!"
 
 #: src/app/components/pages/settings/settings.rs:610
 msgid "Locked by a Family plan parental control and cannot be changed here."
@@ -203,7 +203,7 @@ msgstr ""
 #: src/app/components/pages/details_artist/model.rs:203
 #: src/app/components/pages/search/search.rs:434
 msgid "Albums"
-msgstr "Album"
+msgstr "Álbuns"
 
 #: src/app/components/pages/details_artist/model.rs:204
 msgid "Singles"
@@ -218,21 +218,21 @@ msgstr ""
 #: src/app/components/shell/sidebar/sidebar_item.rs:43
 #: src/app/components/shell/sidebar/sidebar_item.rs:97
 msgid "Library"
-msgstr "Raccolta"
+msgstr "Biblioteca"
 
 #. translators: This is a sidebar entry that marks that the entries below are playlists.
 #: src/app/components/shell/navigation/factory.rs:76
 #: src/app/components/pages/search/search.rs:445
 #: src/app/components/shell/sidebar/sidebar_item.rs:49
 msgid "Playlists"
-msgstr "Playlist"
+msgstr "Playlists"
 
 #. translators: This is a sidebar entry to browse to followed artists.
 #: src/app/components/shell/navigation/factory.rs:88
 #: src/app/components/pages/search/search.rs:423
 #: src/app/components/shell/sidebar/sidebar_item.rs:51
 msgid "Artists"
-msgstr "Artisti"
+msgstr "Artistas"
 
 #: src/app/components/shell/window/mod.rs:81
 msgid "Riff is still playing"
@@ -259,54 +259,54 @@ msgstr ""
 
 #: src/app/components/pages/saved_playlists/model.rs:104
 msgid "You have no saved playlists."
-msgstr "Non hai playlist salvate."
+msgstr "Você não tem playlists salvas."
 
 #: src/app/components/pages/saved_playlists/model.rs:107
 msgid "Your playlists will be shown here."
-msgstr "Le tue playlist verranno mostrate qui."
+msgstr "Suas playlists serão mostradas aqui."
 
 #. translators: This is a menu entry.
 #: src/app/components/shell/user_menu/user_menu.rs:70
 msgid "Preferences"
-msgstr "Preferenze"
+msgstr "Preferências"
 
 #. translators: This is a menu entry.
 #: src/app/components/shell/user_menu/user_menu.rs:72
 msgid "About"
-msgstr "Informazioni su"
+msgstr "Sobre"
 
 #. translators: This is a menu entry.
 #: src/app/components/shell/user_menu/user_menu.rs:74
 msgid "Quit"
-msgstr "Esci"
+msgstr "Fechar"
 
 #. translators: This is a menu entry.
 #: src/app/components/shell/user_menu/user_menu.rs:79
 msgid "Log out"
-msgstr "Log out"
+msgstr "Sair"
 
 #: src/app/components/pages/saved_artists/model.rs:100
 #, fuzzy
 msgid "You have no saved artists."
-msgstr "Non hai playlist salvate."
+msgstr "Você não tem playlists salvas."
 
 #: src/app/components/pages/saved_artists/model.rs:103
 #, fuzzy
 msgid "Your followed artists will be shown here."
-msgstr "Le tue playlist verranno mostrate qui."
+msgstr "Seus artistas favoritos serão mostrados aqui."
 
 #: src/app/components/pages/details_user/widget.rs:41
 #, fuzzy
 msgid "Public Playlists"
-msgstr "Tutte le playlist"
+msgstr "Todas as playlists"
 
 #: src/app/components/pages/saved_albums/model.rs:104
 msgid "You have no saved albums."
-msgstr "Non hai album salvati."
+msgstr "Você não tem álbuns salvos."
 
 #: src/app/components/pages/saved_albums/model.rs:107
 msgid "Your library will be shown here."
-msgstr "La tua libreria verrà mostrata qui."
+msgstr "Sua biblioteca será mostrada aqui."
 
 #: src/app/components/pages/search/search.rs:260
 msgid "Show All"
@@ -316,7 +316,7 @@ msgstr ""
 #: src/app/components/pages/search/search.rs:385
 #: src/app/components/pages/details_album/release_details.blp:56
 msgid "Tracks"
-msgstr "Tracce"
+msgstr "Faixas"
 
 #: src/app/components/pages/details_user/model.rs:47
 msgid "Profile"
@@ -325,21 +325,21 @@ msgstr ""
 #. translators: This is a sidebar entry to browse to saved tracks.
 #: src/app/components/shell/sidebar/sidebar_item.rs:45
 msgid "Saved tracks"
-msgstr "Tracce salvate"
+msgstr "Faixas salvas"
 
 #. translators: This is a sidebar entry to browse to saved playlists.
 #: src/app/components/shell/sidebar/sidebar_item.rs:47
 #: src/app/components/shell/playback/playback_widget.blp:96
 msgid "Now playing"
-msgstr "In riproduzione"
+msgstr "Tocando agora"
 
 #: src/app/components/shell/sidebar/sidebar_item.rs:88
 msgid "All Playlists"
-msgstr "Tutte le playlist"
+msgstr "Todas as playlists"
 
 #: src/app/components/shell/sidebar/sidebar_item.rs:106
 msgid "New Playlist"
-msgstr "Nuova Playlist"
+msgstr "Nova playlist"
 
 #: src/app/components/pages/now_playing/widget.rs:41
 msgid "Queue"
@@ -348,19 +348,19 @@ msgstr ""
 #. translators: Short text displayed instead of a track title when nothing plays
 #: src/app/components/pages/now_playing/widget.rs:54
 #: src/app/components/shell/playback/playback_info_mobile.rs:53
-#: src/app/components/shell/playback/playback_info.rs:70
+#: src/app/Deletar/shell/playback/playback_info.rs:70
 #, fuzzy
 msgid "No track playing"
-msgstr "In riproduzione"
+msgstr "Tocando agora"
 
 #: src/app/components/shell/sidebar/sidebar.rs:68
 msgid "Unnamed playlist"
-msgstr "Playlist senza nome"
+msgstr "Desfavoritar playeus artistas favoritos"
 
 #: src/app/components/pages/saved_tracks/model.rs:66
 #, fuzzy
 msgid "All Tracks"
-msgstr "Tracce"
+msgstr "Faixas"
 
 #: src/app/components/shell/device_selector/widget.rs:138
 #: src/app/components/shell/device_selector/device_selector.blp:9
@@ -371,17 +371,17 @@ msgstr ""
 #: src/app/components/widgets/details_page/header.rs:219
 #: src/app/components/shell/playback/playback_controls.rs:68
 msgid "Pause"
-msgstr "Pausa"
+msgstr "Pausar"
 
 #: src/app/components/pages/now_playing/model.rs:75
 #, fuzzy
 msgid "Now Playing"
-msgstr "In riproduzione"
+msgstr "Tocando agora"
 
 #: src/app/components/pages/details_playlist/model.rs:97
 #, fuzzy
 msgid "Playlist"
-msgstr "Playlist"
+msgstr "Playlists"
 
 #: src/app/components/widgets/details_page/component.rs:150
 #: src/app/components/widgets/card_list/component.rs:111
@@ -391,12 +391,12 @@ msgstr ""
 #. translators: This is a notification that pop ups when a new playlist is created. It includes the name of that playlist.
 #: src/app/components/shell/notification/mod.rs:69
 msgid "New playlist created."
-msgstr "Creata nuova playlist."
+msgstr "Nova playlist criada."
 
 #. translators: This is a label in the notification shown after creating a new playlist. If it is clicked, the new playlist will be opened.
 #: src/app/components/shell/notification/mod.rs:71
 msgid "View"
-msgstr "Visualizza"
+msgstr "Ver"
 
 #: src/app/components/shell/notification/mod.rs:95
 msgid "Connection lost. Trying to reconnect…"
@@ -409,12 +409,12 @@ msgstr ""
 #. Translators: This refers to a music label
 #: src/app/components/pages/details_album/release_details.blp:34
 msgid "Label"
-msgstr "Etichetta discografica"
+msgstr "Editora"
 
 #. Translators: This refers to a release date
 #: src/app/components/pages/details_album/release_details.blp:45
 msgid "Released"
-msgstr "Data di uscita"
+msgstr "Lançamento"
 
 #: src/app/components/pages/details_album/release_details.blp:65
 msgid "Copyright"
@@ -428,7 +428,7 @@ msgstr ""
 #: src/app/components/pages/login/login.blp:55
 #, fuzzy
 msgid "Log in with your Spotify Account"
-msgstr "Login su Spotify Premium"
+msgstr "Entrar no Spotify Premium"
 
 #. Translators: Premium requirement notice shown on the login page.
 #: src/app/components/pages/login/login.blp:85
@@ -462,32 +462,32 @@ msgstr ""
 #: src/app/components/pages/search/search.blp:61
 #, fuzzy
 msgid "_Artist"
-msgstr "Artisti"
+msgstr "Artistas"
 
 #: src/app/components/pages/search/search.blp:69
 #, fuzzy
 msgid "_Albums"
-msgstr "Album"
+msgstr "Álbuns"
 
 #: src/app/components/pages/search/search.blp:77
 #, fuzzy
 msgid "_Playlists"
-msgstr "Playlist"
+msgstr "Playlists"
 
 #: src/app/components/pages/search/search.blp:85
 #, fuzzy
 msgid "_Tracks"
-msgstr "Tracce"
+msgstr "Faixas"
 
 #. Translators: Title for the empty search page (initial state).
 #: src/app/components/pages/search/search.blp:121
 msgid "Search Spotify."
-msgstr "Cerca Spotify."
+msgstr "Buscar no Spotify."
 
 #. Translators: Subtitle for the empty search page (initial state).
 #: src/app/components/pages/search/search.blp:125
 msgid "Type to search."
-msgstr "Digita per cercare."
+msgstr "Digite para pesquisar."
 
 #: src/app/components/pages/settings/equalizer.blp:5
 msgid "Equalizer"
@@ -564,7 +564,7 @@ msgstr ""
 #: src/app/components/pages/settings/pan.blp:41
 #, fuzzy
 msgid "Right"
-msgstr "Chiaro"
+msgstr "Claro"
 
 #: src/app/components/pages/settings/pitch.blp:5
 msgid "Pitch Shift"
@@ -602,11 +602,11 @@ msgstr "Tema"
 
 #: src/app/components/pages/settings/settings.blp:19
 msgid "Light"
-msgstr "Chiaro"
+msgstr "Claro"
 
 #: src/app/components/pages/settings/settings.blp:20
 msgid "Dark"
-msgstr "Scuro"
+msgstr "Escuro"
 
 #: src/app/components/pages/settings/settings.blp:21
 msgid "System"
@@ -648,27 +648,27 @@ msgstr ""
 #. Translators: Header for a group of preference items regarding audio
 #: src/app/components/pages/settings/settings.blp:67
 msgid "Audio"
-msgstr "Audio"
+msgstr "Áudio"
 
 #. Translators: Title for an item in preferences
 #: src/app/components/pages/settings/settings.blp:72
 msgid "Audio Backend"
-msgstr "Backend Audio"
+msgstr "Backend de áudio"
 
 #. Translators: Title for an item in preferences
 #: src/app/components/pages/settings/settings.blp:85
 msgid "ALSA Device"
-msgstr "Device ALSA"
+msgstr "Dispositivo ALSA"
 
 #. Translators: Description for the item (ALSA Device) in preferences
 #: src/app/components/pages/settings/settings.blp:89
 msgid "Applied only if audio backend is ALSA"
-msgstr "Applicato solo se il backend audio è ALSA"
+msgstr "Aplicado apenas se backend de áudio é ALSA"
 
 #. Translators: Title for an item in preferences
 #: src/app/components/pages/settings/settings.blp:99
 msgid "Audio Quality"
-msgstr "Qualità Audio"
+msgstr "Qualidade do Áudio"
 
 #: src/app/components/pages/settings/settings.blp:100
 msgid "Streaming bitrate from Spotify (higher uses more bandwidth)"
@@ -676,21 +676,20 @@ msgstr ""
 
 #: src/app/components/pages/settings/settings.blp:103
 msgid "Normal"
-msgstr "Normale"
+msgstr "Normal"
 
 #: src/app/components/pages/settings/settings.blp:104
-#, fuzzy
 msgid "High"
 msgstr "Alta"
 
 #: src/app/components/pages/settings/settings.blp:105
 msgid "Very high"
-msgstr "Molto alta"
+msgstr "Muito alta"
 
 #: src/app/components/pages/settings/settings.blp:111
 #, fuzzy
 msgid "Audio Format"
-msgstr "Qualità Audio"
+msgstr "Qualidade do Áudio"
 
 #: src/app/components/pages/settings/settings.blp:112
 msgid "Sample bit depth for audio output"
@@ -699,7 +698,7 @@ msgstr ""
 #. Translators: Title for an item in preferences
 #: src/app/components/pages/settings/settings.blp:128
 msgid "Gapless playback"
-msgstr "Riproduzione gapless"
+msgstr "Reprodução sem intervalos"
 
 #: src/app/components/pages/settings/settings.blp:129
 msgid "Eliminates silence between consecutive tracks"
@@ -728,7 +727,7 @@ msgstr ""
 #: src/app/components/pages/settings/settings.blp:153
 #, fuzzy
 msgid "Mono Audio"
-msgstr "Audio"
+msgstr "Áudio"
 
 #: src/app/components/pages/settings/settings.blp:154
 msgid ""
@@ -738,7 +737,7 @@ msgstr ""
 #: src/app/components/pages/settings/settings.blp:160
 #, fuzzy
 msgid "Normalisation"
-msgstr "Normale"
+msgstr "Normal"
 
 #: src/app/components/pages/settings/settings.blp:161
 msgid "Adjust volume levels between tracks for consistent loudness"
@@ -767,12 +766,12 @@ msgstr ""
 #: src/app/components/pages/settings/settings.blp:175
 #, fuzzy
 msgid "Track"
-msgstr "Tracce"
+msgstr "Faixas"
 
 #: src/app/components/pages/settings/settings.blp:176
 #, fuzzy
 msgid "Album"
-msgstr "Album"
+msgstr "Álbuns"
 
 #: src/app/components/pages/settings/settings.blp:182
 msgid "Normalisation Method"
@@ -817,7 +816,7 @@ msgstr ""
 #: src/app/components/pages/settings/settings.blp:233
 #, fuzzy
 msgid "Release (ms)"
-msgstr "Releases"
+msgstr "Lançamentos"
 
 #: src/app/components/pages/settings/settings.blp:234
 msgid "How quickly the limiter recovers after peaks"
@@ -834,12 +833,12 @@ msgstr ""
 #. Translators: Header for a group of preference items regarding network
 #: src/app/components/pages/settings/settings.blp:268
 msgid "Network"
-msgstr "Rete"
+msgstr "Rede"
 
 #. Translators: Title for an item in preferences
 #: src/app/components/pages/settings/settings.blp:273
 msgid "Access Point Port"
-msgstr "Porta Access Point"
+msgstr "Porta do Ponto de Acesso"
 
 #. Translators: Longer description for an item (Access Point Port) in preferences
 #: src/app/components/pages/settings/settings.blp:277
@@ -847,8 +846,8 @@ msgid ""
 "Port used for connections to Spotify's Access Point. Set to 0 if any port is "
 "fine."
 msgstr ""
-"Porta usata per le connessioni all'Access Point Spotify. Impostala a 0 se "
-"qualsiasi valore va bene."
+"Porta usada para conexões ao Ponto de Acesso do Spotify. Defina como 0 se "
+"qualquer porta servir."
 
 #: src/app/components/shell/device_selector/device_selector.blp:15
 msgid "Playing on"
@@ -871,19 +870,19 @@ msgstr ""
 #. Translators: Button label. Selects all visible songs.
 #: src/app/components/shell/headerbar/headerbar.blp:96
 msgid "Select all"
-msgstr "Seleziona tutto"
+msgstr "Selecionar todas"
 
 #: src/app/components/shell/playback/playback_controls.blp:30
 msgid "Previous"
-msgstr "Precedente"
+msgstr "Voltar"
 
 #: src/app/components/shell/playback/playback_controls.blp:56
 msgid "Next"
-msgstr "Successivo"
+msgstr "Avançar"
 
 #: src/app/components/shell/playback/playback_controls.blp:67
 msgid "Repeat"
-msgstr "Ripeti"
+msgstr "Repetir"
 
 #. Translators: label for the entry containing the name of a new playlist
 #: src/app/components/shell/sidebar/create_playlist.blp:10
@@ -893,7 +892,7 @@ msgstr "Nome"
 #. Translators: Button that creates a new playlist
 #: src/app/components/shell/sidebar/create_playlist.blp:30
 msgid "Create"
-msgstr "Crea"
+msgstr "Criar"
 
 #: src/app/components/widgets/card_list/card_view_menu.blp:17
 msgid "Icon Size"
@@ -906,7 +905,7 @@ msgstr ""
 #: src/app/components/widgets/details_page/header.blp:171
 #, fuzzy
 msgid "Add to Library"
-msgstr "Salva nella libreria"
+msgstr "Adicionar à biblioteca"
 
 #: src/app/components/widgets/details_page/header.blp:201
 msgid "Edit"
@@ -914,32 +913,32 @@ msgstr ""
 
 #: src/app/components/widgets/selection/selection_toolbar.blp:60
 msgid "Add to playlist..."
-msgstr "Aggiungi alla playlist..."
+msgstr "Adicionar à playlist..."
 
 #: src/app/components/widgets/selection/selection_toolbar.blp:71
 msgid "Remove"
-msgstr "Rimuovi"
+msgstr "Remover"
 
 #: src/app/components/widgets/selection/selection_toolbar.blp:82
 msgid "Save to library"
-msgstr "Salva nella libreria"
+msgstr "Adicionar à biblioteca"
 
 #~ msgid "Could not save password. Make sure the session keyring is unlocked."
 #~ msgstr ""
-#~ "Impossibile salvare la password. Controlla che la session keyring sia "
-#~ "sbloccata."
+#~ "Não foi possível salvar a senha. Verifique se o seu chaveiro de sessão "
+#~ "está desbloqueado."
 
 #~ msgid "No song playing"
-#~ msgstr "Nessun brano in riproduzione"
+#~ msgstr "Nenhum música sendo executada"
 
 #~ msgid "Connection restored"
-#~ msgstr "Connessione ripristinata"
+#~ msgstr "Conexão reestabelecida"
 
 #~ msgid "Log in"
-#~ msgstr "Log in"
+#~ msgstr "Entrar"
 
 #~ msgid "Appearance"
-#~ msgstr "Aspetto"
+#~ msgstr "Aparência"
 
 #~ msgid "Done"
-#~ msgstr "Fatto"
+#~ msgstr "Feito"

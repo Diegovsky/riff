@@ -26,6 +26,7 @@ impl CardModel {
         category: Option<&str>,
     ) -> CardModel {
         let title = if title.is_empty() && !id.is_empty() {
+            /// translators: Label used for a playlist title during load or if it doesn't have any title.
             gettext("Untitled")
         } else {
             title.to_string()

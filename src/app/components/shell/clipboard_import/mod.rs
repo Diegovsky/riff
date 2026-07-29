@@ -113,7 +113,9 @@ impl ClipboardWatcher {
         };
 
         let dialog = libadwaita::AlertDialog::new(Some(&heading), Some(&body));
+        /// Translators: When prompted "Want to open the link in your clipoard?"
         dialog.add_response("cancel", &gettext("Cancel"));
+        /// Translators: When prompted "Want to open the link in your clipoard?"
         dialog.add_response("open", &gettext("Open"));
         dialog.set_response_appearance("open", libadwaita::ResponseAppearance::Suggested);
         dialog.set_default_response(Some("open"));

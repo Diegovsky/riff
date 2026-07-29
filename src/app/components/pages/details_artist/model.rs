@@ -199,9 +199,13 @@ impl CardListModel for ArtistDetailsModel {
 
     fn filter_options(&self) -> Vec<FilterOption> {
         vec![
+            /// translators: Possible filters in the artist page.
             FilterOption::all(gettext("All")),
+            /// translators: Possible filters in the artist page.
             FilterOption::new(gettext("Albums"), "album"),
+            /// translators: Possible filters in the artist page.
             FilterOption::new(gettext("Singles"), "single"),
+            /// translators: Possible filters in the artist page.
             FilterOption::new(gettext("Compilations"), "compilation"),
         ]
     }
