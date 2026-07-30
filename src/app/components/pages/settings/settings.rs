@@ -138,6 +138,7 @@ impl SettingsDialog {
 
         dialog.bind_backend_and_device();
         dialog.bind_settings();
+        dialog.setup_bitrate_lossless_factory();
         dialog.bind_feature_flags();
         dialog.apply_feature_flag_visibility();
         dialog.connect_theme_select();
@@ -173,6 +174,81 @@ impl SettingsDialog {
         }
     }
 
+    /// Installs a list factory on the Audio Quality combo row that renders the
+    /// "Lossless" entry as a disabled option: its label is dimmed, it cannot be
+    /// selected, and a warning icon is shown next to it. Hovering the warning
+    /// icon reveals a tooltip explaining why the option is unavailable.
+    fn setup_bitrate_lossless_factory(&self) {
+        // Index of the "Lossless" entry in the Audio Quality string list.
+        const LOSSLESS_INDEX: u32 = 3;
+
+        let player_bitrate = self
+            .imp()
+            .player_bitrate
+            .downcast_ref::<libadwaita::ComboRow>()
+            .unwrap();
+
+        let factory = gtk::SignalListItemFactory::new();
+
+        factory.connect_setup(|_, item| {
+            let item = item.downcast_ref::<gtk::ListItem>().unwrap();
+            let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+
+            let label = gtk::Label::new(None);
+            label.set_xalign(0.0);
+            label.set_hexpand(true);
+
+            let warning = gtk::Image::from_icon_name("dialog-warning-symbolic");
+            warning.set_visible(false);
+
+            row.append(&label);
+            row.append(&warning);
+            item.set_child(Some(&row));
+        });
+
+        factory.connect_bind(|_, item| {
+            let item = item.downcast_ref::<gtk::ListItem>().unwrap();
+            let Some(row) = item.child().and_downcast::<gtk::Box>() else {
+                return;
+            };
+            let Some(label) = row.first_child().and_downcast::<gtk::Label>() else {
+                return;
+            };
+            let Some(warning) = row.last_child().and_downcast::<gtk::Image>() else {
+                return;
+            };
+
+            let text = item
+                .item()
+                .and_downcast::<gtk::StringObject>()
+                .map(|s| s.string().to_string())
+                .unwrap_or_default();
+            label.set_label(&text);
+
+            if item.position() == LOSSLESS_INDEX {
+                label.add_css_class("dim-label");
+                warning.set_visible(true);
+                row.set_tooltip_text(Some(&gettextrs::gettext(
+                    "Unsupported due to legal restrictions.",
+                )));
+                // Prevent the entry from being chosen from the dropdown.
+                item.set_selectable(false);
+                item.set_activatable(false);
+            } else {
+                // Reset state in case this list item widget is being reused.
+                label.remove_css_class("dim-label");
+                warning.set_visible(false);
+                row.set_tooltip_text(None);
+                item.set_selectable(true);
+                item.set_activatable(true);
+            }
+        });
+
+        // Only the popup list needs the custom factory; the selected value shown
+        // on the row keeps the combo row's default rendering.
+        player_bitrate.set_list_factory(Some(&factory));
+    }
+
     fn bind_settings(&self) {
         let widget = self.imp();
         let settings = gio::Settings::new(SETTINGS);
@@ -196,6 +272,8 @@ impl SettingsDialog {
             .player_bitrate
             .downcast_ref::<libadwaita::ComboRow>()
             .unwrap();
+        // "Lossless" is shown as a disabled, non-selectable option (see
+        // setup_bitrate_lossless_factory), so it never reaches the mapping below.
         settings
             .bind("player-bitrate", player_bitrate, "selected")
             .mapping(|variant, _| {
@@ -210,14 +288,15 @@ impl SettingsDialog {
                 })
             })
             .set_mapping(|value, _| {
-                value.get::<u32>().ok().map(|u| {
+                value.get::<u32>().ok().and_then(|u| {
                     match u {
-                        0 => "96",
-                        1 => "160",
-                        2 => "320",
-                        _ => unreachable!(),
+                        0 => Some("96"),
+                        1 => Some("160"),
+                        2 => Some("320"),
+                        // "Lossless" cannot be selected, so ignore any other index.
+                        _ => None,
                     }
-                    .to_variant()
+                    .map(|s| s.to_variant())
                 })
             })
             .build();
