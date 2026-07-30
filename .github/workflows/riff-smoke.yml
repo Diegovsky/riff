@@ -1,0 +1,58 @@
+name: riff-smoke
+
+# Headless startup smoke test: builds and installs Riff, launches it under a
+# virtual display and a private session bus, and fails if any error-level log,
+# GTK/GLib critical, or panic appears during startup.
+
+on:
+  push:
+    branches: [master, development]
+  pull_request:
+    branches: [master, development]
+  workflow_dispatch:
+
+jobs:
+  startup:
+    name: "Startup Smoke Test"
+    runs-on: ubuntu-latest
+    # Riff pulls in gtk4 (gnome_47 feature) and libadwaita 1.7, which require
+    # glib >= 2.82. Ubuntu's apt packages lag behind (glib 2.80), so the build
+    # fails there. Run in a Fedora container that ships current GNOME libraries,
+    # matching the blueprint-lint job in riff-quality.yml.
+    container:
+      image: fedora:42
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        # gtk4-update-icon-cache ships in gtk4 (pulled by gtk4-devel),
+        # update-desktop-database in desktop-file-utils, glib-compile-schemas in
+        # glib2; meson's gnome.post_install requires all three at configure time.
+        # dbus-run-session lives in dbus-daemon; xvfb-run in xorg-x11-server-Xvfb.
+        run: >-
+          dnf install -y
+          meson ninja-build gcc pkgconf-pkg-config blueprint-compiler
+          gtk4-devel libadwaita-devel glib2-devel desktop-file-utils
+          openssl-devel alsa-lib-devel pulseaudio-libs-devel
+          gstreamer1-devel gstreamer1-plugins-base-devel gettext libcurl-devel
+          xorg-x11-server-Xvfb dbus-daemon
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build and install
+        run: |
+          meson setup build -Dbuildtype=debug -Doffline=false --prefix="$HOME/.local"
+          ninja -C build install
+
+      - name: Run startup smoke test
+        env:
+          RUN_SECONDS: "10"
+        run: |
+          export RIFF_BIN="$HOME/.local/bin/riff"
+          export GSETTINGS_SCHEMA_DIR="$HOME/.local/share/glib-2.0/schemas"
+          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          xvfb-run -a dbus-run-session -- ./scripts/smoke-test.sh
