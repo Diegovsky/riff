@@ -1,162 +1,69 @@
-<h1 align="center"> Riff </h1>
-<h4 align="center"> A libadwaita/GTK4-based Spotify client </h4>
+<p align="center">
+  <img src="data/hicolor/scalable/apps/dev.diegovsky.Riff.svg" width="128" height="128" alt="Riff icon">
+</p>
 
-![showcase](data/appstream/scheme-dark.png)
+<h1 align="center">Riff</h1>
 
-<div align="center">
-    <a href='https://flathub.org/apps/details/dev.diegovsky.Riff'><img width='130' alt='Download on Flathub' src='https://flathub.org/assets/badges/flathub-badge-en.png'/></a>
-</div>
-<br>
+<p align="center">
+    Riff is a Spotify client that puts your music library front and center. It features a clean, minimal design that lets you listen distraction-free.
+</p>
 
-Enjoy listening to your favorite Spotify content with **Riff**: a libadwaita/GTK4-based Spotify client designed for GNOME!
+![Riff Dark](data/appstream/overview-dark.png#gh-dark-mode-only)![Riff Light](data/appstream/overview-light.png#gh-light-mode-only)
 
-Originally a fork of [Spot](https://github.com/xou816/spot),  Riff continues development to bring the coolest Spotify client onto your desktop and mobile. Written in Rust and based on [librespot](https://github.com/librespot-org/librespot/).
+<p align="center">
+    <a href="https://flathub.org/apps/details/dev.diegovsky.Riff"><img width="130" alt="Download on Flathub" src="https://flathub.org/assets/badges/flathub-badge-en.png"/></a>
+</p>
 
-If you have any feature suggestions or want to contribute to the project, feel free to leave an issue / pull request or join the discussion on our [Discord server](https://discord.gg/SYuYsjzWbm)!
+---
 
-*Note*: AI contributions in any part are not welcome.
+> [!NOTE]
+> Requires a Spotify Premium account. Some accounts may not work due to Spotify's new PlayPlay DRM, which is proprietary and cannot be implemented externally.
+
+> [!WARNING]
+> This project does not accept AI-generated contributions, as outlined by [Flathub's Generative AI Policy](https://docs.flathub.org/docs/for-app-authors/requirements/#generative-ai-policy) and [GNOME Circle's AI Policy](https://gitlab.gnome.org/Teams/Releng/AppOrganization/-/blob/main/AppCriteria.md#circle-app-criteria).
+
+## Features
+
+- Modern GTK4 and libadwaita interface with light/dark themes and a responsive layout
+- Play, pause, skip, seek, shuffle, and repeat with gapless playback
+- Browse your saved albums, playlists, liked tracks, and followed artists
+- Search for albums, artists, tracks, and playlists
+- Share and open Spotify links with your friends using automatic link detection
+- Fine-tune your sound with a built-in DSP engine featuring a 10-band equalizer, stereo pan, and pitch shift
+- Advance desktop integration: media keys (MPRIS), inhibits session suspend while playing, and secure credential storage
 
 ## Installing
 
-> [!NOTE]
-> **Riff requires a premium account to work!**
+**Flathub (recommended)**
 
-Riff is currently only available on Flathub. Install with the command below:
 ```sh
 flatpak install flathub dev.diegovsky.Riff
 ```
 
-## Usage notes
+**From a GitHub release**
 
-### Credentials
+Pre-built bundles are available on the [Releases page](https://github.com/Diegovsky/riff/releases). Download the latest full release or development build Flatpak bundle and install it with:
 
-It is recommended to install a libsecret compliant keyring application, such as [GNOME Keyring](https://wiki.gnome.org/action/show/Projects/GnomeKeyring) (aka seahorse). This will allow saving your password securely between launches.
+```sh
+flatpak install --user Riff-x86_64.flatpak
+```
 
-In GNOME, things should work out of the box. It might be a bit trickier to get it working in other DEs: see this [ArchWiki entry](https://wiki.archlinux.org/index.php/GNOME/Keyring) for detailed explanations on how to automatically start the daemon with your session.
+**Build from source**
 
-Bear special attention to the fact that to enable automatic login, you might have to use the same password for your user account and for the keyring, and that the keyring might need to be [set as default](https://wiki.archlinux.org/index.php/GNOME/Keyring#Passwords_are_not_remembered).
+```sh
+./scripts/setup-dev.sh                # install dependencies
+./scripts/build.sh release --install  # build and install to ~/.local
+~/.local/bin/riff                     # run Riff
+```
 
-See [this comment](https://github.com/xou816/spot/issues/92#issuecomment-801852593) for more details!
-
-## Features
-
-**Only works with premium accounts!**
-
-- playback control (play/pause, prev/next, seeking, shuffle, repeat (none, all, song))
-- selection mode: easily browse and select mutliple tracks to queue them
-- browse your saved albums and playlists
-- search albums and artists
-- view an artist's releases
-- view users' playlists
-- view album info
-- credentials management with Secret Service
-- MPRIS integration
-- playlist management (creation and edition)
-- liked tracks
+See the [Development Guide](doc/Development.md) for full build instructions, project structure, and troubleshooting.
 
 ## Contributing
 
-Contributions are welcome! If you wish, add yourself to the `AUTHORS` files when submitting your contribution.
+Contributions are welcome and encouraged! See [Contributing Guide](CONTRIBUTING.md) for PR guidelines and process, and the [Development Guide](doc/Development.md) for build setup, feature flags, and debug tools.
 
-For any large feature/change, **please** open an issue first to discuss implementation and design decisions.
+Translation contributions are temporarily paused while we migrate to a new platform.
 
-### Translating
 
-Translations are managed using `gettext` and are available in the `po/` subdirectory.
-
-**Please use [POEditor](https://poeditor.com/join/project?hash=xfVrpQfRBM) to submit translations.**
-
-If you feel like it, you are welcome to open a PR to be added to the `TRANSLATORS` file!
-
-## Project structure
-
-An overview of the directories and their responsibilities:
-
-| Directory | Responsibility |
-| --- | --- |
-| `src/` | Rust source code and bundled UI assets. |
-| `src/api/` | Spotify Web API layer. |
-| `src/app/` | Core application logic and state. |
-| `src/app/state/` | The centralized application state. |
-| `src/app/models/` | Presentation models that bind state to the UI. |
-| `src/app/components/` | Wrappers around GTK widgets. |
-| `src/auth/` | Authentication: OAuth2 login flow and secure token storage. |
-| `src/audio_engine/` | DSP pipeline between librespot and the audio backend (EQ, mono, pitch, mixing). |
-| `src/connect/` | Spotify Connect support. |
-| `src/player/` | Local playback and librespot session management. |
-| `src/dbus/` | MPRIS / D-Bus integration. |
-| `data/` | Application data installed on the system. |
-| `po/` | Translations. |
-| `scripts/` | Developer and tooling scripts. |
-| `flatpak/` | Flatpak packaging. |
-| `doc/` | Developer documentation. |
-| `subprojects/` | Meson subproject wrap files. |
-| `.github/` | GitHub configuration. |
-
-See [`doc/Design.md`](doc/Design.md) for a deeper explanation of the data flow and architecture.
-
-## Building
-
-### Dependencies
-
-You can install the required development dependencies by running:
-
-```
-./scripts/setup-dev.sh
-```
-
-### With GNOME Builder and flatpak
-
-Pre-requisite: install the `org.freedesktop.Sdk.Extension.rust-stable` SDK extension with flatpak. Builder might do this for you automatically, but it will install an older version; make sure  the version installed matches the version of the Freedesktop SDK GNOME uses.
-
-Open the project in GNOME Builder and make the `flatpak/dev.diegovsky.Riff.snapshots.json` configuration active. Then build :)
-
-### Manually
-
-You build and install with meson:
-
-```
-meson setup target -Dbuildtype=debug -Doffline=false --prefix="$HOME/.local"
-ninja install -C target
-# to run test/linter/etc
-meson test -C target  --verbose
-```
-
-This will install a `.desktop` file among other things, and the riff executable will be put in `.local/bin` (you might want to add it to your path).
-
-To build an optimized release build, use `-Dbuildtype=release` instead.
-
-### Regenerating potfiles
-
-When adding new `msgids`, don't forget to regenerate/update the potfiles.
-
-```
-ninja riff-pot -C target
-ninja riff-update-po -C target
-```
-
-### Pulling updated strings from POEditor
-
-We are now using POEditor and the wonderful [`poeditor-sync`](https://github.com/mick88/poeditor-sync) tool.
-
-```
-poeditor pull
-```
-
-### Regenerating sources for flatpak
-
-Using [flatpak-cargo-generator.py](https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo):
-
-```
-ninja cargo-sources.json -C target
-```
-
-### Debugging
-
-Set the `RUST_LOG` env variable to the appropriate level.
-
-Debug builds (flatpak) are available from the master branch on Github (see the `riff-snaphots` action).
-
-Riff caches images and HTTP responses in `~/.cache/riff`.
-
-Ruff uses [isahc](https://github.com/sagebind/isahc), which uses libcurl, therefore you can set the `https_proxy` env variable to help with debugging. In debug mode, Riff skips SSL certificate verification.
+## Code of Conduct
+This project follows the [GNOME Code of Conduct](https://conduct.gnome.org). Please familiarize yourself with it before interacting with this repository.
