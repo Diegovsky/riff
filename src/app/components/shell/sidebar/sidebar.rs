@@ -65,7 +65,7 @@ impl SidebarModel {
     fn map_to_destination(a: CardModel) -> SidebarDestination {
         let title = Some(a.title())
             .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| gettext("Unnamed playlist"));
+            .unwrap_or_else(|| gettext("Unnamed Playlist"));
         let id = a.id();
         SidebarDestination::Playlist(PlaylistSummary { id, title })
     }

@@ -36,7 +36,7 @@ impl ArtistDetails {
             registrar,
             name,
         );
-        component.create_playlist(Some(&gettext("Top tracks")));
+        component.create_playlist(Some(&gettext("Top Tracks")));
         component.create_embedded_card_list(
             Some(&gettext("Releases")),
             "artist_releases",

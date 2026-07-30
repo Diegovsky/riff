@@ -51,6 +51,8 @@ template $AppHeaderBar : Adw.Bin {
       [end]
       Button start_selection {
         icon-name: "object-select-symbolic";
+        /* Translators: Tooltip for the button that enters track selection mode. */
+        tooltip-text: _("Select");
         focus-on-click: false;
         can-focus: false;
         visible: false;
@@ -93,7 +95,7 @@ template $AppHeaderBar : Adw.Bin {
 
         /* Translators: Button label. Selects all visible songs. */
 
-        label: _("Select all");
+        label: _("Select All");
       }
     }
   }

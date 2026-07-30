@@ -93,7 +93,7 @@ template $PlaybackWidget : Box {
           Button now_playing_button {
             visible: false;
             icon-name: "music-queue-symbolic";
-            tooltip-text: _("Now playing");
+            tooltip-text: _("Now Playing");
             focus-on-click: false;
             can-focus: false;
             valign: center;
@@ -166,6 +166,7 @@ template $PlaybackWidget : Box {
         MenuButton volume_button {
           visible: false;
           icon-name: 'multimedia-volume-control-symbolic';
+          tooltip-text: _("Volume");
           halign: end;
           valign: center;
           direction: up;

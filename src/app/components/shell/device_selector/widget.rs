@@ -135,7 +135,7 @@ impl DeviceSelectorWidget {
             action.change_state(&device_id.to_variant());
         }
         let label = match device {
-            Device::Local => gettext("This device"),
+            Device::Local => gettext("This Device"),
             Device::Connect(connect) => connect.label.clone(),
         };
         let icon = match device {

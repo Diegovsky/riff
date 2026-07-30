@@ -34,8 +34,8 @@ template $SettingsWindow : Adw.PreferencesDialog {
         model: StringList {
           strings [
             _("Ask"),
-            _("Continue in background"),
-            _("Stop and quit")
+            _("Continue in Background"),
+            _("Stop and Quit")
           ]
         };
       }
@@ -102,7 +102,7 @@ template $SettingsWindow : Adw.PreferencesDialog {
           strings [
             _("Normal"),
             _("High"),
-            _("Very high"),
+            _("Very High"),
           ]
         };
       }
@@ -125,7 +125,7 @@ template $SettingsWindow : Adw.PreferencesDialog {
       Adw.ActionRow gapless_playback {
         /* Translators: Title for an item in preferences */
 
-        title: _("Gapless playback");
+        title: _("Gapless Playback");
         subtitle: _("Eliminates silence between consecutive tracks");
         name: "gapless_playback_row";
         activatable-widget: gapless_playback_switch;
@@ -274,7 +274,7 @@ template $SettingsWindow : Adw.PreferencesDialog {
 
         /* Translators: Longer description for an item (Access Point Port) in preferences */
 
-        subtitle: _("Port used for connections to Spotify\'s Access Point. Set to 0 if any port is fine.");
+        subtitle: _("Port used for connections to Spotify’s Access Point. Set to 0 if any port is fine.");
 
         Entry ap_port {
           valign: center;

@@ -42,9 +42,9 @@ impl SidebarDestination {
             // translators: This is a sidebar entry to browse to saved albums.
             Self::Library => gettext("Library"),
             // translators: This is a sidebar entry to browse to saved tracks.
-            Self::SavedTracks => gettext("Saved tracks"),
+            Self::SavedTracks => gettext("Saved Tracks"),
             // translators: This is a sidebar entry to browse to saved playlists.
-            Self::NowPlaying => gettext("Now playing"),
+            Self::NowPlaying => gettext("Now Playing"),
             // translators: This is a sidebar entry that marks that the entries below are playlists.
             Self::SavedPlaylists => gettext("Playlists"),
             // translators: This is a sidebar entry to browse to followed artists.

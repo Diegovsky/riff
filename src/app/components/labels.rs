@@ -2,16 +2,16 @@ use gettextrs::*;
 
 lazy_static! {
     // translators: This is part of a contextual menu attached to a single track; this entry allows viewing the album containing a specific track.
-    pub static ref VIEW_ALBUM: String = gettext("View album");
+    pub static ref VIEW_ALBUM: String = gettext("View Album");
 
     // translators: This is part of a contextual menu attached to a single track; the intent is to copy the link (public URL) to a specific track.
-    pub static ref COPY_LINK: String = gettext("Copy link");
+    pub static ref COPY_LINK: String = gettext("Copy Link");
 
     // translators: This is part of a contextual menu attached to a single track; this entry adds a track at the end of the play queue.
-    pub static ref ADD_TO_QUEUE: String = gettext("Add to queue");
+    pub static ref ADD_TO_QUEUE: String = gettext("Add to Queue");
 
     // translators: This is part of a contextual menu attached to a single track; this entry removes a track from the play queue.
-    pub static ref REMOVE_FROM_QUEUE: String = gettext("Remove from queue");
+    pub static ref REMOVE_FROM_QUEUE: String = gettext("Remove from Queue");
 
     // translators: This is part of a contextual menu attached to a playlist in the sidebar; this entry starts playing the playlist from the first track.
     pub static ref PLAY: String = gettext("Play");
@@ -20,10 +20,10 @@ lazy_static! {
     pub static ref SHUFFLE: String = gettext("Shuffle");
 
     // translators: This is part of a contextual menu attached to a playlist in the sidebar; this entry deletes a playlist owned by the user.
-    pub static ref DELETE_PLAYLIST: String = gettext("Delete playlist");
+    pub static ref DELETE_PLAYLIST: String = gettext("Delete Playlist");
 
     // translators: This is part of a contextual menu attached to a playlist in the sidebar; this entry unfollows a playlist the user does not own.
-    pub static ref UNFOLLOW_PLAYLIST: String = gettext("Unfollow playlist");
+    pub static ref UNFOLLOW_PLAYLIST: String = gettext("Unfollow Playlist");
 }
 
 pub fn add_to_playlist_label(playlist: &str) -> String {

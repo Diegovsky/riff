@@ -67,7 +67,7 @@ impl PlaybackInfoWidget {
         widget
             .song_title
             // translators: Short text displayed instead of a track title when nothing plays
-            .set_text(&gettext("No track playing"));
+            .set_text(&gettext("No Track Playing"));
         widget.song_artist.set_text("");
         widget.song_info_box.set_visible(false);
         widget
