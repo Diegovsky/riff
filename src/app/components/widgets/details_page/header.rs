@@ -5,7 +5,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
 
-use super::HEADER_IMAGE_SIZE;
+use super::{SubtitleLinksBox, HEADER_IMAGE_SIZE};
 
 /// Controls the shape of the artwork in the details header.
 /// - `Square`: used for albums/playlists (rendered with rounded card corners).
@@ -47,7 +47,7 @@ mod imp {
         pub subtitle_label: TemplateChild<gtk::Label>,
 
         #[template_child]
-        pub subtitle_links_box: TemplateChild<gtk::Box>,
+        pub subtitle_links_box: TemplateChild<SubtitleLinksBox>,
 
         #[template_child]
         pub play_button: TemplateChild<gtk::Button>,
@@ -298,9 +298,7 @@ impl DetailsHeader {
         let links_box = &*imp.subtitle_links_box;
 
         // Clear any previous children.
-        while let Some(child) = links_box.first_child() {
-            links_box.remove(&child);
-        }
+        links_box.clear_links();
 
         if artists.is_empty() {
             links_box.set_visible(false);
@@ -316,7 +314,7 @@ impl DetailsHeader {
             if i > 0 {
                 let separator = gtk::Label::new(Some(", "));
                 separator.add_css_class("body");
-                links_box.append(&separator);
+                links_box.append_link(&separator);
             }
 
             let button = gtk::Button::builder()
@@ -330,7 +328,7 @@ impl DetailsHeader {
                 cb(&id);
             });
 
-            links_box.append(&button);
+            links_box.append_link(&button);
         }
     }
 

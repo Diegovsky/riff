@@ -23,6 +23,8 @@ template $DetailsHeaderWidget : Widget {
         image_box.valign: start;
         image_box.margin-end: 0;
         image_box.margin-bottom: 8;
+        // Remove the desktop-only top padding so the text/buttons stack tightly.
+        info_box.margin-top: 0;
       }
     }
 
@@ -85,6 +87,11 @@ template $DetailsHeaderWidget : Widget {
         Box info_box {
           orientation: vertical;
           hexpand: true;
+          // Top padding set to the height of the action buttons below, so the
+          // centered text block accounts for the button row and sits optically
+          // centered against the artwork on desktop. Reset to 0 by the narrow
+          // breakpoint, where the layout stacks vertically.
+          margin-top: 34;
 
           Label caption_label {
             halign: start;
@@ -116,8 +123,7 @@ template $DetailsHeaderWidget : Widget {
             ]
           }
 
-          Box subtitle_links_box {
-            orientation: horizontal;
+          $SubtitleLinksBox subtitle_links_box {
             halign: start;
             visible: false;
 
