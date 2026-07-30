@@ -174,7 +174,7 @@ row:hover .song__like:hover {
 
 .playlist row {
   background: @card_bg_color;
-  box-shadow: 1px 0px 3px rgba(0, 0, 0, 0.07), -1px 0px 3px rgba(0, 0, 0, 0.07);
+  box-shadow: 1px 0px 3px @shade_color, -1px 0px 3px @shade_color;
   transition: background-color 150ms ease;
 }
 
@@ -192,9 +192,9 @@ row:hover .song__like:hover {
 }
 
 .playlist row:last-child {
-  border-bottom-color: rgba(0, 0, 0, 0);
+  border-bottom-color: transparent;
   border-radius: 0 0 12px 12px;
-  box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.21);
+  box-shadow: 0px 1px 3px @shade_color;
 }
 
 .playlist row:only-child {

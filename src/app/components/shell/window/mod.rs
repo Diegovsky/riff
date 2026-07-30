@@ -84,8 +84,8 @@ impl MainWindow {
             )),
         );
 
-        dialog.add_response("background", &gettext("Continue in background"));
-        dialog.add_response("quit", &gettext("Stop audio and quit"));
+        dialog.add_response("background", &gettext("Continue in Background"));
+        dialog.add_response("quit", &gettext("Stop Audio and Quit"));
 
         dialog.set_response_appearance("quit", libadwaita::ResponseAppearance::Destructive);
         dialog.set_default_response(Some("background"));

@@ -501,13 +501,22 @@ impl SpotifyPlayer {
             }
             Command::Restore => {
                 info!("Attempting to restore session from stored credentials");
-                let credentials = self.oauth_client.get_valid_token().await.map_err(|e| {
-                    error!("Failed to get valid token during restore: {e:?}");
-                    match e {
-                        OAuthError::LoggedOut => SpotifyError::LoggedOut,
-                        _ => SpotifyError::LoginFailed,
-                    }
-                })?;
+                let credentials =
+                    self.oauth_client
+                        .get_valid_token()
+                        .await
+                        .map_err(|e| match e {
+                            // Having no stored credentials is the expected first-run
+                            // state, not a failure: just show the login screen.
+                            OAuthError::LoggedOut => {
+                                info!("No stored credentials to restore; showing login");
+                                SpotifyError::LoggedOut
+                            }
+                            e => {
+                                error!("Failed to get valid token during restore: {e:?}");
+                                SpotifyError::LoginFailed
+                            }
+                        })?;
 
                 info!(
                     "Restoring session (token expires at {:?})",

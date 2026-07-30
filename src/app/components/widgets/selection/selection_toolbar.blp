@@ -35,10 +35,12 @@ template $SelectionToolbarWidget : Box {
 
         Button move_up {
           icon-name: "go-up-symbolic";
+          tooltip-text: _("Move Up");
         }
 
         Button move_down {
           icon-name: "go-down-symbolic";
+          tooltip-text: _("Move Down");
         }
       }
 
@@ -49,7 +51,7 @@ template $SelectionToolbarWidget : Box {
 
         Adw.ButtonContent btn1 {
           icon-name: "music-queue-symbolic";
-          label: _("Add to queue");
+          label: _("Add to Queue");
         }
       }
 
@@ -57,7 +59,7 @@ template $SelectionToolbarWidget : Box {
       MenuButton add {
         valign: center;
         has-frame: false;
-        label: _("Add to playlist...");
+        label: _("Add to Playlist");
         direction: up;
       }
 
@@ -79,7 +81,7 @@ template $SelectionToolbarWidget : Box {
 
         Adw.ButtonContent btn3 {
           icon-name: "star-new-symbolic";
-          label: _("Save to library");
+          label: _("Save to Library");
         }
       }
     }

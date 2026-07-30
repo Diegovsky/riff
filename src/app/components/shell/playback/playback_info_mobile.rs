@@ -50,6 +50,6 @@ impl PlaybackInfoMobileWidget {
     pub fn reset_info(&self) {
         self.imp()
             .now_playing_label
-            .set_text(&gettext("No track playing"));
+            .set_text(&gettext("No Track Playing"));
     }
 }

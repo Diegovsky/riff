@@ -6,13 +6,13 @@ template $DeviceSelectorWidget : Button {
     halign: center;
     hexpand: false;
     icon-name: "audio-x-generic-symbolic";
-    label: _("This device");
+    label: _("This Device");
   }
 }
 
 menu menu {
   section {
-    label: _("Playing on");
+    label: _("Playing On");
 
     item {
       custom: "custom_content";
@@ -21,7 +21,7 @@ menu menu {
 
   section {
     item {
-      label: _("Refresh devices");
+      label: _("Refresh Devices");
       action: "devices.refresh";
     }
   }
@@ -34,7 +34,7 @@ Box custom_content {
   orientation: vertical;
 
   CheckButton this_device_button {
-    label: _("This device");
+    label: _("This Device");
     sensitive: false;
   }
 

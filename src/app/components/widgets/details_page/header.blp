@@ -52,6 +52,7 @@ template $DetailsHeaderWidget : Widget {
           [overlay]
           Button info_button {
             icon-name: "preferences-system-details-symbolic";
+            tooltip-text: _("Details");
             halign: end;
             valign: end;
             visible: false;
@@ -118,7 +119,6 @@ template $DetailsHeaderWidget : Widget {
           Box subtitle_links_box {
             orientation: horizontal;
             halign: start;
-            margin-start: -4;
             visible: false;
 
             styles [
@@ -181,7 +181,7 @@ template $DetailsHeaderWidget : Widget {
             halign: center;
             valign: center;
             visible: false;
-            tooltip-text: _("Copy link");
+            tooltip-text: _("Copy Link");
 
             styles [
               "circular",

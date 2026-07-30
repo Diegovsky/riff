@@ -92,23 +92,23 @@ impl ClipboardWatcher {
         let body = match &link {
             // translators: shown when an album link is found in the clipboard.
             SpotifyLink::Album(_) => {
-                gettext("There's a Spotify album link in your clipboard. Open it in Riff?")
+                gettext("There’s a Spotify album link in your clipboard. Open it in Riff?")
             }
             // translators: shown when an artist link is found in the clipboard.
             SpotifyLink::Artist(_) => {
-                gettext("There's a Spotify artist link in your clipboard. Open it in Riff?")
+                gettext("There’s a Spotify artist link in your clipboard. Open it in Riff?")
             }
             // translators: shown when a playlist link is found in the clipboard.
             SpotifyLink::Playlist(_) => {
-                gettext("There's a Spotify playlist link in your clipboard. Open it in Riff?")
+                gettext("There’s a Spotify playlist link in your clipboard. Open it in Riff?")
             }
             // translators: shown when a user profile link is found in the clipboard.
             SpotifyLink::User(_) => {
-                gettext("There's a Spotify profile link in your clipboard. Open it in Riff?")
+                gettext("There’s a Spotify profile link in your clipboard. Open it in Riff?")
             }
             // translators: shown when a track link is found in the clipboard.
             SpotifyLink::Track(_) => {
-                gettext("There's a Spotify track link in your clipboard. Open it in Riff?")
+                gettext("There’s a Spotify track link in your clipboard. Open it in Riff?")
             }
         };
 

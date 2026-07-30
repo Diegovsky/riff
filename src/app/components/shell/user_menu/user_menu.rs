@@ -76,7 +76,7 @@ impl UserMenu {
         if let Some(username) = self.model.username() {
             let user_menu = gio::Menu::new();
             // translators: This is a menu entry.
-            user_menu.append(Some(&gettext("Log out")), Some("menu.logout"));
+            user_menu.append(Some(&gettext("Log Out")), Some("menu.logout"));
             menu.insert_section(0, Some(&username), &user_menu);
         }
 
