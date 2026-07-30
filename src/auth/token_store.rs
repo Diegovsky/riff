@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crate::app::credentials::Credentials;
 
-const ATTRS: &[(&'static str, &'static str)] = &[("spot_credentials", "yes")];
+const ATTRS: &[(&'static str, &'static str)] = &[("riff", "yes")];
 const MAX_KEYRING_RETRIES: u32 = 6;
 // Base delay used for exponential backoff between keyring retries.
 const KEYRING_RETRY_BASE_DELAY: Duration = Duration::from_millis(50);
