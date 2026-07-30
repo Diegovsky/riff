@@ -62,22 +62,34 @@ template $PlaybackWidget : Box {
         now_playing_button_box.visible: true;
         volume_slider_box.visible: false;
         volume_button.visible: true;
-        playback-center.margin-start: 16;
-        playback-center.margin-end: 16;
+        playback_center.margin-start: 16;
+        playback_center.margin-end: 16;
+        // Narrow: drop equal thirds. The transport controls need more than a
+        // third on a phone-width window, so let each slot take its natural
+        // size; the expanding side slots keep the controls centred.
+        playback_center.homogeneous: false;
       }
     }
 
-    child: CenterBox playback-center {
+    // Desktop: three equal-width columns (now playing, controls, volume). The
+    // homogeneous split means the now-playing card is bounded by its own column
+    // and can never grow into the controls' column, so the centred controls
+    // stay put no matter how long the title or artist is. The narrow breakpoint
+    // turns homogeneity off (see above).
+    child: Box playback_center {
+      orientation: horizontal;
+      homogeneous: true;
       halign: fill;
       hexpand: true;
-      shrink-center-last: true;
       height-request: 68;
       margin-top: 8;
       margin-bottom: 8;
       margin-start: 8;
       margin-end: 8;
 
-      [start]
+      // The side slots expand so that, when homogeneity is off in narrow mode,
+      // they absorb the leftover width equally and keep the controls centred.
+      // Under homogeneity (desktop) the expand is a no-op; every column is equal.
       Box now_playing_start {
         hexpand: true;
         halign: start;
@@ -110,6 +122,8 @@ template $PlaybackWidget : Box {
           overflow: hidden;
           halign: start;
 
+          // The card is bounded by its equal-width column, so a long title or
+          // artist ellipsizes within the column instead of widening it.
           $PlaybackInfoWidget now_playing {
             receives-default: "1";
             halign: "start";
@@ -120,17 +134,15 @@ template $PlaybackWidget : Box {
         }
       }
 
-      [center]
       $PlaybackControlsWidget controls {
-        // Keep the control cluster at natural width. Its template sets
-        // hexpand:true, but with CenterBox shrink-center-last an expanding
-        // centre squeezes the start/end slots and pushes the volume off-edge.
+        // Keep the control cluster at its natural width, centred in its column.
         hexpand: false;
         halign: center;
         valign: center;
       }
 
-      [end]
+      // Right column. Expands only to help centre the controls when homogeneity
+      // is off (narrow mode); its content is aligned to the right edge.
       Box {
         hexpand: true;
         halign: end;

@@ -13,12 +13,14 @@
 mod component;
 mod header;
 mod model;
+mod subtitle_links;
 mod traits;
 mod widget;
 
 pub use component::*;
 pub use header::*;
 pub use model::*;
+pub use subtitle_links::*;
 pub use traits::*;
 pub use widget::*;
 
@@ -28,4 +30,5 @@ pub(super) const HEADER_IMAGE_SIZE: i32 = 200;
 /// Register GObject widget types for this module (called at app startup).
 pub fn expose_widgets() {
     header::expose_widgets();
+    subtitle_links::expose_widgets();
 }

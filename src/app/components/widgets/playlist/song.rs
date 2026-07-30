@@ -165,15 +165,14 @@ impl SongWidget {
             let widget = self.imp();
             widget.menu_btn.set_menu_model(menu);
             widget.menu_btn.add_css_class("song__menu--enabled");
+            let popover = widget.menu_btn.popover().unwrap();
+            // Removes the arrow so it aligns with the sidebar context menu.
+            popover.set_has_arrow(false);
             // Resets the pointing_to target when closing the popup.
-            // This prevents it from being messes up if it was opened by right click.
-            widget
-                .menu_btn
-                .popover()
-                .unwrap()
-                .connect_closed(|popover| {
-                    popover.set_pointing_to(None);
-                });
+            // This prevents it from being messed up if it was opened by right click.
+            popover.connect_closed(|popover| {
+                popover.set_pointing_to(None);
+            });
         }
     }
 
