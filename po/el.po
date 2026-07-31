@@ -10,23 +10,23 @@ msgstr ""
 
 #. translators: This is part of a contextual menu attached to a single track; this entry allows viewing the album containing a specific track.
 #: src/app/components/labels.rs:5
-msgid "View album"
+msgid "View Album"
 msgstr "Προβολή δίσκων"
 
 #. translators: This is part of a contextual menu attached to a single track; the intent is to copy the link (public URL) to a specific track.
 #: src/app/components/labels.rs:8
-msgid "Copy link"
+msgid "Copy Link"
 msgstr "Αντιγραφή συνδέσμου"
 
 #. translators: This is part of a contextual menu attached to a single track; this entry adds a track at the end of the play queue.
 #: src/app/components/labels.rs:11
 #: src/app/components/selection/selection_toolbar.blp:36
-msgid "Add to queue"
+msgid "Add to Queue"
 msgstr "Προσθήκη στην ουρά"
 
 #. translators: This is part of a contextual menu attached to a single track; this entry removes a track from the play queue.
 #: src/app/components/labels.rs:14
-msgid "Remove from queue"
+msgid "Remove from Queue"
 msgstr "Αφαίρεση απ'την ουρά"
 
 #. translators: This is part of a larger text that says "Add to <playlist name>". This text should be as short as possible.
@@ -58,7 +58,7 @@ msgstr "Λίστες"
 
 #. This is the visible name for the play queue. It appears in the sidebar as well.
 #: src/app/components/sidebar/sidebar_item.rs:43
-msgid "Now playing"
+msgid "Now Playing"
 msgstr "Τώρα παίζει"
 
 #. translators: Short text displayed instead of a song title when nothing plays
@@ -80,7 +80,7 @@ msgstr "Κλείσιμο"
 
 #. translators: This is a menu entry.
 #: src/app/components/user_menu/user_menu.rs:74
-msgid "Log out"
+msgid "Log Out"
 msgstr "Αποσύνδεση"
 
 #: src/app/state/login_state.rs:97
@@ -89,7 +89,7 @@ msgstr "Η σύνδεση αποκαταστάθηκε"
 
 #. Title of the section that shows 5 of the top tracks for an artist, as defined by Spotify.
 #: src/app/components/artist_details/artist_details.blp:26
-msgid "Top tracks"
+msgid "Top Tracks"
 msgstr "Δημοφιλή τραγούδια"
 
 #. Title of the sections that contains all releases from an artist (both singles and albums).
@@ -119,7 +119,7 @@ msgstr "Καλλιτέχνες"
 
 #: src/app/components/navigation/factory.rs:76
 #: src/app/components/sidebar/sidebar_item.rs:41
-msgid "Saved tracks"
+msgid "Saved Tracks"
 msgstr "Αποθηκευμένα τραγούδια"
 
 #: src/app/components/playback/playback_controls.rs:64
@@ -175,12 +175,12 @@ msgstr[1] "{} επιλεγμένα τραγούδια"
 
 #. Title for the empty search page (initial state).
 #: src/app/components/search/search.blp:110
-msgid "Search Spotify."
+msgid "Search Spotify"
 msgstr "Αναζητήστε στο Spotify."
 
 #. Subtitle for the empty search page (initial state).
 #: src/app/components/search/search.blp:114
-msgid "Type to search."
+msgid "Type to search"
 msgstr "Πληκτρολογήστε για να αναζητήσετε."
 
 #: src/app/components/selection/selection_toolbar.blp:61
@@ -189,7 +189,7 @@ msgstr "Αφαίρεση"
 
 #. <property name="icon-name">playlist2-symbolic</property>
 #: src/app/components/selection/selection_toolbar.blp:49
-msgid "Add to playlist..."
+msgid "Add to Playlist"
 msgstr "Προσθήκη σε λίστα..."
 
 #. Button label. Exits selection mode.
@@ -200,7 +200,7 @@ msgstr "Ακύρωση"
 
 #. Button label. Selects all visible songs.
 #: src/app/components/headerbar/headerbar.blp:63
-msgid "Select all"
+msgid "Select All"
 msgstr "Επιλογή όλων"
 
 #. translators: This is part of a contextual menu attached to a single track; the full text is "More from <artist>".
@@ -233,7 +233,7 @@ msgid "{} by {}"
 msgstr "{} από {}"
 
 #: src/app/components/sidebar/sidebar.rs:49
-msgid "Unnamed playlist"
+msgid "Unnamed Playlist"
 msgstr "Ανώνυμη λίστα"
 
 #. translators: This is a sidebar entry to browse to saved playlists.
@@ -288,7 +288,7 @@ msgid "High"
 msgstr "Υψηλή"
 
 #: src/app/components/settings/settings.blp:50
-msgid "Very high"
+msgid "Very High"
 msgstr "Πολύ υψηλή"
 
 #. Header for a group of preference items regarding the application's appearance
@@ -321,11 +321,11 @@ msgstr "Θύρα Access Point"
 
 #. Longer description for an item (Access Point Port) in preferences
 #: src/app/components/settings/settings.blp:101
-msgid "Port used for connections to Spotify's Access Point. Set to 0 if any port is fine."
+msgid "Port used for connections to Spotify’s Access Point. Set to 0 if any port is fine."
 msgstr "Χρησιμοποιημένες θύρες για σύνδεση με το Access Point του Spotify. Επιλέξτε 0 για οποιαδήποτε θύρα."
 
 #: src/app/components/selection/selection_toolbar.blp:78
-msgid "Save to library"
+msgid "Save to Library"
 msgstr "Αποθήκευση σε λίστα"
 
 #. translators: This is a notification that pop ups when a new playlist is created. It includes the name of that playlist.
@@ -344,7 +344,7 @@ msgstr "Νέα Λίστα"
 
 #. Title for an item in preferences
 #: src/app/components/settings/settings.blp:58
-msgid "Gapless playback"
+msgid "Gapless Playback"
 msgstr "Gapless playback"
 
 #: src/app/components/settings/settings.blp:83
@@ -369,7 +369,7 @@ msgstr "Δημιουργία"
 #: src/app/components/device_selector/widget.rs:135
 #: src/app/components/device_selector/device_selector.blp:9
 #: src/app/components/device_selector/device_selector.blp:37
-msgid "This device"
+msgid "This Device"
 msgstr ""
 
 #: src/connect/player.rs:65
@@ -392,14 +392,14 @@ msgstr ""
 
 #. Translators: Log in button label
 #: src/app/components/login/login.blp:79
-msgid "Log in with Spotify..."
+msgid "Log in with Spotify…"
 msgstr ""
 
 #: src/app/components/device_selector/device_selector.blp:15
-msgid "Playing on"
+msgid "Playing On"
 msgstr ""
 
 #: src/app/components/device_selector/device_selector.blp:24
-msgid "Refresh devices"
+msgid "Refresh Devices"
 msgstr ""
 
