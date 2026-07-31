@@ -115,6 +115,13 @@ pub fn wire_dev_tools(
         let _ = player_sender.unbounded_send(Command::DevKillSession);
     });
 
+    let dev_simulate_unavailable: gtk::Button =
+        dev_builder.object("dev_simulate_unavailable").unwrap();
+    let player_sender = player_command_sender.clone();
+    dev_simulate_unavailable.connect_clicked(move |_| {
+        let _ = player_sender.unbounded_send(Command::DevSimulateTrackUnavailable);
+    });
+
     // Inject API Error: force every Spotify Web API request to fail with
     // the selected error. Uses toggle buttons instead of a DropDown to
     // avoid a GTK4 bug where a DropDown inside a Popover breaks the
@@ -239,5 +246,19 @@ pub fn wire_dev_tools(
             playback.songs().len()
         );
         info!("==== END STATE DUMP ====");
+    });
+
+    // Clear the persisted verified marker and re-arm DRM detection.
+    let dev_reset_drm: gtk::Button = dev_builder.object("dev_reset_drm").unwrap();
+    let player_sender = player_command_sender.clone();
+    dev_reset_drm.connect_clicked(move |_| {
+        let _ = player_sender.unbounded_send(Command::DevResetDrmVerification);
+    });
+
+    // Show the DRM dialog on demand.
+    let dev_show_drm_dialog: gtk::Button = dev_builder.object("dev_show_drm_dialog").unwrap();
+    let app_sender = sender.clone();
+    dev_show_drm_dialog.connect_clicked(move |_| {
+        let _ = app_sender.unbounded_send(AppAction::ShowDrmBlockedDialog);
     });
 }

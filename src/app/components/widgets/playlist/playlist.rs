@@ -56,6 +56,10 @@ pub trait PlaylistModel {
 
     fn toggle_song_like(&self, _id: &str) {}
 
+    fn skip_explicit(&self) -> bool {
+        false
+    }
+
     fn song_state(&self, id: &str) -> SongState {
         let is_playing = self.current_song_id().map(|s| s.eq(id)).unwrap_or(false);
         let is_selected = self
@@ -63,10 +67,19 @@ pub trait PlaylistModel {
             .map(|s| s.is_song_selected(id))
             .unwrap_or(false);
         let is_liked = self.is_song_liked(id);
+        let is_explicit_filtered = if self.skip_explicit() {
+            self.song_list_model()
+                .get(id)
+                .map(|m| m.description().explicit)
+                .unwrap_or(false)
+        } else {
+            false
+        };
         SongState {
             is_selected,
             is_playing,
             is_liked,
+            is_explicit_filtered,
         }
     }
 
@@ -304,11 +317,13 @@ impl SongModel {
             is_playing,
             is_selected,
             is_liked,
+            is_explicit_filtered,
         }: SongState,
     ) {
         self.set_playing(is_playing);
         self.set_selected(is_selected);
         self.set_liked(is_liked);
+        self.set_explicit_filtered(is_explicit_filtered);
     }
 }
 
@@ -356,6 +371,10 @@ where
                 | BrowserEvent::ArtistDetailsUpdated(_)
                 | BrowserEvent::UserDetailsUpdated(_),
             ) => {
+                self.seed_song_states();
+            }
+            // Re-seed so songs pick up the new explicit-filtered state.
+            AppEvent::PlaybackEvent(PlaybackEvent::SkipExplicitChanged(_)) => {
                 self.seed_song_states();
             }
             _ => {}

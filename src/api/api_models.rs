@@ -391,6 +391,9 @@ pub struct AlbumTrackItem {
     pub artists: Vec<Artist>,
     #[serde(default)]
     pub explicit: bool,
+    /// Only set on market-scoped requests (track relinking); None if not reported.
+    #[serde(default)]
+    pub is_playable: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -534,6 +537,7 @@ where
                     duration_ms,
                     track_number,
                     explicit,
+                    is_playable,
                 } = track;
                 let artists = artists
                     .into_iter()
@@ -566,6 +570,7 @@ where
                     duration_ms: duration_ms as u32,
                     art,
                     explicit,
+                    playable: is_playable.unwrap_or(true),
                 })
             })
             .collect();
@@ -800,5 +805,31 @@ mod tests {
         assert_eq!(song.id, "track123");
         assert_eq!(song.album.id, "album456");
         assert_eq!(song.title, "Some Song");
+        // No `is_playable` in the payload defaults to playable.
+        assert!(song.playable);
+    }
+
+    #[test]
+    fn test_unplayable_track_maps_to_not_playable() {
+        // Market-scoped request for a region-restricted track: is_playable is false.
+        let track = r#"{
+            "id": "track123",
+            "uri": "spotify:track:track123",
+            "name": "Some Song",
+            "duration_ms": 210000,
+            "track_number": 3,
+            "is_playable": false,
+            "restrictions": {"reason": "market"},
+            "artists": [{"id": "artist1", "name": "Artist"}],
+            "album": {
+                "id": "album456",
+                "name": "Some Album",
+                "artists": [{"id": "artist1", "name": "Artist"}],
+                "images": [{"height": 64, "url": "http://img", "width": 64}]
+            }
+        }"#;
+        let deserialized: TrackItem = serde_json::from_str(track).unwrap();
+        let song: SongDescription = deserialized.into();
+        assert!(!song.playable);
     }
 }

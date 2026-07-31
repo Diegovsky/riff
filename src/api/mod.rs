@@ -25,6 +25,7 @@ pub async fn clear_user_cache() -> Option<()> {
 
 /// Result of checking the user's profile at login time.
 pub struct UserProfileCheck {
+    pub user_id: String,
     pub is_premium: bool,
     pub explicit_filter_enabled: bool,
     pub explicit_filter_locked: bool,
@@ -79,6 +80,7 @@ pub async fn check_user_profile(token: &str) -> Result<UserProfileCheck, Spotify
     };
 
     Ok(UserProfileCheck {
+        user_id: user.id,
         is_premium,
         explicit_filter_enabled,
         explicit_filter_locked,

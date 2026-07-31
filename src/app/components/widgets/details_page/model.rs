@@ -37,6 +37,9 @@ macro_rules! impl_playlist_model_base {
             let songs = PlaylistModel::song_list_model(self);
             self.base.toggle_song_like(&songs, id);
         }
+        fn skip_explicit(&self) -> bool {
+            self.base.skip_explicit()
+        }
     };
 }
 
@@ -127,6 +130,10 @@ impl DetailsPageModel {
 
     pub fn current_song_id(&self) -> Option<String> {
         self.state().playback.current_song_id()
+    }
+
+    pub fn skip_explicit(&self) -> bool {
+        self.state().playback.skip_explicit()
     }
 
     // Selection helpers
@@ -386,6 +393,7 @@ mod tests {
             art: None,
             track_number: None,
             explicit: false,
+            playable: true,
         }
     }
 

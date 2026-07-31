@@ -445,9 +445,12 @@ impl SpotifyClient {
     }
 
     pub(crate) fn get_album(&self, id: &str) -> SpotifyRequest<'_, (), FullAlbum> {
+        let query = make_query_params()
+            .append_pair("market", "from_token")
+            .finish();
         self.request()
             .method(Method::GET)
-            .uri(format!("/v1/albums/{id}"), None)
+            .uri(format!("/v1/albums/{id}"), Some(&query))
     }
 
     pub(crate) fn get_track(&self, id: &str) -> SpotifyRequest<'_, (), TrackItem> {
@@ -466,6 +469,7 @@ impl SpotifyClient {
         limit: usize,
     ) -> SpotifyRequest<'_, (), Page<AlbumTrackItem>> {
         let query = make_query_params()
+            .append_pair("market", "from_token")
             .append_pair("offset", &offset.to_string()[..])
             .append_pair("limit", &limit.to_string()[..])
             .finish();
@@ -566,6 +570,7 @@ impl SpotifyClient {
         limit: usize,
     ) -> SpotifyRequest<'_, (), Page<SavedAlbum>> {
         let query = make_query_params()
+            .append_pair("market", "from_token")
             .append_pair("offset", &offset.to_string()[..])
             .append_pair("limit", &limit.to_string()[..])
             .finish();
@@ -581,6 +586,7 @@ impl SpotifyClient {
         limit: usize,
     ) -> SpotifyRequest<'_, (), Page<SavedTrack>> {
         let query = make_query_params()
+            .append_pair("market", "from_token")
             .append_pair("offset", &offset.to_string()[..])
             .append_pair("limit", &limit.to_string()[..])
             .finish();

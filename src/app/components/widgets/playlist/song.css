@@ -156,6 +156,14 @@ row:hover .song__like:hover {
   font-weight: bold;
 }
 
+/* Dim unplayable tracks (e.g. region locked); context menu stays usable. */
+.song--unplayable label.title,
+.song--unplayable label.subtitle,
+.song--unplayable .song__index,
+.song--unplayable .song__cover {
+  opacity: 0.4;
+}
+
 /* "Context Menu" */
 .song__menu {
   opacity: 0;

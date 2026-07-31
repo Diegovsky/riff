@@ -13,6 +13,24 @@ use librespot::playback::config::{AudioFormat, Bitrate, NormalisationMethod, Nor
 
 const SETTINGS: &str = "dev.diegovsky.Riff";
 
+/// Spotify user id recorded as verified-playable, or empty if none.
+pub fn drm_verified_user() -> String {
+    gio::Settings::new(SETTINGS)
+        .string("drm-verified-user")
+        .to_string()
+}
+
+/// Records `user_id` as verified-playable so it isn't reported as DRM-blocked later.
+pub fn set_drm_verified_user(user_id: &str) {
+    let _ = gio::Settings::new(SETTINGS).set_string("drm-verified-user", user_id);
+}
+
+/// Clears the verified-playable account so DRM detection runs again. Dev tools only.
+#[cfg(debug_assertions)]
+pub fn clear_drm_verified_user() {
+    let _ = gio::Settings::new(SETTINGS).set_string("drm-verified-user", "");
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum CloseWindowBehavior {
     #[default]

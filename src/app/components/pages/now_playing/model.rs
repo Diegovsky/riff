@@ -237,6 +237,10 @@ impl PlaylistModel for NowPlayingModel {
         self.base.toggle_song_like(&songs, id);
     }
 
+    fn skip_explicit(&self) -> bool {
+        self.base.skip_explicit()
+    }
+
     fn actions_for(&self, song: &SongDescription) -> Option<gio::ActionGroup> {
         let group = SimpleActionGroup::new();
         for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
