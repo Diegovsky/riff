@@ -26,6 +26,7 @@
 
 - Modern GTK4 and libadwaita interface with light/dark themes and a responsive layout
 - Play, pause, skip, seek, shuffle, and repeat with gapless playback
+- Like tracks and follow artists, albums, and playlists
 - Browse your saved albums, playlists, liked tracks, and followed artists
 - Search for albums, artists, tracks, and playlists
 - Share and open Spotify links with your friends using automatic link detection

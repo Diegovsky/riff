@@ -133,7 +133,7 @@ impl AppPlayerDelegate {
             SpotifyError::LoggedOut => LoginAction::Logout.into(),
             SpotifyError::PlaybackDrmBlocked => AppAction::ShowDrmBlockedDialog,
             SpotifyError::PlaybackTemporarilyUnavailable => {
-                AppAction::ShowNotification(gettext("Playback is temporarily unavailable"))
+                AppAction::ShowNotification(gettext("Playback is Temporarily Unavailable"))
             }
             _ => AppAction::ShowNotification(format!("{error}")),
         })
