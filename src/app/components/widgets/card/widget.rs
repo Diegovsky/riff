@@ -324,10 +324,10 @@ impl CardWidget {
 
             // Visible cards load immediately; off-screen cards yield briefly
             // to avoid blocking the main loop with a burst of disk I/O + decode.
-            if position <= VISIBLE_THRESHOLD {
+            if position <= VISIBLE_THRESHOLD as i64 {
                 worker.send_local_task(load);
             } else {
-                // Use idle callback instead of linear timeouts — GTK schedules
+                // Use idle callback instead of linear timeouts. GTK schedules
                 // these between frames, loading as fast as possible without jank.
                 glib::idle_add_local_once(move || {
                     worker.send_local_task(load);

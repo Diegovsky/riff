@@ -146,6 +146,17 @@ impl PageModel for ArtistDetailsModel {
         let id = self.id.clone();
         let is_followed = self.is_liked();
         let api = self.app_model.get_spotify();
+
+        let summary = {
+            let state = self.app_model.get_state();
+            state.browser.artist_state(&id).map(|artist| ArtistSummary {
+                id: id.clone(),
+                name: artist.artist.clone().unwrap_or_default(),
+                photo: artist.photo.clone(),
+                popularity: 0,
+            })
+        };
+
         self.dispatcher
             .call_spotify_and_dispatch(move || async move {
                 if is_followed {
@@ -153,7 +164,13 @@ impl PageModel for ArtistDetailsModel {
                     Ok(BrowserAction::UnfollowArtist(id).into())
                 } else {
                     api.follow_artist(&id).await?;
-                    Ok(BrowserAction::FollowArtist(id).into())
+                    let summary = summary.unwrap_or_else(|| ArtistSummary {
+                        id: id.clone(),
+                        name: String::new(),
+                        photo: None,
+                        popularity: 0,
+                    });
+                    Ok(BrowserAction::FollowArtist(summary).into())
                 }
             });
     }

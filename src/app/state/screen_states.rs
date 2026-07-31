@@ -166,7 +166,7 @@ impl UpdatableState for PlaylistDetailsState {
                 self.songs.remove(&uris[..]).commit();
                 vec![BrowserEvent::PlaylistTracksRemoved(self.id.clone())]
             }
-            BrowserAction::SavePlaylist(id) if id == &self.id => {
+            BrowserAction::SavePlaylist(playlist) if playlist.id == self.id => {
                 vec![BrowserEvent::PlaylistSaved(self.id.clone())]
             }
             BrowserAction::UnsavePlaylist(id) if id == &self.id => {
@@ -241,7 +241,7 @@ impl UpdatableState for ArtistState {
                 self.next_page.next_offset_take();
                 vec![]
             }
-            BrowserAction::FollowArtist(id) if id == &self.id => {
+            BrowserAction::FollowArtist(artist) if artist.id == self.id => {
                 self.is_followed = true;
                 vec![BrowserEvent::ArtistDetailsUpdated(self.id.clone())]
             }
@@ -354,6 +354,16 @@ impl UpdatableState for HomeState {
                 }
                 vec![BrowserEvent::SavedPlaylistsUpdated]
             }
+            BrowserAction::SavePlaylist(playlist) => {
+                let already_present = self.playlists.iter().any(|p| p.id() == playlist.id);
+                if already_present {
+                    vec![]
+                } else {
+                    self.playlists.insert(0, (&**playlist).into());
+                    self.next_playlists_page.increment();
+                    vec![BrowserEvent::SavedPlaylistsUpdated]
+                }
+            }
             BrowserAction::RemovePlaylist(id) | BrowserAction::UnsavePlaylist(id) => {
                 let position = self.playlists.iter().position(|p| p.id() == *id);
                 if let Some(position) = position {
@@ -421,6 +431,24 @@ impl UpdatableState for HomeState {
                 self.artists.extend(artists.iter().map(|a| a.into()));
                 self.artists_cursor = cursor.clone();
                 vec![BrowserEvent::SavedArtistsUpdated]
+            }
+            BrowserAction::FollowArtist(artist) => {
+                let already_present = self.artists.iter().any(|a| a.id() == artist.id);
+                if already_present {
+                    vec![]
+                } else {
+                    self.artists.insert(0, artist.into());
+                    vec![BrowserEvent::SavedArtistsUpdated]
+                }
+            }
+            BrowserAction::UnfollowArtist(id) => {
+                let position = self.artists.iter().position(|a| a.id() == *id);
+                if let Some(position) = position {
+                    self.artists.remove(position as u32);
+                    vec![BrowserEvent::SavedArtistsUpdated]
+                } else {
+                    vec![]
+                }
             }
             _ => vec![],
         }
@@ -657,5 +685,111 @@ mod tests {
 
         let next = &artist_state.next_page;
         assert_eq!(None, next.next_offset);
+    }
+
+    fn playlist(id: &str, title: &str) -> PlaylistDescription {
+        PlaylistDescription {
+            id: id.to_owned(),
+            title: title.to_owned(),
+            art: None,
+            songs: SongBatch::empty(),
+            owner: UserRef {
+                id: "owner".to_owned(),
+                display_name: "Owner".to_owned(),
+            },
+        }
+    }
+
+    fn artist_summary(id: &str, name: &str) -> ArtistSummary {
+        ArtistSummary {
+            id: id.to_owned(),
+            name: name.to_owned(),
+            photo: None,
+            popularity: 0,
+        }
+    }
+
+    #[test]
+    fn test_home_save_playlist_adds_card() {
+        let mut home = HomeState::default();
+        let events = home.update_with(Cow::Owned(BrowserAction::SavePlaylist(Box::new(playlist(
+            "pl1",
+            "My Playlist",
+        )))));
+
+        assert_eq!(home.playlists.len(), 1);
+        assert_eq!(home.playlists.get(0).id(), "pl1");
+        assert_eq!(events, vec![BrowserEvent::SavedPlaylistsUpdated]);
+    }
+
+    #[test]
+    fn test_home_save_playlist_is_idempotent() {
+        let mut home = HomeState::default();
+        home.update_with(Cow::Owned(BrowserAction::SavePlaylist(Box::new(playlist(
+            "pl1",
+            "My Playlist",
+        )))));
+        let events = home.update_with(Cow::Owned(BrowserAction::SavePlaylist(Box::new(playlist(
+            "pl1",
+            "My Playlist",
+        )))));
+
+        assert_eq!(home.playlists.len(), 1);
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn test_home_unsave_playlist_removes_card() {
+        let mut home = HomeState::default();
+        home.update_with(Cow::Owned(BrowserAction::SavePlaylist(Box::new(playlist(
+            "pl1",
+            "My Playlist",
+        )))));
+        let events = home.update_with(Cow::Owned(BrowserAction::UnsavePlaylist("pl1".to_owned())));
+
+        assert_eq!(home.playlists.len(), 0);
+        assert_eq!(events, vec![BrowserEvent::SavedPlaylistsUpdated]);
+    }
+
+    #[test]
+    fn test_home_follow_artist_adds_card() {
+        let mut home = HomeState::default();
+        let events = home.update_with(Cow::Owned(BrowserAction::FollowArtist(artist_summary(
+            "art1",
+            "Cool Artist",
+        ))));
+
+        assert_eq!(home.artists.len(), 1);
+        assert_eq!(home.artists.get(0).id(), "art1");
+        assert_eq!(events, vec![BrowserEvent::SavedArtistsUpdated]);
+    }
+
+    #[test]
+    fn test_home_follow_artist_is_idempotent() {
+        let mut home = HomeState::default();
+        home.update_with(Cow::Owned(BrowserAction::FollowArtist(artist_summary(
+            "art1",
+            "Cool Artist",
+        ))));
+        let events = home.update_with(Cow::Owned(BrowserAction::FollowArtist(artist_summary(
+            "art1",
+            "Cool Artist",
+        ))));
+
+        assert_eq!(home.artists.len(), 1);
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn test_home_unfollow_artist_removes_card() {
+        let mut home = HomeState::default();
+        home.update_with(Cow::Owned(BrowserAction::FollowArtist(artist_summary(
+            "art1",
+            "Cool Artist",
+        ))));
+        let events = home.update_with(Cow::Owned(BrowserAction::UnfollowArtist("art1".to_owned())));
+
+        assert_eq!(home.artists.len(), 0);
+        assert_eq!(events, vec![BrowserEvent::SavedArtistsUpdated]);
     }
 }

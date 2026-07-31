@@ -22,7 +22,7 @@ impl CardModel {
         subtitle: &str,
         release_date: Option<&str>,
         popularity: Option<u32>,
-        insertion_position: Option<u32>,
+        insertion_position: Option<i64>,
         category: Option<&str>,
     ) -> CardModel {
         let title = if title.is_empty() && !id.is_empty() {
@@ -85,7 +85,7 @@ mod imp {
         #[property(get, set)]
         popularity: Cell<u32>,
         #[property(get, set, name = "insertion-position")]
-        insertion_position: Cell<u32>,
+        insertion_position: Cell<i64>,
         #[property(get, set)]
         category: RefCell<String>,
 

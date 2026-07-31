@@ -264,16 +264,16 @@ impl AppState {
                 events.append(&mut more_events);
                 events
             }
-            AppAction::BrowserAction(BrowserAction::SavePlaylist(id)) => {
+            AppAction::BrowserAction(BrowserAction::SavePlaylist(playlist)) => {
                 let mut events = forward_action(
                     LoginAction::PrependUserPlaylist(vec![PlaylistSummary {
-                        id: id.clone(),
-                        title: String::new(),
+                        id: playlist.id.clone(),
+                        title: playlist.title.clone(),
                     }]),
                     &mut self.logged_user,
                 );
                 let mut more_events =
-                    forward_action(BrowserAction::SavePlaylist(id), &mut self.browser);
+                    forward_action(BrowserAction::SavePlaylist(playlist), &mut self.browser);
                 events.append(&mut more_events);
                 events
             }
