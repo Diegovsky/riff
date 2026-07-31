@@ -55,7 +55,11 @@ pub struct CardList {
     current_size: Rc<Cell<CardSize>>,
     current_sort: Rc<Cell<SortOrder>>,
     current_filter: Rc<RefCell<String>>,
-    next_position: Rc<Cell<u32>>,
+    next_position: Rc<Cell<i64>>,
+    /// Lowest insertion position assigned so far. Freshly added (prepended)
+    /// items are given positions below this so they rank as the most recently
+    /// added under the "Recently Added" sort.
+    min_position: Rc<Cell<i64>>,
     /// Maximum number of rows to display. None means unlimited.
     max_rows: Rc<Cell<Option<u32>>>,
     /// Number of placeholder children currently in the FlowBox.
@@ -114,6 +118,7 @@ impl CardList {
             current_sort: Rc::new(Cell::new(SortOrder::RecentlyAdded)),
             current_filter,
             next_position: Rc::new(Cell::new(0)),
+            min_position: Rc::new(Cell::new(0)),
             max_rows,
             placeholder_count: Rc::new(Cell::new(0)),
             source_signal: Cell::new(None),
@@ -141,6 +146,7 @@ impl CardList {
         }
         self.flowbox.remove_all();
         self.next_position.set(0);
+        self.min_position.set(0);
         self.placeholder_count.set(0);
 
         self.current_layout.set(layout);
@@ -184,6 +190,7 @@ impl CardList {
             // React to source store changes
             let flowbox_weak = self.flowbox.downgrade();
             let next_pos = Rc::clone(&self.next_position);
+            let min_pos = Rc::clone(&self.min_position);
             let current_layout = Rc::clone(&self.current_layout);
             let current_size = Rc::clone(&self.current_size);
             let placeholder_count = Rc::clone(&self.placeholder_count);
@@ -225,21 +232,50 @@ impl CardList {
 
                     // Add new items
                     if added > 0 {
-                        let mut ctr = next_pos.get();
-                        for i in position..(position + added) {
-                            if let Some(obj) = source.item(i) {
-                                if let Some(card) = obj.downcast_ref::<CardModel>() {
-                                    if card.insertion_position() == 0 {
-                                        card.set_insertion_position(ctr);
-                                        ctr += 1;
+                        // A single/bulk insert at the front of a non-empty store
+                        // (a save/follow/create) is the most recently added
+                        // content. Give those cards positions below the current
+                        // minimum so they sort to the top under "Recently Added";
+                        // the FlowBox sort function orders them by their card
+                        // properties for every other sort order on insert.
+                        let before = source.n_items().saturating_sub(added);
+                        let is_prepend = position == 0 && removed == 0 && before > 0;
+
+                        if is_prepend {
+                            let min = min_pos.get();
+                            for offset in 0..added {
+                                let i = position + offset;
+                                if let Some(obj) = source.item(i) {
+                                    if let Some(card) = obj.downcast_ref::<CardModel>() {
+                                        // Item nearest the top of the store
+                                        // (offset 0) is the most recent, so it
+                                        // gets the smallest position.
+                                        let pos = min - (added as i64 - offset as i64);
+                                        card.set_insertion_position(pos);
+                                        let child =
+                                            create_child(card, &worker_clone, shape, layout, size);
+                                        flowbox.insert(&child, -1);
                                     }
-                                    let child =
-                                        create_child(card, &worker_clone, shape, layout, size);
-                                    flowbox.insert(&child, -1);
                                 }
                             }
+                            min_pos.set(min - added as i64);
+                        } else {
+                            let mut ctr = next_pos.get();
+                            for i in position..(position + added) {
+                                if let Some(obj) = source.item(i) {
+                                    if let Some(card) = obj.downcast_ref::<CardModel>() {
+                                        if card.insertion_position() == 0 {
+                                            card.set_insertion_position(ctr);
+                                            ctr += 1;
+                                        }
+                                        let child =
+                                            create_child(card, &worker_clone, shape, layout, size);
+                                        flowbox.insert(&child, -1);
+                                    }
+                                }
+                            }
+                            next_pos.set(ctr);
                         }
-                        next_pos.set(ctr);
                     }
 
                     // Re-apply the row limit after any change

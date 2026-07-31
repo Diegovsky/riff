@@ -186,6 +186,15 @@ impl PageModel for PlaylistDetailsModel {
         let id = self.id.clone();
         let is_saved = self.is_liked();
         let api = self.app_model.get_spotify();
+
+        let description = {
+            let state = self.app_model.get_state();
+            state
+                .browser
+                .playlist_details_state(&id)
+                .and_then(|s| s.playlist.clone())
+        };
+
         self.dispatcher
             .call_spotify_and_dispatch(move || async move {
                 if is_saved {
@@ -193,7 +202,17 @@ impl PageModel for PlaylistDetailsModel {
                     Ok(BrowserAction::UnsavePlaylist(id).into())
                 } else {
                     api.follow_playlist(&id).await?;
-                    Ok(BrowserAction::SavePlaylist(id).into())
+                    let description = description.unwrap_or_else(|| PlaylistDescription {
+                        id: id.clone(),
+                        title: String::new(),
+                        art: None,
+                        songs: SongBatch::empty(),
+                        owner: UserRef {
+                            id: String::new(),
+                            display_name: String::new(),
+                        },
+                    });
+                    Ok(BrowserAction::SavePlaylist(Box::new(description)).into())
                 }
             });
     }
