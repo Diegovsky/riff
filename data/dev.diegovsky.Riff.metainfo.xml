@@ -29,38 +29,105 @@
   </recommends>
 
   <description>
-    <p>Enjoy listening to your favorite Spotify content with Riff: a libadwaita/GTK4-based Spotify client designed for GNOME!</p>
-    <p>Originally a fork of Spot, Riff continues development to bring the coolest Spotify client onto your desktop and mobile. Written in Rust and based on librespot.</p>
-    <p>NOTE: Riff requires a premium account!</p>
-    <p>Current features:</p>
+    <p>Riff is a Spotify client that puts your music library front and center. It features a clean, minimal design that lets you listen distraction-free.</p>
+    <p><em>Note: Riff requires a Spotify Premium account. Some accounts may not work due to Spotify's new PlayPlay DRM, which is proprietary and cannot be implemented externally.</em></p>
+    <p>Features:</p>
     <ul>
-      <li>playback control (play/pause, prev/next, seeking)</li>
-      <li>play queue with shuffle option</li>
-      <li>selection mode: easily browse and select mutliple tracks to queue them</li>
-      <li>browse your saved albums and playlists</li>
-      <li>search albums and artists</li>
-      <li>view an artist's releases</li>
-      <li>view users' playlists</li>
-      <li>credentials management with Secret Service</li>
-      <li>MPRIS integration</li>
+      <li>Modern GTK4 and libadwaita interface with light/dark themes and a responsive layout</li>
+      <li>Play, pause, skip, seek, shuffle, and repeat with gapless playback</li>
+      <li>Like tracks and follow artists, albums, and playlists</li>
+      <li>Browse your saved albums, playlists, liked tracks, and followed artists</li>
+      <li>Search for albums, artists, tracks, and playlists</li>
+      <li>Share and open Spotify links with your friends using automatic link detection</li>
+      <li>Fine-tune your sound with a built-in DSP engine featuring a 10-band equalizer, stereo pan, and pitch shift</li>
+      <li>Advanced desktop integration: media keys (MPRIS), inhibits session suspend while playing, and secure credential storage</li>
     </ul>
   </description>
 
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/Diegovsky/riff/master/data/appstream/scheme-dark.png</image>
+      <image>https://raw.githubusercontent.com/Diegovsky/riff/master/data/appstream/overview-dark.png</image>
       <caption>Riff in dark scheme</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/Diegovsky/riff/master/data/appstream/scheme-light.png</image>
+      <image>https://raw.githubusercontent.com/Diegovsky/riff/master/data/appstream/overview-light.png</image>
       <caption>Riff in light scheme</caption>
     </screenshot>
   </screenshots>
 
   <releases>
-    <release version="26.06" date="2026-06-15">
+    <release version="26.07" date="2026-07-31">
         <description>
-            TODO!
+            <p>This release focuses on improving the listening experience and navigation of your music library. It includes redesigned pages, a configurable audio engine, improved search, and more.</p>
+            <p>New features:</p>
+            <ul>
+                <li>Like Songs: a star button on hover lets you like or unlike tracks in playlists, albums, and the queue.</li>
+                <li>Follow or unfollow artists, albums, and playlists directly from their pages.</li>
+                <li>Saved Artists page: browse all your followed artists from the sidebar.</li>
+                <li>Audio engine with a 10-band equalizer, stereo pan, pitch shift, mono audio, volume curves, and configurable audio formats.</li>
+                <li>Close window behavior: choose to quit or keep running in the background when closing while music plays.</li>
+                <li>Playlist context menus: right-click or long-press playlists in the sidebar for quick actions.</li>
+                <li>Sidebar pagination: all your playlists now load in the sidebar.</li>
+                <li>Shuffle play button on album, artist, and playlist pages.</li>
+                <li>Searchable via "Spotify" in desktop app launchers.</li>
+                <li>Improved logout that clears your session, credentials, and cached state.</li>
+                <li>Improved search that finds tracks and playlists, and can be scoped to artists only.</li>
+                <li>Filter an artist's releases by albums, singles, and compilations.</li>
+                <li>Automatic Spotify link detection for easier sharing.</li>
+                <li>Filter explicit tracks to exclude them from your listening.</li>
+                <li>Session management inhibition keeps your computer awake so music is not interrupted.</li>
+            </ul>
+            <p>UI improvements:</p>
+            <ul>
+                <li>Redesigned playback bar with better alignment, less clutter, and improved mobile support.</li>
+                <li>Reorganized sidebar with renamed and reordered entries.</li>
+                <li>Redesigned Now Playing, Artist, Album, Playlist, and Tracks pages.</li>
+                <li>Card list rework with adjustable icon sizes, multiple layout styles, and sorting.</li>
+                <li>Improved login page with a premium-requirement notice and clearer error messaging.</li>
+                <li>Updated About page with links to Discord and GitHub.</li>
+                <li>Skeleton loading states while pages load.</li>
+                <li>Improved mobile layout with a new header widget.</li>
+                <li>Closer conformance to the Human Interface Guidelines.</li>
+                <li>Riff now uses your system accent color instead of its default green.</li>
+                <li>Collapsible side panel to give your library more room.</li>
+            </ul>
+            <p>Bug fixes:</p>
+            <ul>
+                <li>Fixed a crash when scrolling to change volume via mouse wheel or MPRIS.</li>
+                <li>Fixed the play button sometimes showing an error when opening albums or playlists.</li>
+                <li>Fixed pages loading duplicate content when scrolling quickly.</li>
+                <li>Fixed playback controls getting out of sync when a new track starts.</li>
+                <li>Fixed a crash when a non-Premium account tried to log in; invalid credentials are no longer saved.</li>
+                <li>Expired tokens now refresh automatically and requests are retried.</li>
+                <li>Fixed an index-out-of-bounds crash on partially loaded shuffled playlists.</li>
+                <li>Fixed long playlist and album titles pushing the play button off-screen.</li>
+                <li>Fixed inconsistent album cover sizes in the library grid.</li>
+                <li>Fixed the PipeWire audio backend not working correctly in Flatpak.</li>
+                <li>Improved keyring reliability on startup with automatic retries.</li>
+                <li>Librespot sessions are now more stable and self-heal to prevent playback interruptions.</li>
+                <li>Accounts affected by Spotify's PlayPlay DRM now get a clear notice.</li>
+            </ul>
+            <p>Disabled features (available in the Experimental Feature Panel):</p>
+            <ul>
+                <li>Selection mode for selecting multiple tracks at once.</li>
+                <li>Device selector for switching playback between Spotify Connect devices.</li>
+                <li>Create new playlist button in the sidebar.</li>
+            </ul>
+            <p>Beta feature (opt in via the Experimental Feature Panel):</p>
+            <ul>
+                <li>Audio normalisation to automatically adjust tracks to a standard loudness.</li>
+            </ul>
+            <p>Known issues:</p>
+            <ul>
+                <li>Podcasts and audiobooks are not supported.</li>
+                <li>Creating and managing playlists is not supported.</li>
+                <li>There is no Home or Suggestions page for discovering new media.</li>
+                <li>Viewing lyrics for the current track is not supported.</li>
+                <li>The track list widget has some visual bugs.</li>
+                <li>Some translations and localizations are missing or incorrect.</li>
+                <li>Some UI elements load slowly.</li>
+                <li>There is no default art for missing artist or album images.</li>
+            </ul>
         </description>
     </release>
 
