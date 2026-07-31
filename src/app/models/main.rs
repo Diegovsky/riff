@@ -223,6 +223,7 @@ pub struct SongDescription {
     pub duration_ms: u32,
     pub art: Option<ImageSet>,
     pub explicit: bool,
+    pub playable: bool,
 }
 
 impl SongDescription {
@@ -246,6 +247,7 @@ pub struct SongState {
     pub is_playing: bool,
     pub is_selected: bool,
     pub is_liked: bool,
+    pub is_explicit_filtered: bool,
 }
 
 // A batch of SONGS
@@ -373,6 +375,7 @@ mod tests {
             art: None,
             track_number: None,
             explicit: false,
+            playable: true,
         }
     }
 

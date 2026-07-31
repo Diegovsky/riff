@@ -470,6 +470,7 @@ mod tests {
             art: None,
             track_number: None,
             explicit: false,
+            playable: true,
         }
     }
 

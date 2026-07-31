@@ -3,6 +3,8 @@ use librespot::core::SpotifyUri;
 use tokio::task;
 use url::Url;
 
+use gettextrs::gettext;
+
 use crate::app::state::{LoginAction, PlaybackAction};
 use crate::app::AppAction;
 use crate::auth::TokenStore;
@@ -53,6 +55,8 @@ pub enum Command {
     // genuinely unavailable); the event listener can't make that call because
     // it only holds a snapshot of the session that may have been replaced.
     TrackUnavailable,
+    // First successful playback since login; persist the account as known-good.
+    MarkPlaybackVerified,
     // Re-query the account's explicit content filter (e.g. after a track was
     // rejected with ExplicitContentFiltered) and sync Riff's filter state.
     RecheckExplicitFilter,
@@ -75,6 +79,13 @@ pub enum Command {
     // exercising the token-refresh flow on demand.
     #[cfg(debug_assertions)]
     DevExpireToken,
+    // Dev tools only: clear the verified marker and re-arm DRM detection.
+    #[cfg(debug_assertions)]
+    DevResetDrmVerification,
+    // Dev tools only: simulate one "track failed to load" event on a healthy
+    // session, feeding the failure counter.
+    #[cfg(debug_assertions)]
+    DevSimulateTrackUnavailable,
 }
 
 #[derive(Clone)]
@@ -93,6 +104,10 @@ impl AppPlayerDelegate {
 
     fn end_of_track_reached(&self) {
         self.send(PlaybackAction::Next.into())
+    }
+
+    fn stop_playback(&self) {
+        self.send(PlaybackAction::Stop.into())
     }
 
     fn token_login_successful(&self, username: String) {
@@ -116,6 +131,10 @@ impl AppPlayerDelegate {
             SpotifyError::NotPremium => LoginAction::SetNotPremium.into(),
             SpotifyError::LoginFailed => LoginAction::SetLoginFailure.into(),
             SpotifyError::LoggedOut => LoginAction::Logout.into(),
+            SpotifyError::PlaybackDrmBlocked => AppAction::ShowDrmBlockedDialog,
+            SpotifyError::PlaybackTemporarilyUnavailable => {
+                AppAction::ShowNotification(gettext("Playback is temporarily unavailable"))
+            }
             _ => AppAction::ShowNotification(format!("{error}")),
         })
     }

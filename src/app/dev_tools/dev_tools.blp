@@ -135,6 +135,11 @@ MenuButton dev_menu {
         styles ["destructive-action"]
       }
 
+      Button dev_simulate_unavailable {
+        label: "Simulate Unavailable Track";
+        tooltip-text: "Inject one 'track failed to load' event; click repeatedly to trip the stop threshold";
+      }
+
       Separator {}
 
       Label {
@@ -153,6 +158,16 @@ MenuButton dev_menu {
 
       Button dev_dump_state {
         label: "Dump State to Log";
+      }
+
+      Button dev_reset_drm {
+        label: "Reset DRM Verification";
+        tooltip-text: "Forget that this account has played a track and re-arm PlayPlay DRM detection";
+      }
+
+      Button dev_show_drm_dialog {
+        label: "Show DRM Warning";
+        tooltip-text: "Pop up the PlayPlay DRM \"Playback Not Available\" dialog";
       }
     };
   };

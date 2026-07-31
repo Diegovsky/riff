@@ -275,5 +275,9 @@
       <default>'recently-added'</default>
       <summary>Sort order for saved artists page</summary>
     </key>
+    <key name='drm-verified-user' type='s'>
+      <default>''</default>
+      <summary>Spotify user id known to play tracks, used to skip PlayPlay DRM detection across restarts.</summary>
+    </key>
   </schema>
 </schemalist>

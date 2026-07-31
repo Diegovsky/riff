@@ -44,6 +44,12 @@ pub enum SpotifyError {
     LoggedOut,
     PlayerNotReady,
     TechnicalError,
+    // Every track fails to decrypt (librespot "audio key error"): the signature
+    // of Spotify's PlayPlay DRM, which blocks playback entirely.
+    PlaybackDrmBlocked,
+    // Many tracks failed to load in a row on an account that has already played
+    // this session, so likely transient rather than a DRM block.
+    PlaybackTemporarilyUnavailable,
 }
 
 impl Error for SpotifyError {}
@@ -58,9 +64,23 @@ impl fmt::Display for SpotifyError {
             Self::TechnicalError => {
                 write!(f, "A technical error occured. Check your connectivity.")
             }
+            Self::PlaybackDrmBlocked => write!(
+                f,
+                "Playback is not available for this account. Spotify's PlayPlay DRM \
+                 is proprietary and cannot be implemented outside the official client."
+            ),
+            Self::PlaybackTemporarilyUnavailable => {
+                write!(f, "Playback is temporarily unavailable.")
+            }
         }
     }
 }
+
+// Consecutive load failures before we stop playback, halting a runaway churn
+// through the queue. If nothing has played since login, this run also signals
+// PlayPlay DRM. High enough that one removed album won't trip it.
+// See https://github.com/librespot-org/librespot/issues/1649.
+const CONSECUTIVE_UNAVAILABLE_STOP_THRESHOLD: u32 = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AudioBackend {
@@ -283,6 +303,15 @@ pub struct SpotifyPlayer {
     // while the connection is down. Once the session is rebuilt, the player
     // advances to the next track instead of sitting in silence.
     advance_after_reconnect: Arc<AtomicBool>,
+    // Consecutive load failures; see CONSECUTIVE_UNAVAILABLE_STOP_THRESHOLD.
+    // Reset when a track plays and when the threshold fires.
+    consecutive_load_failures: Arc<AtomicU32>,
+    // Whether any track has played since login. If so, load failures are
+    // individual unavailable tracks, not a DRM block. Reset on login/logout,
+    // not on reconnect.
+    has_played_since_login: Arc<AtomicBool>,
+    // Logged-in account id, used to persist the verified-playable marker.
+    current_user_id: Option<String>,
 
     // Cached "explicit filter locked" state for the account, so we avoid
     // re-querying the profile once we know the filter is locked for the
@@ -337,6 +366,9 @@ impl SpotifyPlayer {
             // Flags shared with the player event task.
             connection_lost: Arc::new(AtomicBool::new(false)),
             advance_after_reconnect: Arc::new(AtomicBool::new(false)),
+            consecutive_load_failures: Arc::new(AtomicU32::new(0)),
+            has_played_since_login: Arc::new(AtomicBool::new(false)),
+            current_user_id: None,
 
             explicit_filter_locked: false,
             delegate,
@@ -470,14 +502,24 @@ impl SpotifyPlayer {
                     self.track_needs_reload = true;
                     return self.try_background_reconnect().await;
                 }
-                warn!("Track unavailable, skipping");
-                // Gracefully skip the track that could not be played.
-                self.delegate.end_of_track_reached();
-                // The account explicit filter may have changed since login.
-                // Re-query it so Riff's filter state stays in sync.
-                let _ = self
-                    .command_sender
-                    .unbounded_send(Command::RecheckExplicitFilter);
+                self.handle_unavailable_track();
+                Ok(())
+            }
+            #[cfg(debug_assertions)]
+            Command::DevSimulateTrackUnavailable => {
+                // Run the real handler without the session health check.
+                warn!("[dev] Simulating an unavailable track failure");
+                self.handle_unavailable_track();
+                Ok(())
+            }
+            Command::MarkPlaybackVerified => {
+                // A track played, so this account is not DRM-blocked; persist it once.
+                if let Some(user_id) = self.current_user_id.as_deref() {
+                    if !user_id.is_empty() && crate::settings::drm_verified_user() != user_id {
+                        info!("Recording account as verified playable");
+                        crate::settings::set_drm_verified_user(user_id);
+                    }
+                }
                 Ok(())
             }
             Command::Logout => {
@@ -496,6 +538,8 @@ impl SpotifyPlayer {
                 self.next_reconnect_at = None;
                 self.connection_lost.store(false, Ordering::Relaxed);
                 self.advance_after_reconnect.store(false, Ordering::Relaxed);
+                self.consecutive_load_failures.store(0, Ordering::Relaxed);
+                self.has_played_since_login.store(false, Ordering::Relaxed);
                 self.delegate.set_connection_lost(false);
                 Ok(())
             }
@@ -679,6 +723,16 @@ impl SpotifyPlayer {
                     }
                 }
             }
+            #[cfg(debug_assertions)]
+            Command::DevResetDrmVerification => {
+                warn!("[dev] Clearing verified-playable marker and re-arming DRM detection");
+                // Forget the persisted known-good account.
+                crate::settings::clear_drm_verified_user();
+                // Re-arm detection for the current session.
+                self.has_played_since_login.store(false, Ordering::Relaxed);
+                self.consecutive_load_failures.store(0, Ordering::Relaxed);
+                Ok(())
+            }
         }
     }
 
@@ -686,6 +740,10 @@ impl SpotifyPlayer {
         &mut self,
         credentials: credentials::Credentials,
     ) -> Result<(), SpotifyError> {
+        // Fresh login: reset the failure run so a previous account can't trip
+        // a DRM block. has_played_since_login is seeded per-account below.
+        self.consecutive_load_failures.store(0, Ordering::Relaxed);
+
         // Check if the account is premium before connecting to librespot.
         // librespot will crash the process for free accounts, so we must
         // catch this early and report a graceful error instead.
@@ -700,6 +758,18 @@ impl SpotifyPlayer {
         if !profile.is_premium {
             warn!("Account is not premium, aborting login");
             return Err(SpotifyError::NotPremium);
+        }
+
+        // Seed DRM detection from the persisted per-account marker: a known-good
+        // account starts as "already played" so its unavailable tracks aren't
+        // mistaken for a DRM block.
+        let known_good =
+            !profile.user_id.is_empty() && crate::settings::drm_verified_user() == profile.user_id;
+        self.current_user_id = Some(profile.user_id.clone());
+        self.has_played_since_login
+            .store(known_good, Ordering::Relaxed);
+        if known_good {
+            debug!("Account previously verified as playable; DRM detection disabled");
         }
 
         // Sync the explicit content filter from the user's Spotify account.
@@ -829,6 +899,36 @@ impl SpotifyPlayer {
                 true
             }
         }
+    }
+
+    /// Handle a track that failed to load on a healthy session: count the
+    /// failure and, past the threshold, stop playback (DRM dialog if nothing
+    /// has played, otherwise a transient toast). Below it, skip the track.
+    fn handle_unavailable_track(&mut self) {
+        warn!("Track unavailable, skipping");
+        let failures = self
+            .consecutive_load_failures
+            .fetch_add(1, Ordering::Relaxed)
+            + 1;
+        if failures >= CONSECUTIVE_UNAVAILABLE_STOP_THRESHOLD {
+            warn!("{failures} tracks failed to load back-to-back; stopping playback");
+            // Nothing has ever played: signature of PlayPlay DRM. Otherwise transient.
+            if !self.has_played_since_login.load(Ordering::Relaxed) {
+                self.delegate.report_error(SpotifyError::PlaybackDrmBlocked);
+            } else {
+                self.delegate
+                    .report_error(SpotifyError::PlaybackTemporarilyUnavailable);
+            }
+            // Reset so the stop can fire again if failures continue.
+            self.consecutive_load_failures.store(0, Ordering::Relaxed);
+            self.delegate.stop_playback();
+            return;
+        }
+        self.delegate.end_of_track_reached();
+        // The account's explicit filter may have changed; re-query it.
+        let _ = self
+            .command_sender
+            .unbounded_send(Command::RecheckExplicitFilter);
     }
 
     /// Whether the librespot session or player died and must be recreated.
@@ -1024,6 +1124,8 @@ impl SpotifyPlayer {
             Arc::clone(&self.last_position_ms),
             Arc::clone(&self.connection_lost),
             Arc::clone(&self.advance_after_reconnect),
+            Arc::clone(&self.consecutive_load_failures),
+            Arc::clone(&self.has_played_since_login),
         ));
         self.player.replace(new_player);
     }
@@ -1231,6 +1333,8 @@ async fn player_setup_delegate(
     last_position_ms: Arc<AtomicU32>,
     connection_lost: Arc<AtomicBool>,
     advance_after_reconnect: Arc<AtomicBool>,
+    consecutive_load_failures: Arc<AtomicU32>,
+    has_played_since_login: Arc<AtomicBool>,
 ) {
     while let Some(event) = channel.recv().await {
         match event {
@@ -1260,6 +1364,12 @@ async fn player_setup_delegate(
                 // the delegate (and its UI) when the flag actually changes.
                 if connection_lost.swap(false, Ordering::Relaxed) {
                     delegate.set_connection_lost(false);
+                }
+                // A track played: not DRM-blocked. Clear the failure run and,
+                // on the first play this login, persist the account as known-good.
+                consecutive_load_failures.store(0, Ordering::Relaxed);
+                if !has_played_since_login.swap(true, Ordering::Relaxed) {
+                    let _ = command_sender.unbounded_send(Command::MarkPlaybackVerified);
                 }
                 last_position_ms.store(position_ms, Ordering::Relaxed);
                 delegate.notify_playback_state(position_ms);

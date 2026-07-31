@@ -3,6 +3,7 @@ use crate::app::loader::ImageLoader;
 use crate::app::models::SongModel;
 use crate::app::Worker;
 use gdk::Rectangle;
+use gettextrs::gettext;
 use gio::MenuModel;
 use glib::subclass::InitializingObject;
 
@@ -17,6 +18,7 @@ mod imp {
 
     const SONG_CLASS: &str = "song--playing";
     const LIKED_CLASS: &str = "song--liked";
+    const UNPLAYABLE_CLASS: &str = "song--unplayable";
 
     #[derive(Debug, Default, CompositeTemplate)]
     #[template(resource = "/dev/diegovsky/Riff/components/song.ui")]
@@ -49,6 +51,8 @@ mod imp {
         pub song_cover: TemplateChild<gtk::Image>,
 
         pub like_handler_id: std::cell::RefCell<Option<glib::SignalHandlerId>>,
+        pub explicit_filtered: std::cell::Cell<bool>,
+        pub playable: std::cell::Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -67,10 +71,15 @@ mod imp {
     }
 
     lazy_static! {
-        static ref PROPERTIES: [glib::ParamSpec; 3] = [
+        static ref PROPERTIES: [glib::ParamSpec; 5] = [
             glib::ParamSpecBoolean::builder("playing").build(),
             glib::ParamSpecBoolean::builder("selected").build(),
-            glib::ParamSpecBoolean::builder("liked").build()
+            glib::ParamSpecBoolean::builder("liked").build(),
+            // Defaults to true so unset widgets render as playable.
+            glib::ParamSpecBoolean::builder("playable")
+                .default_value(true)
+                .build(),
+            glib::ParamSpecBoolean::builder("explicit-filtered").build(),
         ];
     }
 
@@ -111,6 +120,42 @@ mod imp {
                         self.like_btn.set_tooltip_text(Some("Like"));
                     }
                 }
+                "playable" => {
+                    let is_playable: bool = value
+                        .get()
+                        .expect("type conformity checked by `Object::set_property`");
+                    self.playable.set(is_playable);
+                    // Explicit-filtered takes visual priority.
+                    if !self.explicit_filtered.get() {
+                        if is_playable {
+                            self.obj().remove_css_class(UNPLAYABLE_CLASS);
+                            self.obj().set_tooltip_text(None);
+                        } else {
+                            self.obj().add_css_class(UNPLAYABLE_CLASS);
+                            self.obj()
+                                .set_tooltip_text(Some(&gettext("Not Available in Your Region")));
+                        }
+                    }
+                }
+                "explicit-filtered" => {
+                    let is_filtered: bool = value
+                        .get()
+                        .expect("type conformity checked by `Object::set_property`");
+                    self.explicit_filtered.set(is_filtered);
+                    if is_filtered {
+                        self.obj().add_css_class(UNPLAYABLE_CLASS);
+                        self.obj()
+                            .set_tooltip_text(Some(&gettext("Explicit Content is Disabled")));
+                    } else if self.playable.get() {
+                        self.obj().remove_css_class(UNPLAYABLE_CLASS);
+                        self.obj().set_tooltip_text(None);
+                    } else {
+                        // Still region-locked.
+                        self.obj().add_css_class(UNPLAYABLE_CLASS);
+                        self.obj()
+                            .set_tooltip_text(Some(&gettext("Not Available in Your Region")));
+                    }
+                }
                 _ => unimplemented!(),
             }
         }
@@ -120,6 +165,8 @@ mod imp {
                 "playing" => self.obj().has_css_class(SONG_CLASS).to_value(),
                 "selected" => self.song_checkbox.is_active().to_value(),
                 "liked" => self.obj().has_css_class(LIKED_CLASS).to_value(),
+                "playable" => self.playable.get().to_value(),
+                "explicit-filtered" => self.explicit_filtered.get().to_value(),
                 _ => unimplemented!(),
             }
         }
@@ -127,6 +174,7 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.song_checkbox.set_sensitive(false);
+            self.playable.set(true);
         }
 
         fn dispose(&self) {
@@ -181,7 +229,6 @@ impl SongWidget {
     /// Note: coordinates are assumed to be relative to the widget.
     pub fn show_menu(&self, x: f64, y: f64) {
         let widget = self.imp();
-        let root = self.root().unwrap();
 
         let point = self
             .compute_point(&widget.menu_btn.get(), &Point::zero())
@@ -259,6 +306,8 @@ impl SongWidget {
         model.bind_playing(self, "playing");
         model.bind_selected(self, "selected");
         model.bind_liked(self, "liked");
+        model.bind_playable(self, "playable");
+        model.bind_explicit_filtered(self, "explicit-filtered");
 
         self.set_show_cover(show_cover);
         if show_cover {

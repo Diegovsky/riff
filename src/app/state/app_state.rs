@@ -25,6 +25,8 @@ pub enum AppAction {
     Start,
     Raise,
     ShowNotification(String),
+    // Account is blocked by PlayPlay DRM; triggers an explanatory dialog.
+    ShowDrmBlockedDialog,
     SetConnectionLost(bool),
     // Cross-state actions
     QueueSelection,
@@ -95,6 +97,7 @@ pub enum AppEvent {
     Started,
     Raised,
     NotificationShown(String),
+    DrmBlockedDialogShown,
     ConnectionLostChanged(bool),
     PlaylistCreatedNotificationShown(String),
     SettingsEvent(SettingsEvent),
@@ -136,6 +139,7 @@ impl AppState {
             // Couple of actions that don't mutate the state (not intested in keeping track of what they change)
             // they're here just to have a consistent way of doing things (always an Action)
             AppAction::ShowNotification(c) => vec![AppEvent::NotificationShown(c)],
+            AppAction::ShowDrmBlockedDialog => vec![AppEvent::DrmBlockedDialogShown],
             AppAction::SetConnectionLost(lost) => {
                 // Real state, deduplicated: only emit the event (and move the
                 // banner) when the connection status actually changes, so

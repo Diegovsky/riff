@@ -31,6 +31,10 @@ impl SongModel {
         self.set_property("liked", is_liked);
     }
 
+    pub fn set_explicit_filtered(&self, is_explicit_filtered: bool) {
+        self.set_property("explicit-filtered", is_explicit_filtered);
+    }
+
     pub fn get_playing(&self) -> bool {
         self.property("playing")
     }
@@ -103,6 +107,22 @@ impl SongModel {
         );
     }
 
+    pub fn bind_playable(&self, o: &impl ObjectType, property: &str) {
+        self.imp().push_binding(
+            self.bind_property("playable", o, property)
+                .flags(glib::BindingFlags::DEFAULT | glib::BindingFlags::SYNC_CREATE)
+                .build(),
+        );
+    }
+
+    pub fn bind_explicit_filtered(&self, o: &impl ObjectType, property: &str) {
+        self.imp().push_binding(
+            self.bind_property("explicit-filtered", o, property)
+                .flags(glib::BindingFlags::DEFAULT | glib::BindingFlags::SYNC_CREATE)
+                .build(),
+        );
+    }
+
     pub fn unbind_all(&self) {
         self.imp().unbind_all(self);
     }
@@ -166,7 +186,7 @@ mod imp {
     }
 
     lazy_static! {
-        static ref PROPERTIES: [glib::ParamSpec; 9] = [
+        static ref PROPERTIES: [glib::ParamSpec; 11] = [
             glib::ParamSpecString::builder("id").read_only().build(),
             glib::ParamSpecUInt::builder("index").read_only().build(),
             glib::ParamSpecString::builder("title").read_only().build(),
@@ -186,6 +206,12 @@ mod imp {
             glib::ParamSpecBoolean::builder("liked")
                 .readwrite()
                 .build(),
+            glib::ParamSpecBoolean::builder("playable")
+                .read_only()
+                .build(),
+            glib::ParamSpecBoolean::builder("explicit-filtered")
+                .readwrite()
+                .build(),
         ];
     }
 
@@ -203,12 +229,14 @@ mod imp {
                     let SongState {
                         is_selected,
                         is_liked,
+                        is_explicit_filtered,
                         ..
                     } = self.state.get();
                     self.state.set(SongState {
                         is_playing,
                         is_selected,
                         is_liked,
+                        is_explicit_filtered,
                     });
                 }
                 "selected" => {
@@ -218,12 +246,14 @@ mod imp {
                     let SongState {
                         is_playing,
                         is_liked,
+                        is_explicit_filtered,
                         ..
                     } = self.state.get();
                     self.state.set(SongState {
                         is_playing,
                         is_selected,
                         is_liked,
+                        is_explicit_filtered,
                     });
                 }
                 "liked" => {
@@ -233,12 +263,31 @@ mod imp {
                     let SongState {
                         is_playing,
                         is_selected,
+                        is_explicit_filtered,
                         ..
                     } = self.state.get();
                     self.state.set(SongState {
                         is_playing,
                         is_selected,
                         is_liked,
+                        is_explicit_filtered,
+                    });
+                }
+                "explicit-filtered" => {
+                    let is_explicit_filtered = value
+                        .get()
+                        .expect("type conformity checked by `Object::set_property`");
+                    let SongState {
+                        is_playing,
+                        is_selected,
+                        is_liked,
+                        ..
+                    } = self.state.get();
+                    self.state.set(SongState {
+                        is_playing,
+                        is_selected,
+                        is_liked,
+                        is_explicit_filtered,
                     });
                 }
                 _ => unimplemented!(),
@@ -296,6 +345,14 @@ mod imp {
                 "playing" => self.state.get().is_playing.to_value(),
                 "selected" => self.state.get().is_selected.to_value(),
                 "liked" => self.state.get().is_liked.to_value(),
+                "playable" => self
+                    .song
+                    .borrow()
+                    .as_ref()
+                    .expect("song set at constructor")
+                    .playable
+                    .to_value(),
+                "explicit-filtered" => self.state.get().is_explicit_filtered.to_value(),
                 _ => unimplemented!(),
             }
         }
