@@ -315,7 +315,6 @@ impl SettingsDialog {
                     match s {
                         "pulseaudio" => 0,
                         "alsa" => 1,
-                        "gstreamer" => 2,
                         _ => unreachable!(),
                     }
                     .to_value()
@@ -326,7 +325,6 @@ impl SettingsDialog {
                     match u {
                         0 => "pulseaudio",
                         1 => "alsa",
-                        2 => "gstreamer",
                         _ => unreachable!(),
                     }
                     .to_variant()

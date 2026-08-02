@@ -20,7 +20,7 @@
 //!   ProcessorChain
 //!        │   EqProcessor → MonoProcessor → PanProcessor → PitchProcessor → MixProcessor
 //!        ▼
-//!   backend Sink (PulseAudio / ALSA / GStreamer)
+//!   backend Sink (PulseAudio / ALSA)
 //! ```
 //!
 //! Each [`Processor`] operates in place on an [`AudioBuffer`]. Processors expose

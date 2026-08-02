@@ -84,7 +84,6 @@ const CONSECUTIVE_UNAVAILABLE_STOP_THRESHOLD: u32 = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AudioBackend {
-    GStreamer(String),
     PulseAudio,
     Alsa(String),
 }
@@ -1205,10 +1204,6 @@ impl SpotifyPlayer {
 
         Player::new(player_config, session, soft_volume, move || {
             let sink: Box<dyn Sink> = match backend {
-                AudioBackend::GStreamer(pipeline) => {
-                    let backend = audio_backend::find(Some("gstreamer".to_string())).unwrap();
-                    backend(Some(pipeline), audio_format)
-                }
                 AudioBackend::PulseAudio => {
                     info!("using pulseaudio");
                     env::set_var("PULSE_PROP_application.name", "Riff");
