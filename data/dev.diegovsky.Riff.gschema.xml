@@ -3,7 +3,6 @@
   <enum id="dev.diegovsky.Riff.AudioBackend">
     <value value="0" nick="pulseaudio" />
     <value value="1" nick="alsa" />
-    <value value="2" nick="gstreamer" />
   </enum>
   <enum id="dev.diegovsky.Riff.Bitrate">
     <value value="0" nick="96" />
