@@ -1,0 +1,44 @@
+{
+  "app-id": "dev.diegovsky.Riff",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "50",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": [
+    "org.freedesktop.Sdk.Extension.rust-stable"
+  ],
+  "command": "riff",
+  "finish-args": [
+    "--share=network",
+    "--share=ipc",
+    "--socket=fallback-x11",
+    "--socket=wayland",
+    "--socket=pulseaudio",
+    "--device=dri"
+  ],
+  "separate-locales": false,
+  "build-options": {
+    "append-path": "/usr/lib/sdk/rust-stable/bin",
+    "env": {
+      "CARGO_HOME": "/run/build/riff/cargo",
+      "RUST_BACKTRACE": "full",
+      "RUST_LOG": "riff=debug"
+    }
+  },
+  "modules": [
+    {
+      "name": "riff",
+      "builddir": true,
+      "buildsystem": "meson",
+      "config-opts": [
+        "-Doffline=true"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": ".."
+        },
+        "cargo-sources.json"
+      ]
+    }
+  ]
+}
