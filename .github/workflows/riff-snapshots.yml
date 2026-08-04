@@ -2,8 +2,8 @@ name: riff-snapshots
 
 on:
   schedule:
-    # Runs every Sunday at midnight (00:00 UTC)
-    - cron: '0 0 * * 0'
+    # Runs every Friday at midnight (00:00 UTC)
+    - cron: '0 0 * * 5'
   pull_request:
     branches: [main, development]
   workflow_dispatch:
@@ -24,6 +24,8 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: development
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: riff-${{ matrix.variant.arch }}.flatpak
