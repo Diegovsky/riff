@@ -59,7 +59,7 @@ async fn dbus_server(
                     }
                     MprisStateUpdate::SetPositionMs(position) => {
                         player.state_mut().set_position(position);
-                        Ok(())
+                        RiffMprisPlayer::seeked(ctxt, position as i64).await
                     }
                     MprisStateUpdate::SetLoopStatus {
                         has_prev,
