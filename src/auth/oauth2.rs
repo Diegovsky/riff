@@ -48,6 +48,9 @@ user-modify-playback-state,\
 streaming,\
 playlist-modify-public";
 
+pub const SESSION_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
+pub const SESSION_SCOPES: &str = "streaming";
+
 // Interval between background refresh retries. The refresh token stays valid
 // far longer than the access token, so on a transient failure we keep polling
 // rather than giving up. A 10s cadence is frequent enough to recover quickly
@@ -63,6 +66,7 @@ const REFRESH_LEAD_TIME: Duration = Duration::from_secs(60);
 
 pub struct RiffOauthClient {
     client: BasicClient,
+    session_client: BasicClient,
     token_store: TokenStore,
 }
 
@@ -72,53 +76,71 @@ pub struct AuthcodeChallenge {
     listener: JoinHandle<Result<AuthorizationCode, OAuthError>>,
 }
 
+async fn build_authcode_challenge(
+    client: &BasicClient,
+    scopes: &str,
+    notify_complete: impl FnOnce() + Send + 'static,
+) -> Result<AuthcodeChallenge, OAuthError> {
+    let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
+
+    // Generate the full authorization URL.
+    // Some of these scopes are unavailable for custom client IDs. Which?
+    let request_scopes: Vec<oauth2::Scope> =
+        scopes.split(",").map(|s| Scope::new(s.into())).collect();
+
+    let (auth_url, csrf_token) = client
+        .authorize_url(CsrfToken::new_random)
+        .add_scopes(request_scopes)
+        .set_pkce_challenge(pkce_challenge)
+        .url();
+
+    Ok(AuthcodeChallenge {
+        pkce_verifier,
+        auth_url,
+        listener: tokio::task::spawn(async move {
+            let result = wait_for_authcode(csrf_token).await;
+            notify_complete();
+            result
+        }),
+    })
+}
+
 impl RiffOauthClient {
     pub fn new(token_store: TokenStore) -> Self {
+        Self {
+            client: Self::build_client(CLIENT_ID),
+            session_client: Self::build_client(SESSION_CLIENT_ID),
+            token_store,
+        }
+    }
+
+    fn build_client(client_id: &str) -> BasicClient {
         let auth_url = AuthUrl::new("https://accounts.spotify.com/authorize".to_string())
             .expect("Malformed URL");
         let token_url = TokenUrl::new("https://accounts.spotify.com/api/token".to_string())
             .expect("Malformed URL");
         let redirect_url = RedirectUrl::new(REDIRECT_URI.to_string()).expect("Malformed URL");
-        let client = BasicClient::new(
-            ClientId::new(CLIENT_ID.to_string()),
+        BasicClient::new(
+            ClientId::new(client_id.to_string()),
             None,
             auth_url,
             Some(token_url),
         )
-        .set_redirect_uri(redirect_url);
-        Self {
-            client,
-            token_store,
-        }
+        .set_redirect_uri(redirect_url)
     }
 
     pub async fn spawn_authcode_listener(
         &self,
         notify_complete: impl FnOnce() + Send + 'static,
     ) -> Result<AuthcodeChallenge, OAuthError> {
-        let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
+        build_authcode_challenge(&self.client, SCOPES, notify_complete).await
+    }
 
-        // Generate the full authorization URL.
-        // Some of these scopes are unavailable for custom client IDs. Which?
-        let request_scopes: Vec<oauth2::Scope> =
-            SCOPES.split(",").map(|s| Scope::new(s.into())).collect();
-
-        let (auth_url, csrf_token) = self
-            .client
-            .authorize_url(CsrfToken::new_random)
-            .add_scopes(request_scopes)
-            .set_pkce_challenge(pkce_challenge)
-            .url();
-
-        Ok(AuthcodeChallenge {
-            pkce_verifier,
-            auth_url,
-            listener: tokio::task::spawn(async move {
-                let result = wait_for_authcode(csrf_token).await;
-                notify_complete();
-                result
-            }),
-        })
+    pub async fn spawn_session_authcode_listener(
+        &self,
+        notify_complete: impl FnOnce() + Send + 'static,
+    ) -> Result<AuthcodeChallenge, OAuthError> {
+        build_authcode_challenge(&self.session_client, SESSION_SCOPES, notify_complete).await
     }
 
     /// Obtain a Spotify access token using the authorization code with PKCE OAuth flow.
@@ -169,6 +191,35 @@ impl RiffOauthClient {
         };
 
         Ok(token)
+    }
+
+    pub async fn exchange_session_authcode(
+        &self,
+        challenge: AuthcodeChallenge,
+    ) -> Result<String, OAuthError> {
+        let code = challenge
+            .listener
+            .await
+            .map_err(|_| OAuthError::AuthCodeListenerTerminated)??;
+
+        let token = self
+            .session_client
+            .exchange_code(code)
+            .set_pkce_verifier(challenge.pkce_verifier)
+            .request_async(async_http_client)
+            .await
+            .map_err(|e| match e {
+                RequestTokenError::ServerResponse(res) => {
+                    error!(
+                        "An error occured while exchanging a session code: {}",
+                        res.to_string()
+                    );
+                    OAuthError::ExchangeCode { e: res.to_string() }
+                }
+                e => OAuthError::ExchangeCode { e: e.to_string() },
+            })?;
+
+        Ok(token.access_token().secret().to_string())
     }
 
     pub async fn clear_credentials(&self) {

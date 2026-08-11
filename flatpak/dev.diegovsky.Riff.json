@@ -13,8 +13,7 @@
     "--socket=fallback-x11",
     "--socket=wayland",
     "--socket=pulseaudio",
-    "--device=dri",
-    "--talk-name=org.freedesktop.secrets"
+    "--device=dri"
   ],
   "separate-locales": false,
   "build-options": {
@@ -23,9 +22,7 @@
       "CARGO_HOME": "/run/build/riff/cargo",
       "RUST_BACKTRACE": "full",
       "RUST_LOG": "riff=debug"
-    },
-    "strip": false,
-    "no-debuginfo": false
+    }
   },
   "modules": [
     {
@@ -33,8 +30,7 @@
       "builddir": true,
       "buildsystem": "meson",
       "config-opts": [
-        "-Doffline=true",
-        "-Dbuildtype=debug"
+        "-Doffline=true"
       ],
       "sources": [
         {

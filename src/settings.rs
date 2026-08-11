@@ -93,9 +93,6 @@ impl SpotifyPlayerSettings {
             1 => Some(AudioBackend::Alsa(
                 settings.string("alsa-device").as_str().to_string(),
             )),
-            2 => Some(AudioBackend::GStreamer(
-                "audioconvert dithering=none ! audioresample ! pipewiresink".to_string(), // This should be configurable eventually
-            )),
             _ => None,
         }?;
         let gapless = settings.boolean("gapless-playback");
