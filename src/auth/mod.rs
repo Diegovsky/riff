@@ -11,5 +11,5 @@
 mod oauth2;
 mod token_store;
 
-pub use oauth2::{AuthcodeChallenge, OAuthError, RiffOauthClient};
+pub use oauth2::{AuthcodeChallenge, OAuthError, RiffOauthClient, SESSION_CLIENT_ID};
 pub use token_store::TokenStore;

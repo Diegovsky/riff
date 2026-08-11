@@ -17,6 +17,7 @@ pub enum Command {
     Restore,
     InitLogin,
     CompleteLogin,
+    CompleteSessionLogin,
     RefreshToken,
     Logout,
     PlayerLoad {
