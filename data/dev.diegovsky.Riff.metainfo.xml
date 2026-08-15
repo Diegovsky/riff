@@ -9,7 +9,12 @@
   <developer id="diegovsky@fosstodon.org">
      <name>Diego Augusto</name>
   </developer>
-  <summary>A libadwaita/GTK4-based Spotify client</summary>
+  <summary>Stream Spotify without distraction</summary>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#c7f8d3</color>
+    <color type="primary" scheme_preference="dark">#354762</color>
+  </branding>
 
   <launchable type="desktop-id">dev.diegovsky.Riff.desktop</launchable>
 
@@ -56,6 +61,18 @@
   </screenshots>
 
   <releases>
+    <release version="26.07.01" date="2026-08-14">
+        <description>
+            <p>This release fixes a playback issue and adds some polish for Flathub</p>
+            <p>Patch Note:</p>
+            <ul>
+                <li>Fixed a playback issue introduced by Spotify on Aug 10, 2026</li>
+                <li>Updated banner colors on Flathub</li>
+                <li>Updated application summary on Flathub</li>
+                <li>Removed Pipewire as an audio backend to improve Flathub's risk rating</li>
+            </ul>
+        </description>
+    </release>
     <release version="26.07" date="2026-07-31">
         <description>
             <p>This release focuses on improving the listening experience and navigation of your music library. It includes redesigned pages, a configurable audio engine, improved search, and more.</p>
