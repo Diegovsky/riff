@@ -62,6 +62,9 @@ mod imp {
         pub share_button: TemplateChild<gtk::Button>,
 
         #[template_child]
+        pub pin_button: TemplateChild<gtk::Button>,
+
+        #[template_child]
         pub info_button: TemplateChild<gtk::Button>,
 
         #[template_child]
@@ -134,6 +137,10 @@ pub struct DetailsHeader {
 }
 
 impl DetailsHeader {
+    pub fn from_widget(widget: DetailsHeaderWidget) -> Self {
+        Self { widget }
+    }
+
     pub fn new(shape: HeaderImageShape) -> Self {
         let widget: DetailsHeaderWidget = glib::Object::new();
 
@@ -151,6 +158,10 @@ impl DetailsHeader {
         }
 
         Self { widget }
+    }
+
+    pub fn clone_inner(&self) -> DetailsHeaderWidget {
+        self.widget.clone()
     }
 
     pub fn widget(&self) -> &gtk::Widget {
@@ -282,6 +293,32 @@ impl DetailsHeader {
     pub fn connect_edit<F: Fn() + 'static>(&self, f: F) {
         let button = &self.widget.imp().edit_button;
         button.set_visible(true);
+        button.connect_clicked(move |_| f());
+    }
+
+    /// Update the pin button icon and tooltip to reflect pinned state.
+    pub fn set_pinned(&self, is_pinned: bool) {
+        let icon = if is_pinned {
+            "view-pin-symbolic"
+        } else {
+            "pin-symbolic"
+        };
+        let tooltip = if is_pinned {
+            gettext("Unpin")
+        } else {
+            gettext("Pin")
+        };
+        let button = &self.widget.imp().pin_button;
+        button.set_icon_name(icon);
+        button.set_tooltip_text(Some(&tooltip));
+    }
+
+    pub fn set_pin_visible(&self, visible: bool) {
+        self.widget.imp().pin_button.set_visible(visible);
+    }
+
+    pub fn connect_pin<F: Fn() + 'static>(&self, f: F) {
+        let button = &self.widget.imp().pin_button;
         button.connect_clicked(move |_| f());
     }
 

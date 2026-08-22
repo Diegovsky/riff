@@ -227,6 +227,14 @@
       <default>false</default>
       <summary>Show audio normalisation settings for fine-tuning loudness between tracks</summary>
     </key>
+    <key name="feature-pinned-playlists" type="b">
+      <default>false</default>
+      <summary>Enable pinning playlists to the sidebar</summary>
+    </key>
+    <key name="pinned-playlists-by-user" type="s">
+      <default>'{}'</default>
+      <summary>JSON map of Spotify user ID to pinned playlist ID arrays</summary>
+    </key>
     <key name="card-layout" type="s">
       <choices>
         <choice value='vertical'/>

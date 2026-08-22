@@ -10,8 +10,112 @@ use crate::{
 use gio::prelude::SettingsExt;
 use libadwaita::ColorScheme;
 use librespot::playback::config::{AudioFormat, Bitrate, NormalisationMethod, NormalisationType};
+use serde_json;
+use std::collections::HashMap;
 
-const SETTINGS: &str = "dev.diegovsky.Riff";
+pub const SETTINGS: &str = "dev.diegovsky.Riff";
+
+const PINNED_PLAYLISTS_KEY: &str = "pinned-playlists-by-user";
+
+type PinnedPlaylistsByUser = HashMap<String, Vec<String>>;
+
+fn load_pinned_map(settings: &gio::Settings) -> PinnedPlaylistsByUser {
+    let json = settings.string(PINNED_PLAYLISTS_KEY);
+    if json.is_empty() {
+        return HashMap::new();
+    }
+    serde_json::from_str(&json).unwrap_or_else(|e| {
+        error!("Failed to parse pinned playlists: {e}");
+        HashMap::new()
+    })
+}
+
+fn save_pinned_map(settings: &gio::Settings, map: &PinnedPlaylistsByUser) -> bool {
+    match serde_json::to_string(map) {
+        Ok(json) => settings
+            .set_string(PINNED_PLAYLISTS_KEY, &json)
+            .map_err(|e| error!("Failed to save pinned playlists: {e}"))
+            .is_ok(),
+        Err(e) => {
+            error!("Failed to serialize pinned playlists: {e}");
+            false
+        }
+    }
+}
+
+fn pin_in_map(map: &mut PinnedPlaylistsByUser, user_id: &str, id: &str) -> bool {
+    let ids = map.entry(user_id.to_string()).or_default();
+    if ids.iter().any(|x| x == id) {
+        return false;
+    }
+    ids.push(id.to_string());
+    true
+}
+
+fn unpin_from_map(map: &mut PinnedPlaylistsByUser, user_id: &str, id: &str) -> bool {
+    let Some(ids) = map.get_mut(user_id) else {
+        return false;
+    };
+    let len_before = ids.len();
+    ids.retain(|x| x != id);
+    let changed = ids.len() != len_before;
+    if ids.is_empty() {
+        map.remove(user_id);
+    }
+    changed
+}
+
+fn prune_user_pins(map: &mut PinnedPlaylistsByUser, user_id: &str, valid_ids: &[String]) -> bool {
+    let Some(ids) = map.get_mut(user_id) else {
+        return false;
+    };
+    let len_before = ids.len();
+    ids.retain(|id| valid_ids.iter().any(|valid| valid == id));
+    let changed = ids.len() != len_before;
+    if ids.is_empty() {
+        map.remove(user_id);
+    }
+    changed
+}
+
+pub fn get_pinned_playlist_ids(user_id: &str) -> Vec<String> {
+    load_pinned_map(&gio::Settings::new(SETTINGS))
+        .get(user_id)
+        .cloned()
+        .unwrap_or_default()
+}
+
+pub fn is_playlist_pinned(user_id: &str, id: &str) -> bool {
+    get_pinned_playlist_ids(user_id).iter().any(|x| x == id)
+}
+
+pub fn pin_playlist(user_id: &str, id: &str) -> bool {
+    let settings = gio::Settings::new(SETTINGS);
+    let mut map = load_pinned_map(&settings);
+    if !pin_in_map(&mut map, user_id, id) {
+        return false;
+    }
+    save_pinned_map(&settings, &map)
+}
+
+pub fn unpin_playlist(user_id: &str, id: &str) -> bool {
+    let settings = gio::Settings::new(SETTINGS);
+    let mut map = load_pinned_map(&settings);
+    if !unpin_from_map(&mut map, user_id, id) {
+        return false;
+    }
+    save_pinned_map(&settings, &map)
+}
+
+/// Drop pinned IDs that are no longer in the user's saved playlist set.
+pub fn prune_pinned_playlists(user_id: &str, valid_ids: &[String]) -> bool {
+    let settings = gio::Settings::new(SETTINGS);
+    let mut map = load_pinned_map(&settings);
+    if !prune_user_pins(&mut map, user_id, valid_ids) {
+        return false;
+    }
+    save_pinned_map(&settings, &map)
+}
 
 /// Spotify user id recorded as verified-playable, or empty if none.
 pub fn drm_verified_user() -> String {
@@ -369,7 +473,64 @@ impl StateTracker {
 impl EventListener for StateTracker {
     fn on_event(&mut self, event: &AppEvent) {
         if let Err(e) = self.handle_event(event) {
-            error!("Trying to update gsettings: {e}")
+            error!("Trying to update gsettings: {e}");
         }
+    }
+}
+
+#[cfg(test)]
+mod pinned_playlists_tests {
+    use super::*;
+
+    #[test]
+    fn pin_adds_id() {
+        let mut map = PinnedPlaylistsByUser::new();
+        assert!(pin_in_map(&mut map, "user1", "pl1"));
+        assert_eq!(map["user1"], vec!["pl1".to_string()]);
+    }
+
+    #[test]
+    fn double_pin_is_idempotent() {
+        let mut map = PinnedPlaylistsByUser::new();
+        assert!(pin_in_map(&mut map, "user1", "pl1"));
+        assert!(!pin_in_map(&mut map, "user1", "pl1"));
+        assert_eq!(map["user1"].len(), 1);
+    }
+
+    #[test]
+    fn unpin_removes_id() {
+        let mut map = PinnedPlaylistsByUser::new();
+        pin_in_map(&mut map, "user1", "pl1");
+        assert!(unpin_from_map(&mut map, "user1", "pl1"));
+        assert!(!map.contains_key("user1"));
+    }
+
+    #[test]
+    fn unpin_last_item_yields_empty_map() {
+        let mut map = PinnedPlaylistsByUser::new();
+        pin_in_map(&mut map, "user1", "pl1");
+        unpin_from_map(&mut map, "user1", "pl1");
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn is_playlist_pinned_checks_user_scope() {
+        let mut map = PinnedPlaylistsByUser::new();
+        pin_in_map(&mut map, "user1", "pl1");
+        assert!(map.get("user1").unwrap().iter().any(|x| x == "pl1"));
+        assert!(!map.get("user2").is_some_and(|ids| ids.iter().any(|x| x == "pl1")));
+    }
+
+    #[test]
+    fn prune_drops_orphan_ids() {
+        let mut map = PinnedPlaylistsByUser::new();
+        pin_in_map(&mut map, "user1", "pl1");
+        pin_in_map(&mut map, "user1", "pl2");
+        assert!(prune_user_pins(
+            &mut map,
+            "user1",
+            &["pl1".to_string()],
+        ));
+        assert_eq!(map["user1"], vec!["pl1".to_string()]);
     }
 }
