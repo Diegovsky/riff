@@ -22,7 +22,8 @@ use crate::app::state::{
     BrowserAction, BrowserEvent, PlaybackAction, SelectionAction, SelectionState,
 };
 use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, PaginationTarget, SongsSource};
-use crate::feature_flags::{self, FeatureFlag};
+use crate::feature_flags::{is_enabled, FeatureFlag};
+use crate::settings;
 use crate::{impl_toggle_play, impl_track_list_model_base};
 use riff_api::DomainError;
 
@@ -208,6 +209,8 @@ impl PageModel for PlaylistDetailsModel {
         let id = self.id.clone();
         let is_saved = self.is_liked();
         let api = self.app_model.api();
+        let pin_enabled = is_enabled(FeatureFlag::PinnedPlaylists);
+        let user_id = self.app_model.get_state().logged_user.user.clone();
 
         let description = {
             let state = self.app_model.get_state();
@@ -220,6 +223,11 @@ impl PageModel for PlaylistDetailsModel {
         dispatch_api_call(&self.dispatcher, move || async move {
             if is_saved {
                 api.unfollow_playlist(&id).await?;
+                if pin_enabled {
+                    if let Some(user_id) = user_id {
+                        settings::unpin_playlist(&user_id, &id);
+                    }
+                }
                 Ok(BrowserAction::UnsavePlaylist(id).into())
             } else {
                 api.follow_playlist(&id).await?;
@@ -275,6 +283,34 @@ impl PageModel for PlaylistDetailsModel {
             if id == &self.id
         )
     }
+
+    fn supports_pin_button(&self) -> bool {
+        true
+    }
+
+    fn is_pinned(&self) -> bool {
+        self.app_model
+            .get_state()
+            .logged_user
+            .user
+            .as_ref()
+            .is_some_and(|user_id| settings::is_playlist_pinned(user_id, &self.id))
+    }
+
+    fn toggle_pin(&self) {
+        let Some(user_id) = self.app_model.get_state().logged_user.user.clone() else {
+            return;
+        };
+        let changed = if self.is_pinned() {
+            settings::unpin_playlist(&user_id, &self.id)
+        } else {
+            settings::pin_playlist(&user_id, &self.id)
+        };
+        if changed {
+            self.dispatcher
+                .dispatch(BrowserAction::NotifyPinnedPlaylistsUpdated.into());
+        }
+    }
 }
 
 impl TrackListModel for PlaylistDetailsModel {
@@ -298,7 +334,7 @@ impl TrackListModel for PlaylistDetailsModel {
     impl_track_list_model_base!();
 
     fn enable_selection(&self) -> bool {
-        if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
+        if !is_enabled(FeatureFlag::SelectMode) {
             return false;
         }
         let context = if self.is_playlist_editable() {
@@ -345,7 +381,7 @@ impl TrackListModel for PlaylistDetailsModel {
 
 impl SimpleHeaderBarModel for PlaylistDetailsModel {
     fn selection_context(&self) -> Option<SelectionContext> {
-        if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
+        if !is_enabled(FeatureFlag::SelectMode) {
             return None;
         }
         if self.is_playlist_editable() {

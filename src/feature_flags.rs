@@ -1,7 +1,5 @@
 use gio::prelude::SettingsExt;
 
-const SETTINGS: &str = "dev.diegovsky.Riff";
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FeatureFlag {
     /*
@@ -26,6 +24,7 @@ pub enum FeatureFlag {
     being validated for usability before exposing to all users.
     */
     Normalisation,
+    PinnedPlaylists,
 }
 
 impl FeatureFlag {
@@ -34,6 +33,7 @@ impl FeatureFlag {
         FeatureFlag::CreateNewPlaylist,
         FeatureFlag::DeviceSelector,
         FeatureFlag::Normalisation,
+        FeatureFlag::PinnedPlaylists,
     ];
 
     pub fn key(&self) -> &'static str {
@@ -42,6 +42,7 @@ impl FeatureFlag {
             FeatureFlag::CreateNewPlaylist => "feature-create-new-playlist",
             FeatureFlag::DeviceSelector => "feature-device-selector",
             FeatureFlag::Normalisation => "feature-normalisation",
+            FeatureFlag::PinnedPlaylists => "feature-pinned-playlists",
         }
     }
 
@@ -51,6 +52,7 @@ impl FeatureFlag {
             FeatureFlag::CreateNewPlaylist => "Create New Playlist",
             FeatureFlag::DeviceSelector => "Device Selector",
             FeatureFlag::Normalisation => "Audio Normalisation",
+            FeatureFlag::PinnedPlaylists => "Pinned Playlists",
         }
     }
 
@@ -66,11 +68,14 @@ impl FeatureFlag {
             FeatureFlag::Normalisation => {
                 "Show audio normalisation settings for fine-tuning loudness between tracks."
             }
+            FeatureFlag::PinnedPlaylists => {
+                "Enable pinning playlists to the sidebar."
+            }
         }
     }
 }
 
 pub fn is_enabled(flag: FeatureFlag) -> bool {
-    let settings = gio::Settings::new(SETTINGS);
+    let settings = gio::Settings::new(crate::settings::SETTINGS);
     settings.boolean(flag.key())
 }
