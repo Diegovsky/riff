@@ -94,6 +94,18 @@ pub trait PageModel {
     }
     fn on_share_clicked(&self) {}
 
+    // Pin button
+
+    /// Whether this page type supports a pin control (independent of feature flag).
+    fn supports_pin_button(&self) -> bool {
+        false
+    }
+
+    fn is_pinned(&self) -> bool {
+        false
+    }
+    fn toggle_pin(&self) {}
+
     // Subtitle links
 
     /// Returns a list of clickable links for the subtitle area.
