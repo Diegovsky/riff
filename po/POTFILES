@@ -22,6 +22,7 @@ src/app/components/shell/notification/mod.rs
 src/app/components/shell/playback/playback_controls.rs
 src/app/components/shell/playback/playback_info_mobile.rs
 src/app/components/shell/playback/playback_info.rs
+src/app/components/shell/sidebar/playlist_actions.rs
 src/app/components/shell/sidebar/sidebar_item.rs
 src/app/components/shell/sidebar/sidebar.rs
 src/app/components/shell/user_menu/user_menu.rs

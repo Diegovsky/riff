@@ -2,13 +2,15 @@ use gtk::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
 
-use super::{is_playback_event, DetailsPage, PageModel};
+use super::{is_playback_event, DetailsHeader, DetailsPage, PageModel};
 use crate::app::components::{
     CardLayout, CardList, CardListModel, CardSize, Component, EmbeddedCardList, EventListener,
     FilterToggle, HeaderBarModel, HeaderRegistrar, Playlist, PlaylistModel, SortOrder,
 };
 use crate::app::dispatch::Worker;
 use crate::app::{ActionDispatcher, AppEvent};
+use crate::feature_flags::{is_enabled, FeatureFlag};
+use crate::settings;
 
 /// A generic details page component that wires all standard behavior
 /// from a `PageModel` implementation automatically.
@@ -22,6 +24,7 @@ pub struct DetailsPageComponent<M> {
     name: String,
     header_title: libadwaita::WindowTitle,
     end_box: gtk::Box,
+    _pin_settings: Option<gio::Settings>,
 }
 
 impl<M: PageModel + 'static> DetailsPageComponent<M> {
@@ -57,6 +60,7 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             name,
             header_title,
             end_box,
+            _pin_settings: None,
         };
         c.wire();
         c
@@ -251,6 +255,37 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             move || m.load_more()
         ));
 
+        if self.model.supports_pin_button() {
+            self.page.header().connect_pin(clone!(
+                #[weak(rename_to = m)]
+                self.model,
+                move || m.toggle_pin()
+            ));
+
+            let settings = gio::Settings::new(settings::SETTINGS);
+            let header_widget = self.page.header().clone_inner();
+            let sync_pin_button = clone!(
+                #[weak(rename_to = m)]
+                self.model,
+                #[strong]
+                header_widget,
+                move || {
+                    let header = DetailsHeader::from_widget(header_widget.clone());
+                    let pin_enabled = is_enabled(FeatureFlag::PinnedPlaylists);
+                    header.set_pin_visible(pin_enabled);
+                    if pin_enabled {
+                        header.set_pinned(m.is_pinned());
+                    }
+                }
+            );
+            sync_pin_button();
+            settings.connect_changed(
+                Some("feature-pinned-playlists"),
+                move |_, _| sync_pin_button(),
+            );
+            self._pin_settings = Some(settings);
+        }
+
         // Initial state
         if let Some(icon) = self.model.default_icon() {
             self.page.header().set_default_icon(icon);
@@ -300,6 +335,13 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
                 self.page.header().set_like_visible(false);
             }
         }
+        if self.model.supports_pin_button() {
+            let pin_enabled = is_enabled(FeatureFlag::PinnedPlaylists);
+            self.page.header().set_pin_visible(pin_enabled);
+            if pin_enabled {
+                self.page.header().set_pinned(self.model.is_pinned());
+            }
+        }
         self.page
             .load_artwork_or_finish(self.model.get_artwork().as_ref(), &self.worker);
     }
@@ -331,6 +373,15 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
                 if !self.model.like_visible() {
                     self.page.header().set_like_visible(false);
                 }
+            }
+            return true;
+        }
+        if matches!(
+            event,
+            AppEvent::BrowserEvent(crate::app::BrowserEvent::PinnedPlaylistsUpdated)
+        ) {
+            if self.model.supports_pin_button() && is_enabled(FeatureFlag::PinnedPlaylists) {
+                self.page.header().set_pinned(self.model.is_pinned());
             }
             return true;
         }
