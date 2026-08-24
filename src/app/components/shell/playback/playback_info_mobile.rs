@@ -44,12 +44,17 @@ impl PlaybackInfoMobileWidget {
             glib::markup_escape_text(title),
             glib::markup_escape_text(artist)
         );
-        self.imp().now_playing_label.set_markup(&markup);
+        let label = &self.imp().now_playing_label;
+        label.set_markup(&markup);
+        // Cap label width so a long title/artist cannot starve the side
+        // spacers and walk the bar off-centre (same role as ellipsis inside
+        // the desktop `now_playing_start` column).
+        label.set_max_width_chars(48);
     }
 
     pub fn reset_info(&self) {
-        self.imp()
-            .now_playing_label
-            .set_text(&gettext("No Track Playing"));
+        let label = &self.imp().now_playing_label;
+        label.set_text(&gettext("No Track Playing"));
+        label.set_max_width_chars(-1);
     }
 }

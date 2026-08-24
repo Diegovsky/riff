@@ -1,14 +1,29 @@
 using Gtk 4.0;
 
+// Mirror the side-slot balance used by `now_playing_start` /
+// `playback_center` in playback_widget.blp: equal expanding flanks keep the
+// track label centred whether a song is selected or the empty-state text is
+// shown, and keep the strip aligned with the transport controls below.
 template $PlaybackInfoMobileWidget : Box {
+  orientation: horizontal;
   halign: fill;
   valign: center;
   hexpand: true;
 
+  Box {
+    hexpand: true;
+    width-request: 40;
+  }
+
   Label now_playing_label {
     halign: center;
-    hexpand: true;
+    hexpand: false;
     ellipsize: end;
     single-line-mode: true;
+  }
+
+  Box {
+    hexpand: true;
+    width-request: 40;
   }
 }
