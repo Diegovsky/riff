@@ -298,18 +298,13 @@ impl DetailsHeader {
 
     /// Update the pin button icon and tooltip to reflect pinned state.
     pub fn set_pinned(&self, is_pinned: bool) {
-        let icon = if is_pinned {
-            "view-pin-symbolic"
-        } else {
-            "pin-symbolic"
-        };
         let tooltip = if is_pinned {
-            gettext("Unpin")
+            gettext("Unpin from Sidebar")
         } else {
-            gettext("Pin")
+            gettext("Pin to Sidebar")
         };
         let button = &self.widget.imp().pin_button;
-        button.set_icon_name(icon);
+        button.set_icon_name("view-pin-symbolic");
         button.set_tooltip_text(Some(&tooltip));
     }
 

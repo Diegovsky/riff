@@ -341,7 +341,7 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             &self.worker,
         );
         if self.model.supports_pin_button() {
-            let pin_enabled = is_enabled(FeatureFlag::PinnedPlaylists);
+            let pin_enabled = is_enabled(FeatureFlag::PinnedPlaylists) && self.model.is_liked();
             self.page.header().set_pin_visible(pin_enabled);
             if pin_enabled {
                 self.page.header().set_pinned(self.model.is_pinned());
@@ -375,6 +375,9 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
                 self.page.header().set_liked(self.model.is_liked());
                 if !self.model.like_visible() {
                     self.page.header().set_like_visible(false);
+                }
+                if !self.model.is_liked() && self.model.supports_pin_button() {
+                    self.page.header().set_pinned(false);
                 }
             }
             return true;

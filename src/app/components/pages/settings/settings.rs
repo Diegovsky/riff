@@ -658,7 +658,7 @@ impl SettingsDialog {
         let group = libadwaita::PreferencesGroup::new();
         group.set_title("Experimental Features");
         group.set_description(Some(
-            "Experimental features that may change or be removed.",
+            "These settings require restarting the application to take effect.",
         ));
 
         for flag in FeatureFlag::ALL.iter() {
