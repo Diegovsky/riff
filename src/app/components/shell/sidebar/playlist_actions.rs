@@ -86,13 +86,14 @@ pub fn build_playlist_menu(is_owned: bool, id: &str, user_id: Option<&str>) -> g
     playback_section.append(Some(&*labels::PLAY), Some("playlist.play"));
     playback_section.append(Some(&*labels::SHUFFLE), Some("playlist.shuffle"));
 
-    let manage_section = gio::Menu::new();
-    manage_section.append(Some(&*labels::COPY_LINK), Some("playlist.copy_link"));
+    let delete_section = gio::Menu::new();
     if is_owned {
-        manage_section.append(Some(&*labels::DELETE_PLAYLIST), Some("playlist.unfollow"));
+        delete_section.append(Some(&*labels::DELETE_PLAYLIST), Some("playlist.unfollow"));
     } else {
-        manage_section.append(Some(&*labels::UNFOLLOW_PLAYLIST), Some("playlist.unfollow"));
+        delete_section.append(Some(&*labels::UNFOLLOW_PLAYLIST), Some("playlist.unfollow"));
     }
+
+    let pin_section = gio::Menu::new();
     if is_enabled(FeatureFlag::PinnedPlaylists) {
         let is_pinned = user_id.is_some_and(|user_id| settings::is_playlist_pinned(user_id, id));
         let pin_label = if is_pinned {
@@ -100,11 +101,18 @@ pub fn build_playlist_menu(is_owned: bool, id: &str, user_id: Option<&str>) -> g
         } else {
             gettextrs::gettext("Pin Playlist")
         };
-        manage_section.append(Some(&pin_label), Some("playlist.toggle_pin"));
+        pin_section.append(Some(&pin_label), Some("playlist.toggle_pin"));
     }
+
+    let link_section = gio::Menu::new();
+    link_section.append(Some(&*labels::COPY_LINK), Some("playlist.copy_link"));
 
     let menu = gio::Menu::new();
     menu.append_section(None, &playback_section);
-    menu.append_section(None, &manage_section);
+    menu.append_section(None, &delete_section);
+    if is_enabled(FeatureFlag::PinnedPlaylists) {
+        menu.append_section(None, &pin_section);
+    }
+    menu.append_section(None, &link_section);
     menu
 }

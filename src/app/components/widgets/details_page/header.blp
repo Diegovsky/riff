@@ -182,6 +182,19 @@ template $DetailsHeaderWidget : Widget {
             ]
           }
 
+          Button pin_button {
+            icon-name: "view-pin-symbolic";
+            halign: center;
+            valign: center;
+            visible: false;
+            tooltip-text: _("Pin to Sidebar");
+
+            styles [
+              "circular",
+              "pin__button",
+            ]
+          }
+
           Button share_button {
             icon-name: "folder-publicshare-symbolic";
             halign: center;
@@ -192,19 +205,6 @@ template $DetailsHeaderWidget : Widget {
             styles [
               "circular",
               "share__button",
-            ]
-          }
-
-          Button pin_button {
-            icon-name: "pin-symbolic";
-            halign: center;
-            valign: center;
-            visible: false;
-            tooltip-text: _("Pin");
-
-            styles [
-              "circular",
-              "pin__button",
             ]
           }
 
