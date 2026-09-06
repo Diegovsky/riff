@@ -5,6 +5,19 @@ project(
   default_options: ['warning_level=2', 'buildtype=release'],
 )
 
+fs = import('fs')
+
+generated_spotify_api = meson.project_source_root() / 'generated' / 'spotify-api'
+if not fs.is_dir(generated_spotify_api) or not fs.is_file(generated_spotify_api / 'Cargo.toml')
+  error(
+    'Generated Spotify API crate not found at @0@\n\n'.format(generated_spotify_api) +
+    'Run the following to generate it (requires Java):\n' +
+    '  ./scripts/generate-spotify-api.sh\n' +
+    'or:\n' +
+    '  just generate-spotify-api\n'
+  )
+endif
+
 subdir('data')
 subdir('po')
 subdir('src')

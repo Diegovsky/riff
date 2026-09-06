@@ -4,7 +4,9 @@ use std::rc::Rc;
 use gtk::prelude::Cast;
 
 use crate::app::components::{Component, EventListener};
-use crate::app::models::ConnectDevice;
+// The data-layer device type, aliased to avoid clashing with the app-state
+// `Device` enum imported below.
+use crate::app::models::Device as ConnectDevice;
 use crate::app::state::{Device, LoginEvent, PlaybackAction, PlaybackEvent};
 use crate::app::{ActionDispatcher, AppEvent, AppModel};
 
@@ -24,14 +26,13 @@ impl DeviceSelectorModel {
     }
 
     pub fn refresh_available_devices(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
 
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                api.list_available_devices()
-                    .await
-                    .map(|devices| PlaybackAction::SetAvailableDevices(devices).into())
-            });
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            api.get_devices()
+                .await
+                .map(|devices| PlaybackAction::SetAvailableDevices(devices).into())
+        });
     }
 
     pub fn get_available_devices(&self) -> impl Deref<Target = Vec<ConnectDevice>> + '_ {

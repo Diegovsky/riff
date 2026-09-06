@@ -3,7 +3,7 @@ use oo7::Keyring;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use crate::app::credentials::Credentials;
+use crate::credentials::Credentials;
 
 const ATTRS: &[(&'static str, &'static str)] = &[("riff", "yes")];
 const MAX_KEYRING_RETRIES: u32 = 6;

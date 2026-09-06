@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="180"
+   height="180"
+   viewBox="0 0 180 180"
+   version="1.1"
+   id="svg9"
+   sodipodi:docname="user-default.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs9" />
+  <sodipodi:namedview
+     id="namedview9"
+     pagecolor="#505050"
+     bordercolor="#ffffff"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="1"
+     inkscape:deskcolor="#505050">
+    <inkscape:page
+       x="0"
+       y="0"
+       width="180"
+       height="180"
+       id="page2"
+       margin="0"
+       bleed="0" />
+  </sodipodi:namedview>
+  <rect
+     width="180"
+     height="180"
+     fill="#39ff14"
+     id="rect1"
+     x="0"
+     y="0" />
+  <g
+     fill="#ff10f0"
+     id="g9">
+    <rect
+       x="0"
+       y="0"
+       width="45"
+       height="45"
+       id="rect2" />
+    <rect
+       x="90"
+       y="0"
+       width="45"
+       height="45"
+       id="rect3" />
+    <rect
+       x="45"
+       y="45"
+       width="45"
+       height="45"
+       id="rect4" />
+    <rect
+       x="135"
+       y="45"
+       width="45"
+       height="45"
+       id="rect5" />
+    <rect
+       x="0"
+       y="90"
+       width="45"
+       height="45"
+       id="rect6" />
+    <rect
+       x="90"
+       y="90"
+       width="45"
+       height="45"
+       id="rect7" />
+    <rect
+       x="45"
+       y="135"
+       width="45"
+       height="45"
+       id="rect8" />
+    <rect
+       x="135"
+       y="135"
+       width="45"
+       height="45"
+       id="rect9" />
+  </g>
+  <text
+     x="90"
+     y="106"
+     text-anchor="middle"
+     textLength="156"
+     lengthAdjust="spacingAndGlyphs"
+     font-family="sans-serif"
+     font-size="48px"
+     font-weight="bold"
+     fill="#ffffff"
+     stroke="#000000"
+     stroke-width="4"
+     paint-order="stroke"
+     id="text9">User</text>
+</svg>

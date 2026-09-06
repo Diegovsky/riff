@@ -15,6 +15,9 @@ meson command *ARGS:
 update-sources:
     python scripts/flatpak-cargo-generator.py Cargo.lock -o flatpak/cargo-sources.json
 
+generate-spotify-api:
+    ./scripts/generate-spotify-api.sh
+
 init *ARGS:
     meson setup -Dbuildtype=debug -Doffline=false --prefix="$HOME/.local" {{build}} {{ARGS}}
 

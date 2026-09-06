@@ -51,15 +51,14 @@ impl SelectionToolbarModel {
     }
 
     pub fn save_selection(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let ids: Vec<String> = self
             .selection()
             .peek_selection()
-            .map(|s| &s.id)
-            .cloned()
+            .map(|s| s.rri.id.clone())
             .collect();
         self.dispatcher
-            .call_spotify_and_dispatch_many(move || async move {
+            .call_api_and_dispatch_many(move || async move {
                 api.save_tracks(ids).await?;
                 Ok(vec![
                     AppAction::SaveSelection,
@@ -69,16 +68,15 @@ impl SelectionToolbarModel {
     }
 
     fn remove_saved_tracks(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let ids: Vec<String> = self
             .selection()
             .peek_selection()
-            .map(|s| &s.id)
-            .cloned()
+            .map(|s| s.rri.id.clone())
             .collect();
         self.dispatcher
-            .call_spotify_and_dispatch_many(move || async move {
-                api.remove_saved_tracks(ids).await?;
+            .call_api_and_dispatch_many(move || async move {
+                api.remove_tracks(ids).await?;
                 Ok(vec![AppAction::UnsaveSelection])
             })
     }
@@ -97,31 +95,28 @@ impl SelectionToolbarModel {
 
     fn add_to_playlist(&self, id: &str) {
         let id = id.to_string();
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let uris: Vec<String> = self
             .selection()
             .peek_selection()
-            .map(|s| &s.uri)
-            .cloned()
+            .filter_map(|s| s.rri.uri.clone())
             .collect();
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                api.add_to_playlist(&id, uris).await?;
-                Ok(SelectionAction::Clear.into())
-            })
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            api.add_to_playlist(&id, uris).await?;
+            Ok(SelectionAction::Clear.into())
+        })
     }
 
     fn remove_from_playlist(&self, id: &str) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let id = id.to_string();
         let uris: Vec<String> = self
             .selection()
             .peek_selection()
-            .map(|s| &s.uri)
-            .cloned()
+            .filter_map(|s| s.rri.uri.clone())
             .collect();
         self.dispatcher
-            .call_spotify_and_dispatch_many(move || async move {
+            .call_api_and_dispatch_many(move || async move {
                 api.remove_from_playlist(&id, uris.clone()).await?;
                 Ok(vec![
                     BrowserAction::RemoveTracksFromPlaylist(id, uris).into(),

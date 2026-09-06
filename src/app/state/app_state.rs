@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::app::models::{PlaylistDescription, PlaylistSummary};
+use crate::app::models::{Playlist, PlaylistSummary};
 use crate::app::state::{
     browser_state::{BrowserAction, BrowserEvent, BrowserState},
     login_state::{LoginAction, LoginEvent, LoginState},
@@ -37,7 +37,7 @@ pub enum AppAction {
     UnsaveSelection,
     EnableSelection(SelectionContext),
     CancelSelection,
-    CreatePlaylist(PlaylistDescription),
+    CreatePlaylist(Playlist),
     UpdatePlaylistName(PlaylistSummary),
     RemovePlaylist(String),
 }
@@ -166,7 +166,7 @@ impl AppState {
                     .selection
                     .take_selection()
                     .into_iter()
-                    .map(|s| s.id)
+                    .map(|s| s.rri.id)
                     .collect();
                 self.playback.dequeue(&tracks);
 
@@ -180,7 +180,7 @@ impl AppState {
                 let playback = &mut self.playback;
                 selection
                     .next()
-                    .and_then(|song| playback.move_down(&song.id))
+                    .and_then(|song| playback.move_down(&song.rri.id))
                     .map(|_| vec![PlaybackEvent::PlaylistChanged.into()])
                     .unwrap_or_default()
             }
@@ -189,7 +189,7 @@ impl AppState {
                 let playback = &mut self.playback;
                 selection
                     .next()
-                    .and_then(|song| playback.move_up(&song.id))
+                    .and_then(|song| playback.move_up(&song.rri.id))
                     .map(|_| vec![PlaybackEvent::PlaylistChanged.into()])
                     .unwrap_or_default()
             }
@@ -207,7 +207,7 @@ impl AppState {
                     .selection
                     .take_selection()
                     .into_iter()
-                    .map(|s| s.id)
+                    .map(|s| s.rri.id)
                     .collect();
                 let mut events: Vec<AppEvent> = forward_action(
                     BrowserAction::RemoveSavedTracks(tracks),
@@ -231,7 +231,7 @@ impl AppState {
                 }
             }
             AppAction::CreatePlaylist(playlist) => {
-                let id = playlist.id.clone();
+                let id = playlist.rri.id.clone();
                 let mut events = forward_action(
                     LoginAction::PrependUserPlaylist(vec![playlist.clone().into()]),
                     &mut self.logged_user,
@@ -267,7 +267,7 @@ impl AppState {
             AppAction::BrowserAction(BrowserAction::SavePlaylist(playlist)) => {
                 let mut events = forward_action(
                     LoginAction::PrependUserPlaylist(vec![PlaylistSummary {
-                        id: playlist.id.clone(),
+                        id: playlist.rri.id.clone(),
                         title: playlist.title.clone(),
                     }]),
                     &mut self.logged_user,

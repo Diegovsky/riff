@@ -16,10 +16,8 @@ use gio::SimpleAction;
 use gtk::prelude::*;
 
 mod about;
-mod api;
 mod app;
 mod audio_engine;
-mod auth;
 mod config;
 mod connect;
 mod dbus;

@@ -11,6 +11,7 @@ use std::rc::Rc;
 use crate::{impl_playlist_model_base, impl_toggle_play};
 
 use crate::app::components::DetailsPageModel;
+use crate::app::components::SongActions;
 use crate::app::components::{
     labels, HasHeaderBarModel, HeaderImageShape, PageModel, PlaylistModel, SimpleHeaderBarModel,
 };
@@ -18,8 +19,8 @@ use crate::app::models::*;
 use crate::app::state::SelectionContext;
 use crate::app::state::{PlaybackAction, SelectionAction, SelectionState};
 use crate::app::{
-    ActionDispatcher, AppEvent, AppModel, BatchQuery, BrowserAction, BrowserEvent,
-    PaginationTarget, SongsSource,
+    ActionDispatcher, AppEvent, AppModel, BrowserAction, BrowserEvent, PaginationTarget,
+    SongsSource,
 };
 use crate::feature_flags::{self, FeatureFlag};
 
@@ -46,18 +47,12 @@ impl SavedTracksModel {
 
     /// Called on login to load the initial batch of saved tracks.
     pub fn load_initial(&self) {
-        let loader = self.app_model.get_batch_loader();
-        let query = BatchQuery {
-            source: SongsSource::SavedTracks,
-            batch: Batch::first_of_size(50),
-        };
-        self.dispatcher.dispatch_async(Box::pin(async move {
-            loader
-                .query(query, |_s, song_batch| {
-                    BrowserAction::SetSavedTracks(Box::new(song_batch)).into()
-                })
+        let api = self.app_model.api();
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            api.get_saved_tracks(0, 50)
                 .await
-        }));
+                .map(|song_batch| BrowserAction::SetSavedTracks(Box::new(song_batch)).into())
+        });
     }
 }
 
@@ -67,7 +62,14 @@ impl PageModel for SavedTracksModel {
     }
 
     fn get_subtitle(&self) -> Option<String> {
-        let count = PlaylistModel::song_list_model(self).len();
+        let loaded = PlaylistModel::song_list_model(self).len();
+        let count = self
+            .app_model
+            .get_state()
+            .browser
+            .home_state()
+            .and_then(|s| s.saved_tracks_total)
+            .map_or(loaded, |total| total.max(loaded));
         Some(gettextrs::ngettext!(
             "{} Track",
             "{} Tracks",
@@ -85,7 +87,7 @@ impl PageModel for SavedTracksModel {
     }
 
     fn load_more(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let state = self.app_model.get_state();
         let Some(next_page) = state
             .browser
@@ -104,12 +106,11 @@ impl PageModel for SavedTracksModel {
         self.app_model
             .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SavedTracks).into());
 
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                api.get_saved_tracks(offset, batch_size)
-                    .await
-                    .map(|song_batch| BrowserAction::AppendSavedTracks(Box::new(song_batch)).into())
-            });
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            api.get_saved_tracks(offset, batch_size)
+                .await
+                .map(|song_batch| BrowserAction::AppendSavedTracks(Box::new(song_batch)).into())
+        });
     }
 
     fn is_loaded(&self) -> bool {
@@ -168,7 +169,7 @@ impl PlaylistModel for SavedTracksModel {
         }
     }
 
-    fn actions_for(&self, song: &SongDescription) -> Option<gio::ActionGroup> {
+    fn actions_for(&self, song: &Track) -> Option<gio::ActionGroup> {
         let group = SimpleActionGroup::new();
         for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
             group.add_action(&a);
@@ -178,13 +179,13 @@ impl PlaylistModel for SavedTracksModel {
         Some(group.upcast())
     }
 
-    fn menu_for(&self, song: &SongDescription) -> Option<gio::MenuModel> {
+    fn menu_for(&self, song: &Track) -> Option<gio::MenuModel> {
         let menu = gio::Menu::new();
         menu.append(Some(&*labels::VIEW_ALBUM), Some("song.view_album"));
         for artist in song.artists.iter() {
             menu.append(
                 Some(&labels::more_from_label(&artist.name)),
-                Some(&format!("song.view_artist_{}", artist.id)),
+                Some(&format!("song.view_artist_{}", artist.rri.id)),
             );
         }
         menu.append(Some(&*labels::COPY_LINK), Some("song.copy_link"));
@@ -201,8 +202,14 @@ impl SimpleHeaderBarModel for SavedTracksModel {
     }
 
     fn select_all(&self) {
-        let songs: Vec<SongDescription> = PlaylistModel::song_list_model(self).collect();
+        let songs: Vec<Track> = PlaylistModel::song_list_model(self).collect();
         self.dispatcher
             .dispatch(SelectionAction::Select(songs).into());
+    }
+}
+
+impl crate::app::ProvidesApi for SavedTracksModel {
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.app_model.api()
     }
 }

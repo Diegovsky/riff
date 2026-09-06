@@ -9,8 +9,9 @@
 
 use crate::app::components::display_add_css_provider;
 use crate::app::dispatch::Worker;
-use crate::app::loader::ImageLoader;
 use crate::app::models::{CardLayout, CardModel, CardSize};
+use riff_api::ApiService;
+use std::sync::Arc;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -229,6 +230,7 @@ impl CardWidget {
     pub fn for_model(
         model: &CardModel,
         worker: Worker,
+        api_service: Arc<ApiService>,
         shape: ImageShape,
         layout: CardLayout,
         size: CardSize,
@@ -236,7 +238,7 @@ impl CardWidget {
         let widget = Self::new(shape, layout);
         widget.set_image_size(size);
         widget.set_layout(layout);
-        widget.bind(model, worker);
+        widget.bind(model, worker, api_service);
         widget
     }
 
@@ -289,7 +291,7 @@ impl CardWidget {
     }
 
     /// Bind this card to a model, loading artwork asynchronously.
-    fn bind(&self, model: &CardModel, worker: Worker) {
+    fn bind(&self, model: &CardModel, worker: Worker, api_service: Arc<ApiService>) {
         let imp = self.imp();
         *imp.card_id.borrow_mut() = model.id();
 
@@ -306,13 +308,11 @@ impl CardWidget {
 
             let load = async move {
                 if let Some(this) = weak.upgrade() {
-                    let loader = ImageLoader::new();
-                    let pixbuf = loader
-                        .load_remote(&url, "jpg", IMAGE_SIZE as i32, IMAGE_SIZE as i32)
+                    let texture = api_service
+                        .load_image(&url, "jpg", IMAGE_SIZE as i32, IMAGE_SIZE as i32)
                         .await;
-                    if let Some(ref pixbuf) = pixbuf {
-                        let texture = gdk::Texture::for_pixbuf(pixbuf);
-                        this.imp().cover_image.set_paintable(Some(&texture));
+                    if let Some(ref texture) = texture {
+                        this.imp().cover_image.set_paintable(Some(texture));
                     }
                     this.imp().title_label.set_label(&title);
                     this.imp().subtitle_label.set_label(&subtitle);
@@ -333,21 +333,6 @@ impl CardWidget {
                     worker.send_local_task(load);
                 });
             }
-        } else {
-            model
-                .bind_property("title", &*imp.title_label, "label")
-                .flags(glib::BindingFlags::DEFAULT | glib::BindingFlags::SYNC_CREATE)
-                .build();
-            model
-                .bind_property("subtitle", &*imp.subtitle_label, "label")
-                .flags(glib::BindingFlags::DEFAULT | glib::BindingFlags::SYNC_CREATE)
-                .build();
-            model
-                .bind_property("subtitle", &*imp.subtitle_label, "visible")
-                .flags(glib::BindingFlags::DEFAULT | glib::BindingFlags::SYNC_CREATE)
-                .transform_to(|_, subtitle: String| Some(!subtitle.is_empty()))
-                .build();
-            self.set_loaded();
         }
     }
 }

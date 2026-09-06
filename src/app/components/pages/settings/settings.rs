@@ -99,6 +99,15 @@ mod imp {
 
         #[template_child]
         pub pitch: TemplateChild<PitchWidget>,
+
+        #[template_child]
+        pub memory_cache_size: TemplateChild<libadwaita::SpinRow>,
+
+        #[template_child]
+        pub disk_cache_size: TemplateChild<libadwaita::SpinRow>,
+
+        #[template_child]
+        pub clear_cache_button: TemplateChild<gtk::Button>,
     }
 
     #[glib::object_subclass]
@@ -612,6 +621,36 @@ impl SettingsDialog {
         settings
             .bind("skip-explicit", skip_explicit_switch, "active")
             .build();
+
+        // Memory cache size (MB). Bound manually rather than via `Settings::bind`
+        // for the same spin-row feedback-loop reason noted above, and because the
+        // key is a uint while the adjustment is a double.
+        let memory_cache_size = widget
+            .memory_cache_size
+            .downcast_ref::<libadwaita::SpinRow>()
+            .unwrap();
+        let cache_adjustment = memory_cache_size.adjustment();
+        cache_adjustment.set_value(settings.uint("memory-cache-size-mb") as f64);
+        {
+            let settings = settings.clone();
+            cache_adjustment.connect_value_changed(move |adj| {
+                let _ = settings.set_uint("memory-cache-size-mb", adj.value() as u32);
+            });
+        }
+
+        // Disk (image) cache size (MB). Same manual-binding rationale as above.
+        let disk_cache_size = widget
+            .disk_cache_size
+            .downcast_ref::<libadwaita::SpinRow>()
+            .unwrap();
+        let disk_adjustment = disk_cache_size.adjustment();
+        disk_adjustment.set_value(settings.uint("disk-cache-size-mb") as f64);
+        {
+            let settings = settings.clone();
+            disk_adjustment.connect_value_changed(move |adj| {
+                let _ = settings.set_uint("disk-cache-size-mb", adj.value() as u32);
+            });
+        }
     }
 
     fn bind_feature_flags(&self) {
@@ -662,6 +701,16 @@ impl SettingsDialog {
         dialog.connect_close_attempt(move |_| {
             on_close();
         });
+    }
+
+    /// Connect the "Clear Cache" button to the given handler.
+    fn connect_clear_cache<F>(&self, on_clear: F)
+    where
+        F: Fn() + 'static,
+    {
+        self.imp()
+            .clear_cache_button
+            .connect_clicked(move |_| on_clear());
     }
 
     /// Re-lock the equalizer and pan controls. The locks are UI-only and never
@@ -717,6 +766,11 @@ impl Settings {
                 close_model.stop_player();
             }
             close_model.set_settings();
+        });
+
+        let clear_model = model.clone();
+        settings_dialog.connect_clear_cache(move || {
+            clear_model.clear_cache();
         });
 
         Self {

@@ -2,10 +2,7 @@ use futures::channel::mpsc::UnboundedSender;
 use std::rc::Rc;
 
 use crate::app::{
-    components::EventListener,
-    models::{RepeatMode, SongDescription},
-    state::PlaybackEvent,
-    AppEvent, AppModel,
+    components::EventListener, models::RepeatMode, state::PlaybackEvent, AppEvent, AppModel,
 };
 
 use super::types::{LoopStatus, PlaybackStatus, TrackMetadata};
@@ -40,22 +37,19 @@ impl AppPlaybackStateListener {
     }
 
     fn make_track_meta(&self) -> Option<TrackMetadata> {
-        let SongDescription {
-            id,
-            title,
-            artists,
-            album,
-            duration_ms: duration,
-            art,
-            ..
-        } = self.app_model.get_state().playback.current_song()?;
+        let song = self.app_model.get_state().playback.current_song()?;
+        let id = &song.rri.id;
         Some(TrackMetadata {
             id: format!("/dev/diegovsky/Riff/Track/{id}"),
-            length: 1000 * duration as u64,
-            title,
-            album: album.name,
-            artist: artists.into_iter().map(|a| a.name).collect(),
-            art: art.as_ref().and_then(|s| s.largest()).map(str::to_owned),
+            length: 1000 * song.duration_ms as u64,
+            title: song.title.clone(),
+            album: song
+                .album
+                .as_ref()
+                .map(|a| a.name.clone())
+                .unwrap_or_default(),
+            artist: song.artists.iter().map(|a| a.name.clone()).collect(),
+            art: song.art.largest().map(str::to_owned),
         })
     }
 
@@ -70,9 +64,9 @@ impl AppPlaybackStateListener {
     fn loop_status(&self) -> LoopStatus {
         let state = self.app_model.get_state();
         match state.playback.repeat_mode() {
-            RepeatMode::None => LoopStatus::None,
-            RepeatMode::Song => LoopStatus::Track,
-            RepeatMode::Playlist => LoopStatus::Playlist,
+            RepeatMode::Off => LoopStatus::None,
+            RepeatMode::Track => LoopStatus::Track,
+            RepeatMode::Context => LoopStatus::Playlist,
         }
     }
 

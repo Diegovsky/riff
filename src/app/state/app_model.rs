@@ -1,6 +1,6 @@
-use crate::api::SpotifyApiClient;
-use crate::app::{state::*, BatchLoader};
+use crate::app::state::*;
 use ref_filter_map::*;
+use riff_api::ApiService;
 use std::cell::{Ref, RefCell};
 use std::sync::Arc;
 
@@ -8,26 +8,17 @@ use std::sync::Arc;
 // and give a read only view of the state
 pub struct AppModel {
     state: RefCell<AppState>,
-    pub spotify_api: Arc<dyn SpotifyApiClient + Send + Sync>,
-    pub batch_loader: BatchLoader,
+    api_service: Arc<ApiService>,
 }
 
 impl AppModel {
-    pub fn new(state: AppState, spotify_api: Arc<dyn SpotifyApiClient + Send + Sync>) -> Self {
+    pub fn new(state: AppState, api_service: Arc<ApiService>) -> Self {
         let state = RefCell::new(state);
-        Self {
-            state,
-            batch_loader: BatchLoader::new(Arc::clone(&spotify_api)),
-            spotify_api,
-        }
+        Self { state, api_service }
     }
 
-    pub fn get_spotify(&self) -> Arc<dyn SpotifyApiClient + Send + Sync> {
-        Arc::clone(&self.spotify_api)
-    }
-
-    pub fn get_batch_loader(&self) -> BatchLoader {
-        self.batch_loader.clone()
+    pub fn api(&self) -> Arc<ApiService> {
+        Arc::clone(&self.api_service)
     }
 
     // Read only access to the state!
@@ -53,4 +44,8 @@ impl AppModel {
         let mut state = self.state.borrow_mut();
         state.update_state(action)
     }
+}
+
+pub trait ProvidesApi {
+    fn api_service(&self) -> Arc<ApiService>;
 }

@@ -294,9 +294,9 @@ impl RiffMprisPlayer {
     #[zbus(property)]
     pub fn set_loop_status(&self, value: LoopStatus) -> zbus::Result<()> {
         let mode = match value {
-            LoopStatus::None => RepeatMode::None,
-            LoopStatus::Track => RepeatMode::Song,
-            LoopStatus::Playlist => RepeatMode::Playlist,
+            LoopStatus::None => RepeatMode::Off,
+            LoopStatus::Track => RepeatMode::Track,
+            LoopStatus::Playlist => RepeatMode::Context,
         };
         self.sender
             .unbounded_send(PlaybackAction::SetRepeatMode(mode).into())

@@ -40,12 +40,11 @@ impl CardListModel for SavedArtistsModel {
     }
 
     fn refresh(&self) {
-        let api = self.app_model.get_spotify();
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                let (artists, cursor) = api.get_followed_artists(None, 30).await?;
-                Ok(BrowserAction::SetSavedArtists(artists, cursor).into())
-            });
+        let api = self.app_model.api();
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            let (artists, cursor) = api.get_followed_artists(None, 30).await?;
+            Ok(BrowserAction::SetSavedArtists(artists, cursor).into())
+        });
     }
 
     fn has_items(&self) -> bool {
@@ -75,12 +74,11 @@ impl CardListModel for SavedArtistsModel {
         self.app_model
             .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SavedArtists).into());
 
-        let api = self.app_model.get_spotify();
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                let (artists, cursor) = api.get_followed_artists(after, 30).await?;
-                Ok(BrowserAction::AppendSavedArtists(artists, cursor).into())
-            });
+        let api = self.app_model.api();
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            let (artists, cursor) = api.get_followed_artists(after.as_deref(), 30).await?;
+            Ok(BrowserAction::AppendSavedArtists(artists, cursor).into())
+        });
     }
 
     fn open_item(&self, id: String) {
@@ -138,4 +136,10 @@ pub fn make_saved_artists(
         shared_size,
         dispatcher,
     )
+}
+
+impl crate::app::ProvidesApi for SavedArtistsModel {
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.app_model.api()
+    }
 }

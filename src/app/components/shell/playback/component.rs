@@ -29,6 +29,10 @@ impl PlaybackModel {
         self.app_model.get_state()
     }
 
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.app_model.api()
+    }
+
     fn go_home(&self) {
         // Reach now-playing like the sidebar does: pop to home and select its
         // now-playing sub-page, reusing the home sub-page switch path.
@@ -46,7 +50,7 @@ impl PlaybackModel {
         self.state().playback.is_shuffled()
     }
 
-    fn current_song(&self) -> Option<SongDescription> {
+    fn current_song(&self) -> Option<Track> {
         self.app_model.get_state().playback.current_song()
     }
 
@@ -169,9 +173,12 @@ impl PlaybackControl {
                 .set_title_and_artist(&song.title, &song.artists_name());
             self.mobile_now_playing.set_visible(true);
             self.widget.set_song_duration(Some(song.duration_ms as f64));
-            if let Some(url) = song.art.as_ref().and_then(|s| s.best_for_width(120)) {
-                self.widget
-                    .set_artwork_from_url(url.to_owned(), &self.worker);
+            if let Some(url) = song.art.best_for_width(120) {
+                self.widget.set_artwork_from_url(
+                    url.to_owned(),
+                    self.model.api_service(),
+                    &self.worker,
+                );
             }
         } else {
             self.widget.reset_info();

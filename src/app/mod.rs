@@ -1,9 +1,9 @@
-use crate::api::CachedSpotifyClient;
-use crate::auth::TokenStore;
 #[cfg(debug_assertions)]
 use crate::player::Command;
 use crate::settings::{RiffSettings, StateTracker};
 use futures::channel::mpsc::UnboundedSender;
+use gio::prelude::SettingsExt;
+use riff_auth::TokenStore;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -16,6 +16,7 @@ pub mod components;
 use components::*;
 
 pub mod models;
+pub use models::SongsSource;
 
 mod list_store;
 pub use list_store::*;
@@ -23,13 +24,11 @@ pub use list_store::*;
 pub mod state;
 pub use state::{
     AppAction, AppEvent, AppModel, AppState, BrowserAction, BrowserEvent, PaginationTarget,
+    ProvidesApi,
 };
 
-mod batch_loader;
-pub use batch_loader::*;
-
-pub mod credentials;
-pub mod loader;
+mod cache_warmer;
+use cache_warmer::CacheWarmer;
 
 #[cfg(debug_assertions)]
 mod dev_tools;
@@ -63,9 +62,24 @@ impl App {
         worker: Worker,
     ) -> Self {
         let state = AppState::new();
+
+        // Token
         let token_store = TokenStore::new();
-        let spotify_client = Arc::new(CachedSpotifyClient::new(token_store.clone()));
-        let model = Rc::new(AppModel::new(state, spotify_client));
+        let token_provider: Arc<dyn riff_api::TokenProvider> = Arc::new(token_store.clone());
+
+        // Setting
+        let gsettings = gio::Settings::new("dev.diegovsky.Riff");
+
+        // API
+        let memory_cache_mb = gsettings.uint("memory-cache-size-mb").max(1) as usize;
+        let disk_cache_mb = gsettings.uint("disk-cache-size-mb").max(1) as usize;
+        let api_service = Arc::new(riff_api::spotify_service(
+            token_provider,
+            memory_cache_mb * 1024 * 1024,
+            disk_cache_mb * 1024 * 1024,
+        ));
+
+        let model = Rc::new(AppModel::new(state, api_service));
 
         let player_command_sender = crate::player::start_player_service(
             settings.player_settings.clone(),
@@ -73,7 +87,7 @@ impl App {
             token_store,
         );
 
-        let api = model.get_spotify();
+        let api = model.api();
         let connect_command_sender = crate::connect::start_connect_server(api, sender.clone());
 
         // Non widget components
@@ -84,6 +98,7 @@ impl App {
                 player_command_sender.clone(),
                 connect_command_sender,
             )),
+            Box::new(CacheWarmer::new(model.api())),
             Box::new(StateTracker::new_from_gsettings()),
             App::make_dbus(Rc::clone(&model), sender.clone()),
             App::make_inhibitor(&builder, Rc::clone(&model)),
@@ -326,6 +341,15 @@ impl App {
     pub async fn attach(mut self, dispatch_loop: DispatchLoop) {
         let rt = tokio::runtime::Runtime::new().expect("Failed to acquire tokio runtime");
         let _guard = rt.enter();
+
+        // Evict any disk cache left over-budget by a previous session. Run
+        // here (rather than at construction in `App::new`) because this is
+        // where the app's Tokio runtime is entered; the data layer's async
+        // disk I/O requires one.
+        let maintenance = self.model.api();
+        tokio::spawn(async move {
+            maintenance.run_cache_maintenance().await;
+        });
 
         let app = &mut self;
         dispatch_loop

@@ -1,118 +1,89 @@
-use std::{
-    hash::{Hash, Hasher},
-    str::FromStr,
+// The app consumes the provider-neutral data-layer models directly. The leaf
+// catalog entities (`Track`, `Album`, `Playlist`, `Artist`, ...) are
+// re-exported from `riff_api::models` so the rest of the app can refer to them
+// as `crate::app::models::*`.
+pub use riff_api::models::{
+    Album, AlbumType, Artist, ArtistRef, ContentRating, Device, DeviceKind, ImageSet, Page,
+    PlayerState, Playlist, RepeatMode, ResourceId, SearchResults, Track, User,
 };
 
-/// A set of image URLs at different sizes from Spotify.
-///
-/// An `ImageSet` is guaranteed to contain at least one image. Construction
-/// via [`ImageSet::from_images`] returns `None` when no valid (non-empty URL)
-/// images are provided, so any existing `ImageSet` value is always non-empty.
-#[derive(Clone, Debug, Default)]
-pub struct ImageSet {
-    images: Vec<(u32, String)>, // (width, url) sorted by width ascending
+// Only the `#[cfg(test)]` fixtures below name `Provider`; keep its import
+// test-scoped so non-test builds don't see an unused re-export.
+#[cfg(test)]
+use riff_api::models::Provider;
+
+/// UI helper methods for [`Track`].
+pub trait TrackExt {
+    fn artists_name(&self) -> String;
+    fn is_explicit(&self) -> bool;
 }
 
-impl ImageSet {
-    /// Construct an `ImageSet` from an iterator of (width, url) pairs.
-    ///
-    /// Returns `None` if no valid images are provided (all URLs empty or
-    /// iterator is empty). A `Some` value is guaranteed to contain at least
-    /// one image, so `best_for_width` will always return `Some`.
-    pub fn from_images(images: impl IntoIterator<Item = (Option<u32>, String)>) -> Option<Self> {
-        let mut imgs: Vec<(u32, String)> = images
-            .into_iter()
-            .filter(|(_, url)| !url.is_empty())
-            .map(|(w, url)| (w.unwrap_or(0), url))
-            .collect();
-        if imgs.is_empty() {
-            return None;
-        }
-        imgs.sort_by_key(|(w, _)| *w);
-        Some(Self { images: imgs })
-    }
-
-    /// Pick the image URL closest to (but preferring >=) the given width.
-    ///
-    /// Always returns `Some` on a properly constructed `ImageSet` (i.e. one
-    /// obtained from `from_images`). Returns `None` only on a `Default` instance.
-    pub fn best_for_width(&self, width: u32) -> Option<&str> {
-        self.images
+impl TrackExt for Track {
+    fn artists_name(&self) -> String {
+        self.artists
             .iter()
-            .find(|(w, _)| *w >= width)
-            .or_else(|| self.images.last())
-            .map(|(_, url)| url.as_str())
+            .map(|a| a.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
-    /// Get the largest available image URL.
-    pub fn largest(&self) -> Option<&str> {
-        self.images.last().map(|(_, url)| url.as_str())
+    fn is_explicit(&self) -> bool {
+        matches!(self.content_rating, ContentRating::Explicit)
     }
 }
 
-// A batch of whatever
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Batch {
-    // What offset does the batch start at
-    pub offset: usize,
-    // How many elements
-    pub batch_size: usize,
-    // Total number of elements if we had all batches
-    pub total: usize,
+/// UI helper methods for [`Album`].
+pub trait AlbumExt {
+    fn artists_name(&self) -> String;
+    fn release_date_string(&self) -> Option<String>;
+    fn album_type_string(&self) -> Option<String>;
 }
 
-impl Batch {
-    pub fn first_of_size(batch_size: usize) -> Self {
-        Self {
-            offset: 0,
-            batch_size,
-            total: 0,
-        }
+impl AlbumExt for Album {
+    fn artists_name(&self) -> String {
+        self.artists
+            .iter()
+            .map(|a| a.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
-    pub fn next(self) -> Option<Self> {
-        let Self {
-            offset,
-            batch_size,
-            total,
-        } = self;
-
-        Some(Self {
-            offset: offset + batch_size,
-            batch_size,
-            total,
+    fn release_date_string(&self) -> Option<String> {
+        self.release_date.map(|d| match (d.month, d.day) {
+            (Some(m), Some(day)) => format!("{:04}-{:02}-{:02}", d.year, m, day),
+            (Some(m), None) => format!("{:04}-{:02}", d.year, m),
+            _ => format!("{:04}", d.year),
         })
-        .filter(|b| b.offset < total)
+    }
+
+    fn album_type_string(&self) -> Option<String> {
+        Some(match &self.album_type {
+            AlbumType::Album => "album".to_string(),
+            AlbumType::Single => "single".to_string(),
+            AlbumType::Ep => "ep".to_string(),
+            AlbumType::Compilation => "compilation".to_string(),
+            AlbumType::Live => "live".to_string(),
+            AlbumType::Soundtrack => "soundtrack".to_string(),
+            AlbumType::Other(s) => s.clone(),
+        })
     }
 }
 
-// "Something"Ref models usually boil down to an ID/url + a display name
-
-#[derive(Clone, Debug)]
-pub struct UserRef {
-    pub id: String,
-    pub display_name: String,
+/// A request descriptor for the next page to fetch: the offset to load and the
+/// page size to request. This is the "fetch intent" counterpart to a loaded
+/// `Page<Track>`. It intentionally carries no `total`;
+/// the app paginates until a short/empty page is returned (see
+/// [`crate::app::state::pagination::Pagination`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PageRequest {
+    /// Offset of the first element to load.
+    pub offset: usize,
+    /// Number of elements to request.
+    pub batch_size: usize,
 }
 
-#[derive(Clone, Debug)]
-pub struct ArtistRef {
-    pub id: String,
-    pub name: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct AlbumRef {
-    pub id: String,
-    pub name: String,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct SearchResults {
-    pub albums: Vec<AlbumDescription>,
-    pub artists: Vec<ArtistSummary>,
-    pub playlists: Vec<PlaylistDescription>,
-    pub tracks: SongBatch,
-}
+// "Something"Ref models (UserRef, ArtistRef, AlbumRef) are re-exported from
+// the data layer above.
 
 /// The category a scoped ("sub") search page searches within.
 ///
@@ -127,119 +98,21 @@ pub enum SearchType {
     Tracks,
 }
 
-impl SearchType {
-    /// The Spotify search API `type` query value.
-    pub fn spotify_type(self) -> &'static str {
-        match self {
-            Self::Artists => "artist",
-            Self::Albums => "album",
-            Self::Playlists => "playlist",
-            Self::Tracks => "track",
+impl From<SearchType> for riff_api::models::SearchType {
+    fn from(kind: SearchType) -> Self {
+        match kind {
+            SearchType::Artists => Self::Artist,
+            SearchType::Albums => Self::Album,
+            SearchType::Playlists => Self::Playlist,
+            SearchType::Tracks => Self::Track,
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct AlbumDescription {
-    pub id: String,
-    pub title: String,
-    pub artists: Vec<ArtistRef>,
-    pub release_date: Option<String>,
-    pub art: Option<ImageSet>,
-    pub songs: SongBatch,
-    pub is_liked: bool,
-    pub popularity: u32,
-    pub album_type: Option<String>,
-}
-
-impl AlbumDescription {
-    pub fn artists_name(&self) -> String {
-        self.artists
-            .iter()
-            .map(|a| a.name.to_string())
-            .collect::<Vec<String>>()
-            .join(", ")
-    }
-
-    pub fn year(&self) -> Option<u32> {
-        self.release_date
-            .as_ref()
-            .and_then(|date| date.split('-').next())
-            .and_then(|y| u32::from_str(y).ok())
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct AlbumFullDescription {
-    pub description: AlbumDescription,
-    pub release_details: AlbumReleaseDetails,
-}
-
-#[derive(Clone, Debug)]
-pub struct AlbumReleaseDetails {
-    pub label: String,
-    pub copyright_text: String,
-    pub total_tracks: usize,
-}
-
-#[derive(Clone, Debug)]
-pub struct PlaylistDescription {
-    pub id: String,
-    pub title: String,
-    pub art: Option<ImageSet>,
-    pub songs: SongBatch,
-    pub owner: UserRef,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum ConnectDeviceKind {
-    Phone,
-    Computer,
-    Speaker,
-    Other,
-}
-
-#[derive(Clone, Debug)]
-pub struct ConnectDevice {
-    pub id: String,
-    pub label: String,
-    pub kind: ConnectDeviceKind,
 }
 
 #[derive(Clone, Debug)]
 pub struct PlaylistSummary {
     pub id: String,
     pub title: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct SongDescription {
-    pub id: String,
-    pub track_number: Option<u32>,
-    pub uri: String,
-    pub title: String,
-    pub artists: Vec<ArtistRef>,
-    pub album: AlbumRef,
-    pub duration_ms: u32,
-    pub art: Option<ImageSet>,
-    pub explicit: bool,
-    pub playable: bool,
-}
-
-impl SongDescription {
-    pub fn artists_name(&self) -> String {
-        self.artists
-            .iter()
-            .map(|a| a.name.to_string())
-            .collect::<Vec<String>>()
-            .join(", ")
-    }
-}
-
-impl Hash for SongDescription {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
-    }
 }
 
 #[derive(Copy, Clone, Default)]
@@ -250,145 +123,137 @@ pub struct SongState {
     pub is_explicit_filtered: bool,
 }
 
-// A batch of SONGS
-#[derive(Debug, Clone, Default)]
-pub struct SongBatch {
-    pub songs: Vec<SongDescription>,
-    pub batch: Batch,
+/// Identifies the source of a song list (playlist, album, etc.) for playback
+/// and pagination purposes.
+#[derive(Clone, Debug)]
+pub enum SongsSource {
+    Playlist(String),
+    Album(String),
+    Artist(String),
+    SavedTracks,
+    /// Songs shown on a scoped track search page, keyed by the search query.
+    Search(String),
 }
 
-impl SongBatch {
-    pub fn empty() -> Self {
-        Self {
-            songs: vec![],
-            batch: Batch::first_of_size(1),
-        }
-    }
-
-    pub fn resize(self, batch_size: usize) -> Vec<Self> {
-        let SongBatch { mut songs, batch } = self;
-        // Growing a batch is easy...
-        if batch_size > batch.batch_size {
-            let new_batch = Batch {
-                batch_size,
-                ..batch
-            };
-            vec![Self {
-                songs,
-                batch: new_batch,
-            }]
-        // Shrinking is not!
-        // We have to split the batch in multiple batches
-        } else {
-            let n = songs.len();
-            let iter_count = n.div_ceil(batch_size);
-            (0..iter_count)
-                .map(|i| {
-                    let offset = batch.offset + i * batch_size;
-                    let new_batch = Batch {
-                        offset,
-                        total: batch.total,
-                        batch_size,
-                    };
-                    let drain_upper = usize::min(batch_size, songs.len());
-                    let new_songs = songs.drain(0..drain_upper).collect();
-                    Self {
-                        songs: new_songs,
-                        batch: new_batch,
-                    }
-                })
-                .collect()
+impl PartialEq for SongsSource {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Playlist(l), Self::Playlist(r)) => l == r,
+            (Self::Album(l), Self::Album(r)) => l == r,
+            (Self::Artist(l), Self::Artist(r)) => l == r,
+            (Self::SavedTracks, Self::SavedTracks) => true,
+            (Self::Search(l), Self::Search(r)) => l == r,
+            _ => false,
         }
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct ArtistDescription {
-    pub id: String,
-    pub name: String,
-    pub photo: Option<ImageSet>,
-    pub albums: Vec<AlbumDescription>,
-    pub top_tracks: Vec<SongDescription>,
-    pub is_followed: bool,
-}
+impl Eq for SongsSource {}
 
-#[derive(Clone, Debug)]
-pub struct ArtistSummary {
-    pub id: String,
-    pub name: String,
-    pub photo: Option<ImageSet>,
-    pub popularity: u32,
-}
+impl SongsSource {
+    pub fn has_spotify_uri(&self) -> bool {
+        matches!(self, Self::Playlist(_) | Self::Album(_))
+    }
 
-#[derive(Clone, Debug)]
-pub struct UserDescription {
-    pub id: String,
-    pub name: String,
-    pub photo: Option<ImageSet>,
-    pub playlists: Vec<PlaylistDescription>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RepeatMode {
-    Song,
-    Playlist,
-    None,
-}
-
-#[derive(Clone, Debug)]
-pub struct ConnectPlayerState {
-    pub is_playing: bool,
-    pub current_song_id: Option<String>,
-    pub progress_ms: u32,
-    pub repeat: RepeatMode,
-    pub shuffle: bool,
-}
-
-impl Default for ConnectPlayerState {
-    fn default() -> Self {
-        Self {
-            is_playing: false,
-            current_song_id: None,
-            progress_ms: 0,
-            repeat: RepeatMode::None,
-            shuffle: false,
+    pub fn spotify_uri(&self) -> Option<String> {
+        match self {
+            Self::Playlist(id) => Some(format!("spotify:playlist:{}", id)),
+            Self::Album(id) => Some(format!("spotify:album:{}", id)),
+            _ => None,
         }
+    }
+}
+
+/// Test-only constructor for a minimal [`Track`]. Shared across the crate's
+/// unit tests so they do not each have to spell out every field.
+#[cfg(test)]
+pub fn make_track(id: &str) -> Track {
+    Track {
+        rri: ResourceId {
+            provider: Provider::Spotify,
+            id: id.to_string(),
+            uri: None,
+        },
+        title: "Title".to_string(),
+        artists: vec![],
+        album: None,
+        duration_ms: 1000,
+        track_number: None,
+        disc_number: None,
+        content_rating: ContentRating::None,
+        isrc: None,
+        art: ImageSet::default(),
+        playable: true,
+        popularity: None,
+        saved: None,
+        preview_url: None,
+        url: None,
     }
 }
 
 #[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    fn song(id: &str) -> SongDescription {
-        SongDescription {
+pub fn make_album(id: &str) -> Album {
+    Album {
+        rri: ResourceId {
+            provider: Provider::Spotify,
             id: id.to_string(),
-            uri: "".to_string(),
-            title: "Title".to_string(),
-            artists: vec![],
-            album: AlbumRef {
-                id: "".to_string(),
-                name: "".to_string(),
-            },
-            duration_ms: 1000,
-            art: None,
-            track_number: None,
-            explicit: false,
-            playable: true,
-        }
+            uri: None,
+        },
+        title: String::new(),
+        artists: vec![],
+        art: ImageSet::default(),
+        album_type: AlbumType::Album,
+        release_date: None,
+        total_tracks: None,
+        label: None,
+        copyright: None,
+        upc: None,
+        genres: vec![],
+        popularity: None,
+        content_rating: ContentRating::None,
+        saved: None,
+        tracks: None,
+        url: None,
     }
+}
 
-    #[test]
-    fn resize_batch() {
-        let batch = SongBatch {
-            songs: vec![song("1"), song("2"), song("3"), song("4")],
-            batch: Batch::first_of_size(4),
-        };
+#[cfg(test)]
+pub fn make_artist(id: &str, name: &str) -> Artist {
+    Artist {
+        rri: ResourceId {
+            provider: Provider::Spotify,
+            id: id.to_string(),
+            uri: None,
+        },
+        name: name.to_string(),
+        art: ImageSet::default(),
+        genres: vec![],
+        popularity: None,
+        follower_count: None,
+        bio: None,
+        following: None,
+        url: None,
+    }
+}
 
-        let batches = batch.resize(2);
-        assert_eq!(batches.len(), 2);
-        assert_eq!(&batches.get(0).unwrap().songs.get(0).unwrap().id, "1");
-        assert_eq!(&batches.get(1).unwrap().songs.get(0).unwrap().id, "3");
+#[cfg(test)]
+pub fn make_playlist(id: &str, title: &str) -> Playlist {
+    Playlist {
+        rri: ResourceId {
+            provider: Provider::Spotify,
+            id: id.to_string(),
+            uri: None,
+        },
+        title: title.to_string(),
+        description: None,
+        owner: None,
+        art: ImageSet::default(),
+        total_tracks: None,
+        collaborative: None,
+        public: None,
+        version: None,
+        tracks: None,
+        following: None,
+        url: None,
     }
 }

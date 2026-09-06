@@ -13,7 +13,7 @@ const COMBINED_RESULTS_LIMIT: usize = 24;
 pub struct SearchResultsModel {
     app_model: Rc<AppModel>,
     dispatcher: Box<dyn ActionDispatcher>,
-    queued_song: RefCell<Option<SongDescription>>,
+    queued_song: RefCell<Option<Track>>,
 }
 
 impl SearchResultsModel {
@@ -62,32 +62,28 @@ impl SearchResultsModel {
             return;
         };
         let query = query.to_owned();
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         match self.get_filter() {
             None => {
-                self.dispatcher
-                    .call_spotify_and_dispatch(move || async move {
-                        api.search(&query, 0, COMBINED_RESULTS_LIMIT)
-                            .await
-                            .map(|results| {
-                                BrowserAction::SetSearchResults(Box::new(results)).into()
-                            })
-                    });
+                self.dispatcher.call_api_and_dispatch(move || async move {
+                    api.search(&query, 0, COMBINED_RESULTS_LIMIT)
+                        .await
+                        .map(|results| BrowserAction::SetSearchResults(Box::new(results)).into())
+                });
             }
             Some(search_type) => {
-                self.dispatcher
-                    .call_spotify_and_dispatch(move || async move {
-                        api.search_scoped(&query, search_type, 0, CARD_BATCH_SIZE)
-                            .await
-                            .map(|results| {
-                                BrowserAction::SetSearchScopeResults(
-                                    search_type,
-                                    query.clone(),
-                                    Box::new(results),
-                                )
-                                .into()
-                            })
-                    });
+                self.dispatcher.call_api_and_dispatch(move || async move {
+                    api.search_scoped(&query, search_type.into(), 0, CARD_BATCH_SIZE)
+                        .await
+                        .map(|results| {
+                            BrowserAction::SetSearchScopeResults(
+                                search_type,
+                                query.clone(),
+                                Box::new(results),
+                            )
+                            .into()
+                        })
+                });
             }
         }
     }
@@ -96,16 +92,20 @@ impl SearchResultsModel {
         self.app_model
             .map_state_opt(|s| Some(&s.browser.search_state()?.results))
     }
-    pub fn open_track(&self, song: SongDescription) {
+    pub fn open_track(&self, song: Track) {
         self.queued_song.borrow_mut().replace(song.clone());
-        self.dispatcher
-            .dispatch(AppAction::ViewAlbum(song.album.id.clone()));
+        self.dispatcher.dispatch(AppAction::ViewAlbum(
+            song.album
+                .as_ref()
+                .map(|a| a.rri.id.clone())
+                .unwrap_or_default(),
+        ));
     }
     pub fn on_album_loaded(&self, id: &str) {
         if let Some(song) = self.queued_song.borrow_mut().take() {
-            if song.album.id == id {
+            if song.album.as_ref().map(|a| a.rri.id == id).unwrap_or(false) {
                 self.dispatcher
-                    .dispatch(BrowserAction::PlaySong(song.id.clone()).into())
+                    .dispatch(BrowserAction::PlaySong(song.rri.id.clone()).into())
             }
         }
     }
@@ -134,7 +134,7 @@ pub(super) fn load_more_scope(
     dispatcher: &(dyn ActionDispatcher + 'static),
     search_type: SearchType,
 ) {
-    let api = app_model.get_spotify();
+    let api = app_model.api();
     let Some(state) = app_model.map_state_opt(|s| s.browser.search_state()) else {
         return;
     };
@@ -154,8 +154,8 @@ pub(super) fn load_more_scope(
 
     app_model.update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SearchScope).into());
 
-    dispatcher.call_spotify_and_dispatch(move || async move {
-        api.search_scoped(&query, search_type, offset, batch_size)
+    dispatcher.call_api_and_dispatch(move || async move {
+        api.search_scoped(&query, search_type.into(), offset, batch_size)
             .await
             .map(|results| {
                 BrowserAction::AppendSearchScopeResults(

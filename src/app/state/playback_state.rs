@@ -2,8 +2,12 @@ use std::borrow::Cow;
 use std::time::Instant;
 
 use crate::app::models::*;
+// The data-layer device type. Aliased here because this module also defines its
+// own `Device` enum (local vs. Connect target), which would clash with the
+// glob-imported name.
+use crate::app::models::Device as ConnectDevice;
 use crate::app::state::{AppAction, AppEvent, UpdatableState};
-use crate::app::{BatchQuery, LazyRandomIndex, SongsSource};
+use crate::app::LazyRandomIndex;
 
 #[derive(Debug)]
 pub struct PlaybackState {
@@ -57,7 +61,7 @@ impl PlaybackState {
     }
 
     // Whatever batch of songs we would need to grab if we were to play the next track
-    pub fn next_query(&self) -> Option<BatchQuery> {
+    pub fn next_query(&self) -> Option<(SongsSource, PageRequest)> {
         let next_index = self.next_index()?;
         let next_index = if self.is_shuffled {
             self.index.get(next_index)?
@@ -67,13 +71,13 @@ impl PlaybackState {
         let batch = self.songs.needed_batch_for(next_index);
         if let Some(batch) = batch {
             let source = self.source.as_ref().cloned()?;
-            Some(BatchQuery { source, batch })
+            Some((source, batch))
         } else {
             None
         }
     }
 
-    fn index(&self, i: usize) -> Option<SongDescription> {
+    fn index(&self, i: usize) -> Option<Track> {
         let song = if self.is_shuffled {
             self.songs.index(self.index.get(i)?)
         } else {
@@ -91,16 +95,16 @@ impl PlaybackState {
     }
 
     pub fn current_song_id(&self) -> Option<String> {
-        Some(self.index(self.list_position?)?.id)
+        Some(self.index(self.list_position?)?.rri.id)
     }
 
-    pub fn current_song(&self) -> Option<SongDescription> {
+    pub fn current_song(&self) -> Option<Track> {
         self.index(self.list_position?)
     }
 
     fn next_id(&self) -> Option<String> {
         self.next_index()
-            .and_then(|i| Some(self.songs().index(i)?.description().id.clone()))
+            .and_then(|i| Some(self.songs().index(i)?.description().rri.id.clone()))
     }
 
     fn clear(&mut self, source: Option<SongsSource>) -> SongListModelPending {
@@ -111,25 +115,29 @@ impl PlaybackState {
     }
 
     // Replaces (!) the current playlist with the contents of a song batch
-    fn set_batch(&mut self, source: Option<SongsSource>, song_batch: SongBatch) -> bool {
+    fn set_batch(&mut self, source: Option<SongsSource>, song_batch: Page<Track>) -> bool {
         let ok = self.clear(source).and(|s| s.add(song_batch)).commit();
         self.index.resize(self.songs.partial_len());
         ok
     }
 
-    fn add_batch(&mut self, song_batch: SongBatch) -> bool {
+    fn add_batch(&mut self, song_batch: Page<Track>) -> bool {
         let ok = self.songs.add(song_batch).commit();
         self.index.resize(self.songs.partial_len());
         ok
     }
 
     // Replaces (!) the current playlist with a bunch of songs (not batched, not expected to grow)
-    fn set_queue(&mut self, tracks: Vec<SongDescription>) {
-        self.clear(None).and(|s| s.append(tracks)).commit();
+    fn set_queue(&mut self, tracks: Vec<Track>) {
+        self.set_queue_with_source(None, tracks);
+    }
+
+    fn set_queue_with_source(&mut self, source: Option<SongsSource>, tracks: Vec<Track>) {
+        self.clear(source).and(|s| s.append(tracks)).commit();
         self.index.grow(self.songs.len());
     }
 
-    pub fn queue(&mut self, tracks: Vec<SongDescription>) {
+    pub fn queue(&mut self, tracks: Vec<Track>) {
         self.source = None;
         self.songs.append(tracks).commit();
         self.index.grow(self.songs.len());
@@ -240,7 +248,9 @@ impl PlaybackState {
 
     /// Returns true if the current song is marked as explicit.
     fn current_song_is_explicit(&self) -> bool {
-        self.current_song().map(|s| s.explicit).unwrap_or(false)
+        self.current_song()
+            .map(|s| s.is_explicit())
+            .unwrap_or(false)
     }
 
     /// True if the current song is not playable (e.g. region locked).
@@ -271,16 +281,13 @@ impl PlaybackState {
     }
 
     pub fn next_index(&self) -> Option<usize> {
-        // When shuffled, we can only play songs that are actually loaded
-        let len = if self.is_shuffled {
-            self.songs.partial_len()
-        } else {
-            self.songs.len()
-        };
+        let loaded = self.songs.partial_len();
+        let complete = self.is_shuffled || self.songs.is_complete();
         self.list_position.and_then(|p| match self.repeat {
-            RepeatMode::Song => Some(p),
-            RepeatMode::Playlist if len != 0 => Some((p + 1) % len),
-            RepeatMode::None => Some(p + 1).filter(|&i| i < len),
+            RepeatMode::Track => Some(p),
+            RepeatMode::Context if !complete => Some(p + 1),
+            RepeatMode::Context if loaded != 0 => Some((p + 1) % loaded),
+            RepeatMode::Off => Some(p + 1).filter(|&i| i < loaded || !complete),
             _ => None,
         })
     }
@@ -347,9 +354,9 @@ impl PlaybackState {
             self.songs.len()
         };
         self.list_position.and_then(|p| match self.repeat {
-            RepeatMode::Song => Some(p),
-            RepeatMode::Playlist if len != 0 => Some((if p == 0 { len } else { p }) - 1),
-            RepeatMode::None => Some(p).filter(|&i| i > 0).map(|i| i - 1),
+            RepeatMode::Track => Some(p),
+            RepeatMode::Context if len != 0 => Some((if p == 0 { len } else { p }) - 1),
+            RepeatMode::Off => Some(p).filter(|&i| i > 0).map(|i| i - 1),
             _ => None,
         })
     }
@@ -394,7 +401,7 @@ impl Default for PlaybackState {
             list_position: None,
             seek_position: PositionMillis::new(1.0),
             source: None,
-            repeat: RepeatMode::None,
+            repeat: RepeatMode::Off,
             is_playing: false,
             is_shuffled: false,
             skip_explicit: false,
@@ -425,13 +432,14 @@ pub enum PlaybackAction {
     SyncSeek(u32),
     Load(String),
     #[deprecated]
-    LoadSongs(Vec<SongDescription>),
-    LoadPagedSongs(SongsSource, SongBatch),
+    LoadSongs(Vec<Track>),
+    LoadPagedSongs(SongsSource, Page<Track>),
+    LoadContextSongs(SongsSource, Vec<Track>),
     SetVolume(f64),
     Next,
     Previous,
     PreloadNext,
-    Queue(Vec<SongDescription>),
+    Queue(Vec<Track>),
     Dequeue(String),
     SwitchDevice(Device),
     SetAvailableDevices(Vec<ConnectDevice>),
@@ -511,9 +519,9 @@ impl UpdatableState for PlaybackState {
             }
             PlaybackAction::ToggleRepeat => {
                 self.repeat = match self.repeat {
-                    RepeatMode::Song => RepeatMode::None,
-                    RepeatMode::Playlist => RepeatMode::Song,
-                    RepeatMode::None => RepeatMode::Playlist,
+                    RepeatMode::Track => RepeatMode::Off,
+                    RepeatMode::Context => RepeatMode::Track,
+                    RepeatMode::Off => RepeatMode::Context,
                 };
                 vec![PlaybackEvent::RepeatModeChanged(self.repeat)]
             }
@@ -626,6 +634,10 @@ impl UpdatableState for PlaybackState {
                 self.set_queue(tracks);
                 vec![PlaybackEvent::PlaylistChanged, PlaybackEvent::SourceChanged]
             }
+            PlaybackAction::LoadContextSongs(source, tracks) => {
+                self.set_queue_with_source(Some(source), tracks);
+                vec![PlaybackEvent::PlaylistChanged, PlaybackEvent::SourceChanged]
+            }
             PlaybackAction::Queue(tracks) => {
                 self.queue(tracks);
                 vec![PlaybackEvent::PlaylistChanged]
@@ -719,24 +731,10 @@ impl PositionMillis {
 mod tests {
 
     use super::*;
-    use crate::app::models::AlbumRef;
+    use crate::app::models::make_track;
 
-    fn song(id: &str) -> SongDescription {
-        SongDescription {
-            id: id.to_string(),
-            uri: "".to_string(),
-            title: "Title".to_string(),
-            artists: vec![],
-            album: AlbumRef {
-                id: "".to_string(),
-                name: "".to_string(),
-            },
-            duration_ms: 1000,
-            art: None,
-            track_number: None,
-            explicit: false,
-            playable: true,
-        }
+    fn song(id: &str) -> Track {
+        make_track(id)
     }
 
     impl PlaybackState {
@@ -746,14 +744,14 @@ mod tests {
 
         fn prev_id(&self) -> Option<String> {
             self.prev_index()
-                .and_then(|i| Some(self.songs().index(i)?.description().id.clone()))
+                .and_then(|i| Some(self.songs().index(i)?.description().rri.id.clone()))
         }
 
         fn song_ids(&self) -> Vec<String> {
             self.songs()
                 .collect()
                 .iter()
-                .map(|s| s.id.clone())
+                .map(|s| s.rri.id.clone())
                 .collect()
         }
     }
@@ -971,22 +969,15 @@ mod tests {
         assert_eq!(state.current_song_id(), None);
     }
 
-    /// Reproduces the exact dispatch sequence from the details page shuffle button:
-    /// 1. ToggleShuffle (enables shuffle)
-    /// 2. LoadPagedSongs (loads a new source with songs)
-    /// 3. Load(first_song_id) (starts playing the first song)
-    /// Then pressing Next should select the next shuffled song, not stop playback.
     #[test]
     fn test_details_page_shuffle_play() {
         let mut state = PlaybackState::default();
         let songs = vec![song("1"), song("2"), song("3"), song("4"), song("5")];
-        let batch = SongBatch {
-            songs: songs.clone(),
-            batch: Batch {
-                offset: 0,
-                batch_size: 50,
-                total: 5,
-            },
+        let batch = Page {
+            items: songs.clone(),
+            offset: Some(0),
+            total: None,
+            next_cursor: None,
         };
 
         // Step 1: ToggleShuffle (no songs loaded yet)
@@ -1005,7 +996,7 @@ mod tests {
         assert!(state.is_playing());
         assert!(state.current_song_id().is_some());
 
-        // Now press Next — this should NOT stop playback
+        // Now press Next, this should NOT stop playback
         let events = state.update_with(Cow::Owned(PlaybackAction::Next));
         assert!(
             state.is_playing(),
@@ -1034,34 +1025,28 @@ mod tests {
         );
     }
 
-    /// Reproduces the artist page shuffle bug: Batch::first_of_size(50) sets total=0,
-    /// causing the playback state to think there are 0 songs.
     #[test]
-    fn test_details_page_shuffle_play_artist_bug() {
+    fn test_details_page_shuffle_play_artist() {
         let mut state = PlaybackState::default();
         let songs = vec![song("1"), song("2"), song("3"), song("4"), song("5")];
-        // Artist page uses Batch::first_of_size(50) which has total=0
-        let batch = SongBatch {
-            songs: songs.clone(),
-            batch: Batch::first_of_size(50),
-        };
 
         // Step 1: ToggleShuffle
         state.update_with(Cow::Owned(PlaybackAction::ToggleShuffle));
         assert!(state.is_shuffled());
 
-        // Step 2: LoadPagedSongs with total=0 batch
-        state.update_with(Cow::Owned(PlaybackAction::LoadPagedSongs(
+        // Step 2: LoadContextSongs (non-paginated artist source)
+        state.update_with(Cow::Owned(PlaybackAction::LoadContextSongs(
             SongsSource::Artist("artist1".to_string()),
-            batch,
+            songs.clone(),
         )));
+        assert_eq!(state.songs().len(), 5);
 
         // Step 3: Load first song
         state.update_with(Cow::Owned(PlaybackAction::Load("1".to_string())));
         assert!(state.is_playing(), "Song should be playing after Load");
         assert_eq!(state.current_song_id(), Some("1".to_string()));
 
-        // Now press Next — this SHOULD work but currently fails
+        // Now press Next — this SHOULD work
         let events = state.update_with(Cow::Owned(PlaybackAction::Next));
         assert!(
             state.is_playing(),
@@ -1078,20 +1063,16 @@ mod tests {
         );
     }
 
-    /// Reproduces the playlist shuffle bug: total > loaded songs means shuffle
-    /// can pick indices that have no songs loaded.
     #[test]
-    fn test_details_page_shuffle_play_playlist_bug() {
+    fn test_details_page_shuffle_play_playlist() {
         let mut state = PlaybackState::default();
-        // Playlist has 200 total songs but only first 100 are loaded
-        let songs: Vec<_> = (1..=100).map(|i| song(&i.to_string())).collect();
-        let batch = SongBatch {
-            songs,
-            batch: Batch {
-                offset: 0,
-                batch_size: 100,
-                total: 200,
-            },
+        // A single aligned page of 50 songs (the playback list's batch size).
+        let songs: Vec<_> = (1..=50).map(|i| song(&i.to_string())).collect();
+        let batch = Page {
+            items: songs,
+            offset: Some(0),
+            total: None,
+            next_cursor: None,
         };
 
         // Step 1: ToggleShuffle
@@ -1102,18 +1083,16 @@ mod tests {
             SongsSource::Playlist("pl1".to_string()),
             batch,
         )));
-        // songs.len() returns total=200, but only 100 are actually loaded
-        assert_eq!(state.songs().len(), 200);
+        assert_eq!(state.songs().len(), 50);
 
         // Step 3: Load first song
         state.update_with(Cow::Owned(PlaybackAction::Load("1".to_string())));
         assert!(state.is_playing());
 
-        // Press Next multiple times — eventually shuffle will pick an index >= 100
-        // which has no song loaded, causing playback to stop
+        // Press Next across the whole page — playback must never stop.
         let mut failed = false;
-        for _ in 0..99 {
-            let events = state.update_with(Cow::Owned(PlaybackAction::Next));
+        for _ in 0..49 {
+            state.update_with(Cow::Owned(PlaybackAction::Next));
             if !state.is_playing() || state.current_song_id().is_none() {
                 failed = true;
                 break;
@@ -1125,22 +1104,11 @@ mod tests {
         );
     }
 
-    fn explicit_song(id: &str) -> SongDescription {
-        SongDescription {
-            id: id.to_string(),
-            uri: "".to_string(),
-            title: "Explicit Title".to_string(),
-            artists: vec![],
-            album: AlbumRef {
-                id: "".to_string(),
-                name: "".to_string(),
-            },
-            duration_ms: 1000,
-            art: None,
-            track_number: None,
-            explicit: true,
-            playable: true,
-        }
+    fn explicit_song(id: &str) -> Track {
+        let mut track = make_track(id);
+        track.title = "Explicit Title".to_string();
+        track.content_rating = ContentRating::Explicit;
+        track
     }
 
     #[test]
@@ -1384,22 +1352,11 @@ mod tests {
             .any(|e| matches!(e, PlaybackEvent::TrackSeeked(_))));
     }
 
-    fn unplayable_song(id: &str) -> SongDescription {
-        SongDescription {
-            id: id.to_string(),
-            uri: "".to_string(),
-            title: "Unplayable Title".to_string(),
-            artists: vec![],
-            album: AlbumRef {
-                id: "".to_string(),
-                name: "".to_string(),
-            },
-            duration_ms: 1000,
-            art: None,
-            track_number: None,
-            explicit: false,
-            playable: false,
-        }
+    fn unplayable_song(id: &str) -> Track {
+        let mut track = make_track(id);
+        track.title = "Unplayable Title".to_string();
+        track.playable = false;
+        track
     }
 
     #[test]

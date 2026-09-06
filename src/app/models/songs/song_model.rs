@@ -13,7 +13,7 @@ glib::wrapper! {
 }
 
 impl SongModel {
-    pub fn new(song: SongDescription) -> Self {
+    pub fn new(song: Track) -> Self {
         let o: Self = glib::Object::new();
         o.imp().song.replace(Some(song));
         o
@@ -127,13 +127,13 @@ impl SongModel {
         self.imp().unbind_all(self);
     }
 
-    pub fn description(&self) -> impl Deref<Target = SongDescription> + '_ {
+    pub fn description(&self) -> impl Deref<Target = Track> + '_ {
         Ref::map(self.imp().song.borrow(), |s| {
             s.as_ref().expect("song set at constructor")
         })
     }
 
-    pub fn into_description(&self) -> SongDescription {
+    pub fn into_description(&self) -> Track {
         self.imp()
             .song
             .borrow()
@@ -157,7 +157,7 @@ mod imp {
 
     #[derive(Default)]
     pub struct SongModel {
-        pub song: RefCell<Option<SongDescription>>,
+        pub song: RefCell<Option<Track>>,
         pub state: Cell<SongState>,
         bindings: RefCell<BindingsInner>,
     }
@@ -323,6 +323,7 @@ mod imp {
                     .borrow()
                     .as_ref()
                     .expect("song set at constructor")
+                    .rri
                     .id
                     .to_value(),
                 "duration" => self
@@ -338,8 +339,7 @@ mod imp {
                     .as_ref()
                     .expect("song set at constructor")
                     .art
-                    .as_ref()
-                    .and_then(|s| s.best_for_width(48))
+                    .best_for_width(48)
                     .map(str::to_owned)
                     .to_value(),
                 "playing" => self.state.get().is_playing.to_value(),

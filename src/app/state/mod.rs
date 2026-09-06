@@ -9,7 +9,7 @@ mod selection_state;
 mod settings_state;
 mod spotify_link;
 
-pub use app_model::AppModel;
+pub use app_model::{AppModel, ProvidesApi};
 pub use app_state::*;
 pub use browser_state::*;
 pub use login_state::*;

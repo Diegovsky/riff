@@ -9,8 +9,8 @@ use gio::SimpleActionGroup;
 use std::ops::Deref;
 use std::rc::Rc;
 
-use crate::api::SpotifyApiError;
 use crate::app::components::DetailsPageModel;
+use crate::app::components::SongActions;
 use crate::app::components::{
     labels, HasHeaderBarModel, HeaderImageShape, PageModel, PlaylistModel, SimpleHeaderBarModel,
 };
@@ -22,6 +22,7 @@ use crate::app::state::{
 use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, PaginationTarget, SongsSource};
 use crate::feature_flags::{self, FeatureFlag};
 use crate::{impl_playlist_model_base, impl_toggle_play};
+use riff_api::DomainError;
 
 /// Data model for the playlist detail page. Composes `DetailsPageModel` via Deref.
 pub struct PlaylistDetailsModel {
@@ -54,11 +55,11 @@ impl PlaylistDetailsModel {
             .browser
             .playlist_details_state(&self.id)
             .and_then(|s| s.playlist.as_ref())
-            .map(|p| p.owner.id == *user)
+            .map(|p| p.owner.as_ref().map(|o| o.rri.id == *user).unwrap_or(false))
             .unwrap_or(false)
     }
 
-    pub fn get_playlist_info(&self) -> Option<impl Deref<Target = PlaylistDescription> + '_> {
+    pub fn get_playlist_info(&self) -> Option<impl Deref<Target = Playlist> + '_> {
         self.app_model.map_state_opt(|s| {
             s.browser
                 .playlist_details_state(&self.id)?
@@ -69,14 +70,13 @@ impl PlaylistDetailsModel {
 
     /// Rename the playlist via the API and update local state.
     pub fn update_playlist_details(&self, title: String) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let id = self.id.clone();
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                api.update_playlist_details(&id, title.clone())
-                    .await
-                    .map(|_| AppAction::UpdatePlaylistName(PlaylistSummary { id, title }))
-            });
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            api.update_playlist_details(&id, &title)
+                .await
+                .map(|_| AppAction::UpdatePlaylistName(PlaylistSummary { id, title }))
+        });
     }
 }
 
@@ -86,11 +86,17 @@ impl PageModel for PlaylistDetailsModel {
     }
 
     fn get_subtitle(&self) -> Option<String> {
-        Some(self.get_playlist_info()?.owner.display_name.clone())
+        Some(
+            self.get_playlist_info()?
+                .owner
+                .as_ref()
+                .map(|o| o.display_name.clone())
+                .unwrap_or_default(),
+        )
     }
 
     fn get_artwork(&self) -> Option<ImageSet> {
-        self.get_playlist_info()?.art.clone()
+        Some(self.get_playlist_info()?.art.clone())
     }
 
     fn get_caption(&self) -> Option<String> {
@@ -102,30 +108,27 @@ impl PageModel for PlaylistDetailsModel {
     }
 
     fn load_page_info(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let id = self.id.clone();
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                let (tracks_result, playlist_result) =
-                    futures::join!(api.get_playlist_tracks(&id, 0, 100), api.get_playlist(&id));
-                let playlist_tracks = tracks_result?;
-                match playlist_result {
-                    Ok(playlist) => Ok(BrowserAction::SetPlaylistDetails(
-                        Box::new(playlist),
-                        Box::new(playlist_tracks),
-                    )
-                    .into()),
-                    Err(SpotifyApiError::BadStatus(400, _))
-                    | Err(SpotifyApiError::BadStatus(404, _)) => {
-                        Ok(BrowserAction::NavigationPop.into())
-                    }
-                    Err(e) => Err(e),
-                }
-            });
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            let (tracks_result, playlist_result) =
+                futures::join!(api.get_playlist_tracks(&id, 0, 50), api.get_playlist(&id));
+            let playlist_tracks = tracks_result?;
+            match playlist_result {
+                Ok(playlist) => Ok(BrowserAction::SetPlaylistDetails(
+                    Box::new(playlist),
+                    Box::new(playlist_tracks),
+                )
+                .into()),
+                Err(DomainError::ClientError { status: 400, .. })
+                | Err(DomainError::NotFound { .. }) => Ok(BrowserAction::NavigationPop.into()),
+                Err(e) => Err(e),
+            }
+        });
     }
 
     fn load_more(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let state = self.app_model.get_state();
         let Some(next_page) = state
             .browser
@@ -146,14 +149,13 @@ impl PageModel for PlaylistDetailsModel {
             BrowserAction::ConsumeNextPage(PaginationTarget::PlaylistTracks(id.clone())).into(),
         );
 
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                api.get_playlist_tracks(&id, offset, batch_size)
-                    .await
-                    .map(|song_batch| {
-                        BrowserAction::AppendPlaylistTracks(id, Box::new(song_batch)).into()
-                    })
-            });
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            api.get_playlist_tracks(&id, offset, batch_size)
+                .await
+                .map(|song_batch| {
+                    BrowserAction::AppendPlaylistTracks(id, Box::new(song_batch)).into()
+                })
+        });
     }
 
     fn is_loaded(&self) -> bool {
@@ -185,7 +187,7 @@ impl PageModel for PlaylistDetailsModel {
     fn toggle_like(&self) {
         let id = self.id.clone();
         let is_saved = self.is_liked();
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
 
         let description = {
             let state = self.app_model.get_state();
@@ -195,26 +197,22 @@ impl PageModel for PlaylistDetailsModel {
                 .and_then(|s| s.playlist.clone())
         };
 
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                if is_saved {
-                    api.unfollow_playlist(&id).await?;
-                    Ok(BrowserAction::UnsavePlaylist(id).into())
-                } else {
-                    api.follow_playlist(&id).await?;
-                    let description = description.unwrap_or_else(|| PlaylistDescription {
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            if is_saved {
+                api.unfollow_playlist(&id).await?;
+                Ok(BrowserAction::UnsavePlaylist(id).into())
+            } else {
+                api.follow_playlist(&id).await?;
+                let description = description.unwrap_or_else(|| Playlist {
+                    rri: ResourceId {
                         id: id.clone(),
-                        title: String::new(),
-                        art: None,
-                        songs: SongBatch::empty(),
-                        owner: UserRef {
-                            id: String::new(),
-                            display_name: String::new(),
-                        },
-                    });
-                    Ok(BrowserAction::SavePlaylist(Box::new(description)).into())
-                }
-            });
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                });
+                Ok(BrowserAction::SavePlaylist(Box::new(description)).into())
+            }
+        });
     }
 
     fn like_visible(&self) -> bool {
@@ -223,11 +221,13 @@ impl PageModel for PlaylistDetailsModel {
 
     fn get_subtitle_links(&self) -> Vec<ArtistRef> {
         self.get_playlist_info()
-            .map(|playlist| {
-                vec![ArtistRef {
-                    id: playlist.owner.id.clone(),
-                    name: playlist.owner.display_name.clone(),
-                }]
+            .and_then(|playlist| {
+                playlist.owner.as_ref().map(|o| {
+                    vec![ArtistRef {
+                        rri: o.rri.clone(),
+                        name: o.display_name.clone(),
+                    }]
+                })
             })
             .unwrap_or_default()
     }
@@ -293,7 +293,7 @@ impl PlaylistModel for PlaylistDetailsModel {
         }
     }
 
-    fn actions_for(&self, song: &SongDescription) -> Option<gio::ActionGroup> {
+    fn actions_for(&self, song: &Track) -> Option<gio::ActionGroup> {
         let group = SimpleActionGroup::new();
         for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
             group.add_action(&a);
@@ -304,13 +304,13 @@ impl PlaylistModel for PlaylistDetailsModel {
         Some(group.upcast())
     }
 
-    fn menu_for(&self, song: &SongDescription) -> Option<gio::MenuModel> {
+    fn menu_for(&self, song: &Track) -> Option<gio::MenuModel> {
         let menu = gio::Menu::new();
         menu.append(Some(&*labels::VIEW_ALBUM), Some("song.view_album"));
         for artist in song.artists.iter() {
             menu.append(
                 Some(&labels::more_from_label(&artist.name)),
-                Some(&format!("song.view_artist_{}", artist.id)),
+                Some(&format!("song.view_artist_{}", artist.rri.id)),
             );
         }
         menu.append(Some(&*labels::COPY_LINK), Some("song.copy_link"));
@@ -332,8 +332,14 @@ impl SimpleHeaderBarModel for PlaylistDetailsModel {
     }
 
     fn select_all(&self) {
-        let songs: Vec<SongDescription> = PlaylistModel::song_list_model(self).collect();
+        let songs: Vec<Track> = PlaylistModel::song_list_model(self).collect();
         self.dispatcher
             .dispatch(SelectionAction::Select(songs).into());
+    }
+}
+
+impl crate::app::ProvidesApi for PlaylistDetailsModel {
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.app_model.api()
     }
 }

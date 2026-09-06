@@ -1,5 +1,6 @@
 use crate::app::components::SortOrder;
 use crate::app::AppEvent;
+use crate::app::ProvidesApi;
 
 use super::CardListModel;
 
@@ -8,7 +9,7 @@ use super::CardListModel;
 /// Extends `CardListModel` (data layer) with page-level concerns: identity,
 /// empty state, sort capabilities, and event handling. Analogous to `PageModel`
 /// for the details page framework.
-pub trait CardListPageModel: CardListModel {
+pub trait CardListPageModel: CardListModel + ProvidesApi {
     // Page identity (used for sort persistence)
 
     fn page_id(&self) -> &str;

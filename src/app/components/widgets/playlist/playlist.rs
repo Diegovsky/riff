@@ -6,11 +6,11 @@ use std::rc::Rc;
 
 use crate::app::components::utils::{ancestor, AnimatorDefault};
 use crate::app::components::{Component, EventListener, SongWidget};
-use crate::app::models::{SongDescription, SongListModel, SongModel, SongState};
+use crate::app::models::{SongListModel, SongModel, SongState, Track, TrackExt};
 use crate::app::state::{BrowserEvent, PlaybackEvent, SelectionEvent, SelectionState};
-use crate::app::{AppEvent, Worker};
+use crate::app::{AppEvent, ProvidesApi, Worker};
 
-pub trait PlaylistModel {
+pub trait PlaylistModel: ProvidesApi {
     fn is_paused(&self) -> bool;
 
     fn song_list_model(&self) -> SongListModel;
@@ -27,10 +27,10 @@ pub trait PlaylistModel {
         true
     }
 
-    fn actions_for(&self, _song: &SongDescription) -> Option<gio::ActionGroup> {
+    fn actions_for(&self, _song: &Track) -> Option<gio::ActionGroup> {
         None
     }
-    fn menu_for(&self, _song: &SongDescription) -> Option<gio::MenuModel> {
+    fn menu_for(&self, _song: &Track) -> Option<gio::MenuModel> {
         None
     }
 
@@ -70,7 +70,7 @@ pub trait PlaylistModel {
         let is_explicit_filtered = if self.skip_explicit() {
             self.song_list_model()
                 .get(id)
-                .map(|m| m.description().explicit)
+                .map(|m| m.description().is_explicit())
                 .unwrap_or(false)
         } else {
             false
@@ -108,6 +108,7 @@ where
         let list_model = model.song_list_model();
         let selection_model = gtk::NoSelection::new(Some(list_model.clone()));
         let factory = gtk::SignalListItemFactory::new();
+        let api_service = model.api_service();
 
         listview.add_css_class("playlist");
         listview.set_show_separators(true);
@@ -139,6 +140,8 @@ where
         factory.connect_bind(clone!(
             #[weak]
             model,
+            #[strong]
+            api_service,
             move |_, item| {
                 let item = item.downcast_ref::<gtk::ListItem>().unwrap();
                 let song_model = item.item().unwrap().downcast::<SongModel>().unwrap();
@@ -153,16 +156,21 @@ where
                 // The widget's appearance is driven entirely by the SongModel's
                 // own GObject properties (playing/selected/liked), which are
                 // seeded/updated out-of-band by Playlist::update_list. actions
-                // and menus are built from the SongModel's SongDescription, not
+                // and menus are built from the SongModel's Track, not
                 // from a lookup into AppState.
                 let widget = item.child().unwrap().downcast::<SongWidget>().unwrap();
-                widget.bind(&song_model, worker.clone(), model.show_song_covers());
+                widget.bind(
+                    &song_model,
+                    worker.clone(),
+                    api_service.clone(),
+                    model.show_song_covers(),
+                );
 
                 let song = song_model.description();
                 widget.set_actions(model.actions_for(&song).as_ref());
                 widget.set_menu(model.menu_for(&song).as_ref());
 
-                let like_id = song.id.clone();
+                let like_id = song.rri.id.clone();
                 widget.connect_like(clone!(
                     #[weak]
                     model,
@@ -193,9 +201,9 @@ where
                 let song = song.description();
                 let selection_enabled = model.is_selection_enabled();
                 if selection_enabled {
-                    model.toggle_select(&song.id);
+                    model.toggle_select(&song.rri.id);
                 } else {
-                    model.play_song_at(position as usize, &song.id);
+                    model.play_song_at(position as usize, &song.rri.id);
                 }
             }
         ));

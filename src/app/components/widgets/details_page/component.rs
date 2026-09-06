@@ -276,7 +276,7 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         if !links.is_empty() {
             let artists: Vec<(String, String)> = links
                 .iter()
-                .map(|a| (a.id.clone(), a.name.clone()))
+                .map(|a| (a.rri.id.clone(), a.name.clone()))
                 .collect();
             self.page.header().set_subtitle_links(
                 &artists,
@@ -300,8 +300,11 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
                 self.page.header().set_like_visible(false);
             }
         }
-        self.page
-            .load_artwork_or_finish(self.model.get_artwork().as_ref(), &self.worker);
+        self.page.load_artwork_or_finish(
+            self.model.get_artwork().as_ref(),
+            self.model.api_service(),
+            &self.worker,
+        );
     }
 
     /// Standard event handling. Returns true if the event was consumed.

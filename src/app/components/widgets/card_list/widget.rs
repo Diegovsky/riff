@@ -9,6 +9,9 @@ use crate::app::components::{CardLayout, CardSize, CardWidget, ImageShape, SortO
 use crate::app::dispatch::Worker;
 use crate::app::models::{CardModel, FilterOption};
 use crate::app::ListStore;
+use crate::app::ProvidesApi;
+use riff_api::ApiService;
+use std::sync::Arc;
 
 // Constants
 
@@ -130,7 +133,7 @@ impl CardList {
         &self.flowbox
     }
 
-    pub fn bind<M: CardListModel + 'static>(
+    pub fn bind<M: CardListModel + ProvidesApi + 'static>(
         &self,
         model: &Rc<M>,
         worker: Worker,
@@ -154,6 +157,7 @@ impl CardList {
 
         if let Some(store) = model.get_store() {
             let shape = model.image_shape();
+            let api_service = model.api_service();
             let inner = store.inner().clone();
 
             // Install sort function
@@ -181,7 +185,7 @@ impl CardList {
                     if let Some(card) = obj.downcast_ref::<CardModel>() {
                         card.set_insertion_position(counter);
                         counter += 1;
-                        self.add_child(card, &worker, shape, layout, size);
+                        self.add_child(card, &worker, &api_service, shape, layout, size);
                     }
                 }
             }
@@ -197,6 +201,7 @@ impl CardList {
             let constraint = Rc::clone(&self.max_rows);
             let current_filter = Rc::clone(&self.current_filter);
             let worker_clone = worker.clone();
+            let api_service_clone = api_service.clone();
             let handler_id =
                 inner.connect_items_changed(move |source, position, removed, added| {
                     let Some(flowbox) = flowbox_weak.upgrade() else {
@@ -252,8 +257,14 @@ impl CardList {
                                         // gets the smallest position.
                                         let pos = min - (added as i64 - offset as i64);
                                         card.set_insertion_position(pos);
-                                        let child =
-                                            create_child(card, &worker_clone, shape, layout, size);
+                                        let child = create_child(
+                                            card,
+                                            &worker_clone,
+                                            &api_service_clone,
+                                            shape,
+                                            layout,
+                                            size,
+                                        );
                                         flowbox.insert(&child, -1);
                                     }
                                 }
@@ -268,8 +279,14 @@ impl CardList {
                                             card.set_insertion_position(ctr);
                                             ctr += 1;
                                         }
-                                        let child =
-                                            create_child(card, &worker_clone, shape, layout, size);
+                                        let child = create_child(
+                                            card,
+                                            &worker_clone,
+                                            &api_service_clone,
+                                            shape,
+                                            layout,
+                                            size,
+                                        );
                                         flowbox.insert(&child, -1);
                                     }
                                 }
@@ -313,11 +330,12 @@ impl CardList {
         &self,
         card: &CardModel,
         worker: &Worker,
+        api_service: &Arc<ApiService>,
         shape: ImageShape,
         layout: CardLayout,
         size: CardSize,
     ) {
-        let child = create_child(card, worker, shape, layout, size);
+        let child = create_child(card, worker, api_service, shape, layout, size);
         self.flowbox.insert(&child, -1);
     }
 
@@ -512,11 +530,19 @@ impl Drop for CardList {
 fn create_child(
     card: &CardModel,
     worker: &Worker,
+    api_service: &Arc<ApiService>,
     shape: ImageShape,
     layout: CardLayout,
     size: CardSize,
 ) -> gtk::FlowBoxChild {
-    let widget = CardWidget::for_model(card, worker.clone(), shape, layout, size);
+    let widget = CardWidget::for_model(
+        card,
+        worker.clone(),
+        api_service.clone(),
+        shape,
+        layout,
+        size,
+    );
     let child = gtk::FlowBoxChild::new();
     child.set_halign(gtk::Align::Fill);
     child.set_hexpand(true);

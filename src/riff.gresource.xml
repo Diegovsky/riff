@@ -50,6 +50,12 @@
     <!-- sidebar -->
     <file alias="sidebar/sidebar_row.ui">app/components/shell/sidebar/sidebar_row.ui</file>
     <file alias="components/create_playlist.ui">app/components/shell/sidebar/create_playlist.ui</file>
+    <!-- default placeholders for missing artwork -->
+    <file compressed="true" preprocess="xml-stripblanks" alias="defaults/album-default.svg">app/icons/album-default.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="defaults/artist-default.svg">app/icons/artist-default.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="defaults/playlist-default.svg">app/icons/playlist-default.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="defaults/track-default.svg">app/icons/track-default.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="defaults/user-default.svg">app/icons/user-default.svg</file>
   </gresource>
   <gresource prefix="/dev/diegovsky/Riff/icons/scalable/actions/">
     <file compressed="true" preprocess="xml-stripblanks" alias="music-queue-symbolic.svg">app/icons/music-queue-symbolic.svg</file>

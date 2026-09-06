@@ -4,9 +4,10 @@ use gtk::{glib, CompositeTemplate};
 
 use crate::app::components::display_add_css_provider;
 use crate::app::components::utils::{format_duration, Clock, Debouncer};
-use crate::app::loader::ImageLoader;
 use crate::app::models::RepeatMode;
 use crate::app::Worker;
+use riff_api::ApiService;
+use std::sync::Arc;
 
 use super::playback_controls::PlaybackControlsWidget;
 use super::playback_info::PlaybackInfoWidget;
@@ -117,18 +118,17 @@ impl PlaybackWidget {
         self.set_song_duration(None);
     }
 
-    fn set_artwork(&self, image: &gdk_pixbuf::Pixbuf) {
+    fn set_artwork(&self, texture: &gdk::Texture) {
         let widget = self.imp();
-        widget.now_playing.set_artwork(image);
+        widget.now_playing.set_artwork(texture);
     }
 
-    pub fn set_artwork_from_url(&self, url: String, worker: &Worker) {
+    pub fn set_artwork_from_url(&self, url: String, api_service: Arc<ApiService>, worker: &Worker) {
         let weak_self = self.downgrade();
         worker.send_local_task(async move {
-            let loader = ImageLoader::new();
-            let result = loader.load_remote(&url, "jpg", 48, 48).await;
-            if let (Some(ref _self), Some(ref result)) = (weak_self.upgrade(), result) {
-                _self.set_artwork(result);
+            let result = api_service.load_image(&url, "jpg", 48, 48).await;
+            if let (Some(ref _self), Some(ref texture)) = (weak_self.upgrade(), result) {
+                _self.set_artwork(texture);
             }
         });
     }

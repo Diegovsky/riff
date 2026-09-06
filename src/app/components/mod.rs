@@ -10,8 +10,8 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::future::Future;
 
-use crate::api::SpotifyApiError;
 use crate::app::{ActionDispatcher, AppAction, AppEvent};
+use riff_api::DomainError;
 
 mod pages;
 pub use pages::*;
@@ -46,41 +46,42 @@ pub fn expose_custom_widgets() {
 }
 
 impl dyn ActionDispatcher {
-    fn call_spotify_and_dispatch<F, C>(&self, call: C)
+    fn call_api_and_dispatch<F, C>(&self, call: C)
     where
         C: 'static + Send + Clone + FnOnce() -> F,
-        F: Send + Future<Output = Result<AppAction, SpotifyApiError>>,
+        F: Send + Future<Output = Result<AppAction, DomainError>>,
     {
-        self.call_spotify_and_dispatch_many(move || async { call().await.map(|a| vec![a]) })
+        self.call_api_and_dispatch_many(move || async { call().await.map(|a| vec![a]) })
     }
 
-    fn call_spotify_and_dispatch_many<F, C>(&self, call: C)
+    fn call_api_and_dispatch_many<F, C>(&self, call: C)
     where
         C: 'static + Send + Clone + FnOnce() -> F,
-        F: Send + Future<Output = Result<Vec<AppAction>, SpotifyApiError>>,
+        F: Send + Future<Output = Result<Vec<AppAction>, DomainError>>,
     {
         self.dispatch_many_async(Box::pin(async move {
             let first_call = call.clone();
             let result = first_call().await;
             match result {
                 Ok(actions) => actions,
-                Err(SpotifyApiError::NoToken) => vec![],
-                Err(SpotifyApiError::InvalidToken) => call().await.unwrap_or_else(|_| Vec::new()),
-                Err(SpotifyApiError::TooManyRequests) => {
+                Err(DomainError::NoToken) => vec![],
+                Err(DomainError::AuthExpired) => call().await.unwrap_or_else(|_| Vec::new()),
+                Err(DomainError::RateLimited { .. }) => {
                     error!("Spotify API error: rate limited");
                     vec![AppAction::ShowNotification(gettext(
                         // translators: This notification is shown when Spotify throttles requests.
                         "Rate limited by Spotify. Please wait a moment and try again.",
                     ))]
                 }
-                // Raised only by the dev "Simulate Offline" switch, which also
-                // kills the librespot session. The connection-lost banner is
-                // driven entirely by the player's session-health path (see
-                // SpotifyPlayer::set_connection_lost), so here we only suppress
-                // the generic error toast rather than touching the banner.
-                #[cfg(debug_assertions)]
-                Err(SpotifyApiError::Offline) => vec![],
                 Err(err) => {
+                    // In debug builds the "Simulate Offline" dev switch surfaces
+                    // as a network error; suppress the generic error toast (the
+                    // connection-lost banner is driven entirely by the player's
+                    // session-health path, see SpotifyPlayer::set_connection_lost).
+                    #[cfg(debug_assertions)]
+                    if riff_api::is_simulate_offline() {
+                        return vec![];
+                    }
                     error!("Spotify API error: {}", err);
                     vec![AppAction::ShowNotification(gettext(
                         // translators: This notification is the default message for unhandled errors. Logs refer to console output.

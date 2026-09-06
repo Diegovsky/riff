@@ -7,7 +7,7 @@ use gettextrs::gettext;
 
 use crate::app::state::{LoginAction, PlaybackAction};
 use crate::app::AppAction;
-use crate::auth::TokenStore;
+use riff_auth::TokenStore;
 #[allow(clippy::module_inception)]
 mod player;
 pub use player::*;

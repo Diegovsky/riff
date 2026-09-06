@@ -110,9 +110,9 @@ impl SpotifyPlayerSettings {
         let shuffle = settings.boolean("shuffle");
         let skip_explicit = settings.boolean("skip-explicit");
         let repeat = match settings.string("repeat").as_str() {
-            "song" => RepeatMode::Song,
-            "playlist" => RepeatMode::Playlist,
-            "none" | _ => RepeatMode::None,
+            "song" => RepeatMode::Track,
+            "playlist" => RepeatMode::Context,
+            "none" | _ => RepeatMode::Off,
         };
 
         // Volume curve
@@ -276,9 +276,9 @@ impl StateTracker {
             RepeatModeChanged(repeat) => self.settings.set_string(
                 "repeat",
                 match *repeat {
-                    RepeatMode::Song => "song",
-                    RepeatMode::Playlist => "playlist",
-                    RepeatMode::None => "none",
+                    RepeatMode::Track => "song",
+                    RepeatMode::Context => "playlist",
+                    RepeatMode::Off => "none",
                 },
             )?,
             _ => (),
