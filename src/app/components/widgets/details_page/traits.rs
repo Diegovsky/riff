@@ -6,6 +6,7 @@ use crate::app::components::{
 use crate::app::models::{ArtistRef, ImageSet};
 use crate::app::state::PlaybackEvent;
 use crate::app::AppEvent;
+use crate::app::ProvidesApi;
 
 use super::DetailsPageModel;
 
@@ -29,7 +30,7 @@ pub trait HasHeaderBarModel:
 /// The generic `DetailsPageComponent` uses this trait to wire all standard
 /// behavior (header, buttons, events) automatically. Pages only need to
 /// implement the methods relevant to them; everything else has sensible defaults.
-pub trait PageModel {
+pub trait PageModel: ProvidesApi {
     // Page identity
 
     fn get_title(&self) -> Option<String>;

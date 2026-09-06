@@ -1,4 +1,3 @@
-use crate::api::clear_user_cache;
 use crate::app::state::{LoginAction, PlaybackAction};
 use crate::app::{ActionDispatcher, AppModel};
 use std::ops::Deref;
@@ -24,23 +23,22 @@ impl UserMenuModel {
 
     pub fn logout(&self) {
         self.dispatcher.dispatch(PlaybackAction::Stop.into());
-        self.dispatcher.dispatch_async(Box::pin(async {
-            // let _ = self.app_model.key.await;
-            let _ = clear_user_cache().await;
+        let api = self.app_model.api();
+        self.dispatcher.dispatch_async(Box::pin(async move {
+            api.clear_user_cache().await;
             Some(LoginAction::Logout.into())
         }));
     }
 
     pub fn fetch_user_playlists(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         if self.username().is_some() {
-            self.dispatcher
-                .call_spotify_and_dispatch(move || async move {
-                    api.get_saved_playlists(0, 30).await.map(|playlists| {
-                        let summaries = playlists.into_iter().map(|p| p.into()).collect();
-                        LoginAction::SetUserPlaylists(summaries).into()
-                    })
-                });
+            self.dispatcher.call_api_and_dispatch(move || async move {
+                api.get_saved_playlists(0, 30).await.map(|page| {
+                    let summaries = page.items.into_iter().map(|p| p.into()).collect();
+                    LoginAction::SetUserPlaylists(summaries).into()
+                })
+            });
         }
     }
 }

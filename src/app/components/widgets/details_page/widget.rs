@@ -1,5 +1,6 @@
 use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -7,7 +8,6 @@ use libadwaita::prelude::*;
 
 use crate::app::components::{display_add_css_provider, CLAMP_MAX_SIZE};
 use crate::app::dispatch::Worker;
-use crate::app::loader::ImageLoader;
 use crate::app::models::ImageSet;
 
 use super::{DetailsHeader, HeaderImageShape, HEADER_IMAGE_SIZE};
@@ -121,20 +121,24 @@ impl DetailsPage {
     }
 
     /// Asynchronously load artwork from an ImageSet, or mark the page as loaded if none.
-    pub fn load_artwork_or_finish(&self, art: Option<&ImageSet>, worker: &Worker) {
+    pub fn load_artwork_or_finish(
+        &self,
+        art: Option<&ImageSet>,
+        api_service: Arc<riff_api::ApiService>,
+        worker: &Worker,
+    ) {
         if let Some(url) = art.and_then(|s| s.best_for_width(HEADER_IMAGE_SIZE as u32)) {
             let url = url.to_string();
             let weak_header = self.header.widget_weak();
             let weak = self.scroll_child.downgrade();
             worker.send_local_task(async move {
-                let pixbuf = ImageLoader::new()
-                    .load_remote(&url, "jpg", HEADER_IMAGE_SIZE, HEADER_IMAGE_SIZE)
+                let texture = api_service
+                    .load_image(&url, "jpg", HEADER_IMAGE_SIZE, HEADER_IMAGE_SIZE)
                     .await;
-                if let (Some(scroll_child), Some(ref pixbuf)) = (weak.upgrade(), pixbuf) {
+                if let (Some(scroll_child), Some(ref texture)) = (weak.upgrade(), texture) {
                     if let Some(header) = weak_header.upgrade() {
-                        let texture = gdk::Texture::for_pixbuf(pixbuf);
                         let imp = header.imp();
-                        imp.image.set_paintable(Some(&texture));
+                        imp.image.set_paintable(Some(texture));
                         imp.image_box
                             .remove_css_class("details-header__image-placeholder");
                     }

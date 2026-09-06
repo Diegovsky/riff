@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
-// A (statically accessed) wrapper around the DBUS Secret Service
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Credentials {
     pub access_token: String,

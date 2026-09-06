@@ -8,11 +8,12 @@ use gio::SimpleActionGroup;
 use std::ops::Deref;
 use std::rc::Rc;
 
+use crate::app::components::SongActions;
 use crate::app::components::{
     labels, DetailsPageModel, DeviceSelectorModel, HasHeaderBarModel, HeaderImageShape, PageModel,
     PlaylistModel, SimpleHeaderBarModel,
 };
-use crate::app::models::{ArtistRef, ImageSet, SongDescription, SongListModel};
+use crate::app::models::{ArtistRef, ImageSet, SongListModel, SongsSource, Track, TrackExt};
 use crate::app::state::Device;
 use crate::app::state::{
     PlaybackAction, PlaybackEvent, PlaybackState, SelectionAction, SelectionContext, SelectionState,
@@ -46,7 +47,7 @@ impl NowPlayingModel {
         self.app_model.map_state(|s| &s.playback)
     }
 
-    fn current_song(&self) -> Option<SongDescription> {
+    fn current_song(&self) -> Option<Track> {
         self.app_model.get_state().playback.current_song()
     }
 
@@ -76,7 +77,7 @@ impl PageModel for NowPlayingModel {
     }
 
     fn get_artwork(&self) -> Option<ImageSet> {
-        self.current_song()?.art.clone()
+        Some(self.current_song()?.art.clone())
     }
 
     fn header_image_shape(&self) -> HeaderImageShape {
@@ -85,18 +86,33 @@ impl PageModel for NowPlayingModel {
 
     fn load_more(&self) {
         let queue = self.queue();
-        let loader = self.app_model.get_batch_loader();
-        let Some(query) = queue.next_query() else {
+        let Some((source, batch)) = queue.next_query() else {
             return;
         };
-        debug!("next_query = {:?}", &query);
-        self.dispatcher.dispatch_async(Box::pin(async move {
-            loader
-                .query(query, |source, song_batch| {
-                    PlaybackAction::LoadPagedSongs(source, song_batch).into()
-                })
-                .await
-        }));
+        let api = self.app_model.api();
+        let offset = batch.offset;
+        let batch_size = batch.batch_size;
+        debug!(
+            "next_query source={:?} offset={} size={}",
+            &source, offset, batch_size
+        );
+
+        if matches!(&source, SongsSource::Artist(_) | SongsSource::Search(_)) {
+            error!("non-paginated source in load_more, ignoring");
+            return;
+        }
+
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            let song_batch = match &source {
+                SongsSource::Playlist(id) => {
+                    api.get_playlist_tracks(id, offset, batch_size).await?
+                }
+                SongsSource::Album(id) => api.get_album_tracks(id, offset, batch_size).await?,
+                SongsSource::SavedTracks => api.get_saved_tracks(offset, batch_size).await?,
+                SongsSource::Artist(_) | SongsSource::Search(_) => unreachable!(),
+            };
+            Ok(PlaybackAction::LoadPagedSongs(source, song_batch).into())
+        });
     }
 
     fn is_loaded(&self) -> bool {
@@ -120,7 +136,7 @@ impl PageModel for NowPlayingModel {
         if let Some(song) = self.current_song() {
             let state = self.app_model.get_state();
             if let Some(home) = state.browser.home_state() {
-                return home.saved_tracks.get(&song.id).is_some();
+                return home.saved_tracks.get(&song.rri.id).is_some();
             }
         }
         false
@@ -130,23 +146,21 @@ impl PageModel for NowPlayingModel {
         let Some(song) = self.current_song() else {
             return;
         };
-        let id = song.id.clone();
-        let api = self.app_model.get_spotify();
+        let id = song.rri.id.clone();
+        let api = self.app_model.api();
         let is_liked = self.is_liked();
 
         if is_liked {
-            self.dispatcher
-                .call_spotify_and_dispatch(move || async move {
-                    api.remove_saved_tracks(vec![id.clone()]).await?;
-                    Ok(BrowserAction::RemoveSavedTracks(vec![id]).into())
-                });
+            self.dispatcher.call_api_and_dispatch(move || async move {
+                api.remove_tracks(vec![id.clone()]).await?;
+                Ok(BrowserAction::RemoveSavedTracks(vec![id]).into())
+            });
         } else {
             let song_desc = song.clone();
-            self.dispatcher
-                .call_spotify_and_dispatch(move || async move {
-                    api.save_tracks(vec![id]).await?;
-                    Ok(BrowserAction::SaveTracks(vec![song_desc]).into())
-                });
+            self.dispatcher.call_api_and_dispatch(move || async move {
+                api.save_tracks(vec![id]).await?;
+                Ok(BrowserAction::SaveTracks(vec![song_desc]).into())
+            });
         }
     }
 
@@ -168,7 +182,7 @@ impl PageModel for NowPlayingModel {
     fn on_share_clicked(&self) {
         if let Some(song) = self.current_song() {
             self.base
-                .share_link(&format!("https://open.spotify.com/track/{}", song.id));
+                .share_link(&format!("https://open.spotify.com/track/{}", song.rri.id));
         }
     }
 
@@ -241,7 +255,7 @@ impl PlaylistModel for NowPlayingModel {
         self.base.skip_explicit()
     }
 
-    fn actions_for(&self, song: &SongDescription) -> Option<gio::ActionGroup> {
+    fn actions_for(&self, song: &Track) -> Option<gio::ActionGroup> {
         let group = SimpleActionGroup::new();
         for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
             group.add_action(&a);
@@ -252,13 +266,13 @@ impl PlaylistModel for NowPlayingModel {
         Some(group.upcast())
     }
 
-    fn menu_for(&self, song: &SongDescription) -> Option<gio::MenuModel> {
+    fn menu_for(&self, song: &Track) -> Option<gio::MenuModel> {
         let menu = gio::Menu::new();
         menu.append(Some(&*labels::VIEW_ALBUM), Some("song.view_album"));
         for artist in song.artists.iter() {
             menu.append(
                 Some(&labels::more_from_label(&artist.name)),
-                Some(&format!("song.view_artist_{}", artist.id)),
+                Some(&format!("song.view_artist_{}", artist.rri.id)),
             );
         }
         menu.append(Some(&*labels::COPY_LINK), Some("song.copy_link"));
@@ -276,8 +290,14 @@ impl SimpleHeaderBarModel for NowPlayingModel {
     }
 
     fn select_all(&self) {
-        let songs: Vec<SongDescription> = self.queue().songs().collect();
+        let songs: Vec<Track> = self.queue().songs().collect();
         self.dispatcher
             .dispatch(SelectionAction::Select(songs).into());
+    }
+}
+
+impl crate::app::ProvidesApi for NowPlayingModel {
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.app_model.api()
     }
 }

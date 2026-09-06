@@ -1,0 +1,23 @@
+[package]
+name = "riff-auth"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Riff's Authentication crate."
+
+[dependencies]
+oauth2 = "4.4"
+url = "2.4.1"
+thiserror = "1.0.40"
+log = "0.4.17"
+serde_json = "1.0.96"
+anyhow = "1.0.102"
+oo7 = "0.5.0"
+
+[dependencies.serde]
+version = "^1.0.136"
+features = ["derive"]
+
+[dependencies.tokio]
+version = "1"
+features = ["rt", "macros", "sync", "time", "io-util", "net"]

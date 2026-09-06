@@ -10,7 +10,7 @@
 //! a spawned http server (mimicking Spotify's client), or manually via stdin. The latter
 //! is appropriate for headless systems.
 
-use crate::app::credentials::Credentials;
+use crate::credentials::Credentials;
 
 use log::{error, info, trace, warn};
 use oauth2::reqwest::async_http_client;
@@ -28,7 +28,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::task::JoinHandle;
 use url::Url;
 
-use super::TokenStore;
+use crate::token_store::TokenStore;
 
 pub const CLIENT_ID: &str = "782ae96ea60f4cdf986a766049607005";
 pub const REDIRECT_URI: &str = "http://127.0.0.1:8898/login";
@@ -53,15 +53,13 @@ pub const SESSION_SCOPES: &str = "streaming";
 
 // Interval between background refresh retries. The refresh token stays valid
 // far longer than the access token, so on a transient failure we keep polling
-// rather than giving up. A 10s cadence is frequent enough to recover quickly
-// yet light enough to poll indefinitely through a longer outage.
+// rather than giving up.
 const REFRESH_POLL_INTERVAL: Duration = Duration::from_secs(10);
 
 // How long before expiry we start trying to refresh. This must be larger than
 // REFRESH_POLL_INTERVAL so that transient failures get retried while the
 // current token is still valid, leaving no window where playback runs on an
-// expired token. With a 60s lead and a 10s interval we get roughly six
-// attempts before the token actually expires.
+// expired token.
 const REFRESH_LEAD_TIME: Duration = Duration::from_secs(60);
 
 pub struct RiffOauthClient {

@@ -217,7 +217,6 @@ impl DetailsPageModel {
     }
 
     // Liked song helpers
-
     pub fn is_song_liked(&self, id: &str) -> bool {
         let state = self.app_model.get_state();
         if let Some(home) = state.browser.home_state() {
@@ -231,22 +230,20 @@ impl DetailsPageModel {
             return;
         };
         let song_desc = song.into_description();
-        let song_id = song_desc.id.clone();
-        let api = self.app_model.get_spotify();
+        let song_id = song_desc.rri.id.clone();
+        let api = self.app_model.api();
         let is_liked = self.is_song_liked(id);
 
         if is_liked {
-            self.dispatcher
-                .call_spotify_and_dispatch(move || async move {
-                    api.remove_saved_tracks(vec![song_id.clone()]).await?;
-                    Ok(BrowserAction::RemoveSavedTracks(vec![song_id]).into())
-                });
+            self.dispatcher.call_api_and_dispatch(move || async move {
+                api.remove_tracks(vec![song_id.clone()]).await?;
+                Ok(BrowserAction::RemoveSavedTracks(vec![song_id]).into())
+            });
         } else {
-            self.dispatcher
-                .call_spotify_and_dispatch(move || async move {
-                    api.save_tracks(vec![song_id]).await?;
-                    Ok(BrowserAction::SaveTracks(vec![song_desc]).into())
-                });
+            self.dispatcher.call_api_and_dispatch(move || async move {
+                api.save_tracks(vec![song_id]).await?;
+                Ok(BrowserAction::SaveTracks(vec![song_desc]).into())
+            });
         }
     }
 }

@@ -278,5 +278,17 @@
       <default>''</default>
       <summary>Spotify user id known to play tracks, used to skip PlayPlay DRM detection across restarts.</summary>
     </key>
+    <key name="memory-cache-size-mb" type="u">
+      <range min="1" max="1024"/>
+      <default>32</default>
+      <summary>Maximum memory (MB) for the in-memory data and texture cache</summary>
+      <description>Upper bound on RAM used to cache API responses and textures.</description>
+    </key>
+    <key name="disk-cache-size-mb" type="u">
+      <range min="16" max="4096"/>
+      <default>256</default>
+      <summary>Maximum disk space (MB) for the on-disk data cache</summary>
+      <description>Upper bound on disk space used to cache API responses.</description>
+    </key>
   </schema>
 </schemalist>

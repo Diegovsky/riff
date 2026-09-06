@@ -79,8 +79,7 @@ impl PlaybackInfoWidget {
         self.imp().song_info_box.set_visible(visible);
     }
 
-    pub fn set_artwork(&self, pixbuf: &gdk_pixbuf::Pixbuf) {
-        let texture = gdk::Texture::for_pixbuf(pixbuf);
-        self.imp().playing_image.set_paintable(Some(&texture));
+    pub fn set_artwork(&self, texture: &gdk::Texture) {
+        self.imp().playing_image.set_paintable(Some(texture));
     }
 }

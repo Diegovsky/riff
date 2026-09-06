@@ -12,7 +12,7 @@ use crate::app::components::{
     EventListener, HeaderRegistrar, ImageShape, Playlist, SortOrder, CLAMP_MAX_SIZE,
 };
 use crate::app::dispatch::Worker;
-use crate::app::models::{CardModel, SearchType, SongDescription};
+use crate::app::models::{CardModel, SearchType, Track};
 use crate::app::state::{AppEvent, BrowserEvent};
 use crate::app::{ActionDispatcher, ListStore};
 
@@ -221,6 +221,13 @@ struct SearchSectionModel {
     store: ListStore<CardModel>,
     shape: ImageShape,
     on_activated: Box<dyn Fn(String)>,
+    api_service: std::sync::Arc<riff_api::ApiService>,
+}
+
+impl crate::app::ProvidesApi for SearchSectionModel {
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.api_service.clone()
+    }
 }
 
 impl CardListModel for SearchSectionModel {
@@ -345,12 +352,15 @@ impl SearchResults {
         // --- Combined ("all") view: Tracks / Artists / Albums sections ---
         let all_box = gtk::Box::new(gtk::Orientation::Vertical, SECTION_SPACING);
 
+        let section_api_service = model.app_model().api();
+
         let track_section = Rc::new(SearchSectionModel {
             store: ListStore::new(),
             shape: ImageShape::Square,
-            // Tracks need the full SongDescription, so activation is wired
+            // Tracks need the full Track, so activation is wired
             // separately via connect_child_activated below rather than by id.
             on_activated: Box::new(|_| {}),
+            api_service: section_api_service.clone(),
         });
         let artist_section = Rc::new(SearchSectionModel {
             store: ListStore::new(),
@@ -360,6 +370,7 @@ impl SearchResults {
                 model,
                 move |id| model.open_artist(id)
             )),
+            api_service: section_api_service.clone(),
         });
         let album_section = Rc::new(SearchSectionModel {
             store: ListStore::new(),
@@ -369,6 +380,7 @@ impl SearchResults {
                 model,
                 move |id| model.open_album(id)
             )),
+            api_service: section_api_service.clone(),
         });
         let playlist_section = Rc::new(SearchSectionModel {
             store: ListStore::new(),
@@ -378,6 +390,7 @@ impl SearchResults {
                 model,
                 move |id| model.open_playlist(id)
             )),
+            api_service: section_api_service.clone(),
         });
 
         let track_card_list = build_section(
@@ -391,7 +404,7 @@ impl SearchResults {
             size.get(),
         );
 
-        // Override track activation to pass the full SongDescription.
+        // Override track activation to pass the full Track.
         let track_section_clone = Rc::clone(&track_section);
         let model_weak = Rc::downgrade(&model);
         track_card_list
@@ -411,7 +424,7 @@ impl SearchResults {
                 if let Some(card_model) = track_section_clone.store.iter().find(|c| c.id() == id) {
                     if let Some(song) = card_model
                         .data()
-                        .and_then(|d| d.downcast_ref::<SongDescription>().cloned())
+                        .and_then(|d| d.downcast_ref::<Track>().cloned())
                     {
                         m.open_track(song);
                     }
@@ -568,19 +581,24 @@ impl SearchResults {
 
         let tracks: Vec<CardModel> = results
             .tracks
-            .songs
+            .items
             .iter()
             .map(|track| CardModel::from(track).with_data(track.clone()))
             .collect();
         replace_store_contents(&self.track_section.store, tracks);
 
-        let artists: Vec<CardModel> = results.artists.iter().map(CardModel::from).collect();
+        let artists: Vec<CardModel> = results.artists.items.iter().map(CardModel::from).collect();
         replace_store_contents(&self.artist_section.store, artists);
 
-        let albums: Vec<CardModel> = results.albums.iter().map(CardModel::from).collect();
+        let albums: Vec<CardModel> = results.albums.items.iter().map(CardModel::from).collect();
         replace_store_contents(&self.album_section.store, albums);
 
-        let playlists: Vec<CardModel> = results.playlists.iter().map(CardModel::from).collect();
+        let playlists: Vec<CardModel> = results
+            .playlists
+            .items
+            .iter()
+            .map(CardModel::from)
+            .collect();
         replace_store_contents(&self.playlist_section.store, playlists);
     }
 

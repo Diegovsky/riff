@@ -42,7 +42,7 @@ impl SidebarModel {
     }
 
     pub fn load_more_playlists(&self) -> Option<()> {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let state = self.app_model.get_state();
         let home = state.browser.home_state()?;
         let batch_size = home.next_playlists_page.batch_size;
@@ -52,12 +52,11 @@ impl SidebarModel {
         self.app_model
             .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SavedPlaylists).into());
 
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                api.get_saved_playlists(offset, batch_size)
-                    .await
-                    .map(|playlists| BrowserAction::AppendPlaylistsContent(playlists).into())
-            });
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            api.get_saved_playlists(offset, batch_size)
+                .await
+                .map(|page| BrowserAction::AppendPlaylistsContent(page.items).into())
+        });
 
         Some(())
     }
@@ -72,13 +71,12 @@ impl SidebarModel {
 
     fn create_new_playlist(&self, name: String) {
         let user_id = self.app_model.get_state().logged_user.user.clone().unwrap();
-        let api = self.app_model.get_spotify();
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                api.create_new_playlist(name.as_str(), user_id.as_str())
-                    .await
-                    .map(AppAction::CreatePlaylist)
-            })
+        let api = self.app_model.api();
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            api.create_playlist(user_id.as_str(), name.as_str())
+                .await
+                .map(AppAction::CreatePlaylist)
+        })
     }
 
     pub(super) fn is_playlist_owned(&self, id: &str) -> bool {
@@ -90,21 +88,20 @@ impl SidebarModel {
     }
 
     pub(super) fn unfollow_playlist(&self, id: String) {
-        let api = self.app_model.get_spotify();
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                api.unfollow_playlist(&id).await?;
-                Ok(AppAction::RemovePlaylist(id))
-            })
+        let api = self.app_model.api();
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            api.unfollow_playlist(&id).await?;
+            Ok(AppAction::RemovePlaylist(id))
+        })
     }
 
     pub(super) fn play_playlist(&self, id: String) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let source = SongsSource::Playlist(id.clone());
         self.dispatcher
-            .call_spotify_and_dispatch_many(move || async move {
-                let batch = api.get_playlist_tracks(&id, 0, 100).await?;
-                let first_id = batch.songs.first().map(|s| s.id.clone());
+            .call_api_and_dispatch_many(move || async move {
+                let batch = api.get_playlist_tracks(&id, 0, 50).await?;
+                let first_id = batch.items.first().map(|s| s.rri.id.clone());
                 let mut actions: Vec<AppAction> = vec![
                     PlaybackAction::SetShuffled(false).into(),
                     PlaybackAction::LoadPagedSongs(source, batch).into(),
@@ -117,15 +114,15 @@ impl SidebarModel {
     }
 
     pub(super) fn shuffle_playlist(&self, id: String) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let source = SongsSource::Playlist(id.clone());
         self.dispatcher
-            .call_spotify_and_dispatch_many(move || async move {
-                let batch = api.get_playlist_tracks(&id, 0, 100).await?;
-                let len = batch.songs.len();
+            .call_api_and_dispatch_many(move || async move {
+                let batch = api.get_playlist_tracks(&id, 0, 50).await?;
+                let len = batch.items.len();
                 let track_id = if len > 0 {
                     let index = rand::random::<usize>() % len;
-                    Some(batch.songs[index].id.clone())
+                    Some(batch.items[index].rri.id.clone())
                 } else {
                     None
                 };

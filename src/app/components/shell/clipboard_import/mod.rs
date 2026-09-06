@@ -140,13 +140,12 @@ impl ClipboardWatcher {
             SpotifyLink::Track(id) => {
                 // No track detail screen exists: resolve the track's album and
                 // open that instead.
-                let api = self.app_model.get_spotify();
-                self.dispatcher
-                    .call_spotify_and_dispatch(move || async move {
-                        api.get_track(&id)
-                            .await
-                            .map(|song| AppAction::ViewAlbum(song.album.id))
-                    });
+                let api = self.app_model.api();
+                self.dispatcher.call_api_and_dispatch(move || async move {
+                    api.get_track(&id).await.map(|song| {
+                        AppAction::ViewAlbum(song.album.map(|a| a.rri.id).unwrap_or_default())
+                    })
+                });
             }
         }
     }

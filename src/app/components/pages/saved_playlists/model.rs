@@ -40,16 +40,15 @@ impl CardListModel for SavedPlaylistsModel {
     }
 
     fn refresh(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         if let Some(state) = self.state() {
             let batch_size = state.next_playlists_page.batch_size;
             drop(state);
-            self.dispatcher
-                .call_spotify_and_dispatch(move || async move {
-                    api.get_saved_playlists(0, batch_size)
-                        .await
-                        .map(|playlists| BrowserAction::SetPlaylistsContent(playlists).into())
-                });
+            self.dispatcher.call_api_and_dispatch(move || async move {
+                api.get_saved_playlists(0, batch_size)
+                    .await
+                    .map(|page| BrowserAction::SetPlaylistsContent(page.items).into())
+            });
         }
     }
 
@@ -64,7 +63,7 @@ impl CardListModel for SavedPlaylistsModel {
     }
 
     fn load_more(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let state = match self.state() {
             Some(s) => s,
             None => return,
@@ -79,12 +78,11 @@ impl CardListModel for SavedPlaylistsModel {
         self.app_model
             .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SavedPlaylists).into());
 
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                api.get_saved_playlists(offset, batch_size)
-                    .await
-                    .map(|playlists| BrowserAction::AppendPlaylistsContent(playlists).into())
-            });
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            api.get_saved_playlists(offset, batch_size)
+                .await
+                .map(|page| BrowserAction::AppendPlaylistsContent(page.items).into())
+        });
     }
 
     fn open_item(&self, id: String) {
@@ -139,4 +137,10 @@ pub fn make_saved_playlists(
         shared_size,
         dispatcher,
     )
+}
+
+impl crate::app::ProvidesApi for SavedPlaylistsModel {
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.app_model.api()
+    }
 }

@@ -2,6 +2,10 @@
 mod main;
 pub use main::*;
 
+// Playback queue conversions
+mod queue;
+pub use queue::*;
+
 // Shared enums (used by UI, state, and settings)
 mod card_enums;
 pub use card_enums::*;
@@ -15,44 +19,41 @@ pub use card_model::*;
 
 use crate::app::components::card::IMAGE_SIZE;
 
-impl From<&AlbumDescription> for CardModel {
-    fn from(album: &AlbumDescription) -> Self {
-        let art = album
-            .art
-            .as_ref()
-            .and_then(|s| s.best_for_width(IMAGE_SIZE))
-            .map(str::to_owned);
+impl From<&Album> for CardModel {
+    fn from(album: &Album) -> Self {
+        let art = album.art.best_for_width(IMAGE_SIZE).map(str::to_owned);
         CardModel::new(
-            &album.id,
+            &album.rri.id,
             art.as_ref(),
             &album.title,
             &album.artists_name(),
-            album.release_date.as_deref(),
-            Some(album.popularity),
+            album.release_date_string().as_deref(),
+            Some(album.popularity.unwrap_or(0)),
             None,
-            album.album_type.as_deref(),
+            album.album_type_string().as_deref(),
         )
     }
 }
 
-impl From<AlbumDescription> for CardModel {
-    fn from(album: AlbumDescription) -> Self {
+impl From<Album> for CardModel {
+    fn from(album: Album) -> Self {
         Self::from(&album)
     }
 }
 
-impl From<&PlaylistDescription> for CardModel {
-    fn from(playlist: &PlaylistDescription) -> Self {
-        let art = playlist
-            .art
+impl From<&Playlist> for CardModel {
+    fn from(playlist: &Playlist) -> Self {
+        let art = playlist.art.best_for_width(IMAGE_SIZE).map(str::to_owned);
+        let owner = playlist
+            .owner
             .as_ref()
-            .and_then(|s| s.best_for_width(IMAGE_SIZE))
-            .map(str::to_owned);
+            .map(|o| o.display_name.as_str())
+            .unwrap_or("");
         CardModel::new(
-            &playlist.id,
+            &playlist.rri.id,
             art.as_ref(),
             &playlist.title,
-            &playlist.owner.display_name,
+            owner,
             None,
             None,
             None,
@@ -61,59 +62,54 @@ impl From<&PlaylistDescription> for CardModel {
     }
 }
 
-impl From<PlaylistDescription> for PlaylistSummary {
-    fn from(PlaylistDescription { id, title, .. }: PlaylistDescription) -> Self {
-        Self { id, title }
+impl From<Playlist> for PlaylistSummary {
+    fn from(playlist: Playlist) -> Self {
+        Self {
+            id: playlist.rri.id,
+            title: playlist.title,
+        }
     }
 }
 
-impl From<PlaylistDescription> for CardModel {
-    fn from(playlist: PlaylistDescription) -> Self {
+impl From<Playlist> for CardModel {
+    fn from(playlist: Playlist) -> Self {
         Self::from(&playlist)
     }
 }
 
-impl From<SongDescription> for SongModel {
-    fn from(song: SongDescription) -> Self {
+impl From<Track> for SongModel {
+    fn from(song: Track) -> Self {
         SongModel::new(song)
     }
 }
 
-impl From<&SongDescription> for SongModel {
-    fn from(song: &SongDescription) -> Self {
+impl From<&Track> for SongModel {
+    fn from(song: &Track) -> Self {
         SongModel::new(song.clone())
     }
 }
 
-impl From<&ArtistSummary> for CardModel {
-    fn from(artist: &ArtistSummary) -> Self {
-        let photo = artist
-            .photo
-            .as_ref()
-            .and_then(|s| s.best_for_width(IMAGE_SIZE))
-            .map(str::to_owned);
+impl From<&Artist> for CardModel {
+    fn from(artist: &Artist) -> Self {
+        let photo = artist.art.best_for_width(IMAGE_SIZE).map(str::to_owned);
         CardModel::new(
-            &artist.id,
+            &artist.rri.id,
             photo.as_ref(),
             &artist.name,
             "",
             None,
-            Some(artist.popularity),
+            Some(artist.popularity.unwrap_or(0)),
             None,
             None,
         )
     }
 }
 
-impl From<&SongDescription> for CardModel {
-    fn from(desc: &SongDescription) -> Self {
-        let photo = desc
-            .art
-            .as_ref()
-            .and_then(|s| s.best_for_width(IMAGE_SIZE))
-            .map(str::to_owned);
+impl From<&Track> for CardModel {
+    fn from(desc: &Track) -> Self {
+        let photo = desc.art.best_for_width(IMAGE_SIZE).map(str::to_owned);
         CardModel::new(
-            &desc.id,
+            &desc.rri.id,
             photo.as_ref(),
             &desc.title,
             &desc.artists_name(),

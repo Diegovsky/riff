@@ -11,7 +11,7 @@ use crate::app::components::{
     CardListModel, HasHeaderBarModel, HeaderImageShape, ImageShape, PageModel, SimpleHeaderBarModel,
 };
 use crate::app::models::*;
-use crate::app::state::{BrowserAction, BrowserEvent, SelectionContext};
+use crate::app::state::{BrowserAction, BrowserEvent, SelectionContext, CARD_BATCH_SIZE};
 use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, ListStore, PaginationTarget};
 
 /// Data model for the user profile page. Composes `DetailsPageModel` via Deref.
@@ -47,10 +47,6 @@ impl PageModel for UserDetailsModel {
         Some(gettext("Profile"))
     }
 
-    fn default_icon(&self) -> Option<&str> {
-        Some("avatar-default-symbolic")
-    }
-
     fn get_artwork(&self) -> Option<ImageSet> {
         self.app_model
             .map_state_opt(|s| s.browser.user_state(&self.id)?.photo.as_ref())
@@ -62,18 +58,29 @@ impl PageModel for UserDetailsModel {
     }
 
     fn load_page_info(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
+
+        // User info: name and photo for the header.
         let id = self.id.clone();
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                api.get_user(&id)
-                    .await
-                    .map(|user| BrowserAction::SetUserDetails(Box::new(user)).into())
-            });
+        let info_api = api.clone();
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            info_api
+                .get_user(&id)
+                .await
+                .map(|user| BrowserAction::SetUserInfo(Box::new(user)).into())
+        });
+
+        // Initial page of the user's public playlists (the card list).
+        let id = self.id.clone();
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            api.get_user_playlists(&id, 0, CARD_BATCH_SIZE)
+                .await
+                .map(|page| BrowserAction::SetUserPlaylists(id, page.items).into())
+        });
     }
 
     fn load_more(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
 
         let state = self.app_model.get_state();
         let Some(next_page) = state
@@ -95,12 +102,11 @@ impl PageModel for UserDetailsModel {
             BrowserAction::ConsumeNextPage(PaginationTarget::UserPlaylists(id.clone())).into(),
         );
 
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                api.get_user_playlists(&id, offset, batch_size)
-                    .await
-                    .map(|playlists| BrowserAction::AppendUserPlaylists(id, playlists).into())
-            });
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            api.get_user_playlists(&id, offset, batch_size)
+                .await
+                .map(|page| BrowserAction::AppendUserPlaylists(id, page.items).into())
+        });
     }
 
     fn is_loaded(&self) -> bool {
@@ -156,4 +162,10 @@ impl SimpleHeaderBarModel for UserDetailsModel {
     }
 
     fn select_all(&self) {}
+}
+
+impl crate::app::ProvidesApi for UserDetailsModel {
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.app_model.api()
+    }
 }

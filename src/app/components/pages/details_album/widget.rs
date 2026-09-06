@@ -13,6 +13,7 @@ use crate::app::components::{
     Component, DetailsPageComponent, EventListener, HasHeaderBarModel, HeaderRegistrar, PageModel,
 };
 use crate::app::dispatch::Worker;
+use crate::app::models::AlbumExt;
 use crate::app::AppEvent;
 
 /// GTK widget for the album detail page.
@@ -71,15 +72,13 @@ impl EventListener for Details {
             // Update the release details dialog when album info loads
             if self.component.model().should_refresh_details(event) {
                 if let Some(album) = self.component.model().get_album_info() {
-                    let details = &album.release_details;
-                    let desc = &album.description;
                     self.modal.set_details(
-                        &desc.title,
-                        &desc.artists_name(),
-                        &details.label,
-                        desc.release_date.as_ref().unwrap(),
-                        details.total_tracks,
-                        &details.copyright_text,
+                        &album.title,
+                        &album.artists_name(),
+                        album.label.as_deref().unwrap_or_default(),
+                        &album.release_date_string().unwrap_or_default(),
+                        album.total_tracks.unwrap_or(0) as usize,
+                        album.copyright.as_deref().unwrap_or_default(),
                     );
                 }
             }

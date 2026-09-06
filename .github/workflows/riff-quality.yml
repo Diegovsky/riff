@@ -23,6 +23,13 @@ jobs:
       - name: Add empty config.rs
         run: echo > src/config.rs
 
+      # Create minimal stub of spotify-api crate as it is not committed.
+      - name: Create generated crate stub
+        run: |
+          mkdir -p generated/spotify-api/src
+          printf '[package]\nname = "spotify-api"\nversion = "0.0.0"\nedition = "2021"\n' > generated/spotify-api/Cargo.toml
+          echo > generated/spotify-api/src/lib.rs
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 

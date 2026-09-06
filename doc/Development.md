@@ -4,16 +4,19 @@ This guide is the starting point for developing Riff. It walks you from a clean 
 
 ## Quick Setup
 
-Get a development build running in three steps. Run these from the repository root.
+Get a development build running in four steps. Run these from the repository root.
 
 ```sh
 # 1. Install dependencies (detects dnf, apt-get, pacman, or zypper)
 ./scripts/setup-dev.sh
 
-# 2. Build a debug build and install to ~/.local
+# 2. Generate the Spotify API client crate (requires Java)
+./scripts/generate-spotify-api.sh
+
+# 3. Build a debug build and install to ~/.local
 ./scripts/build.sh dev --install
 
-# 3. Run with debug logging
+# 4. Run with debug logging
 RUST_LOG='riff=debug,librespot=error' ~/.local/bin/riff
 ```
 
@@ -33,15 +36,21 @@ See [`Design.md`](Design.md) for the full data flow explanation.
 ### Directory Structure
 
 | Directory | Responsibility |
-| --- | --- |
+| --- | -- |
+| `crates/` | Riff crates used by the main application - see below. |
+| `crates/riff-config/` | Shared constants and configuration values for the Riff workspace. |
+| `crates/riff-auth/` | Authentication: OAuth2 (PKCE) flow and keyring-backed credential store. |
+| `crates/riff-api/` | Data layer for Riff, replacing the legacy API and caching code. |
+| `crates/riff-api/src/providers/` | Provider-neutral music service trait and per-vendor implementations. |
+| `crates/riff-api/src/providers/spotify/` | Spotify provider: domain types and Spotify-to-provider-neutral conversion. |
+| `crates/riff-api/src/http/` | Shared HTTP connection pool and retry logic. |
+| `crates/riff-api/src/cache/` | Caching layer: disk TTL cache, texture LRU, domain object LRU. |
 | `src/` | Rust source code and bundled UI assets. |
-| `src/api/` | Spotify Web API client with response caching. |
 | `src/app/` | Core application logic and state. |
 | `src/app/state/` | Centralized application state and reducers. |
 | `src/app/models/` | Presentation models binding state to UI. |
 | `src/app/components/` | GTK widget wrappers and event listeners. |
 | `src/app/dev_tools/` | Dev menu (debug builds only). |
-| `src/auth/` | OAuth2 login flow and secure token storage. |
 | `src/audio_engine/` | DSP chain between librespot and the audio backend (EQ, pitch, pan, mono, mix). |
 | `src/connect/` | Spotify Connect device support. |
 | `src/player/` | librespot session and local playback management. |
@@ -49,7 +58,6 @@ See [`Design.md`](Design.md) for the full data flow explanation.
 | `data/` | Application data installed on the system (icons, desktop file, appstream, GSchema). |
 | `po/` | Translations (gettext). |
 | `scripts/` | Developer and tooling scripts. |
-| `scripts/lint/` | HIG and style linters (Python). |
 | `flatpak/` | Flatpak packaging manifests and cargo sources. |
 | `doc/` | Developer documentation. |
 | `subprojects/` | Meson subproject wrap files. |
@@ -218,6 +226,11 @@ To install manually, you need:
 - `gettext` (translations)
 - `libxml2` / `libxml2-utils`
 - `pkg-config`
+
+## Generated Code
+
+`./scripts/generate-spotify-api.sh` will generate the Spotify crate found in `./generated`.
+
 
 ## Building
 

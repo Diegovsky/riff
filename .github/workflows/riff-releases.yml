@@ -8,8 +8,32 @@ on:
   workflow_dispatch:
 
 jobs:
+  generate-spotify-api-crate:
+    name: "Generate Spotify API crate"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Generate Spotify API crate
+        run: ./scripts/generate-spotify-api.sh
+
+      - name: Upload generated crate
+        uses: actions/upload-artifact@v4
+        with:
+          name: spotify-api-crate
+          path: generated/spotify-api
+          include-hidden-files: true
+          retention-days: 1
+
   flatpak:
     name: "Flatpak ${{ matrix.variant.arch }}"
+    needs: [generate-spotify-api-crate]
     runs-on: ${{ matrix.variant.runner }}
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
@@ -23,6 +47,13 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download generated Spotify API crate
+        uses: actions/download-artifact@v4
+        with:
+          name: spotify-api-crate
+          path: generated/spotify-api
+
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: riff-${{ matrix.variant.arch }}.flatpak

@@ -94,9 +94,9 @@ pub fn wire_dev_tools(
         // The connection-lost banner is deliberately NOT raised here. It
         // appears as a side effect once an actual API request fails while
         // offline, and clears itself once a request succeeds again (see
-        // call_spotify_and_dispatch_many), mirroring how a real outage is
+        // call_api_and_dispatch_many), mirroring how a real outage is
         // detected rather than the switch poking the toast directly.
-        crate::api::set_simulate_offline(active);
+        riff_api::set_simulate_offline(active);
         if active {
             let _ = player_sender.unbounded_send(Command::DevKillSession);
         }
@@ -137,7 +137,7 @@ pub fn wire_dev_tools(
         let idx = index as u8;
         button.connect_toggled(move |btn| {
             if btn.is_active() {
-                crate::api::set_injected_error(idx);
+                riff_api::set_injected_error(idx);
             }
         });
     }

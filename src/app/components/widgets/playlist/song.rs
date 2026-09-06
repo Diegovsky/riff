@@ -1,11 +1,12 @@
 use crate::app::components::display_add_css_provider;
-use crate::app::loader::ImageLoader;
 use crate::app::models::SongModel;
 use crate::app::Worker;
 use gdk::Rectangle;
 use gettextrs::gettext;
 use gio::MenuModel;
 use glib::subclass::InitializingObject;
+use riff_api::ApiService;
+use std::sync::Arc;
 
 use gtk::graphene::Point;
 use gtk::prelude::*;
@@ -271,33 +272,36 @@ impl SongWidget {
         }
     }
 
-    fn set_image(&self, pixbuf: &gdk_pixbuf::Pixbuf) {
-        let texture = gdk::Texture::for_pixbuf(pixbuf);
-        self.imp().song_cover.set_paintable(Some(&texture));
+    fn set_image(&self, texture: &gdk::Texture) {
+        self.imp().song_cover.set_paintable(Some(texture));
     }
 
-    pub fn set_art(&self, model: &SongModel, worker: Worker) {
+    pub fn set_art(&self, model: &SongModel, worker: Worker, api_service: Arc<ApiService>) {
         if let Some(url) = model
             .description()
             .art
-            .as_ref()
-            .and_then(|s| s.best_for_width(48))
+            .best_for_width(48)
             .map(str::to_owned)
         {
             let _self = self.downgrade();
             worker.send_local_task(async move {
                 if let Some(_self) = _self.upgrade() {
-                    let loader = ImageLoader::new();
-                    let result = loader.load_remote(&url, "jpg", 100, 100).await;
-                    if let Some(pixbuf) = result.as_ref() {
-                        _self.set_image(pixbuf);
+                    let result = api_service.load_image(&url, "jpg", 100, 100).await;
+                    if let Some(ref texture) = result {
+                        _self.set_image(texture);
                     }
                 }
             });
         }
     }
 
-    pub fn bind(&self, model: &SongModel, worker: Worker, show_cover: bool) {
+    pub fn bind(
+        &self,
+        model: &SongModel,
+        worker: Worker,
+        api_service: Arc<ApiService>,
+        show_cover: bool,
+    ) {
         let widget = self.imp();
 
         model.bind_title(&*widget.song_title, "label");
@@ -311,7 +315,7 @@ impl SongWidget {
 
         self.set_show_cover(show_cover);
         if show_cover {
-            self.set_art(model, worker);
+            self.set_art(model, worker, api_service);
         } else {
             model.bind_index(&*widget.song_index, "label");
         }

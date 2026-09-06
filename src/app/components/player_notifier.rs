@@ -153,7 +153,7 @@ impl PlayerNotifier {
                 song,
             },
             _ => CurrentlyPlaying::Songs {
-                songs: state.playback.songs().map_collect(|s| s.id),
+                songs: state.playback.songs().map_collect(|s| s.rri.id),
                 offset,
             },
         };

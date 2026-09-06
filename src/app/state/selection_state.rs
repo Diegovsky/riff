@@ -1,12 +1,12 @@
 use std::borrow::Cow;
 use std::collections::HashSet;
 
-use crate::app::models::SongDescription;
+use crate::app::models::Track;
 use crate::app::state::{AppAction, AppEvent, UpdatableState};
 
 #[derive(Clone, Debug)]
 pub enum SelectionAction {
-    Select(Vec<SongDescription>),
+    Select(Vec<Track>),
     Deselect(Vec<String>),
     Clear,
 }
@@ -41,7 +41,7 @@ pub enum SelectionContext {
 }
 
 pub struct SelectionState {
-    selected_songs: Vec<SongDescription>,
+    selected_songs: Vec<Track>,
     selected_songs_ids: HashSet<String>,
     selection_active: bool,
     pub context: SelectionContext,
@@ -59,19 +59,19 @@ impl Default for SelectionState {
 }
 
 impl SelectionState {
-    fn select(&mut self, song: SongDescription) -> bool {
-        let selected = self.selected_songs_ids.contains(&song.id);
+    fn select(&mut self, song: Track) -> bool {
+        let selected = self.selected_songs_ids.contains(&song.rri.id);
         if !selected {
-            self.selected_songs_ids.insert(song.id.clone());
+            self.selected_songs_ids.insert(song.rri.id.clone());
             self.selected_songs.push(song);
         }
         !selected
     }
 
     fn deselect(&mut self, id: &str) -> bool {
-        let songs: Vec<SongDescription> = std::mem::take(&mut self.selected_songs)
+        let songs: Vec<Track> = std::mem::take(&mut self.selected_songs)
             .into_iter()
-            .filter(|s| s.id != id)
+            .filter(|s| s.rri.id != id)
             .collect();
         self.selected_songs = songs;
         self.selected_songs_ids.remove(id)
@@ -108,12 +108,12 @@ impl SelectionState {
     }
 
     // Clears (!) the selection, returns associated memory
-    pub fn take_selection(&mut self) -> Vec<SongDescription> {
+    pub fn take_selection(&mut self) -> Vec<Track> {
         std::mem::take(self).selected_songs
     }
 
     // Just have a look at the selection without changing it
-    pub fn peek_selection(&self) -> impl Iterator<Item = &'_ SongDescription> {
+    pub fn peek_selection(&self) -> impl Iterator<Item = &'_ Track> {
         self.selected_songs.iter()
     }
 }

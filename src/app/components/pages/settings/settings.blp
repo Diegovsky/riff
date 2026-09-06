@@ -281,5 +281,70 @@ template $SettingsWindow : Adw.PreferencesDialog {
         }
       }
     }
+
+    Adw.PreferencesGroup {
+      /* Translators: Header for a group of preference items regarding data caching */
+
+      title: _("Caching");
+
+      /* Translators: Description under the Caching preferences header */
+
+      description: _("Control how Riff caches data locally.");
+
+      Adw.SpinRow memory_cache_size {
+        /* Translators: Title for the in-memory cache size preference */
+
+        title: _("Memory Cache Size (MB)");
+
+        /* Translators: Description for the in-memory cache size preference */
+
+        subtitle: _("Maximum memory allocated for caching data while Riff is running.");
+        adjustment: Adjustment {
+          lower: 1;
+          upper: 1024;
+          value: 32;
+          step-increment: 8;
+          page-increment: 32;
+        };
+      }
+
+      Adw.SpinRow disk_cache_size {
+        /* Translators: Title for the on-disk image cache size preference */
+
+        title: _("Disk Cache Size (MB)");
+
+        /* Translators: Description for the on-disk image cache size preference */
+
+        subtitle: _("Maximum disk space allocated for caching data between sessions.");
+        adjustment: Adjustment {
+          lower: 16;
+          upper: 4096;
+          value: 256;
+          step-increment: 16;
+          page-increment: 64;
+        };
+      }
+
+      Adw.ActionRow {
+        /* Translators: Title for the clear cache action row */
+
+        title: _("Clear Cache");
+
+        /* Translators: Description for the clear cache action row */
+
+        subtitle: _("Remove all cached data and images stored on disk");
+
+        Button clear_cache_button {
+          /* Translators: Label for the button that clears the cache */
+
+          label: _("Clear");
+          valign: center;
+
+          styles [
+            "destructive-action",
+          ]
+        }
+      }
+    }
   }
 }

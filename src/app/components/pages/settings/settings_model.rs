@@ -1,6 +1,7 @@
 use crate::app::state::{PlaybackAction, SettingsAction};
-use crate::app::{ActionDispatcher, AppModel};
+use crate::app::{ActionDispatcher, AppAction, AppModel};
 use crate::settings::RiffSettings;
+use gettextrs::gettext;
 use std::rc::Rc;
 
 pub struct SettingsModel {
@@ -23,6 +24,16 @@ impl SettingsModel {
     pub fn set_settings(&self) {
         self.dispatcher
             .dispatch(SettingsAction::ChangeSettings.into());
+    }
+
+    /// Clear the on-disk and in-memory data caches, then notify the user.
+    pub fn clear_cache(&self) {
+        let api = self.app_model.api();
+        self.dispatcher.dispatch_async(Box::pin(async move {
+            api.clear_user_cache().await;
+            // Translators: Toast shown after the user clears the cache in settings.
+            Some(AppAction::ShowNotification(gettext("Cache cleared")))
+        }));
     }
 
     pub fn settings(&self) -> RiffSettings {

@@ -5,10 +5,11 @@ use std::sync::{Arc, RwLock};
 use futures::channel::mpsc::UnboundedSender;
 use gettextrs::gettext;
 
-use crate::api::{SpotifyApiClient, SpotifyApiError, SpotifyResult};
-use crate::app::models::{ConnectPlayerState, RepeatMode, SongDescription};
+use crate::app::models::{queue_songs, PlayerState, RepeatMode, Track};
 use crate::app::state::{Device, PlaybackAction};
 use crate::app::{AppAction, SongsSource};
+use riff_api::ApiService;
+use riff_api::DomainError;
 
 #[derive(Debug)]
 pub enum ConnectCommand {
@@ -32,18 +33,15 @@ pub enum ConnectCommand {
 }
 
 pub struct ConnectPlayer {
-    api: Arc<dyn SpotifyApiClient + Send + Sync>,
+    api: Arc<ApiService>,
     action_sender: UnboundedSender<AppAction>,
     device_id: RwLock<Option<String>>,
     last_queue: RwLock<u64>,
-    last_state: RwLock<ConnectPlayerState>,
+    last_state: RwLock<PlayerState>,
 }
 
 impl ConnectPlayer {
-    pub fn new(
-        api: Arc<dyn SpotifyApiClient + Send + Sync>,
-        action_sender: UnboundedSender<AppAction>,
-    ) -> Self {
+    pub fn new(api: Arc<ApiService>, action_sender: UnboundedSender<AppAction>) -> Self {
         Self {
             api: api.clone(),
             action_sender,
@@ -68,13 +66,15 @@ impl ConnectPlayer {
         ]);
     }
 
-    async fn get_queue_if_changed(&self) -> Option<Vec<SongDescription>> {
+    async fn get_queue_if_changed(&self) -> Option<Vec<Track>> {
         let last_queue = *self.last_queue.read().ok().as_deref().unwrap_or(&0u64);
-        let songs = self.api.get_player_queue().await.ok();
+        let songs = self.api.get_player_queue().await.ok().map(queue_songs);
         songs.filter(|songs| {
             let hash = {
                 let mut hasher = DefaultHasher::new();
-                songs.hash(&mut hasher);
+                for s in songs {
+                    s.rri.id.hash(&mut hasher);
+                }
                 hasher.finish()
             };
             if let Some(last_queue) = self.last_queue.try_write().ok().as_deref_mut() {
@@ -84,14 +84,14 @@ impl ConnectPlayer {
         })
     }
 
-    async fn apply_remote_state(&self, state: &ConnectPlayerState) {
+    async fn apply_remote_state(&self, state: &PlayerState) {
         if let Some(songs) = self.get_queue_if_changed().await {
             #[allow(deprecated)]
             self.send_actions([PlaybackAction::LoadSongs(songs).into()]);
         }
 
         let play_pause = if state.is_playing {
-            PlaybackAction::Load(state.current_song_id.clone().unwrap())
+            PlaybackAction::Load(state.current_track_id.as_ref().unwrap().id.clone())
         } else {
             PlaybackAction::Pause
         };
@@ -113,7 +113,7 @@ impl ConnectPlayer {
 
     pub async fn sync_state(&self) {
         debug!("polling connect device...");
-        let player_state = self.api.player_state().await;
+        let player_state = self.api.get_player_state().await;
         let Ok(state) = player_state else {
             self.device_lost();
             return;
@@ -127,9 +127,9 @@ impl ConnectPlayer {
     async fn handle_player_load_in_context(
         &self,
         device_id: String,
-        current_state: &ConnectPlayerState,
+        current_state: &PlayerState,
         command: ConnectCommand,
-    ) -> SpotifyResult<()> {
+    ) -> Result<(), DomainError> {
         let ConnectCommand::PlayerLoadInContext {
             source,
             offset,
@@ -139,18 +139,18 @@ impl ConnectPlayer {
             panic!("Illegal call");
         };
         let is_diff_song = current_state
-            .current_song_id
+            .current_track_id
             .as_ref()
-            .map(|it| it != &song)
+            .map(|it| it.id != song)
             .unwrap_or(true);
         let is_paused = !current_state.is_playing;
         if is_diff_song {
             let context = source.spotify_uri().unwrap();
             self.api
-                .player_play_in_context(device_id, context, offset)
+                .player_play_in_context(&device_id, &context, offset)
                 .await
         } else if is_paused {
-            self.api.player_resume(device_id).await
+            self.api.player_resume(&device_id).await
         } else {
             Ok(())
         }
@@ -159,22 +159,22 @@ impl ConnectPlayer {
     async fn handle_player_load(
         &self,
         device_id: String,
-        current_state: &ConnectPlayerState,
+        current_state: &PlayerState,
         command: ConnectCommand,
-    ) -> SpotifyResult<()> {
+    ) -> Result<(), DomainError> {
         let ConnectCommand::PlayerLoad { songs, offset } = command else {
             panic!("Illegal call");
         };
         let is_diff_song = current_state
-            .current_song_id
+            .current_track_id
             .as_ref()
-            .map(|it| it != &songs[offset])
+            .map(|it| it.id != songs[offset])
             .unwrap_or(true);
         let is_paused = !current_state.is_playing;
         if is_diff_song {
             self.api
-                .player_play_no_context(
-                    device_id,
+                .player_play_uris(
+                    &device_id,
                     songs
                         .into_iter()
                         .map(|s| format!("spotify:track:{}", s))
@@ -183,7 +183,7 @@ impl ConnectPlayer {
                 )
                 .await
         } else if is_paused {
-            self.api.player_resume(device_id).await
+            self.api.player_resume(&device_id).await
         } else {
             Ok(())
         }
@@ -193,7 +193,7 @@ impl ConnectPlayer {
         &self,
         device_id: String,
         command: ConnectCommand,
-    ) -> SpotifyResult<()> {
+    ) -> Result<(), DomainError> {
         let state = self.last_state.read();
         let Ok(state) = state.as_deref() else {
             return Ok(());
@@ -207,18 +207,20 @@ impl ConnectPlayer {
                 self.handle_player_load(device_id, state, command).await
             }
             ConnectCommand::PlayerResume if !state.is_playing => {
-                self.api.player_resume(device_id).await
+                self.api.player_resume(&device_id).await
             }
             ConnectCommand::PlayerPause if state.is_playing => {
-                self.api.player_pause(device_id).await
+                self.api.player_pause(&device_id).await
             }
-            ConnectCommand::PlayerSeek(offset) => self.api.player_seek(device_id, offset).await,
-            ConnectCommand::PlayerRepeat(mode) => self.api.player_repeat(device_id, mode).await,
+            ConnectCommand::PlayerSeek(offset) => {
+                self.api.player_seek(&device_id, offset as u32).await
+            }
+            ConnectCommand::PlayerRepeat(mode) => self.api.player_repeat(&device_id, mode).await,
             ConnectCommand::PlayerShuffle(shuffle) => {
-                self.api.player_shuffle(device_id, shuffle).await
+                self.api.player_shuffle(&device_id, shuffle).await
             }
             ConnectCommand::PlayerSetVolume(volume) => {
-                self.api.player_volume(device_id, volume).await
+                self.api.player_volume(&device_id, volume).await
             }
             _ => Ok(()),
         }
@@ -234,7 +236,7 @@ impl ConnectPlayer {
             ConnectCommand::PlayerStop => {
                 let device_id = self.device_id.write().ok()?.take();
                 if let Some(old_id) = device_id {
-                    let _ = self.api.player_pause(old_id).await;
+                    let _ = self.api.player_pause(&old_id).await;
                 }
                 false
             }
@@ -242,13 +244,13 @@ impl ConnectPlayer {
                 let device_id = self.device_id.read().ok()?.clone();
                 if let Some(device_id) = device_id {
                     let result = self.handle_other_command(device_id, command).await;
-                    if matches!(result, Err(SpotifyApiError::TooManyRequests)) {
+                    if matches!(result, Err(DomainError::RateLimited { .. })) {
                         self.send_actions([AppAction::ShowNotification(gettext(
                             // translators: This notification is shown when Spotify throttles requests.
                             "Rate limited by Spotify. Please wait a moment and try again.",
                         ))]);
                     }
-                    matches!(result, Err(SpotifyApiError::BadStatus(404, _)))
+                    matches!(result, Err(DomainError::NotFound { .. }))
                 } else {
                     true
                 }

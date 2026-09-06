@@ -82,9 +82,9 @@ impl PlaybackControlsWidget {
 
     pub fn set_repeat_mode(&self, mode: RepeatMode) {
         let repeat_mode_icon = match mode {
-            RepeatMode::Song => "media-playlist-repeat-song-symbolic",
-            RepeatMode::Playlist => "media-playlist-repeat-symbolic",
-            RepeatMode::None => "media-playlist-consecutive-symbolic",
+            RepeatMode::Track => "media-playlist-repeat-song-symbolic",
+            RepeatMode::Context => "media-playlist-repeat-symbolic",
+            RepeatMode::Off => "media-playlist-consecutive-symbolic",
         };
 
         self.imp().repeat.set_icon_name(repeat_mode_icon);

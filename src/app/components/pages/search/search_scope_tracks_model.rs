@@ -10,6 +10,7 @@ use std::rc::Rc;
 use crate::impl_playlist_model_base;
 
 use crate::app::components::DetailsPageModel;
+use crate::app::components::SongActions;
 use crate::app::components::{labels, PlaylistModel};
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
@@ -71,24 +72,15 @@ impl PlaylistModel for SearchScopeTracksModel {
     }
 
     fn play_song_at(&self, _pos: usize, id: &str) {
-        let tracks: Vec<SongDescription> = PlaylistModel::song_list_model(self).collect();
-        let total = tracks.len();
+        let tracks: Vec<Track> = PlaylistModel::song_list_model(self).collect();
         let query = self.get_query().unwrap_or_default();
-        let batch = SongBatch {
-            songs: tracks,
-            batch: Batch {
-                offset: 0,
-                batch_size: total,
-                total,
-            },
-        };
         self.dispatcher
-            .dispatch(PlaybackAction::LoadPagedSongs(SongsSource::Search(query), batch).into());
+            .dispatch(PlaybackAction::LoadContextSongs(SongsSource::Search(query), tracks).into());
         self.dispatcher
             .dispatch(PlaybackAction::Load(id.to_string()).into());
     }
 
-    fn actions_for(&self, song: &SongDescription) -> Option<gio::ActionGroup> {
+    fn actions_for(&self, song: &Track) -> Option<gio::ActionGroup> {
         let group = SimpleActionGroup::new();
         for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
             group.add_action(&a);
@@ -98,16 +90,22 @@ impl PlaylistModel for SearchScopeTracksModel {
         Some(group.upcast())
     }
 
-    fn menu_for(&self, song: &SongDescription) -> Option<gio::MenuModel> {
+    fn menu_for(&self, song: &Track) -> Option<gio::MenuModel> {
         let menu = gio::Menu::new();
         menu.append(Some(&*labels::VIEW_ALBUM), Some("song.view_album"));
         for artist in song.artists.iter() {
             menu.append(
                 Some(&labels::more_from_label(&artist.name)),
-                Some(&format!("song.view_artist_{}", artist.id)),
+                Some(&format!("song.view_artist_{}", artist.rri.id)),
             );
         }
         menu.append(Some(&*labels::COPY_LINK), Some("song.copy_link"));
         Some(menu.upcast())
+    }
+}
+
+impl crate::app::ProvidesApi for SearchScopeTracksModel {
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.app_model.api()
     }
 }

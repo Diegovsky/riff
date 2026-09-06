@@ -40,16 +40,15 @@ impl CardListModel for SavedAlbumsModel {
     }
 
     fn refresh(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         if let Some(state) = self.state() {
             let batch_size = state.next_albums_page.batch_size;
             drop(state);
-            self.dispatcher
-                .call_spotify_and_dispatch(move || async move {
-                    api.get_saved_albums(0, batch_size)
-                        .await
-                        .map(|albums| BrowserAction::SetLibraryContent(albums).into())
-                });
+            self.dispatcher.call_api_and_dispatch(move || async move {
+                api.get_saved_albums(0, batch_size)
+                    .await
+                    .map(|page| BrowserAction::SetLibraryContent(page.items).into())
+            });
         }
     }
 
@@ -64,7 +63,7 @@ impl CardListModel for SavedAlbumsModel {
     }
 
     fn load_more(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let state = match self.state() {
             Some(s) => s,
             None => return,
@@ -79,12 +78,11 @@ impl CardListModel for SavedAlbumsModel {
         self.app_model
             .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SavedAlbums).into());
 
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                api.get_saved_albums(offset, batch_size)
-                    .await
-                    .map(|albums| BrowserAction::AppendLibraryContent(albums).into())
-            });
+        self.dispatcher.call_api_and_dispatch(move || async move {
+            api.get_saved_albums(offset, batch_size)
+                .await
+                .map(|page| BrowserAction::AppendLibraryContent(page.items).into())
+        });
     }
 
     fn open_item(&self, id: String) {
@@ -138,4 +136,10 @@ pub fn make_saved_albums(
         shared_size,
         dispatcher,
     )
+}
+
+impl crate::app::ProvidesApi for SavedAlbumsModel {
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.app_model.api()
+    }
 }

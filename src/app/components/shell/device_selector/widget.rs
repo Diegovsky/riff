@@ -1,4 +1,6 @@
-use crate::app::models::{ConnectDevice, ConnectDeviceKind};
+// `ConnectDevice` is the data-layer device type, aliased to avoid clashing with
+// the app-state `Device` enum imported below.
+use crate::app::models::{Device as ConnectDevice, DeviceKind};
 use crate::app::state::Device;
 use gdk::prelude::FromVariant;
 use gettextrs::gettext;
@@ -141,10 +143,11 @@ impl DeviceSelectorWidget {
         let icon = match device {
             Device::Local => "audio-x-generic-symbolic",
             Device::Connect(connect) => match connect.kind {
-                ConnectDeviceKind::Phone => "phone-symbolic",
-                ConnectDeviceKind::Computer => "computer-symbolic",
-                ConnectDeviceKind::Speaker => "audio-speakers-symbolic",
-                ConnectDeviceKind::Other => "audio-x-generic-symbolic",
+                DeviceKind::Phone => "phone-symbolic",
+                DeviceKind::Computer => "computer-symbolic",
+                DeviceKind::Speaker => "audio-speakers-symbolic",
+                DeviceKind::Tv => "tv-symbolic",
+                DeviceKind::Other => "audio-x-generic-symbolic",
             },
         };
         self.imp().button_content.set_label(&label);
