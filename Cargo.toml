@@ -11,6 +11,7 @@ license = "MIT"
 [dependencies]
 riff-api = { path = "crates/riff-api" }
 riff-auth = { path = "crates/riff-auth" }
+serde_json = "1.0.96"
 gio = "0.20"
 glib = "0.20"
 futures = "0.3.18"
