@@ -518,7 +518,9 @@ mod pinned_playlists_tests {
         let mut map = PinnedPlaylistsByUser::new();
         pin_in_map(&mut map, "user1", "pl1");
         assert!(map.get("user1").unwrap().iter().any(|x| x == "pl1"));
-        assert!(!map.get("user2").is_some_and(|ids| ids.iter().any(|x| x == "pl1")));
+        assert!(!map
+            .get("user2")
+            .is_some_and(|ids| ids.iter().any(|x| x == "pl1")));
     }
 
     #[test]
@@ -526,11 +528,7 @@ mod pinned_playlists_tests {
         let mut map = PinnedPlaylistsByUser::new();
         pin_in_map(&mut map, "user1", "pl1");
         pin_in_map(&mut map, "user1", "pl2");
-        assert!(prune_user_pins(
-            &mut map,
-            "user1",
-            &["pl1".to_string()],
-        ));
+        assert!(prune_user_pins(&mut map, "user1", &["pl1".to_string()],));
         assert_eq!(map["user1"], vec!["pl1".to_string()]);
     }
 }

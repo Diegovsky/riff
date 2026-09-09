@@ -55,6 +55,18 @@ impl Clock {
 #[derive(Clone)]
 pub struct Debouncer(Rc<Cell<Option<glib::source::SourceId>>>);
 
+impl std::fmt::Debug for Debouncer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Debouncer").finish_non_exhaustive()
+    }
+}
+
+impl Default for Debouncer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Debouncer {
     pub fn new() -> Self {
         Self(Rc::new(Cell::new(None)))
@@ -71,6 +83,13 @@ impl Debouncer {
                 glib::ControlFlow::Break
             });
         if let Some(previous_source) = self.0.replace(Some(new_source)) {
+            previous_source.remove();
+        }
+    }
+
+    /// Cancel a pending debounced call, if any, without running it.
+    pub fn stop(&self) {
+        if let Some(previous_source) = self.0.replace(None) {
             previous_source.remove();
         }
     }

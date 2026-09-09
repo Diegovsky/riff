@@ -10,6 +10,9 @@ pub use card_list::*;
 pub mod details_page;
 pub use details_page::*;
 
+pub mod segmented_button;
+pub use segmented_button::*;
+
 pub mod playlist;
 pub use playlist::*;
 

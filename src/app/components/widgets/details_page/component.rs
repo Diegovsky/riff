@@ -249,6 +249,12 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             ));
         }
 
+        // Example segmented button
+        let seg = self.page.header().add_segmented_button(true);
+        seg.add_icon("system-run-symbolic", "Dev A", || {});
+        seg.add_icon("preferences-system-symbolic", "Dev B", || {});
+        seg.add_icon("dialog-information-symbolic", "Dev C", || {});
+
         self.page.connect_bottom_edge(clone!(
             #[weak(rename_to = m)]
             self.model,
@@ -279,10 +285,9 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
                 }
             );
             sync_pin_button();
-            settings.connect_changed(
-                Some("feature-pinned-playlists"),
-                move |_, _| sync_pin_button(),
-            );
+            settings.connect_changed(Some("feature-pinned-playlists"), move |_, _| {
+                sync_pin_button()
+            });
             self._pin_settings = Some(settings);
         }
 

@@ -204,7 +204,11 @@ impl SidebarModel {
         let _ = settings::prune_pinned_playlists(&user_id, &saved_ids);
     }
 
-    pub fn apply_playlist_sidebar_items(&self, list_store: &gio::ListStore, num_fixed_entries: u32) {
+    pub fn apply_playlist_sidebar_items(
+        &self,
+        list_store: &gio::ListStore,
+        num_fixed_entries: u32,
+    ) {
         self.prune_stale_pins();
         let items = self.build_playlist_sidebar_items();
         list_store.splice(
@@ -239,12 +243,12 @@ impl SidebarModel {
                         })
                         .unwrap_or_else(|| gettextrs::gettext("Pinned Playlist"));
 
-                    items.push(SidebarItem::from_destination(
-                        SidebarDestination::Playlist(PlaylistSummary {
+                    items.push(SidebarItem::from_destination(SidebarDestination::Playlist(
+                        PlaylistSummary {
                             id: id.clone(),
                             title,
-                        }),
-                    ));
+                        },
+                    )));
                 }
             }
 
@@ -324,9 +328,9 @@ impl Sidebar {
                         Self::make_navigatable(item)
                     } else {
                         match item.id().as_str() {
-                            SAVED_PLAYLISTS_SECTION | PINNED_PLAYLISTS_SECTION | LIBRARY_SECTION => {
-                                Self::make_section_label(item)
-                            }
+                            SAVED_PLAYLISTS_SECTION
+                            | PINNED_PLAYLISTS_SECTION
+                            | LIBRARY_SECTION => Self::make_section_label(item),
                             CREATE_PLAYLIST_ITEM => Self::make_create_playlist(
                                 item,
                                 popover.clone().expect("popover should exist"),
@@ -475,12 +479,9 @@ impl Sidebar {
         let settings = gio::Settings::new(settings::SETTINGS);
         let list_store_watch = list_store.clone();
         let model_watch = Rc::clone(&model);
-        settings.connect_changed(
-            Some("feature-pinned-playlists"),
-            move |_, _| {
-                model_watch.apply_playlist_sidebar_items(&list_store_watch, num_fixed_entries);
-            },
-        );
+        settings.connect_changed(Some("feature-pinned-playlists"), move |_, _| {
+            model_watch.apply_playlist_sidebar_items(&list_store_watch, num_fixed_entries);
+        });
 
         model.apply_playlist_sidebar_items(&list_store, num_fixed_entries);
 
