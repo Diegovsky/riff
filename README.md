@@ -41,6 +41,14 @@
 flatpak install flathub dev.diegovsky.Riff
 ```
 
+**Arch User Repository (AUR)**
+
+```sh
+yay -S riff-client
+```
+
+_Note: The AUR package is not maintained by us and may be out of date._
+
 **From a GitHub release**
 
 Pre-built bundles are available on the [Releases page](https://github.com/Diegovsky/riff/releases). Download the latest full release or development build Flatpak bundle and install it with:
