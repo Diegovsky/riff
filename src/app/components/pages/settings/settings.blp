@@ -325,6 +325,23 @@ template $SettingsWindow : Adw.PreferencesDialog {
         };
       }
 
+      Adw.SpinRow audio_cache_size {
+        /* Translators: Title for the disk audio cache size preference */
+
+        title: _("Audio Cache Size (MB)");
+
+        /* Translators: Description for the disk audio cache size preference */
+
+        subtitle: _("Maximum disk space allocated for caching downloaded audio.");
+        adjustment: Adjustment {
+          lower: 64;
+          upper: 16384;
+          value: 1024;
+          step-increment: 64;
+          page-increment: 256;
+        };
+      }
+
       Adw.ActionRow {
         /* Translators: Title for the clear cache action row */
 

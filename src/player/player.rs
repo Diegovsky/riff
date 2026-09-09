@@ -1144,13 +1144,22 @@ fn librespot_cache_root() -> std::path::PathBuf {
     glib::user_cache_dir().join("riff").join("librespot")
 }
 
+pub fn clear_audio_cache() {
+    let audio_dir = librespot_cache_root().join("audio");
+    if let Err(e) = std::fs::remove_dir_all(&audio_dir) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            warn!("Failed to clear librespot audio cache: {e}");
+        }
+    }
+}
+
 fn open_librespot_cache() -> Option<Cache> {
     let root = librespot_cache_root();
     Cache::new(
         Some(root.join("credentials")),
         Some(root.join("volume")),
         Some(root.join("audio")),
-        None,
+        Some(crate::settings::audio_cache_size_limit_bytes()),
     )
     .map_err(|e| dbg!(e))
     .ok()

@@ -26,11 +26,13 @@ impl SettingsModel {
             .dispatch(SettingsAction::ChangeSettings.into());
     }
 
-    /// Clear the on-disk and in-memory data caches, then notify the user.
+    /// Clear the on-disk and in-memory data caches, plus librespot's
+    /// downloaded audio cache, then notify the user.
     pub fn clear_cache(&self) {
         let api = self.app_model.api();
         self.dispatcher.dispatch_async(Box::pin(async move {
             api.clear_user_cache().await;
+            crate::player::clear_audio_cache();
             // Translators: Toast shown after the user clears the cache in settings.
             Some(AppAction::ShowNotification(gettext("Cache cleared")))
         }));

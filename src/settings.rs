@@ -31,6 +31,12 @@ pub fn clear_drm_verified_user() {
     let _ = gio::Settings::new(SETTINGS).set_string("drm-verified-user", "");
 }
 
+/// User-configured limit for librespot's on-disk audio cache, in bytes.
+pub fn audio_cache_size_limit_bytes() -> u64 {
+    let mb = gio::Settings::new(SETTINGS).uint("audio-cache-size-mb") as u64;
+    mb * 1024 * 1024
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum CloseWindowBehavior {
     #[default]

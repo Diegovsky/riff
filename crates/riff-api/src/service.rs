@@ -65,11 +65,13 @@ impl ApiService {
         self.image_disk.evict_to_budget().await;
     }
 
-    /// Clear all user-specific cached data (memory + API disk). The image
-    /// cache is content-addressed and safe to keep.
+    /// Clear all cached data, on disk (API responses + images) and in memory
+    /// (API response cache + decoded textures).
     pub async fn clear_user_cache(&self) {
         self.json_cache.clear();
+        self.texture_cache.clear();
         self.api_disk.clear().await;
+        self.image_disk.clear().await;
     }
 
     fn handle_auth_error(&self, err: &DomainError) {
