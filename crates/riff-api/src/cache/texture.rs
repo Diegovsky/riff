@@ -22,6 +22,10 @@ impl TextureCache {
     pub fn insert(&self, key: String, texture: gdk::Texture, byte_size: usize) {
         self.inner.lock().unwrap().insert(key, texture, byte_size);
     }
+
+    pub fn clear(&self) {
+        self.inner.lock().unwrap().clear();
+    }
 }
 
 #[cfg(test)]

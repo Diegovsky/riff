@@ -107,6 +107,9 @@ mod imp {
         pub disk_cache_size: TemplateChild<libadwaita::SpinRow>,
 
         #[template_child]
+        pub audio_cache_size: TemplateChild<libadwaita::SpinRow>,
+
+        #[template_child]
         pub clear_cache_button: TemplateChild<gtk::Button>,
     }
 
@@ -649,6 +652,20 @@ impl SettingsDialog {
             let settings = settings.clone();
             disk_adjustment.connect_value_changed(move |adj| {
                 let _ = settings.set_uint("disk-cache-size-mb", adj.value() as u32);
+            });
+        }
+
+        // Audio cache on disk size (MB).
+        let audio_cache_size = widget
+            .audio_cache_size
+            .downcast_ref::<libadwaita::SpinRow>()
+            .unwrap();
+        let audio_adjustment = audio_cache_size.adjustment();
+        audio_adjustment.set_value(settings.uint("audio-cache-size-mb") as f64);
+        {
+            let settings = settings.clone();
+            audio_adjustment.connect_value_changed(move |adj| {
+                let _ = settings.set_uint("audio-cache-size-mb", adj.value() as u32);
             });
         }
     }

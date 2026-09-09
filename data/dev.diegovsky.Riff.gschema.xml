@@ -290,5 +290,11 @@
       <summary>Maximum disk space (MB) for the on-disk data cache</summary>
       <description>Upper bound on disk space used to cache API responses.</description>
     </key>
+    <key name="audio-cache-size-mb" type="u">
+      <range min="64" max="16384"/>
+      <default>1024</default>
+      <summary>Maximum disk space (MB) for the on-disk audio cache</summary>
+      <description>Upper bound on disk space used to cache downloaded audio data.</description>
+    </key>
   </schema>
 </schemalist>
