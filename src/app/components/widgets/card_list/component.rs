@@ -144,10 +144,6 @@ impl<M: CardListPageModel + 'static> EventListener for CardListComponent<M> {
                 self.card_list.show_placeholders();
                 self.model.refresh();
             }
-            AppEvent::LoginEvent(LoginEvent::LogoutCompleted) => {
-                self.card_list.widget().remove_all();
-                self.page_widget.status_page().set_visible(false);
-            }
             AppEvent::BrowserEvent(
                 BrowserEvent::CardLayoutChanged(_) | BrowserEvent::CardSizeChanged(_),
             ) => {
