@@ -12,6 +12,7 @@ const SAVED_PLAYLISTS: &str = "saved_playlists";
 const SAVED_ARTISTS: &str = "saved_artists";
 const PLAYLIST: &str = "playlist";
 pub const SAVED_PLAYLISTS_SECTION: &str = "saved_playlists_section";
+pub const PINNED_PLAYLISTS_SECTION: &str = "pinned_playlists_section";
 pub const LIBRARY_SECTION: &str = "library_section";
 pub const CREATE_PLAYLIST_ITEM: &str = "create_playlist";
 
@@ -86,6 +87,15 @@ impl SidebarItem {
             .property("id", SAVED_PLAYLISTS_SECTION)
             .property("data", String::new())
             .property("title", gettext("All Playlists"))
+            .property("navigatable", false)
+            .build()
+    }
+
+    pub fn pinned_playlists_section() -> Self {
+        glib::Object::builder()
+            .property("id", PINNED_PLAYLISTS_SECTION)
+            .property("data", String::new())
+            .property("title", gettext("Pinned Playlists"))
             .property("navigatable", false)
             .build()
     }

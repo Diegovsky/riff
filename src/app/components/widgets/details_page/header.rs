@@ -6,6 +6,7 @@ use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
 
 use super::{SubtitleLinksBox, HEADER_IMAGE_SIZE};
+use crate::app::components::{ExpandBehavior, SegmentedButton};
 
 /// Controls the shape of the artwork in the details header.
 /// - `Square`: used for albums/playlists (rendered with rounded card corners).
@@ -60,6 +61,12 @@ mod imp {
 
         #[template_child]
         pub share_button: TemplateChild<gtk::Button>,
+
+        #[template_child]
+        pub pin_button: TemplateChild<gtk::Button>,
+
+        #[template_child]
+        pub button_box: TemplateChild<gtk::Box>,
 
         #[template_child]
         pub info_button: TemplateChild<gtk::Button>,
@@ -134,6 +141,10 @@ pub struct DetailsHeader {
 }
 
 impl DetailsHeader {
+    pub fn from_widget(widget: DetailsHeaderWidget) -> Self {
+        Self { widget }
+    }
+
     pub fn new(shape: HeaderImageShape) -> Self {
         let widget: DetailsHeaderWidget = glib::Object::new();
 
@@ -151,6 +162,10 @@ impl DetailsHeader {
         }
 
         Self { widget }
+    }
+
+    pub fn clone_inner(&self) -> DetailsHeaderWidget {
+        self.widget.clone()
     }
 
     pub fn widget(&self) -> &gtk::Widget {
@@ -283,6 +298,39 @@ impl DetailsHeader {
         let button = &self.widget.imp().edit_button;
         button.set_visible(true);
         button.connect_clicked(move |_| f());
+    }
+
+    /// Update the pin button icon and tooltip to reflect pinned state.
+    pub fn set_pinned(&self, is_pinned: bool) {
+        let tooltip = if is_pinned {
+            gettext("Unpin from Sidebar")
+        } else {
+            gettext("Pin to Sidebar")
+        };
+        let button = &self.widget.imp().pin_button;
+        button.set_icon_name("view-pin-symbolic");
+        button.set_tooltip_text(Some(&tooltip));
+    }
+
+    pub fn set_pin_visible(&self, visible: bool) {
+        self.widget.imp().pin_button.set_visible(visible);
+    }
+
+    pub fn connect_pin<F: Fn() + 'static>(&self, f: F) {
+        let button = &self.widget.imp().pin_button;
+        button.connect_clicked(move |_| f());
+    }
+
+    /// Example [`SegmentedButton`]
+    pub fn add_segmented_button(&self, visible: bool) -> SegmentedButton {
+        let seg = SegmentedButton::new(ExpandBehavior::OnClick);
+        seg.widget().set_visible(visible);
+        seg.widget().set_valign(gtk::Align::Center);
+
+        let imp = self.widget.imp();
+        imp.button_box
+            .insert_child_after(seg.widget(), Some(&*imp.pin_button));
+        seg
     }
 
     /// Set multiple artist link buttons in the subtitle area.

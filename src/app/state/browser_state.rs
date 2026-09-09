@@ -76,6 +76,8 @@ pub enum BrowserAction {
     ChangeCardLayout(CardLayout),
     ChangeCardSize(CardSize),
     ChangeSortOrder(String, SortOrder),
+    /// Refresh sidebar and details pin UI without reloading saved playlists from Spotify.
+    NotifyPinnedPlaylistsUpdated,
 }
 
 impl From<BrowserAction> for AppAction {
@@ -90,6 +92,8 @@ pub enum BrowserEvent {
     HomeVisiblePageChanged(&'static str),
     LibraryUpdated,
     SavedPlaylistsUpdated,
+    /// Emitted when local pinned playlist IDs change (no Spotify fetch).
+    PinnedPlaylistsUpdated,
     CardLayoutChanged(CardLayout),
     CardSizeChanged(CardSize),
     SortOrderChanged(String, SortOrder),
@@ -412,6 +416,9 @@ impl UpdatableState for BrowserState {
             BrowserAction::ChangeSortOrder(page, order) => {
                 vec![BrowserEvent::SortOrderChanged(page.clone(), *order)]
             }
+            BrowserAction::NotifyPinnedPlaylistsUpdated => {
+                vec![BrowserEvent::PinnedPlaylistsUpdated]
+            }
             // Besides navigation actions, we just forward actions to each dedicated reducer
             _ => self
                 .navigation
@@ -504,5 +511,12 @@ pub mod tests {
         assert_eq!(state.current_screen(), &new_screen);
         assert_eq!(state.count(), 2);
         assert_eq!(events, vec![BrowserEvent::NavigationPoppedTo(new_screen)]);
+    }
+
+    #[test]
+    fn notify_pinned_playlists_updated_emits_event() {
+        let mut state = BrowserState::new();
+        let events = state.update_with(Cow::Owned(BrowserAction::NotifyPinnedPlaylistsUpdated));
+        assert_eq!(events, vec![BrowserEvent::PinnedPlaylistsUpdated]);
     }
 }
