@@ -68,9 +68,7 @@ impl FeatureFlag {
             FeatureFlag::Normalisation => {
                 "Show audio normalisation settings for fine-tuning loudness between tracks."
             }
-            FeatureFlag::PinnedPlaylists => {
-                "Enable pinning playlists to the sidebar."
-            }
+            FeatureFlag::PinnedPlaylists => "Enable pinning playlists to the sidebar.",
         }
     }
 }

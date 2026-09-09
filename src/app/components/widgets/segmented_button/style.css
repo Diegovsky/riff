@@ -1,0 +1,16 @@
+.segmented-button {
+  border-radius: 9999px;
+}
+
+.segmented-button > button,
+.segmented-button revealer > box > button {
+  border: none;
+  box-shadow: none;
+  outline: none;
+  border-radius: 0;
+  margin: 0;
+}
+
+.segmented-button revealer {
+  transition: all 200ms ease;
+}
