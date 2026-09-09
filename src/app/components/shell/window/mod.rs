@@ -5,10 +5,11 @@ use gettextrs::gettext;
 use gio::prelude::SettingsExt;
 use gtk::prelude::*;
 use libadwaita::prelude::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::app::components::EventListener;
+use crate::app::state::LoginEvent;
 use crate::app::{AppEvent, AppModel};
 use crate::settings::{CloseWindowBehavior, WindowGeometry};
 
@@ -23,6 +24,7 @@ thread_local! {
 pub struct MainWindow {
     initial_window_geometry: WindowGeometry,
     window: libadwaita::ApplicationWindow,
+    logged_in: Cell<bool>,
 }
 
 impl MainWindow {
@@ -73,6 +75,7 @@ impl MainWindow {
         Self {
             initial_window_geometry,
             window,
+            logged_in: Cell::new(false),
         }
     }
 
@@ -158,11 +161,22 @@ impl MainWindow {
         if self.initial_window_geometry.is_maximized {
             self.window.maximize();
         }
-        self.window.present();
     }
 
     fn raise(&self) {
+        if self.logged_in.get() {
+            self.window.present();
+        }
+    }
+
+    fn show(&self) {
+        self.logged_in.set(true);
         self.window.present();
+    }
+
+    fn hide(&self) {
+        self.logged_in.set(false);
+        self.window.set_visible(false);
     }
 
     fn save_window_geometry<W: GtkWindowExt>(window: &W) {
@@ -185,6 +199,10 @@ impl EventListener for MainWindow {
             AppEvent::Started => self.start(),
             AppEvent::Raised => self.raise(),
             AppEvent::DrmBlockedDialogShown => self.show_drm_blocked_dialog(),
+            AppEvent::LoginEvent(LoginEvent::LoginCompleted) => self.show(),
+            AppEvent::LoginEvent(LoginEvent::LoginShown | LoginEvent::LogoutCompleted) => {
+                self.hide()
+            }
             _ => {}
         }
     }
