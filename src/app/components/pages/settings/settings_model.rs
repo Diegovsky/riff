@@ -30,7 +30,7 @@ impl SettingsModel {
     /// downloaded audio cache, then notify the user.
     pub fn clear_cache(&self) {
         let api = self.app_model.api();
-        self.dispatcher.dispatch_async(Box::pin(async move {
+        self.dispatcher.dispatch_write_async(Box::pin(async move {
             api.clear_user_cache().await;
             crate::player::clear_audio_cache();
             // Translators: Toast shown after the user clears the cache in settings.

@@ -174,7 +174,7 @@ impl PageModel for DetailsModel {
         let id = album.rri.id.clone();
         let is_liked = self.is_liked();
         let api = self.app_model.api();
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        self.dispatcher.call_api_and_write(move || async move {
             if !is_liked {
                 api.save_albums(&id)
                     .await

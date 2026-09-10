@@ -72,7 +72,7 @@ impl PlaylistDetailsModel {
     pub fn update_playlist_details(&self, title: String) {
         let api = self.app_model.api();
         let id = self.id.clone();
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        self.dispatcher.call_api_and_write(move || async move {
             api.update_playlist_details(&id, &title)
                 .await
                 .map(|_| AppAction::UpdatePlaylistName(PlaylistSummary { id, title }))
@@ -197,7 +197,7 @@ impl PageModel for PlaylistDetailsModel {
                 .and_then(|s| s.playlist.clone())
         };
 
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        self.dispatcher.call_api_and_write(move || async move {
             if is_saved {
                 api.unfollow_playlist(&id).await?;
                 Ok(BrowserAction::UnsavePlaylist(id).into())

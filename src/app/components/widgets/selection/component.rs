@@ -58,7 +58,7 @@ impl SelectionToolbarModel {
             .map(|s| s.rri.id.clone())
             .collect();
         self.dispatcher
-            .call_api_and_dispatch_many(move || async move {
+            .call_api_and_write_many(move || async move {
                 api.save_tracks(ids).await?;
                 Ok(vec![
                     AppAction::SaveSelection,
@@ -75,7 +75,7 @@ impl SelectionToolbarModel {
             .map(|s| s.rri.id.clone())
             .collect();
         self.dispatcher
-            .call_api_and_dispatch_many(move || async move {
+            .call_api_and_write_many(move || async move {
                 api.remove_tracks(ids).await?;
                 Ok(vec![AppAction::UnsaveSelection])
             })
@@ -101,7 +101,7 @@ impl SelectionToolbarModel {
             .peek_selection()
             .filter_map(|s| s.rri.uri.clone())
             .collect();
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        self.dispatcher.call_api_and_write(move || async move {
             api.add_to_playlist(&id, uris).await?;
             Ok(SelectionAction::Clear.into())
         })
@@ -116,7 +116,7 @@ impl SelectionToolbarModel {
             .filter_map(|s| s.rri.uri.clone())
             .collect();
         self.dispatcher
-            .call_api_and_dispatch_many(move || async move {
+            .call_api_and_write_many(move || async move {
                 api.remove_from_playlist(&id, uris.clone()).await?;
                 Ok(vec![
                     BrowserAction::RemoveTracksFromPlaylist(id, uris).into(),

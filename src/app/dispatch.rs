@@ -3,16 +3,24 @@ use futures::future::BoxFuture;
 use futures::future::Future;
 use futures::stream::StreamExt;
 use std::pin::Pin;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 use super::AppAction;
+
+// Bounds how many reads run concurrently, so a page firing several reads at
+// once does not trip Spotify's rate limiter.
+const READ_CONCURRENCY: usize = 8;
 
 // A wrapper around an MPSC sender to send AppActions synchronously or asynchronously
 // It is a trait because I guess I wanted to be able to stub it, but see how that went...
 pub trait ActionDispatcher {
     fn dispatch(&self, action: AppAction);
     fn dispatch_many(&self, actions: Vec<AppAction>);
-    fn dispatch_async(&self, action: BoxFuture<'static, Option<AppAction>>);
     fn dispatch_many_async(&self, actions: BoxFuture<'static, Vec<AppAction>>);
+    // Writes are kept ordered relative to each other, unlike reads above.
+    fn dispatch_write_async(&self, action: BoxFuture<'static, Option<AppAction>>);
+    fn dispatch_write_many_async(&self, actions: BoxFuture<'static, Vec<AppAction>>);
     // Can't have impl Clone easily so there you go
     fn box_clone(&self) -> Box<dyn ActionDispatcher>;
 }
@@ -21,11 +29,16 @@ pub trait ActionDispatcher {
 pub struct ActionDispatcherImpl {
     sender: UnboundedSender<AppAction>,
     worker: Worker,
+    read_permits: Arc<Semaphore>,
 }
 
 impl ActionDispatcherImpl {
     pub fn new(sender: UnboundedSender<AppAction>, worker: Worker) -> Self {
-        Self { sender, worker }
+        Self {
+            sender,
+            worker,
+            read_permits: Arc::new(Semaphore::new(READ_CONCURRENCY)),
+        }
     }
 }
 
@@ -40,7 +53,18 @@ impl ActionDispatcher for ActionDispatcherImpl {
         }
     }
 
-    fn dispatch_async(&self, action: BoxFuture<'static, Option<AppAction>>) {
+    fn dispatch_many_async(&self, actions: BoxFuture<'static, Vec<AppAction>>) {
+        let clone = self.sender.clone();
+        let permits = self.read_permits.clone();
+        tokio::spawn(async move {
+            let _permit = permits.acquire_owned().await;
+            for action in actions.await.into_iter() {
+                clone.unbounded_send(action).unwrap();
+            }
+        });
+    }
+
+    fn dispatch_write_async(&self, action: BoxFuture<'static, Option<AppAction>>) {
         let clone = self.sender.clone();
         self.worker.send_task(async move {
             if let Some(action) = action.await {
@@ -49,7 +73,7 @@ impl ActionDispatcher for ActionDispatcherImpl {
         });
     }
 
-    fn dispatch_many_async(&self, actions: BoxFuture<'static, Vec<AppAction>>) {
+    fn dispatch_write_many_async(&self, actions: BoxFuture<'static, Vec<AppAction>>) {
         let clone = self.sender.clone();
         self.worker.send_task(async move {
             for action in actions.await.into_iter() {

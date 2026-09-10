@@ -24,7 +24,7 @@ impl UserMenuModel {
     pub fn logout(&self) {
         self.dispatcher.dispatch(PlaybackAction::Stop.into());
         let api = self.app_model.api();
-        self.dispatcher.dispatch_async(Box::pin(async move {
+        self.dispatcher.dispatch_write_async(Box::pin(async move {
             api.clear_user_cache().await;
             Some(LoginAction::Logout.into())
         }));

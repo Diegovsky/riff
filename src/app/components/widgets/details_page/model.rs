@@ -235,12 +235,12 @@ impl DetailsPageModel {
         let is_liked = self.is_song_liked(id);
 
         if is_liked {
-            self.dispatcher.call_api_and_dispatch(move || async move {
+            self.dispatcher.call_api_and_write(move || async move {
                 api.remove_tracks(vec![song_id.clone()]).await?;
                 Ok(BrowserAction::RemoveSavedTracks(vec![song_id]).into())
             });
         } else {
-            self.dispatcher.call_api_and_dispatch(move || async move {
+            self.dispatcher.call_api_and_write(move || async move {
                 api.save_tracks(vec![song_id]).await?;
                 Ok(BrowserAction::SaveTracks(vec![song_desc]).into())
             });
@@ -289,8 +289,9 @@ mod tests {
         fn dispatch_many(&self, actions: Vec<AppAction>) {
             self.actions.borrow_mut().extend(actions);
         }
-        fn dispatch_async(&self, _action: BoxFuture<'static, Option<AppAction>>) {}
         fn dispatch_many_async(&self, _actions: BoxFuture<'static, Vec<AppAction>>) {}
+        fn dispatch_write_async(&self, _action: BoxFuture<'static, Option<AppAction>>) {}
+        fn dispatch_write_many_async(&self, _actions: BoxFuture<'static, Vec<AppAction>>) {}
         fn box_clone(&self) -> Box<dyn ActionDispatcher> {
             Box::new(self.clone())
         }

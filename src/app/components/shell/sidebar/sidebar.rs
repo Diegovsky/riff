@@ -72,7 +72,7 @@ impl SidebarModel {
     fn create_new_playlist(&self, name: String) {
         let user_id = self.app_model.get_state().logged_user.user.clone().unwrap();
         let api = self.app_model.api();
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        self.dispatcher.call_api_and_write(move || async move {
             api.create_playlist(user_id.as_str(), name.as_str())
                 .await
                 .map(AppAction::CreatePlaylist)
@@ -89,7 +89,7 @@ impl SidebarModel {
 
     pub(super) fn unfollow_playlist(&self, id: String) {
         let api = self.app_model.api();
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        self.dispatcher.call_api_and_write(move || async move {
             api.unfollow_playlist(&id).await?;
             Ok(AppAction::RemovePlaylist(id))
         })

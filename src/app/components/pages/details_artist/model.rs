@@ -187,7 +187,7 @@ impl PageModel for ArtistDetailsModel {
             })
         };
 
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        self.dispatcher.call_api_and_write(move || async move {
             if is_followed {
                 api.unfollow_artists(&id).await?;
                 Ok(BrowserAction::UnfollowArtist(id).into())

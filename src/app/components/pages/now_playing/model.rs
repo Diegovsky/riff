@@ -151,13 +151,13 @@ impl PageModel for NowPlayingModel {
         let is_liked = self.is_liked();
 
         if is_liked {
-            self.dispatcher.call_api_and_dispatch(move || async move {
+            self.dispatcher.call_api_and_write(move || async move {
                 api.remove_tracks(vec![id.clone()]).await?;
                 Ok(BrowserAction::RemoveSavedTracks(vec![id]).into())
             });
         } else {
             let song_desc = song.clone();
-            self.dispatcher.call_api_and_dispatch(move || async move {
+            self.dispatcher.call_api_and_write(move || async move {
                 api.save_tracks(vec![id]).await?;
                 Ok(BrowserAction::SaveTracks(vec![song_desc]).into())
             });
