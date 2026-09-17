@@ -47,6 +47,8 @@ mod imp {
         pub expanded: Cell<bool>,
         /// Number of segments added so far.
         pub count: Cell<usize>,
+        /// Segments in insertion order (first is the always-visible trigger).
+        pub segments: RefCell<Vec<gtk::Button>>,
         /// Current behavior - shared with first-segment click handlers.
         pub behavior: Cell<ExpandBehavior>,
         /// Currently installed hover controller, kept so it can be removed.
@@ -152,7 +154,27 @@ impl SegmentedButton {
             imp.extra_box.append(&button);
         }
         imp.count.set(imp.count.get() + 1);
+        imp.segments.borrow_mut().push(button.clone());
         button
+    }
+
+    /// Show or hide a segment by index (0 is the always-visible trigger).
+    ///
+    /// If the last visible extra segment is hidden while the control is
+    /// expanded, the control collapses so the revealer does not open onto an
+    /// empty slot.
+    pub fn set_icon_visible(&self, index: usize, visible: bool) {
+        let imp = self.widget.imp();
+        let Some(button) = imp.segments.borrow().get(index).cloned() else {
+            return;
+        };
+        button.set_visible(visible);
+        if !visible && index > 0 && imp.expanded.get() {
+            let any_visible = imp.segments.borrow().iter().skip(1).any(|s| s.is_visible());
+            if !any_visible {
+                self.widget.set_expanded_internal(false);
+            }
+        }
     }
 
     /// Switch the expand trigger. Can be called after segments have been added.

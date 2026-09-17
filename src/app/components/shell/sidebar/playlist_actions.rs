@@ -95,7 +95,9 @@ pub fn build_playlist_menu(is_owned: bool, id: &str, user_id: Option<&str>) -> g
 
     let pin_section = gio::Menu::new();
     if is_enabled(FeatureFlag::PinnedPlaylists) {
-        let is_pinned = user_id.is_some_and(|user_id| settings::is_playlist_pinned(user_id, id));
+        let is_pinned = user_id.is_some_and(|user_id| {
+            settings::is_object_pinned(user_id, id, settings::PinnedKind::Playlist)
+        });
         let pin_label = if is_pinned {
             gettextrs::gettext("Unpin Playlist")
         } else {

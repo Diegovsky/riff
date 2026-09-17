@@ -15,103 +15,149 @@ use std::collections::HashMap;
 
 pub const SETTINGS: &str = "dev.diegovsky.Riff";
 
-const PINNED_PLAYLISTS_KEY: &str = "pinned-playlists-by-user";
+/// GSettings key holding the per-user pinned-object map.
+const PINNED_OBJECTS_KEY: &str = "pinned-objects-by-user";
 
-type PinnedPlaylistsByUser = HashMap<String, Vec<String>>;
+/// The kind of media object a user can pin to the sidebar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PinnedKind {
+    Playlist,
+    Album,
+    Artist,
+    Track,
+}
 
-fn load_pinned_map(settings: &gio::Settings) -> PinnedPlaylistsByUser {
-    let json = settings.string(PINNED_PLAYLISTS_KEY);
+/// A single user-pinned object. Serializes as `{"id":"...","kind":"..."}`.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PinnedObject {
+    pub id: String,
+    pub kind: PinnedKind,
+}
+
+impl PinnedObject {
+    pub fn new(id: impl Into<String>, kind: PinnedKind) -> Self {
+        Self {
+            id: id.into(),
+            kind,
+        }
+    }
+}
+
+/// Per-user map of pinned objects: `user_id -> Vec<PinnedObject>`.
+type PinnedObjectsByUser = HashMap<String, Vec<PinnedObject>>;
+
+fn load_pinned_map(settings: &gio::Settings) -> PinnedObjectsByUser {
+    let json = settings.string(PINNED_OBJECTS_KEY);
     if json.is_empty() {
         return HashMap::new();
     }
     serde_json::from_str(&json).unwrap_or_else(|e| {
-        error!("Failed to parse pinned playlists: {e}");
+        error!("Failed to parse pinned objects: {e}");
         HashMap::new()
     })
 }
 
-fn save_pinned_map(settings: &gio::Settings, map: &PinnedPlaylistsByUser) -> bool {
+fn save_pinned_map(settings: &gio::Settings, map: &PinnedObjectsByUser) -> bool {
     match serde_json::to_string(map) {
         Ok(json) => settings
-            .set_string(PINNED_PLAYLISTS_KEY, &json)
-            .map_err(|e| error!("Failed to save pinned playlists: {e}"))
+            .set_string(PINNED_OBJECTS_KEY, &json)
+            .map_err(|e| error!("Failed to save pinned objects: {e}"))
             .is_ok(),
         Err(e) => {
-            error!("Failed to serialize pinned playlists: {e}");
+            error!("Failed to serialize pinned objects: {e}");
             false
         }
     }
 }
 
-fn pin_in_map(map: &mut PinnedPlaylistsByUser, user_id: &str, id: &str) -> bool {
-    let ids = map.entry(user_id.to_string()).or_default();
-    if ids.iter().any(|x| x == id) {
+fn pin_in_map(map: &mut PinnedObjectsByUser, user_id: &str, object: &PinnedObject) -> bool {
+    let objects = map.entry(user_id.to_string()).or_default();
+    if objects
+        .iter()
+        .any(|o| o.id == object.id && o.kind == object.kind)
+    {
         return false;
     }
-    ids.push(id.to_string());
+    objects.push(object.clone());
     true
 }
 
-fn unpin_from_map(map: &mut PinnedPlaylistsByUser, user_id: &str, id: &str) -> bool {
-    let Some(ids) = map.get_mut(user_id) else {
+fn unpin_from_map(
+    map: &mut PinnedObjectsByUser,
+    user_id: &str,
+    id: &str,
+    kind: PinnedKind,
+) -> bool {
+    let Some(objects) = map.get_mut(user_id) else {
         return false;
     };
-    let len_before = ids.len();
-    ids.retain(|x| x != id);
-    let changed = ids.len() != len_before;
-    if ids.is_empty() {
+    let len_before = objects.len();
+    objects.retain(|o| o.id != id || o.kind != kind);
+    let changed = objects.len() != len_before;
+    if objects.is_empty() {
         map.remove(user_id);
     }
     changed
 }
 
-fn prune_user_pins(map: &mut PinnedPlaylistsByUser, user_id: &str, valid_ids: &[String]) -> bool {
-    let Some(ids) = map.get_mut(user_id) else {
+/// Drop pins for objects of `kind` whose IDs are no longer valid.
+fn prune_user_pins(
+    map: &mut PinnedObjectsByUser,
+    user_id: &str,
+    kind: PinnedKind,
+    valid_ids: &[String],
+) -> bool {
+    let Some(objects) = map.get_mut(user_id) else {
         return false;
     };
-    let len_before = ids.len();
-    ids.retain(|id| valid_ids.iter().any(|valid| valid == id));
-    let changed = ids.len() != len_before;
-    if ids.is_empty() {
+    let len_before = objects.len();
+    objects.retain(|o| o.kind != kind || valid_ids.iter().any(|valid| valid == &o.id));
+    let changed = objects.len() != len_before;
+    if objects.is_empty() {
         map.remove(user_id);
     }
     changed
 }
 
-pub fn get_pinned_playlist_ids(user_id: &str) -> Vec<String> {
+// Generic pinned-object API (any kind).
+
+pub fn get_pinned_objects(user_id: &str) -> Vec<PinnedObject> {
     load_pinned_map(&gio::Settings::new(SETTINGS))
         .get(user_id)
         .cloned()
         .unwrap_or_default()
 }
 
-pub fn is_playlist_pinned(user_id: &str, id: &str) -> bool {
-    get_pinned_playlist_ids(user_id).iter().any(|x| x == id)
+pub fn is_object_pinned(user_id: &str, id: &str, kind: PinnedKind) -> bool {
+    get_pinned_objects(user_id)
+        .iter()
+        .any(|o| o.id == id && o.kind == kind)
 }
 
-pub fn pin_playlist(user_id: &str, id: &str) -> bool {
+pub fn pin_object(user_id: &str, kind: PinnedKind, id: &str) -> bool {
     let settings = gio::Settings::new(SETTINGS);
     let mut map = load_pinned_map(&settings);
-    if !pin_in_map(&mut map, user_id, id) {
+    if !pin_in_map(&mut map, user_id, &PinnedObject::new(id, kind)) {
         return false;
     }
     save_pinned_map(&settings, &map)
 }
 
-pub fn unpin_playlist(user_id: &str, id: &str) -> bool {
+pub fn unpin_object(user_id: &str, kind: PinnedKind, id: &str) -> bool {
     let settings = gio::Settings::new(SETTINGS);
     let mut map = load_pinned_map(&settings);
-    if !unpin_from_map(&mut map, user_id, id) {
+    if !unpin_from_map(&mut map, user_id, id, kind) {
         return false;
     }
     save_pinned_map(&settings, &map)
 }
 
-/// Drop pinned IDs that are no longer in the user's saved playlist set.
-pub fn prune_pinned_playlists(user_id: &str, valid_ids: &[String]) -> bool {
+/// Drop pins for objects of `kind` that are no longer in the user's library.
+pub fn prune_pinned_objects(user_id: &str, kind: PinnedKind, valid_ids: &[String]) -> bool {
     let settings = gio::Settings::new(SETTINGS);
     let mut map = load_pinned_map(&settings);
-    if !prune_user_pins(&mut map, user_id, valid_ids) {
+    if !prune_user_pins(&mut map, user_id, kind, valid_ids) {
         return false;
     }
     save_pinned_map(&settings, &map)
@@ -488,53 +534,120 @@ impl EventListener for StateTracker {
 mod pinned_playlists_tests {
     use super::*;
 
+    fn pl(id: &str) -> PinnedObject {
+        PinnedObject::new(id, PinnedKind::Playlist)
+    }
+
     #[test]
     fn pin_adds_id() {
-        let mut map = PinnedPlaylistsByUser::new();
-        assert!(pin_in_map(&mut map, "user1", "pl1"));
-        assert_eq!(map["user1"], vec!["pl1".to_string()]);
+        let mut map = PinnedObjectsByUser::new();
+        assert!(pin_in_map(&mut map, "user1", &pl("pl1")));
+        assert_eq!(map["user1"], vec![pl("pl1")]);
     }
 
     #[test]
     fn double_pin_is_idempotent() {
-        let mut map = PinnedPlaylistsByUser::new();
-        assert!(pin_in_map(&mut map, "user1", "pl1"));
-        assert!(!pin_in_map(&mut map, "user1", "pl1"));
+        let mut map = PinnedObjectsByUser::new();
+        assert!(pin_in_map(&mut map, "user1", &pl("pl1")));
+        assert!(!pin_in_map(&mut map, "user1", &pl("pl1")));
         assert_eq!(map["user1"].len(), 1);
     }
 
     #[test]
     fn unpin_removes_id() {
-        let mut map = PinnedPlaylistsByUser::new();
-        pin_in_map(&mut map, "user1", "pl1");
-        assert!(unpin_from_map(&mut map, "user1", "pl1"));
+        let mut map = PinnedObjectsByUser::new();
+        pin_in_map(&mut map, "user1", &pl("pl1"));
+        assert!(unpin_from_map(
+            &mut map,
+            "user1",
+            "pl1",
+            PinnedKind::Playlist
+        ));
         assert!(!map.contains_key("user1"));
     }
 
     #[test]
     fn unpin_last_item_yields_empty_map() {
-        let mut map = PinnedPlaylistsByUser::new();
-        pin_in_map(&mut map, "user1", "pl1");
-        unpin_from_map(&mut map, "user1", "pl1");
+        let mut map = PinnedObjectsByUser::new();
+        pin_in_map(&mut map, "user1", &pl("pl1"));
+        unpin_from_map(&mut map, "user1", "pl1", PinnedKind::Playlist);
         assert!(map.is_empty());
     }
 
     #[test]
     fn is_playlist_pinned_checks_user_scope() {
-        let mut map = PinnedPlaylistsByUser::new();
-        pin_in_map(&mut map, "user1", "pl1");
-        assert!(map.get("user1").unwrap().iter().any(|x| x == "pl1"));
+        let mut map = PinnedObjectsByUser::new();
+        pin_in_map(&mut map, "user1", &pl("pl1"));
+        assert!(map
+            .get("user1")
+            .unwrap()
+            .iter()
+            .any(|o| o.id == "pl1" && o.kind == PinnedKind::Playlist));
         assert!(!map
             .get("user2")
-            .is_some_and(|ids| ids.iter().any(|x| x == "pl1")));
+            .is_some_and(|objects| objects.iter().any(|o| o.id == "pl1")));
     }
 
     #[test]
     fn prune_drops_orphan_ids() {
-        let mut map = PinnedPlaylistsByUser::new();
-        pin_in_map(&mut map, "user1", "pl1");
-        pin_in_map(&mut map, "user1", "pl2");
-        assert!(prune_user_pins(&mut map, "user1", &["pl1".to_string()],));
-        assert_eq!(map["user1"], vec!["pl1".to_string()]);
+        let mut map = PinnedObjectsByUser::new();
+        pin_in_map(&mut map, "user1", &pl("pl1"));
+        pin_in_map(&mut map, "user1", &pl("pl2"));
+        assert!(prune_user_pins(
+            &mut map,
+            "user1",
+            PinnedKind::Playlist,
+            &["pl1".to_string()],
+        ));
+        assert_eq!(map["user1"], vec![pl("pl1")]);
+    }
+
+    #[test]
+    fn kind_is_part_of_identity() {
+        let mut map = PinnedObjectsByUser::new();
+        pin_in_map(
+            &mut map,
+            "user1",
+            &PinnedObject::new("id1", PinnedKind::Album),
+        );
+        pin_in_map(
+            &mut map,
+            "user1",
+            &PinnedObject::new("id1", PinnedKind::Artist),
+        );
+        assert_eq!(map["user1"].len(), 2);
+        assert!(unpin_from_map(&mut map, "user1", "id1", PinnedKind::Album));
+        assert_eq!(map["user1"][0].kind, PinnedKind::Artist);
+    }
+
+    #[test]
+    fn prune_is_kind_scoped() {
+        let mut map = PinnedObjectsByUser::new();
+        pin_in_map(&mut map, "user1", &pl("pl1"));
+        pin_in_map(
+            &mut map,
+            "user1",
+            &PinnedObject::new("alb1", PinnedKind::Album),
+        );
+        assert!(prune_user_pins(
+            &mut map,
+            "user1",
+            PinnedKind::Album,
+            &["alb2".to_string()],
+        ));
+        assert_eq!(map["user1"].len(), 1);
+        assert_eq!(map["user1"][0].kind, PinnedKind::Playlist);
+    }
+
+    #[test]
+    fn modern_serialization_includes_kind() {
+        let mut map = PinnedObjectsByUser::new();
+        pin_in_map(
+            &mut map,
+            "user1",
+            &PinnedObject::new("alb1", PinnedKind::Album),
+        );
+        let json = serde_json::to_string(&map).unwrap();
+        assert!(json.contains(r#""kind":"album""#));
     }
 }

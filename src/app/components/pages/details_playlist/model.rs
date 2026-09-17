@@ -225,7 +225,7 @@ impl PageModel for PlaylistDetailsModel {
                 api.unfollow_playlist(&id).await?;
                 if pin_enabled {
                     if let Some(user_id) = user_id {
-                        settings::unpin_playlist(&user_id, &id);
+                        settings::unpin_object(&user_id, settings::PinnedKind::Playlist, &id);
                     }
                 }
                 Ok(BrowserAction::UnsavePlaylist(id).into())
@@ -294,7 +294,9 @@ impl PageModel for PlaylistDetailsModel {
             .logged_user
             .user
             .as_ref()
-            .is_some_and(|user_id| settings::is_playlist_pinned(user_id, &self.id))
+            .is_some_and(|user_id| {
+                settings::is_object_pinned(user_id, &self.id, settings::PinnedKind::Playlist)
+            })
     }
 
     fn toggle_pin(&self) {
@@ -302,9 +304,9 @@ impl PageModel for PlaylistDetailsModel {
             return;
         };
         let changed = if self.is_pinned() {
-            settings::unpin_playlist(&user_id, &self.id)
+            settings::unpin_object(&user_id, settings::PinnedKind::Playlist, &self.id)
         } else {
-            settings::pin_playlist(&user_id, &self.id)
+            settings::pin_object(&user_id, settings::PinnedKind::Playlist, &self.id)
         };
         if changed {
             self.dispatcher

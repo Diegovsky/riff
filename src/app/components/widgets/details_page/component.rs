@@ -217,12 +217,31 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             ));
         }
 
+        let pin_on = self.model.supports_pin_button() && is_enabled(FeatureFlag::PinnedPlaylists);
+
         if self.model.has_like_button() {
-            self.page.header().connect_liked(clone!(
-                #[weak(rename_to = m)]
-                self.model,
-                move || m.toggle_like()
-            ));
+            if pin_on {
+                // Replace the standalone like button with a like+pin segmented
+                // control: hovering the like segment reveals the pin segment.
+                let (like, pin) = self.page.header().add_like_pin_segmented_button();
+                like.connect_clicked(clone!(
+                    #[weak(rename_to = m)]
+                    self.model,
+                    move |_| m.toggle_like()
+                ));
+                pin.connect_clicked(clone!(
+                    #[weak(rename_to = m)]
+                    self.model,
+                    move |_| m.toggle_pin()
+                ));
+                self.page.header().hide_standalone_like_button();
+            } else {
+                self.page.header().connect_liked(clone!(
+                    #[weak(rename_to = m)]
+                    self.model,
+                    move || m.toggle_like()
+                ));
+            }
         }
 
         if self.model.has_info_button() {
@@ -241,12 +260,6 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             ));
         }
 
-        // Example segmented button
-        let seg = self.page.header().add_segmented_button(true);
-        seg.add_icon("system-run-symbolic", "Dev A", || {});
-        seg.add_icon("preferences-system-symbolic", "Dev B", || {});
-        seg.add_icon("dialog-information-symbolic", "Dev C", || {});
-
         self.page.connect_bottom_edge(clone!(
             #[weak(rename_to = m)]
             self.model,
@@ -254,12 +267,6 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         ));
 
         if self.model.supports_pin_button() {
-            self.page.header().connect_pin(clone!(
-                #[weak(rename_to = m)]
-                self.model,
-                move || m.toggle_pin()
-            ));
-
             let settings = gio::Settings::new(settings::SETTINGS);
             let header_widget = self.page.header().clone_inner();
             let sync_pin_button = clone!(
@@ -269,9 +276,9 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
                 header_widget,
                 move || {
                     let header = DetailsHeader::from_widget(header_widget.clone());
-                    let pin_enabled = is_enabled(FeatureFlag::PinnedPlaylists);
-                    header.set_pin_visible(pin_enabled);
-                    if pin_enabled {
+                    let pin_visible = is_enabled(FeatureFlag::PinnedPlaylists) && m.is_liked();
+                    header.set_pin_visible(pin_visible);
+                    if pin_visible {
                         header.set_pinned(m.is_pinned());
                     }
                 }
@@ -376,8 +383,13 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
                 if let Some(tooltip) = self.model.like_tooltip(self.model.is_liked()) {
                     self.page.header().set_like_tooltip(&tooltip);
                 }
-                if !self.model.is_liked() && self.model.supports_pin_button() {
-                    self.page.header().set_pinned(false);
+                if self.model.supports_pin_button() {
+                    let pin_visible =
+                        is_enabled(FeatureFlag::PinnedPlaylists) && self.model.is_liked();
+                    self.page.header().set_pin_visible(pin_visible);
+                    if pin_visible {
+                        self.page.header().set_pinned(self.model.is_pinned());
+                    }
                 }
             }
             return true;

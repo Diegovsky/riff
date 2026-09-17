@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use gettextrs::gettext;
@@ -61,9 +62,6 @@ mod imp {
 
         #[template_child]
         pub share_button: TemplateChild<gtk::Button>,
-
-        #[template_child]
-        pub pin_button: TemplateChild<gtk::Button>,
 
         #[template_child]
         pub button_box: TemplateChild<gtk::Box>,
@@ -139,11 +137,16 @@ glib::wrapper! {
 /// buttons without touching GObject internals directly.
 pub struct DetailsHeader {
     widget: DetailsHeaderWidget,
+    /// Optional like+pin segmented control. Holds `(SegmentedButton, like_button, pin_button)`.
+    like_pin_seg: RefCell<Option<(SegmentedButton, gtk::Button, gtk::Button)>>,
 }
 
 impl DetailsHeader {
     pub fn from_widget(widget: DetailsHeaderWidget) -> Self {
-        Self { widget }
+        Self {
+            widget,
+            like_pin_seg: RefCell::new(None),
+        }
     }
 
     pub fn new(shape: HeaderImageShape) -> Self {
@@ -162,7 +165,10 @@ impl DetailsHeader {
                 .add_css_class("details-header__image--circular");
         }
 
-        Self { widget }
+        Self {
+            widget,
+            like_pin_seg: RefCell::new(None),
+        }
     }
 
     pub fn clone_inner(&self) -> DetailsHeaderWidget {
@@ -249,6 +255,9 @@ impl DetailsHeader {
             "non-starred-symbolic"
         };
         self.widget.imp().like_button.set_icon_name(icon);
+        if let Some((_, like, _)) = &*self.like_pin_seg.borrow() {
+            like.set_icon_name(icon);
+        }
     }
 
     /// Show or hide the like button.
@@ -311,35 +320,51 @@ impl DetailsHeader {
 
     /// Update the pin button icon and tooltip to reflect pinned state.
     pub fn set_pinned(&self, is_pinned: bool) {
-        let tooltip = if is_pinned {
-            gettext("Unpin from Sidebar")
+        let (icon, tooltip) = if is_pinned {
+            ("view-pin-symbolic", gettext("Unpin from Sidebar"))
         } else {
-            gettext("Pin to Sidebar")
+            ("view-pin-outline-symbolic", gettext("Pin to Sidebar"))
         };
-        let button = &self.widget.imp().pin_button;
-        button.set_icon_name("view-pin-symbolic");
-        button.set_tooltip_text(Some(&tooltip));
+        if let Some((_, _, pin)) = &*self.like_pin_seg.borrow() {
+            pin.set_icon_name(icon);
+            pin.set_tooltip_text(Some(&tooltip));
+        }
     }
 
     pub fn set_pin_visible(&self, visible: bool) {
-        self.widget.imp().pin_button.set_visible(visible);
+        if let Some((seg, _, _)) = &*self.like_pin_seg.borrow() {
+            seg.set_icon_visible(1, visible);
+        }
     }
 
-    pub fn connect_pin<F: Fn() + 'static>(&self, f: F) {
-        let button = &self.widget.imp().pin_button;
-        button.connect_clicked(move |_| f());
+    /// Hide the standalone like button.
+    ///
+    /// Used when a like+pin segmented control replaces it in the header.
+    pub fn hide_standalone_like_button(&self) {
+        self.widget.imp().like_button.set_visible(false);
     }
 
-    /// Example [`SegmentedButton`]
-    pub fn add_segmented_button(&self, visible: bool) -> SegmentedButton {
-        let seg = SegmentedButton::new(ExpandBehavior::OnClick);
-        seg.widget().set_visible(visible);
+    /// Add a like+pin segmented control after the standalone pin button.
+    ///
+    /// The like segment is always visible and acts as the expand trigger;
+    /// hovering reveals the pin segment. Returns `(like_segment, pin_segment)`
+    /// for wiring actions and state updates.
+    pub fn add_like_pin_segmented_button(&self) -> (gtk::Button, gtk::Button) {
+        let seg = SegmentedButton::new(ExpandBehavior::OnHover);
         seg.widget().set_valign(gtk::Align::Center);
+
+        let like = seg.add_icon("non-starred-symbolic", &gettext("Add to Library"), || {});
+        let pin = seg.add_icon(
+            "view-pin-outline-symbolic",
+            &gettext("Pin to Sidebar"),
+            || {},
+        );
 
         let imp = self.widget.imp();
         imp.button_box
-            .insert_child_after(seg.widget(), Some(&*imp.pin_button));
-        seg
+            .insert_child_after(seg.widget(), Some(&*imp.like_button));
+        *self.like_pin_seg.borrow_mut() = Some((seg, like.clone(), pin.clone()));
+        (like, pin)
     }
 
     /// Set multiple artist link buttons in the subtitle area.

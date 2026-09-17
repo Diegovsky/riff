@@ -229,11 +229,11 @@
     </key>
     <key name="feature-pinned-playlists" type="b">
       <default>false</default>
-      <summary>Enable pinning playlists to the sidebar</summary>
+      <summary>Enable pinning objects to the sidebar</summary>
     </key>
-    <key name="pinned-playlists-by-user" type="s">
+    <key name="pinned-objects-by-user" type="s">
       <default>'{}'</default>
-      <summary>JSON map of Spotify user ID to pinned playlist ID arrays</summary>
+      <summary>JSON map of Spotify user ID to pinned objects (playlists, albums, artists, tracks)</summary>
     </key>
     <key name="card-layout" type="s">
       <choices>
