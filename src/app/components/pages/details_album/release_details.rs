@@ -53,7 +53,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct
-    ReleaseDetailsDialog(ObjectSubclass<imp::ReleaseDetailsDialog>) @extends gtk::Widget, libadwaita::Dialog;
+    ReleaseDetailsDialog(ObjectSubclass<imp::ReleaseDetailsDialog>) @extends gtk::Widget, libadwaita::Dialog,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl ReleaseDetailsDialog {

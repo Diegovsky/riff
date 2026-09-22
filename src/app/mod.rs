@@ -10,7 +10,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 pub mod dispatch;
-pub use dispatch::{ActionDispatcher, ActionDispatcherImpl, DispatchLoop, Worker};
+pub use dispatch::{DispatchLoop, Dispatcher};
 
 pub mod components;
 use components::*;
@@ -30,6 +30,8 @@ pub use state::{
 mod cache_warmer;
 use cache_warmer::CacheWarmer;
 
+pub mod load;
+
 #[cfg(debug_assertions)]
 mod dev_tools;
 
@@ -47,7 +49,6 @@ pub struct App {
     model: Rc<AppModel>,
     // Allows sending actions that are handled by the model above
     sender: UnboundedSender<AppAction>,
-    worker: Worker,
     // Sends commands to the librespot player. Only the dev tools menu uses it,
     // so it is compiled out of release builds entirely.
     #[cfg(debug_assertions)]
@@ -59,7 +60,6 @@ impl App {
         settings: RiffSettings,
         builder: gtk::Builder,
         sender: UnboundedSender<AppAction>,
-        worker: Worker,
     ) -> Self {
         let state = AppState::new();
 
@@ -94,7 +94,7 @@ impl App {
         let components: Vec<Box<dyn EventListener>> = vec![
             Box::new(PlayerNotifier::new(
                 Rc::clone(&model),
-                Box::new(ActionDispatcherImpl::new(sender.clone(), worker.clone())),
+                Dispatcher::new(sender.clone()),
                 player_command_sender.clone(),
                 connect_command_sender,
             )),
@@ -110,7 +110,6 @@ impl App {
             components,
             model,
             sender,
-            worker,
             #[cfg(debug_assertions)]
             player_command_sender,
         }
@@ -122,12 +121,10 @@ impl App {
         let builder = &self.builder;
         // ...some way to read the app state
         let model = &self.model;
-        // ...some way to handle various asynchronous tasks
-        let worker = &self.worker;
         // ...some (basic) way to send actions that will change the app state
         let sender = &self.sender;
         // ...ALSO some way to send actions, but more conveniently
-        let dispatcher = Box::new(ActionDispatcherImpl::new(sender.clone(), worker.clone()));
+        let dispatcher = Dispatcher::new(sender.clone());
 
         // Send gsettings updates for saved settings like repeat mode, shuffle, etc.
         // has to be done after the UI loads, otherwise visual glitches occour.
@@ -143,31 +140,20 @@ impl App {
         // All components that will be available initially
         let mut components: Vec<Box<dyn EventListener>> = vec![
             App::make_window(&self.settings, builder, Rc::clone(model)),
-            App::make_selection_toolbar(builder, Rc::clone(model), dispatcher.box_clone()),
-            App::make_playback(
-                builder,
-                Rc::clone(model),
-                dispatcher.box_clone(),
-                worker.clone(),
-            ),
-            App::make_login(builder, dispatcher.box_clone()),
-            App::make_navigation(
-                builder,
-                Rc::clone(model),
-                dispatcher.box_clone(),
-                worker.clone(),
-                registrar,
-            ),
+            App::make_selection_toolbar(builder, Rc::clone(model), dispatcher.clone()),
+            App::make_playback(builder, Rc::clone(model), dispatcher.clone()),
+            App::make_login(builder, dispatcher.clone()),
+            App::make_navigation(builder, Rc::clone(model), dispatcher.clone(), registrar),
             // After navigation, so a pushed screen registers before the header
             // refreshes.
             App::make_app_header(
                 app_header,
                 Rc::clone(model),
-                dispatcher.box_clone(),
+                dispatcher.clone(),
                 header_models,
             ),
-            App::make_search_button(builder, dispatcher.box_clone()),
-            App::make_clipboard_import(builder, Rc::clone(model), dispatcher.box_clone()),
+            App::make_search_button(builder, dispatcher.clone()),
+            App::make_clipboard_import(builder, Rc::clone(model), dispatcher.clone()),
             App::make_user_menu(builder, Rc::clone(model), dispatcher),
             App::make_notification(builder),
         ];
@@ -200,7 +186,7 @@ impl App {
     fn make_app_header(
         widget: AppHeaderBar,
         app_model: Rc<AppModel>,
-        dispatcher: Box<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
         models: HeaderModelRegistry,
     ) -> Box<AppHeaderBarComponent> {
         Box::new(AppHeaderBarComponent::new(
@@ -216,8 +202,7 @@ impl App {
     fn make_navigation(
         builder: &gtk::Builder,
         app_model: Rc<AppModel>,
-        dispatcher: Box<dyn ActionDispatcher>,
-        worker: Worker,
+        dispatcher: Dispatcher,
         registrar: HeaderRegistrar,
     ) -> Box<Navigation> {
         let split_view: libadwaita::NavigationSplitView = builder.object("split_view").unwrap();
@@ -225,14 +210,10 @@ impl App {
         let home_listbox: gtk::ListBox = builder.object("home_listbox").unwrap();
         let window: libadwaita::ApplicationWindow = builder.object("window").unwrap();
 
-        let model = NavigationModel::new(Rc::clone(&app_model), dispatcher.box_clone());
+        let model = NavigationModel::new(Rc::clone(&app_model), dispatcher.clone());
         // This is where components that are not created initially will be assembled
-        let screen_factory = ScreenFactory::new(
-            Rc::clone(&app_model),
-            dispatcher.box_clone(),
-            worker,
-            registrar,
-        );
+        let screen_factory =
+            ScreenFactory::new(Rc::clone(&app_model), dispatcher.clone(), registrar);
         Box::new(Navigation::new(
             model,
             split_view,
@@ -243,7 +224,7 @@ impl App {
         ))
     }
 
-    fn make_login(builder: &gtk::Builder, dispatcher: Box<dyn ActionDispatcher>) -> Box<Login> {
+    fn make_login(builder: &gtk::Builder, dispatcher: Dispatcher) -> Box<Login> {
         let parent: gtk::Window = builder.object("window").unwrap();
         let model = LoginModel::new(dispatcher);
         Box::new(Login::new(parent, model))
@@ -252,7 +233,7 @@ impl App {
     fn make_selection_toolbar(
         builder: &gtk::Builder,
         app_model: Rc<AppModel>,
-        dispatcher: Box<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
     ) -> Box<impl EventListener> {
         Box::new(SelectionToolbar::new(
             SelectionToolbarModel::new(app_model, dispatcher),
@@ -263,22 +244,17 @@ impl App {
     fn make_playback(
         builder: &gtk::Builder,
         app_model: Rc<AppModel>,
-        dispatcher: Box<dyn ActionDispatcher>,
-        worker: Worker,
+        dispatcher: Dispatcher,
     ) -> Box<impl EventListener> {
         let model = PlaybackModel::new(app_model, dispatcher);
         Box::new(PlaybackControl::new(
             model,
             builder.object("playback").unwrap(),
             builder.object("mobile_now_playing").unwrap(),
-            worker,
         ))
     }
 
-    fn make_search_button(
-        builder: &gtk::Builder,
-        dispatcher: Box<dyn ActionDispatcher>,
-    ) -> Box<SearchButton> {
+    fn make_search_button(builder: &gtk::Builder, dispatcher: Dispatcher) -> Box<SearchButton> {
         let search_button: gtk::Button = builder.object("search_button").unwrap();
         let model = SearchBarModel(dispatcher);
         Box::new(SearchButton::new(model, search_button))
@@ -287,10 +263,10 @@ impl App {
     fn make_user_menu(
         builder: &gtk::Builder,
         app_model: Rc<AppModel>,
-        dispatcher: Box<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
     ) -> Box<UserMenu> {
         let parent: gtk::Window = builder.object("window").unwrap();
-        let settings_model = SettingsModel::new(app_model.clone(), dispatcher.box_clone());
+        let settings_model = SettingsModel::new(app_model.clone(), dispatcher.clone());
         let settings = Settings::new(parent.clone(), settings_model);
 
         let button: gtk::MenuButton = builder.object("user").unwrap();
@@ -308,7 +284,7 @@ impl App {
     fn make_clipboard_import(
         builder: &gtk::Builder,
         app_model: Rc<AppModel>,
-        dispatcher: Box<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
     ) -> Box<ClipboardImport> {
         let window: libadwaita::ApplicationWindow = builder.object("window").unwrap();
         Box::new(ClipboardImport::new(window, dispatcher, app_model))
@@ -339,15 +315,19 @@ impl App {
 
     // Here is the loop
     pub async fn attach(mut self, dispatch_loop: DispatchLoop) {
-        let rt = tokio::runtime::Runtime::new().expect("Failed to acquire tokio runtime");
-        let _guard = rt.enter();
+        // Runtime and guard both leak: GTK callbacks spawn onto this for the
+        // life of the process, and a dropped guard makes a later spawn panic.
+        let rt = Box::leak(Box::new(
+            tokio::runtime::Runtime::new().expect("Failed to acquire tokio runtime"),
+        ));
+        std::mem::forget(rt.enter());
 
         // Evict any disk cache left over-budget by a previous session. Run
         // here (rather than at construction in `App::new`) because this is
         // where the app's Tokio runtime is entered; the data layer's async
         // disk I/O requires one.
         let maintenance = self.model.api();
-        tokio::spawn(async move {
+        rt.spawn(async move {
             maintenance.run_cache_maintenance().await;
         });
 

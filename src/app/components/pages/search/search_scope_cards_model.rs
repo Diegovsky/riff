@@ -8,17 +8,17 @@ use std::rc::Rc;
 use crate::app::components::{CardListModel, ImageShape};
 use crate::app::models::*;
 use crate::app::state::SearchState;
-use crate::app::{ActionDispatcher, AppAction, AppModel, ListStore};
+use crate::app::{AppAction, AppModel, Dispatcher, ListStore};
 
 use super::load_more_scope;
 
 pub struct SearchScopeCardsModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl SearchScopeCardsModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,
@@ -58,7 +58,7 @@ impl CardListModel for SearchScopeCardsModel {
         if search_type == SearchType::Tracks {
             return;
         }
-        load_more_scope(&self.app_model, self.dispatcher.as_ref(), search_type);
+        load_more_scope(&self.app_model, &self.dispatcher, search_type);
     }
 
     fn open_item(&self, id: String) {

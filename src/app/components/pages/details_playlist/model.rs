@@ -12,14 +12,15 @@ use std::rc::Rc;
 use crate::app::components::DetailsPageModel;
 use crate::app::components::SongActions;
 use crate::app::components::{
-    labels, HasHeaderBarModel, HeaderImageShape, PageModel, PlaylistModel, SimpleHeaderBarModel,
+    dispatch_api_call, dispatch_api_read, labels, HasHeaderBarModel, HeaderImageShape, PageModel,
+    PlaylistModel, SimpleHeaderBarModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
 use crate::app::state::{
     BrowserAction, BrowserEvent, PlaybackAction, SelectionAction, SelectionState,
 };
-use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, PaginationTarget, SongsSource};
+use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, PaginationTarget, SongsSource};
 use crate::feature_flags::{self, FeatureFlag};
 use crate::{impl_playlist_model_base, impl_toggle_play};
 use riff_api::DomainError;
@@ -39,7 +40,7 @@ impl Deref for PlaylistDetailsModel {
 impl HasHeaderBarModel for PlaylistDetailsModel {}
 
 impl PlaylistDetailsModel {
-    pub fn new(id: String, app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(id: String, app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             base: DetailsPageModel::new(id, app_model, dispatcher),
         }
@@ -72,7 +73,7 @@ impl PlaylistDetailsModel {
     pub fn update_playlist_details(&self, title: String) {
         let api = self.app_model.api();
         let id = self.id.clone();
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        dispatch_api_call(&self.dispatcher, move || async move {
             api.update_playlist_details(&id, &title)
                 .await
                 .map(|_| AppAction::UpdatePlaylistName(PlaylistSummary { id, title }))
@@ -110,9 +111,11 @@ impl PageModel for PlaylistDetailsModel {
     fn load_page_info(&self) {
         let api = self.app_model.api();
         let id = self.id.clone();
-        self.dispatcher.call_api_and_dispatch(move || async move {
-            let (tracks_result, playlist_result) =
-                futures::join!(api.get_playlist_tracks(&id, 0, 50), api.get_playlist(&id));
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            let (tracks_result, playlist_result) = futures::join!(
+                api.get_playlist_tracks(&id, 0, 50, tag),
+                api.get_playlist(&id, tag)
+            );
             let playlist_tracks = tracks_result?;
             match playlist_result {
                 Ok(playlist) => Ok(BrowserAction::SetPlaylistDetails(
@@ -149,8 +152,8 @@ impl PageModel for PlaylistDetailsModel {
             BrowserAction::ConsumeNextPage(PaginationTarget::PlaylistTracks(id.clone())).into(),
         );
 
-        self.dispatcher.call_api_and_dispatch(move || async move {
-            api.get_playlist_tracks(&id, offset, batch_size)
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            api.get_playlist_tracks(&id, offset, batch_size, tag)
                 .await
                 .map(|song_batch| {
                     BrowserAction::AppendPlaylistTracks(id, Box::new(song_batch)).into()
@@ -197,7 +200,7 @@ impl PageModel for PlaylistDetailsModel {
                 .and_then(|s| s.playlist.clone())
         };
 
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        dispatch_api_call(&self.dispatcher, move || async move {
             if is_saved {
                 api.unfollow_playlist(&id).await?;
                 Ok(BrowserAction::UnsavePlaylist(id).into())
@@ -295,12 +298,12 @@ impl PlaylistModel for PlaylistDetailsModel {
 
     fn actions_for(&self, song: &Track) -> Option<gio::ActionGroup> {
         let group = SimpleActionGroup::new();
-        for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
+        for a in song.make_artist_actions(self.dispatcher.clone(), None) {
             group.add_action(&a);
         }
-        group.add_action(&song.make_album_action(self.dispatcher.box_clone(), None));
+        group.add_action(&song.make_album_action(self.dispatcher.clone(), None));
         group.add_action(&song.make_link_action(None));
-        group.add_action(&song.make_queue_action(self.dispatcher.box_clone(), None));
+        group.add_action(&song.make_queue_action(self.dispatcher.clone(), None));
         Some(group.upcast())
     }
 

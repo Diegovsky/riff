@@ -8,9 +8,8 @@ use super::page_widget::CardListWidget;
 use super::traits::CardListPageModel;
 use super::widget::CardList;
 use crate::app::components::{CardLayout, CardSize, Component, EventListener, SortOrder};
-use crate::app::dispatch::Worker;
 use crate::app::state::LoginEvent;
-use crate::app::{ActionDispatcher, AppEvent, BrowserEvent};
+use crate::app::{AppEvent, BrowserEvent, Dispatcher};
 use crate::settings::StateTracker;
 
 // Constants
@@ -35,10 +34,9 @@ pub struct CardListComponent<M: CardListPageModel + 'static> {
 impl<M: CardListPageModel + 'static> CardListComponent<M> {
     pub fn new(
         model: Rc<M>,
-        worker: Worker,
         layout: Rc<Cell<CardLayout>>,
         size: Rc<Cell<CardSize>>,
-        dispatcher: Rc<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
     ) -> Self {
         let page_widget = CardListWidget::new();
 
@@ -73,7 +71,7 @@ impl<M: CardListPageModel + 'static> CardListComponent<M> {
             }
         ));
 
-        card_list.bind(&model, worker, layout.get(), size.get());
+        card_list.bind(&model, layout.get(), size.get());
         card_list.show_placeholders();
 
         let page_id = model.page_id().to_string();
@@ -199,7 +197,7 @@ impl EmbeddedCardList {
         available_sorts: &[SortOrder],
         layout: Rc<Cell<CardLayout>>,
         size: Rc<Cell<CardSize>>,
-        dispatcher: Rc<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
     ) -> Self {
         // Apply shared style/size (card list may have been created with defaults)
         card_list.update_layout(layout.get());

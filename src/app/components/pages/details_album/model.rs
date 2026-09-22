@@ -10,7 +10,8 @@ use std::rc::Rc;
 use crate::app::components::DetailsPageModel;
 use crate::app::components::SongActions;
 use crate::app::components::{
-    labels, HasHeaderBarModel, HeaderImageShape, PageModel, PlaylistModel, SimpleHeaderBarModel,
+    dispatch_api_call, dispatch_api_read, labels, HasHeaderBarModel, HeaderImageShape, PageModel,
+    PlaylistModel, SimpleHeaderBarModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
@@ -18,7 +19,7 @@ use crate::app::state::CARD_BATCH_SIZE;
 use crate::app::state::{
     BrowserAction, BrowserEvent, PlaybackAction, SelectionAction, SelectionState,
 };
-use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, PaginationTarget, SongsSource};
+use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, PaginationTarget, SongsSource};
 use crate::feature_flags::{self, FeatureFlag};
 use crate::{impl_playlist_model_base, impl_toggle_play};
 use riff_api::DomainError;
@@ -38,7 +39,7 @@ impl Deref for DetailsModel {
 impl HasHeaderBarModel for DetailsModel {}
 
 impl DetailsModel {
-    pub fn new(id: String, app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(id: String, app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             base: DetailsPageModel::new(id, app_model, dispatcher),
         }
@@ -79,8 +80,8 @@ impl PageModel for DetailsModel {
         // A 400/404 means the album does not exist, so navigate back.
         let id = self.id.clone();
         let info_api = api.clone();
-        self.dispatcher.call_api_and_dispatch(move || async move {
-            match info_api.get_album(&id).await {
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            match info_api.get_album(&id, tag).await {
                 Ok(album) => Ok(BrowserAction::SetAlbumInfo(Box::new(album)).into()),
                 Err(DomainError::ClientError { status: 400, .. })
                 | Err(DomainError::NotFound { .. }) => Ok(BrowserAction::NavigationPop.into()),
@@ -92,9 +93,9 @@ impl PageModel for DetailsModel {
         // album metadata.
         let id = self.id.clone();
         let tracks_api = api.clone();
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
             tracks_api
-                .get_album_tracks(&id, 0, CARD_BATCH_SIZE)
+                .get_album_tracks(&id, 0, CARD_BATCH_SIZE, tag)
                 .await
                 .map(|batch| BrowserAction::SetAlbumTracks(id, Box::new(batch)).into())
         });
@@ -102,8 +103,8 @@ impl PageModel for DetailsModel {
         // Liked status: a failure here must not blank the page, so it is
         // swallowed to "not liked" rather than surfaced as an error.
         let id = self.id.clone();
-        self.dispatcher.call_api_and_dispatch(move || async move {
-            let is_liked = api.check_saved_album(&id).await.unwrap_or(false);
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            let is_liked = api.check_saved_album(&id, tag).await.unwrap_or(false);
             Ok(BrowserAction::SetAlbumLikedStatus(id, is_liked).into())
         });
     }
@@ -130,8 +131,8 @@ impl PageModel for DetailsModel {
             BrowserAction::ConsumeNextPage(PaginationTarget::AlbumTracks(id.clone())).into(),
         );
 
-        self.dispatcher.call_api_and_dispatch(move || async move {
-            api.get_album_tracks(&id, offset, batch_size)
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            api.get_album_tracks(&id, offset, batch_size, tag)
                 .await
                 .map(|song_batch| BrowserAction::AppendAlbumTracks(id, Box::new(song_batch)).into())
         });
@@ -174,7 +175,7 @@ impl PageModel for DetailsModel {
         let id = album.rri.id.clone();
         let is_liked = self.is_liked();
         let api = self.app_model.api();
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        dispatch_api_call(&self.dispatcher, move || async move {
             if !is_liked {
                 api.save_albums(&id)
                     .await
@@ -256,12 +257,12 @@ impl PlaylistModel for DetailsModel {
 
     fn actions_for(&self, song: &Track) -> Option<gio::ActionGroup> {
         let group = SimpleActionGroup::new();
-        for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
+        for a in song.make_artist_actions(self.dispatcher.clone(), None) {
             group.add_action(&a);
         }
 
         group.add_action(&song.make_link_action(None));
-        group.add_action(&song.make_queue_action(self.dispatcher.box_clone(), None));
+        group.add_action(&song.make_queue_action(self.dispatcher.clone(), None));
         Some(group.upcast())
     }
 

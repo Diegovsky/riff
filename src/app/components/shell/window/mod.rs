@@ -100,7 +100,7 @@ impl MainWindow {
         dialog.set_extra_child(Some(&remember_check));
 
         dialog.choose(
-            window,
+            Some(window),
             None::<&gio::Cancellable>,
             clone!(
                 #[weak]

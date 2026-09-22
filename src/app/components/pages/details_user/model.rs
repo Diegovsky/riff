@@ -8,11 +8,12 @@ use std::rc::Rc;
 
 use crate::app::components::DetailsPageModel;
 use crate::app::components::{
-    CardListModel, HasHeaderBarModel, HeaderImageShape, ImageShape, PageModel, SimpleHeaderBarModel,
+    dispatch_api_read, CardListModel, HasHeaderBarModel, HeaderImageShape, ImageShape, PageModel,
+    SimpleHeaderBarModel,
 };
 use crate::app::models::*;
 use crate::app::state::{BrowserAction, BrowserEvent, SelectionContext, CARD_BATCH_SIZE};
-use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, ListStore, PaginationTarget};
+use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, ListStore, PaginationTarget};
 
 /// Data model for the user profile page. Composes `DetailsPageModel` via Deref.
 pub struct UserDetailsModel {
@@ -29,7 +30,7 @@ impl Deref for UserDetailsModel {
 impl HasHeaderBarModel for UserDetailsModel {}
 
 impl UserDetailsModel {
-    pub fn new(id: String, app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(id: String, app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             base: DetailsPageModel::new(id, app_model, dispatcher),
         }
@@ -63,17 +64,17 @@ impl PageModel for UserDetailsModel {
         // User info: name and photo for the header.
         let id = self.id.clone();
         let info_api = api.clone();
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
             info_api
-                .get_user(&id)
+                .get_user(&id, tag)
                 .await
                 .map(|user| BrowserAction::SetUserInfo(Box::new(user)).into())
         });
 
         // Initial page of the user's public playlists (the card list).
         let id = self.id.clone();
-        self.dispatcher.call_api_and_dispatch(move || async move {
-            api.get_user_playlists(&id, 0, CARD_BATCH_SIZE)
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            api.get_user_playlists(&id, 0, CARD_BATCH_SIZE, tag)
                 .await
                 .map(|page| BrowserAction::SetUserPlaylists(id, page.items).into())
         });
@@ -102,8 +103,8 @@ impl PageModel for UserDetailsModel {
             BrowserAction::ConsumeNextPage(PaginationTarget::UserPlaylists(id.clone())).into(),
         );
 
-        self.dispatcher.call_api_and_dispatch(move || async move {
-            api.get_user_playlists(&id, offset, batch_size)
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            api.get_user_playlists(&id, offset, batch_size, tag)
                 .await
                 .map(|page| BrowserAction::AppendUserPlaylists(id, page.items).into())
         });

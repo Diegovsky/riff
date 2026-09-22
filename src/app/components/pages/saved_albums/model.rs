@@ -5,24 +5,23 @@ use std::rc::Rc;
 use gettextrs::gettext;
 
 use crate::app::components::{
-    CardLayout, CardListComponent, CardListModel, CardListPageModel, CardSize, ImageShape,
-    SortOrder,
+    dispatch_api_read, CardLayout, CardListComponent, CardListModel, CardListPageModel, CardSize,
+    ImageShape, SortOrder,
 };
-use crate::app::dispatch::Worker;
 use crate::app::models::*;
 use crate::app::state::HomeState;
 use crate::app::{
-    ActionDispatcher, AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, ListStore,
+    AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Dispatcher, ListStore,
     PaginationTarget,
 };
 
 pub struct SavedAlbumsModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl SavedAlbumsModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,
@@ -44,8 +43,8 @@ impl CardListModel for SavedAlbumsModel {
         if let Some(state) = self.state() {
             let batch_size = state.next_albums_page.batch_size;
             drop(state);
-            self.dispatcher.call_api_and_dispatch(move || async move {
-                api.get_saved_albums(0, batch_size)
+            dispatch_api_read(&self.dispatcher, move |tag| async move {
+                api.get_saved_albums(0, batch_size, tag)
                     .await
                     .map(|page| BrowserAction::SetLibraryContent(page.items).into())
             });
@@ -78,8 +77,8 @@ impl CardListModel for SavedAlbumsModel {
         self.app_model
             .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SavedAlbums).into());
 
-        self.dispatcher.call_api_and_dispatch(move || async move {
-            api.get_saved_albums(offset, batch_size)
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            api.get_saved_albums(offset, batch_size, tag)
                 .await
                 .map(|page| BrowserAction::AppendLibraryContent(page.items).into())
         });
@@ -123,19 +122,12 @@ impl CardListPageModel for SavedAlbumsModel {
 pub type SavedAlbums = CardListComponent<SavedAlbumsModel>;
 
 pub fn make_saved_albums(
-    worker: Worker,
     model: SavedAlbumsModel,
     shared_layout: Rc<Cell<CardLayout>>,
     shared_size: Rc<Cell<CardSize>>,
-    dispatcher: Rc<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 ) -> SavedAlbums {
-    CardListComponent::new(
-        Rc::new(model),
-        worker,
-        shared_layout,
-        shared_size,
-        dispatcher,
-    )
+    CardListComponent::new(Rc::new(model), shared_layout, shared_size, dispatcher)
 }
 
 impl crate::app::ProvidesApi for SavedAlbumsModel {

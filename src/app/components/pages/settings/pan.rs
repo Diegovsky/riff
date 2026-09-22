@@ -50,7 +50,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct PanWidget(ObjectSubclass<imp::PanWidget>)
-        @extends gtk::Widget, libadwaita::PreferencesGroup;
+        @extends gtk::Widget, libadwaita::PreferencesGroup,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl Default for PanWidget {

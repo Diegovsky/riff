@@ -43,7 +43,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct FilterToggleWidget(ObjectSubclass<imp::FilterToggleWidget>)
-        @extends gtk::Widget, libadwaita::BreakpointBin;
+        @extends gtk::Widget, libadwaita::BreakpointBin,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl FilterToggleWidget {

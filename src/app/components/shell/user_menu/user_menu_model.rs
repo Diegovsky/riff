@@ -1,15 +1,16 @@
+use crate::app::components::dispatch_api_read;
 use crate::app::state::{LoginAction, PlaybackAction};
-use crate::app::{ActionDispatcher, AppModel};
+use crate::app::{AppModel, Dispatcher};
 use std::ops::Deref;
 use std::rc::Rc;
 
 pub struct UserMenuModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl UserMenuModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,
@@ -24,17 +25,18 @@ impl UserMenuModel {
     pub fn logout(&self) {
         self.dispatcher.dispatch(PlaybackAction::Stop.into());
         let api = self.app_model.api();
-        self.dispatcher.dispatch_async(Box::pin(async move {
+        let dispatcher = self.dispatcher.clone();
+        tokio::spawn(async move {
             api.clear_user_cache().await;
-            Some(LoginAction::Logout.into())
-        }));
+            dispatcher.dispatch(LoginAction::Logout.into());
+        });
     }
 
     pub fn fetch_user_playlists(&self) {
         let api = self.app_model.api();
         if self.username().is_some() {
-            self.dispatcher.call_api_and_dispatch(move || async move {
-                api.get_saved_playlists(0, 30).await.map(|page| {
+            dispatch_api_read(&self.dispatcher, move |tag| async move {
+                api.get_saved_playlists(0, 30, tag).await.map(|page| {
                     let summaries = page.items.into_iter().map(|p| p.into()).collect();
                     LoginAction::SetUserPlaylists(summaries).into()
                 })

@@ -6,8 +6,9 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use libadwaita::prelude::*;
 
+use crate::app::components::utils::decode_px;
 use crate::app::components::{display_add_css_provider, CLAMP_MAX_SIZE};
-use crate::app::dispatch::Worker;
+use crate::app::load;
 use crate::app::models::ImageSet;
 
 use super::{DetailsHeader, HeaderImageShape, HEADER_IMAGE_SIZE};
@@ -125,16 +126,17 @@ impl DetailsPage {
         &self,
         art: Option<&ImageSet>,
         api_service: Arc<riff_api::ApiService>,
-        worker: &Worker,
     ) {
         if let Some(url) = art.and_then(|s| s.best_for_width(HEADER_IMAGE_SIZE as u32)) {
             let url = url.to_string();
             let weak_header = self.header.widget_weak();
             let weak = self.scroll_child.downgrade();
-            worker.send_local_task(async move {
-                let texture = api_service
-                    .load_image(&url, "jpg", HEADER_IMAGE_SIZE, HEADER_IMAGE_SIZE)
-                    .await;
+            // Captured before spawning, so it describes the view that opened
+            // this page.
+            let tag = load::hero();
+            let size = decode_px(HEADER_IMAGE_SIZE);
+            glib::MainContext::default().spawn_local(async move {
+                let texture = api_service.load_image(&url, size, size, tag).await;
                 if let (Some(scroll_child), Some(ref texture)) = (weak.upgrade(), texture) {
                     if let Some(header) = weak_header.upgrade() {
                         let imp = header.imp();

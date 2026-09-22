@@ -1,9 +1,9 @@
 use gtk::prelude::*;
 
 use crate::app::components::EventListener;
-use crate::app::{ActionDispatcher, AppAction};
+use crate::app::{AppAction, Dispatcher};
 
-pub struct SearchBarModel(pub Box<dyn ActionDispatcher>);
+pub struct SearchBarModel(pub Dispatcher);
 
 impl SearchBarModel {
     pub fn navigate_to_search(&self) {

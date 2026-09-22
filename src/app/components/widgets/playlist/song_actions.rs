@@ -2,43 +2,27 @@ use gio::SimpleAction;
 
 use crate::app::models::Track;
 use crate::app::state::{AppAction, PlaybackAction};
-use crate::app::ActionDispatcher;
+use crate::app::Dispatcher;
 
 /// Context-menu actions that can be built for a single track.
 pub trait SongActions {
-    fn make_queue_action(
-        &self,
-        dispatcher: Box<dyn ActionDispatcher>,
-        name: Option<&str>,
-    ) -> SimpleAction;
+    fn make_queue_action(&self, dispatcher: Dispatcher, name: Option<&str>) -> SimpleAction;
 
-    fn make_dequeue_action(
-        &self,
-        dispatcher: Box<dyn ActionDispatcher>,
-        name: Option<&str>,
-    ) -> SimpleAction;
+    fn make_dequeue_action(&self, dispatcher: Dispatcher, name: Option<&str>) -> SimpleAction;
 
     fn make_link_action(&self, name: Option<&str>) -> SimpleAction;
 
-    fn make_album_action(
-        &self,
-        dispatcher: Box<dyn ActionDispatcher>,
-        name: Option<&str>,
-    ) -> SimpleAction;
+    fn make_album_action(&self, dispatcher: Dispatcher, name: Option<&str>) -> SimpleAction;
 
     fn make_artist_actions(
         &self,
-        dispatcher: Box<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
         prefix: Option<&str>,
     ) -> Vec<SimpleAction>;
 }
 
 impl SongActions for Track {
-    fn make_queue_action(
-        &self,
-        dispatcher: Box<dyn ActionDispatcher>,
-        name: Option<&str>,
-    ) -> SimpleAction {
+    fn make_queue_action(&self, dispatcher: Dispatcher, name: Option<&str>) -> SimpleAction {
         let queue = SimpleAction::new(name.unwrap_or("queue"), None);
         let song = self.clone();
         queue.connect_activate(move |_, _| {
@@ -47,11 +31,7 @@ impl SongActions for Track {
         queue
     }
 
-    fn make_dequeue_action(
-        &self,
-        dispatcher: Box<dyn ActionDispatcher>,
-        name: Option<&str>,
-    ) -> SimpleAction {
+    fn make_dequeue_action(&self, dispatcher: Dispatcher, name: Option<&str>) -> SimpleAction {
         let dequeue = SimpleAction::new(name.unwrap_or("dequeue"), None);
         let track_id = self.rri.id.clone();
         dequeue.connect_activate(move |_, _| {
@@ -70,11 +50,7 @@ impl SongActions for Track {
         copy_link
     }
 
-    fn make_album_action(
-        &self,
-        dispatcher: Box<dyn ActionDispatcher>,
-        name: Option<&str>,
-    ) -> SimpleAction {
+    fn make_album_action(&self, dispatcher: Dispatcher, name: Option<&str>) -> SimpleAction {
         let album_id = self
             .album
             .as_ref()
@@ -89,7 +65,7 @@ impl SongActions for Track {
 
     fn make_artist_actions(
         &self,
-        dispatcher: Box<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
         prefix: Option<&str>,
     ) -> Vec<SimpleAction> {
         self.artists
@@ -100,7 +76,7 @@ impl SongActions for Track {
                     &format!("{}_{}", prefix.unwrap_or("view_artist"), &id),
                     None,
                 );
-                let dispatcher = dispatcher.box_clone();
+                let dispatcher = dispatcher.clone();
                 view_artist.connect_activate(move |_, _| {
                     dispatcher.dispatch(AppAction::ViewArtist(id.clone()));
                 });

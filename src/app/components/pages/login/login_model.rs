@@ -1,12 +1,12 @@
 use crate::app::state::{LoginAction, TryLoginAction};
-use crate::app::ActionDispatcher;
+use crate::app::Dispatcher;
 
 pub struct LoginModel {
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl LoginModel {
-    pub fn new(dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(dispatcher: Dispatcher) -> Self {
         Self { dispatcher }
     }
 

@@ -7,18 +7,18 @@ use crate::app::components::sidebar::SidebarDestination;
 use crate::app::components::EventListener;
 use crate::app::models::*;
 use crate::app::state::{PlaybackAction, PlaybackEvent, ScreenName, SelectionEvent};
-use crate::app::{ActionDispatcher, AppEvent, AppModel, AppState, BrowserAction, Worker};
+use crate::app::{AppEvent, AppModel, AppState, BrowserAction, Dispatcher};
 
 use super::playback_widget::PlaybackWidget;
 use super::PlaybackInfoMobileWidget;
 
 pub struct PlaybackModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl PlaybackModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,
@@ -91,7 +91,6 @@ pub struct PlaybackControl {
     model: Rc<PlaybackModel>,
     widget: PlaybackWidget,
     mobile_now_playing: PlaybackInfoMobileWidget,
-    worker: Worker,
 }
 
 impl PlaybackControl {
@@ -99,7 +98,6 @@ impl PlaybackControl {
         model: PlaybackModel,
         widget: PlaybackWidget,
         mobile_now_playing: PlaybackInfoMobileWidget,
-        worker: Worker,
     ) -> Self {
         let model = Rc::new(model);
 
@@ -148,7 +146,6 @@ impl PlaybackControl {
             model,
             widget,
             mobile_now_playing,
-            worker,
         }
     }
 
@@ -174,11 +171,8 @@ impl PlaybackControl {
             self.mobile_now_playing.set_visible(true);
             self.widget.set_song_duration(Some(song.duration_ms as f64));
             if let Some(url) = song.art.best_for_width(120) {
-                self.widget.set_artwork_from_url(
-                    url.to_owned(),
-                    self.model.api_service(),
-                    &self.worker,
-                );
+                self.widget
+                    .set_artwork_from_url(url.to_owned(), self.model.api_service());
             }
         } else {
             self.widget.reset_info();

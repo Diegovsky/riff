@@ -16,11 +16,6 @@ pub fn spotify_service(
     memory_cache_bytes: usize,
     disk_cache_bytes: usize,
 ) -> ApiService {
-    let provider = Arc::new(SpotifyDomain::new(Arc::clone(&token_provider)));
-    ApiService::new(
-        provider,
-        token_provider,
-        memory_cache_bytes,
-        disk_cache_bytes,
-    )
+    let provider = Arc::new(SpotifyDomain::new(token_provider));
+    ApiService::new(provider, memory_cache_bytes, disk_cache_bytes)
 }

@@ -3,22 +3,22 @@ use gtk::prelude::*;
 use std::ops::Deref;
 use std::rc::Rc;
 
-use crate::app::components::{Component, EventListener};
+use crate::app::components::{dispatch_api_call, dispatch_api_call_many, Component, EventListener};
 use crate::app::models::PlaylistSummary;
 use crate::app::state::{
     LoginEvent, SelectionAction, SelectionContext, SelectionEvent, SelectionState,
 };
-use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, BrowserAction};
+use crate::app::{AppAction, AppEvent, AppModel, BrowserAction, Dispatcher};
 
 use super::widget::{SelectionToolState, SelectionToolbarWidget};
 
 pub struct SelectionToolbarModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl SelectionToolbarModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,
@@ -57,14 +57,13 @@ impl SelectionToolbarModel {
             .peek_selection()
             .map(|s| s.rri.id.clone())
             .collect();
-        self.dispatcher
-            .call_api_and_dispatch_many(move || async move {
-                api.save_tracks(ids).await?;
-                Ok(vec![
-                    AppAction::SaveSelection,
-                    AppAction::ShowNotification(gettext("Tracks saved!")),
-                ])
-            })
+        dispatch_api_call_many(&self.dispatcher, move || async move {
+            api.save_tracks(ids).await?;
+            Ok(vec![
+                AppAction::SaveSelection,
+                AppAction::ShowNotification(gettext("Tracks saved!")),
+            ])
+        })
     }
 
     fn remove_saved_tracks(&self) {
@@ -74,11 +73,10 @@ impl SelectionToolbarModel {
             .peek_selection()
             .map(|s| s.rri.id.clone())
             .collect();
-        self.dispatcher
-            .call_api_and_dispatch_many(move || async move {
-                api.remove_tracks(ids).await?;
-                Ok(vec![AppAction::UnsaveSelection])
-            })
+        dispatch_api_call_many(&self.dispatcher, move || async move {
+            api.remove_tracks(ids).await?;
+            Ok(vec![AppAction::UnsaveSelection])
+        })
     }
 
     fn selection(&self) -> impl Deref<Target = SelectionState> + '_ {
@@ -101,7 +99,7 @@ impl SelectionToolbarModel {
             .peek_selection()
             .filter_map(|s| s.rri.uri.clone())
             .collect();
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        dispatch_api_call(&self.dispatcher, move || async move {
             api.add_to_playlist(&id, uris).await?;
             Ok(SelectionAction::Clear.into())
         })
@@ -115,14 +113,13 @@ impl SelectionToolbarModel {
             .peek_selection()
             .filter_map(|s| s.rri.uri.clone())
             .collect();
-        self.dispatcher
-            .call_api_and_dispatch_many(move || async move {
-                api.remove_from_playlist(&id, uris.clone()).await?;
-                Ok(vec![
-                    BrowserAction::RemoveTracksFromPlaylist(id, uris).into(),
-                    SelectionAction::Clear.into(),
-                ])
-            })
+        dispatch_api_call_many(&self.dispatcher, move || async move {
+            api.remove_from_playlist(&id, uris.clone()).await?;
+            Ok(vec![
+                BrowserAction::RemoveTracksFromPlaylist(id, uris).into(),
+                SelectionAction::Clear.into(),
+            ])
+        })
     }
 }
 

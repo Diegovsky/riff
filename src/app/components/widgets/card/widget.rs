@@ -1,4 +1,4 @@
-//! Card widget — a reusable artwork + label tile used throughout the app.
+//! Card widget - a reusable artwork + label tile used throughout the app.
 //!
 //! Each card displays an image (album cover, artist photo, playlist art) with
 //! optional title/subtitle labels. Cards support three layouts (vertical, image-only,
@@ -8,9 +8,11 @@
 //! `CardModel` from the app state.
 
 use crate::app::components::display_add_css_provider;
-use crate::app::dispatch::Worker;
+use crate::app::components::utils::decode_px;
 use crate::app::models::{CardLayout, CardModel, CardSize};
 use riff_api::ApiService;
+
+use crate::app::load;
 use std::sync::Arc;
 
 use gtk::prelude::*;
@@ -32,9 +34,9 @@ const HORIZONTAL_GAP: i32 = 12;
 /// Width multiplier for the label area in horizontal layout (relative to image size).
 const HORIZONTAL_LABEL_WIDTH_SCALE: f32 = 1.8;
 
-/// Cards at or below this position in the list load immediately; the rest yield
-/// to the main loop via `idle_add_local_once` to avoid startup jank.
-const VISIBLE_THRESHOLD: u32 = 15;
+/// Cards at or below this position load immediately; the rest yield to the
+/// main loop first. An upper bound on one screenful at the default card size.
+const VISIBLE_THRESHOLD: u32 = 24;
 
 // Enums
 
@@ -209,7 +211,8 @@ glib::wrapper! {
     /// Cards are the primary visual unit in grid and list views. They render
     /// a cover image at a configurable size and layout, with a skeleton loading
     /// animation until content arrives.
-    pub struct CardWidget(ObjectSubclass<imp::CardWidget>) @extends gtk::Widget;
+    pub struct CardWidget(ObjectSubclass<imp::CardWidget>) @extends gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl CardWidget {
@@ -229,7 +232,6 @@ impl CardWidget {
     /// Create a card pre-bound to a model, ready for display.
     pub fn for_model(
         model: &CardModel,
-        worker: Worker,
         api_service: Arc<ApiService>,
         shape: ImageShape,
         layout: CardLayout,
@@ -238,7 +240,7 @@ impl CardWidget {
         let widget = Self::new(shape, layout);
         widget.set_image_size(size);
         widget.set_layout(layout);
-        widget.bind(model, worker, api_service);
+        widget.bind(model, api_service);
         widget
     }
 
@@ -291,7 +293,7 @@ impl CardWidget {
     }
 
     /// Bind this card to a model, loading artwork asynchronously.
-    fn bind(&self, model: &CardModel, worker: Worker, api_service: Arc<ApiService>) {
+    fn bind(&self, model: &CardModel, api_service: Arc<ApiService>) {
         let imp = self.imp();
         *imp.card_id.borrow_mut() = model.id();
 
@@ -305,11 +307,21 @@ impl CardWidget {
             let title = model.title();
             let subtitle = model.subtitle();
             let position = model.insertion_position();
+            let is_visible = position <= VISIBLE_THRESHOLD as i64;
+            // Captured now, since the off-screen branch defers to an idle
+            // callback by which point the user may have navigated away.
+            let tag = if is_visible {
+                load::visible()
+            } else {
+                load::offscreen()
+            };
+
+            let decode_size = decode_px(imp.icon_size.get());
 
             let load = async move {
                 if let Some(this) = weak.upgrade() {
                     let texture = api_service
-                        .load_image(&url, "jpg", IMAGE_SIZE as i32, IMAGE_SIZE as i32)
+                        .load_image(&url, decode_size, decode_size, tag)
                         .await;
                     if let Some(ref texture) = texture {
                         this.imp().cover_image.set_paintable(Some(texture));
@@ -322,15 +334,15 @@ impl CardWidget {
                 }
             };
 
-            // Visible cards load immediately; off-screen cards yield briefly
-            // to avoid blocking the main loop with a burst of disk I/O + decode.
-            if position <= VISIBLE_THRESHOLD as i64 {
-                worker.send_local_task(load);
+            // DEFAULT_IDLE sits below GTK's redraw priority, so artwork never
+            // delays a frame; `Priority::DEFAULT` would sit above it.
+            let ctx = glib::MainContext::default();
+            if is_visible {
+                ctx.spawn_local_with_priority(glib::Priority::DEFAULT_IDLE, load);
             } else {
-                // Use idle callback instead of linear timeouts. GTK schedules
-                // these between frames, loading as fast as possible without jank.
+                // Yield once more so a long list doesn't front-load the queue.
                 glib::idle_add_local_once(move || {
-                    worker.send_local_task(load);
+                    ctx.spawn_local_with_priority(glib::Priority::DEFAULT_IDLE, load);
                 });
             }
         }

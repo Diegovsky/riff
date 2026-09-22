@@ -34,7 +34,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct PlaybackInfoMobileWidget(ObjectSubclass<imp::PlaybackInfoMobileWidget>) @extends gtk::Widget, gtk::Box;
+    pub struct PlaybackInfoMobileWidget(ObjectSubclass<imp::PlaybackInfoMobileWidget>) @extends gtk::Widget, gtk::Box,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 impl PlaybackInfoMobileWidget {

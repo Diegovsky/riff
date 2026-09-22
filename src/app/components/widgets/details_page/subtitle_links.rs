@@ -155,7 +155,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct SubtitleLinksBox(ObjectSubclass<imp::SubtitleLinksBox>) @extends gtk::Widget;
+    pub struct SubtitleLinksBox(ObjectSubclass<imp::SubtitleLinksBox>) @extends gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl SubtitleLinksBox {

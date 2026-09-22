@@ -2,7 +2,8 @@ use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
 
-use crate::app::dispatch::ActionDispatcher;
+use crate::app::components::dispatch_api_read;
+use crate::app::dispatch::Dispatcher;
 use crate::app::models::*;
 use crate::app::state::{AppAction, AppModel, BrowserAction, PaginationTarget, CARD_BATCH_SIZE};
 
@@ -12,12 +13,12 @@ const COMBINED_RESULTS_LIMIT: usize = 24;
 
 pub struct SearchResultsModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
     queued_song: RefCell<Option<Track>>,
 }
 
 impl SearchResultsModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             queued_song: Default::default(),
             app_model,
@@ -65,15 +66,15 @@ impl SearchResultsModel {
         let api = self.app_model.api();
         match self.get_filter() {
             None => {
-                self.dispatcher.call_api_and_dispatch(move || async move {
-                    api.search(&query, 0, COMBINED_RESULTS_LIMIT)
+                dispatch_api_read(&self.dispatcher, move |tag| async move {
+                    api.search(&query, 0, COMBINED_RESULTS_LIMIT, tag)
                         .await
                         .map(|results| BrowserAction::SetSearchResults(Box::new(results)).into())
                 });
             }
             Some(search_type) => {
-                self.dispatcher.call_api_and_dispatch(move || async move {
-                    api.search_scoped(&query, search_type.into(), 0, CARD_BATCH_SIZE)
+                dispatch_api_read(&self.dispatcher, move |tag| async move {
+                    api.search_scoped(&query, search_type.into(), 0, CARD_BATCH_SIZE, tag)
                         .await
                         .map(|results| {
                             BrowserAction::SetSearchScopeResults(
@@ -131,7 +132,7 @@ impl SearchResultsModel {
 /// `search_type`, there is no further page, or the query is blank.
 pub(super) fn load_more_scope(
     app_model: &Rc<AppModel>,
-    dispatcher: &(dyn ActionDispatcher + 'static),
+    dispatcher: &Dispatcher,
     search_type: SearchType,
 ) {
     let api = app_model.api();
@@ -154,8 +155,8 @@ pub(super) fn load_more_scope(
 
     app_model.update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SearchScope).into());
 
-    dispatcher.call_api_and_dispatch(move || async move {
-        api.search_scoped(&query, search_type.into(), offset, batch_size)
+    dispatch_api_read(dispatcher, move |tag| async move {
+        api.search_scoped(&query, search_type.into(), offset, batch_size, tag)
             .await
             .map(|results| {
                 BrowserAction::AppendSearchScopeResults(

@@ -183,7 +183,7 @@ Riff uses the `env_logger` crate. Control verbosity with `RUST_LOG`:
 RUST_LOG='riff=debug,librespot=error' riff
 
 # Trace-level for the API layer
-RUST_LOG='riff::api=trace,riff=info' riff
+RUST_LOG='riff_api=trace,riff=info' riff
 
 # Everything at trace (very noisy)
 RUST_LOG=trace riff

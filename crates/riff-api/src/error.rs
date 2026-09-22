@@ -27,6 +27,9 @@ pub enum DomainError {
 
     #[error("Parse error: {0}")]
     Parse(String),
+
+    #[error("Shed under load")]
+    Shed,
 }
 
 impl DomainError {

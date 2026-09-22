@@ -13,14 +13,14 @@ use crate::{impl_playlist_model_base, impl_toggle_play};
 use crate::app::components::DetailsPageModel;
 use crate::app::components::SongActions;
 use crate::app::components::{
-    labels, HasHeaderBarModel, HeaderImageShape, PageModel, PlaylistModel, SimpleHeaderBarModel,
+    dispatch_api_read, labels, HasHeaderBarModel, HeaderImageShape, PageModel, PlaylistModel,
+    SimpleHeaderBarModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
 use crate::app::state::{PlaybackAction, SelectionAction, SelectionState};
 use crate::app::{
-    ActionDispatcher, AppEvent, AppModel, BrowserAction, BrowserEvent, PaginationTarget,
-    SongsSource,
+    AppEvent, AppModel, BrowserAction, BrowserEvent, Dispatcher, PaginationTarget, SongsSource,
 };
 use crate::feature_flags::{self, FeatureFlag};
 
@@ -39,7 +39,7 @@ impl Deref for SavedTracksModel {
 impl HasHeaderBarModel for SavedTracksModel {}
 
 impl SavedTracksModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             base: DetailsPageModel::new_without_id(app_model, dispatcher),
         }
@@ -48,8 +48,8 @@ impl SavedTracksModel {
     /// Called on login to load the initial batch of saved tracks.
     pub fn load_initial(&self) {
         let api = self.app_model.api();
-        self.dispatcher.call_api_and_dispatch(move || async move {
-            api.get_saved_tracks(0, 50)
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            api.get_saved_tracks(0, 50, tag)
                 .await
                 .map(|song_batch| BrowserAction::SetSavedTracks(Box::new(song_batch)).into())
         });
@@ -106,8 +106,8 @@ impl PageModel for SavedTracksModel {
         self.app_model
             .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SavedTracks).into());
 
-        self.dispatcher.call_api_and_dispatch(move || async move {
-            api.get_saved_tracks(offset, batch_size)
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            api.get_saved_tracks(offset, batch_size, tag)
                 .await
                 .map(|song_batch| BrowserAction::AppendSavedTracks(Box::new(song_batch)).into())
         });
@@ -171,10 +171,10 @@ impl PlaylistModel for SavedTracksModel {
 
     fn actions_for(&self, song: &Track) -> Option<gio::ActionGroup> {
         let group = SimpleActionGroup::new();
-        for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
+        for a in song.make_artist_actions(self.dispatcher.clone(), None) {
             group.add_action(&a);
         }
-        group.add_action(&song.make_album_action(self.dispatcher.box_clone(), None));
+        group.add_action(&song.make_album_action(self.dispatcher.clone(), None));
         group.add_action(&song.make_link_action(None));
         Some(group.upcast())
     }

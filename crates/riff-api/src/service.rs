@@ -7,14 +7,19 @@ use std::sync::{Arc, Mutex};
 
 use serde::{de::DeserializeOwned, Serialize};
 
-use riff_config::{API_TTL, IMAGE_TTL, STALE_IF_ERROR_TTL};
+use riff_config::api::{
+    API_QUEUE_CAP, API_READ_CONCURRENCY, API_TTL, IMAGE_EXT, IMAGE_LOAD_CONCURRENCY,
+    IMAGE_QUEUE_CAP, IMAGE_TTL, STALE_IF_ERROR_TTL,
+};
+
+use gdk::prelude::TextureExt;
 
 use crate::cache::{CacheKey, DiskCache, Store, TextureCache};
 use crate::error::DomainError;
 use crate::http;
 use crate::models::*;
 use crate::providers::MusicProvider;
-use crate::token::TokenProvider;
+use crate::scheduler::{Admission, AdmissionQueue, Lane, Load, Slot};
 
 #[derive(Serialize, serde::Deserialize)]
 struct PersistedPage {
@@ -29,8 +34,11 @@ pub struct ApiService {
     cdn_client: http::ServiceClient,
     image_disk: DiskCache,
     api_disk: DiskCache,
-    token_provider: Arc<dyn TokenProvider>,
     inflight: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    image_queue: AdmissionQueue,
+    read_queue: AdmissionQueue,
+    write_lane: Lane,
+    player_lane: Lane,
 }
 
 impl ApiService {
@@ -38,7 +46,6 @@ impl ApiService {
     /// are constructed through a vendor factory (e.g. `spotify_service`).
     pub(crate) fn new(
         provider: Arc<dyn MusicProvider>,
-        token_provider: Arc<dyn TokenProvider>,
         memory_cache_bytes: usize,
         disk_cache_bytes: usize,
     ) -> Self {
@@ -50,13 +57,26 @@ impl ApiService {
             cdn_client: http::cdn_service(pool),
             image_disk: DiskCache::new("riff/img", disk_cache_bytes, IMAGE_TTL),
             api_disk: DiskCache::new("riff/net", disk_cache_bytes, API_TTL),
-            token_provider,
             inflight: Mutex::new(HashMap::new()),
+            image_queue: AdmissionQueue::new(
+                "image queue",
+                IMAGE_LOAD_CONCURRENCY,
+                IMAGE_QUEUE_CAP,
+            ),
+            read_queue: AdmissionQueue::new("api read queue", API_READ_CONCURRENCY, API_QUEUE_CAP),
+            // A dropped caller leaves the cache stale and the change unsent,
+            // but no caller cancels today.
+            write_lane: Lane::new(1),
+            player_lane: Lane::new(1),
         }
     }
 
-    pub fn has_token(&self) -> bool {
-        self.token_provider.access_token().is_some()
+    async fn admit_read(&self, load: Load) -> Result<Option<Slot>, DomainError> {
+        match self.read_queue.admit(load).await {
+            Admission::Granted(slot) => Ok(Some(slot)),
+            Admission::Unslotted => Ok(None),
+            Admission::Denied => Err(DomainError::Shed),
+        }
     }
 
     /// Evict both disk caches to their budgets. Call on shutdown.
@@ -94,11 +114,17 @@ impl ApiService {
         }
     }
 
-    /// Single-resource fetch: memory -> disk -> network, with single-flight.
-    async fn cached_or_fetch<T, F>(&self, cache_key: CacheKey, fetch: F) -> Result<T, DomainError>
+    /// Single-resource fetch: memory -> disk -> queue -> network, with
+    /// single-flight.
+    async fn cached_or_fetch<T, F>(
+        &self,
+        cache_key: CacheKey,
+        load: Load,
+        fetch: F,
+    ) -> Result<T, DomainError>
     where
         T: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
-        F: std::future::Future<Output = Result<T, DomainError>> + Send + 'static,
+        F: std::future::Future<Output = Result<T, DomainError>> + Send,
     {
         // Tier 1: Memory
         if let Some(val) = self.json_cache.get_single::<T>(&cache_key) {
@@ -107,34 +133,60 @@ impl ApiService {
 
         let disk_key = cache_key.disk_key();
         let flight = self.inflight_lock(&disk_key);
-        let guard = flight.lock().await;
 
         let outcome: Result<T, DomainError> = 'resolved: {
-            // Re-check memory after acquiring the lock.
-            if let Some(val) = self.json_cache.get_single::<T>(&cache_key) {
-                break 'resolved Ok(val);
-            }
-
-            // Tier 2: Disk. Fresh entries are served directly; stale entries
-            // are kept for stale-if-error fallback.
+            // Tier 2: Disk, one caller at a time per key.
             let mut stale: Option<(T, Option<String>)> = None;
-            if let Some(entry) = self.api_disk.read(&disk_key).await {
-                if let Ok(val) = serde_json::from_slice::<T>(&entry.data) {
-                    match entry.state {
-                        crate::cache::disk::EntryState::Fresh => {
-                            self.json_cache.insert_single(&cache_key, val.clone());
-                            break 'resolved Ok(val);
-                        }
-                        crate::cache::disk::EntryState::Stale { etag } => {
-                            stale = Some((val, etag));
+            {
+                let _guard = flight.lock().await;
+
+                if let Some(val) = self.json_cache.get_single::<T>(&cache_key) {
+                    break 'resolved Ok(val);
+                }
+
+                if let Some(entry) = self.api_disk.read(&disk_key).await {
+                    if let Ok(val) = serde_json::from_slice::<T>(&entry.data) {
+                        match entry.state {
+                            crate::cache::disk::EntryState::Fresh => {
+                                debug!("api: {disk_key} served from disk, no request made");
+                                self.json_cache.insert_single(&cache_key, val.clone());
+                                break 'resolved Ok(val);
+                            }
+                            crate::cache::disk::EntryState::Stale { etag } => {
+                                debug!("api: {disk_key} disk copy is stale, refetching");
+                                stale = Some((val, etag));
+                            }
                         }
                     }
                 }
             }
 
             // Tier 3: Network.
-            match tokio::spawn(fetch).await {
-                Ok(Ok(val)) => {
+            let mut slot = match self.admit_read(load).await {
+                Ok(slot) => slot,
+                Err(err) => break 'resolved Err(err),
+            };
+            let _guard = match flight.try_lock() {
+                Ok(guard) => guard,
+                Err(_) => {
+                    drop(slot);
+                    let guard = flight.lock().await;
+                    slot = match self.admit_read(load).await {
+                        Ok(slot) => slot,
+                        Err(err) => break 'resolved Err(err),
+                    };
+                    guard
+                }
+            };
+            let _slot = slot;
+
+            // Another caller may have fetched this while we waited.
+            if let Some(val) = self.json_cache.get_single::<T>(&cache_key) {
+                break 'resolved Ok(val);
+            }
+
+            match fetch.await {
+                Ok(val) => {
                     self.json_cache.insert_single(&cache_key, val.clone());
                     if let Ok(bytes) = serde_json::to_vec(&val) {
                         let disk = self.api_disk.clone();
@@ -145,9 +197,11 @@ impl ApiService {
                     }
                     Ok(val)
                 }
-                Ok(Err(err)) => {
+                Err(err) => {
                     self.handle_auth_error(&err);
                     // Stale-if-error: serve stale copy on transient failure.
+                    let serving_stale = stale.is_some() && err.is_transient();
+                    log_fetch_failure(&disk_key, &err, serving_stale);
                     if let (Some((val, etag)), true) = (stale, err.is_transient()) {
                         self.json_cache.insert_single(&cache_key, val.clone());
                         let disk = self.api_disk.clone();
@@ -161,13 +215,26 @@ impl ApiService {
                         Err(err)
                     }
                 }
-                Err(e) => Err(DomainError::Network(e.to_string())),
             }
         };
 
-        drop(guard);
         self.release_inflight(&disk_key, flight);
         outcome
+    }
+
+    /// One page of `lim` items at `off`, if memory already holds it.
+    fn cached_page<T>(&self, cache_key: &CacheKey, off: usize, lim: usize) -> Option<Page<T>>
+    where
+        T: Clone + Send + Sync + 'static,
+    {
+        let mut items = self.json_cache.get_paginated::<T>(cache_key, off)?;
+        items.truncate(lim);
+        Some(Page {
+            items,
+            offset: Some(off),
+            total: Some(self.json_cache.get_total(cache_key).unwrap_or(0)),
+            next_cursor: None,
+        })
     }
 
     /// Paginated fetch: memory -> disk -> network, with single-flight.
@@ -176,84 +243,90 @@ impl ApiService {
         cache_key: CacheKey,
         off: usize,
         lim: usize,
+        load: Load,
         fetch: F,
     ) -> Result<Page<T>, DomainError>
     where
         T: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
-        F: std::future::Future<Output = Result<Page<T>, DomainError>> + Send + 'static,
+        F: std::future::Future<Output = Result<Page<T>, DomainError>> + Send,
     {
         // Tier 1: Memory.
-        if let Some(mut items) = self.json_cache.get_paginated::<T>(&cache_key, off) {
-            items.truncate(lim);
-            let total = self.json_cache.get_total(&cache_key).unwrap_or(0);
-            return Ok(Page {
-                items,
-                offset: Some(off),
-                total: Some(total),
-                next_cursor: None,
-            });
+        if let Some(page) = self.cached_page::<T>(&cache_key, off, lim) {
+            return Ok(page);
         }
 
         let disk_key = cache_key.disk_key();
         let flight_id = format!("{disk_key}#{off}#{lim}");
         let flight = self.inflight_lock(&flight_id);
-        let guard = flight.lock().await;
 
         let outcome: Result<Page<T>, DomainError> = 'resolved: {
-            // Re-check memory after acquiring the lock.
-            if let Some(mut items) = self.json_cache.get_paginated::<T>(&cache_key, off) {
-                items.truncate(lim);
-                let total = self.json_cache.get_total(&cache_key).unwrap_or(0);
-                break 'resolved Ok(Page {
-                    items,
-                    offset: Some(off),
-                    total: Some(total),
-                    next_cursor: None,
-                });
-            }
+            // Tier 2: Disk. See `cached_or_fetch` for the lock dance.
+            {
+                let _guard = flight.lock().await;
 
-            // Tier 2: Disk - restore persisted pages into memory.
-            if let Some(entry) = self.api_disk.read(&disk_key).await {
-                if matches!(entry.state, crate::cache::disk::EntryState::Fresh) {
-                    if let Ok(persisted) = serde_json::from_slice::<PersistedPage>(&entry.data) {
-                        let total = persisted.total;
-                        for (page_offset, values) in persisted.pages {
-                            let items: Vec<T> = values
-                                .iter()
-                                .filter_map(|v| serde_json::from_value::<T>(v.clone()).ok())
-                                .collect();
-                            // Only restore pages that deserialized fully.
-                            if items.len() == values.len() {
-                                self.json_cache.append_paginated(
-                                    &cache_key,
-                                    page_offset,
-                                    items,
-                                    total,
-                                );
-                            }
-                        }
-                        if let Some(mut items) = self.json_cache.get_paginated::<T>(&cache_key, off)
+                if let Some(page) = self.cached_page::<T>(&cache_key, off, lim) {
+                    break 'resolved Ok(page);
+                }
+
+                if let Some(entry) = self.api_disk.read(&disk_key).await {
+                    if matches!(entry.state, crate::cache::disk::EntryState::Fresh) {
+                        if let Ok(persisted) = serde_json::from_slice::<PersistedPage>(&entry.data)
                         {
-                            items.truncate(lim);
-                            break 'resolved Ok(Page {
-                                items,
-                                offset: Some(off),
-                                total: Some(total),
-                                next_cursor: None,
-                            });
+                            let total = persisted.total;
+                            for (page_offset, values) in persisted.pages {
+                                let items: Vec<T> = values
+                                    .iter()
+                                    .filter_map(|v| serde_json::from_value::<T>(v.clone()).ok())
+                                    .collect();
+                                if items.len() == values.len() {
+                                    self.json_cache.append_paginated(
+                                        &cache_key,
+                                        page_offset,
+                                        items,
+                                        total,
+                                    );
+                                }
+                            }
+                            if let Some(page) = self.cached_page::<T>(&cache_key, off, lim) {
+                                debug!("api: {disk_key} served from disk, no request made");
+                                break 'resolved Ok(page);
+                            }
                         }
                     }
                 }
             }
 
             // Tier 3: Network.
-            let page = match tokio::spawn(fetch).await {
-                Ok(Ok(p)) => p,
-                Ok(Err(err)) => {
+            let mut slot = match self.admit_read(load).await {
+                Ok(slot) => slot,
+                Err(err) => break 'resolved Err(err),
+            };
+            let _guard = match flight.try_lock() {
+                Ok(guard) => guard,
+                Err(_) => {
+                    drop(slot);
+                    let guard = flight.lock().await;
+                    slot = match self.admit_read(load).await {
+                        Ok(slot) => slot,
+                        Err(err) => break 'resolved Err(err),
+                    };
+                    guard
+                }
+            };
+            let _slot = slot;
+
+            // Another caller may have filled this page while we waited.
+            if let Some(page) = self.cached_page::<T>(&cache_key, off, lim) {
+                break 'resolved Ok(page);
+            }
+
+            let page = match fetch.await {
+                Ok(p) => p,
+                Err(err) => {
                     self.handle_auth_error(&err);
+                    log_fetch_failure(&flight_id, &err, false);
                     break 'resolved Err(err);
                 }
-                Err(e) => break 'resolved Err(DomainError::Network(e.to_string())),
             };
 
             let result = Page {
@@ -301,15 +374,14 @@ impl ApiService {
             Ok(result)
         };
 
-        drop(guard);
         self.release_inflight(&flight_id, flight);
         outcome
     }
 
-    pub async fn get_album(&self, id: &str) -> Result<Album, DomainError> {
+    pub async fn get_album(&self, id: &str, load: Load) -> Result<Album, DomainError> {
         let d = Arc::clone(&self.provider);
         let id = id.to_string();
-        self.cached_or_fetch(CacheKey::Album(id.clone()), async move {
+        self.cached_or_fetch(CacheKey::Album(id.clone()), load, async move {
             d.get_album(&id).await
         })
         .await
@@ -320,6 +392,7 @@ impl ApiService {
         id: &str,
         offset: usize,
         limit: usize,
+        load: Load,
     ) -> Result<Page<Track>, DomainError> {
         let d = Arc::clone(&self.provider);
         let id = id.to_string();
@@ -329,18 +402,27 @@ impl ApiService {
                 CacheKey::AlbumTracks(id.clone()),
                 offset,
                 limit,
+                load,
                 async move { d.get_album_tracks(&id, offset, limit).await },
             )
             .await?;
-        // Backfill album art into tracks that only have the placeholder.
+
         if result.items.iter().any(|t| t.art.is_resource()) {
-            if let Ok(album) = self.get_album(&id2).await {
-                if !album.art.is_resource() {
-                    let art = album.art;
-                    for track in result.items.iter_mut() {
-                        if track.art.is_resource() {
-                            track.art = art.clone();
-                        }
+            let art = match self
+                .json_cache
+                .get_single::<Album>(&CacheKey::Album(id2.clone()))
+            {
+                Some(album) if !album.art.is_resource() => Some(album.art),
+                Some(_) => None,
+                None => match self.get_album(&id2, load).await {
+                    Ok(album) if !album.art.is_resource() => Some(album.art),
+                    _ => None,
+                },
+            };
+            if let Some(art) = art {
+                for track in result.items.iter_mut() {
+                    if track.art.is_resource() {
+                        track.art = art.clone();
                     }
                 }
             }
@@ -352,9 +434,10 @@ impl ApiService {
         &self,
         offset: usize,
         limit: usize,
+        load: Load,
     ) -> Result<Page<Album>, DomainError> {
         let d = Arc::clone(&self.provider);
-        self.cached_paginated(CacheKey::SavedAlbums, offset, limit, async move {
+        self.cached_paginated(CacheKey::SavedAlbums, offset, limit, load, async move {
             d.get_saved_albums(offset, limit).await
         })
         .await
@@ -364,9 +447,10 @@ impl ApiService {
         &self,
         offset: usize,
         limit: usize,
+        load: Load,
     ) -> Result<Page<Track>, DomainError> {
         let d = Arc::clone(&self.provider);
-        self.cached_paginated(CacheKey::SavedTracks, offset, limit, async move {
+        self.cached_paginated(CacheKey::SavedTracks, offset, limit, load, async move {
             d.get_saved_tracks(offset, limit).await
         })
         .await
@@ -376,18 +460,19 @@ impl ApiService {
         &self,
         offset: usize,
         limit: usize,
+        load: Load,
     ) -> Result<Page<Playlist>, DomainError> {
         let d = Arc::clone(&self.provider);
-        self.cached_paginated(CacheKey::SavedPlaylists, offset, limit, async move {
+        self.cached_paginated(CacheKey::SavedPlaylists, offset, limit, load, async move {
             d.get_saved_playlists(offset, limit).await
         })
         .await
     }
 
-    pub async fn get_playlist(&self, id: &str) -> Result<Playlist, DomainError> {
+    pub async fn get_playlist(&self, id: &str, load: Load) -> Result<Playlist, DomainError> {
         let d = Arc::clone(&self.provider);
         let id = id.to_string();
-        self.cached_or_fetch(CacheKey::Playlist(id.clone()), async move {
+        self.cached_or_fetch(CacheKey::Playlist(id.clone()), load, async move {
             d.get_playlist(&id).await
         })
         .await
@@ -398,6 +483,7 @@ impl ApiService {
         id: &str,
         offset: usize,
         limit: usize,
+        load: Load,
     ) -> Result<Page<Track>, DomainError> {
         let d = Arc::clone(&self.provider);
         let id = id.to_string();
@@ -405,15 +491,16 @@ impl ApiService {
             CacheKey::PlaylistTracks(id.clone()),
             offset,
             limit,
+            load,
             async move { d.get_playlist_tracks(&id, offset, limit).await },
         )
         .await
     }
 
-    pub async fn get_artist(&self, id: &str) -> Result<Artist, DomainError> {
+    pub async fn get_artist(&self, id: &str, load: Load) -> Result<Artist, DomainError> {
         let d = Arc::clone(&self.provider);
         let id = id.to_string();
-        self.cached_or_fetch(CacheKey::Artist(id.clone()), async move {
+        self.cached_or_fetch(CacheKey::Artist(id.clone()), load, async move {
             d.get_artist(&id).await
         })
         .await
@@ -424,6 +511,7 @@ impl ApiService {
         id: &str,
         offset: usize,
         limit: usize,
+        load: Load,
     ) -> Result<Page<Album>, DomainError> {
         let d = Arc::clone(&self.provider);
         let id = id.to_string();
@@ -431,15 +519,20 @@ impl ApiService {
             CacheKey::ArtistAlbums(id.clone()),
             offset,
             limit,
+            load,
             async move { d.get_artist_albums(&id, offset, limit).await },
         )
         .await
     }
 
-    pub async fn get_artist_top_tracks(&self, id: &str) -> Result<Vec<Track>, DomainError> {
+    pub async fn get_artist_top_tracks(
+        &self,
+        id: &str,
+        load: Load,
+    ) -> Result<Vec<Track>, DomainError> {
         let d = Arc::clone(&self.provider);
         let id = id.to_string();
-        self.cached_or_fetch(CacheKey::ArtistTopTracks(id.clone()), async move {
+        self.cached_or_fetch(CacheKey::ArtistTopTracks(id.clone()), load, async move {
             d.get_artist_top_tracks(&id).await
         })
         .await
@@ -450,12 +543,14 @@ impl ApiService {
         query: &str,
         offset: usize,
         limit: usize,
+        load: Load,
     ) -> Result<SearchResults, DomainError> {
-        let d = Arc::clone(&self.provider);
-        let query = query.to_string();
-        tokio::spawn(async move { d.search(&query, offset, limit).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let query = query.trim();
+        if query.is_empty() {
+            return Ok(SearchResults::default());
+        }
+        let _slot = self.admit_read(load).await?;
+        self.provider.search(query, offset, limit).await
     }
 
     pub async fn search_scoped(
@@ -464,37 +559,35 @@ impl ApiService {
         kind: SearchType,
         offset: usize,
         limit: usize,
+        load: Load,
     ) -> Result<SearchResults, DomainError> {
-        let d = Arc::clone(&self.provider);
-        let query = query.to_string();
-        tokio::spawn(async move { d.search_scoped(&query, kind, offset, limit).await })
+        let query = query.trim();
+        if query.is_empty() {
+            return Ok(SearchResults::default());
+        }
+        let _slot = self.admit_read(load).await?;
+        self.provider
+            .search_scoped(query, kind, offset, limit)
             .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
     }
 
-    pub async fn get_user(&self, id: &str) -> Result<User, DomainError> {
+    pub async fn get_user(&self, id: &str, load: Load) -> Result<User, DomainError> {
         let d = Arc::clone(&self.provider);
         let id = id.to_string();
-        self.cached_or_fetch(
-            CacheKey::User(id.clone()),
-            async move { d.get_user(&id).await },
-        )
+        self.cached_or_fetch(CacheKey::User(id.clone()), load, async move {
+            d.get_user(&id).await
+        })
         .await
     }
 
-    pub async fn get_current_user(&self) -> Result<User, DomainError> {
-        let d = Arc::clone(&self.provider);
-        tokio::spawn(async move { d.get_current_user().await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+    pub async fn get_current_user(&self, load: Load) -> Result<User, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_current_user().await
     }
 
-    pub async fn get_track(&self, id: &str) -> Result<Track, DomainError> {
-        let d = Arc::clone(&self.provider);
-        let id = id.to_string();
-        tokio::spawn(async move { d.get_track(&id).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+    pub async fn get_track(&self, id: &str, load: Load) -> Result<Track, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_track(id).await
     }
 
     pub async fn get_user_playlists(
@@ -502,6 +595,7 @@ impl ApiService {
         id: &str,
         offset: usize,
         limit: usize,
+        load: Load,
     ) -> Result<Page<Playlist>, DomainError> {
         let d = Arc::clone(&self.provider);
         let id = id.to_string();
@@ -509,6 +603,7 @@ impl ApiService {
             CacheKey::UserPlaylists(id.clone()),
             offset,
             limit,
+            load,
             async move { d.get_user_playlists(&id, offset, limit).await },
         )
         .await
@@ -529,11 +624,8 @@ impl ApiService {
             .invalidate(&CacheKey::SavedAlbums.disk_key())
             .await;
         self.invalidate_albums(ids).await;
-        let d = Arc::clone(&self.provider);
-        let ids = ids.to_string();
-        tokio::spawn(async move { d.save_albums(&ids).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.write_lane.enter().await;
+        self.provider.save_albums(ids).await
     }
 
     pub async fn remove_albums(&self, ids: &str) -> Result<(), DomainError> {
@@ -542,11 +634,8 @@ impl ApiService {
             .invalidate(&CacheKey::SavedAlbums.disk_key())
             .await;
         self.invalidate_albums(ids).await;
-        let d = Arc::clone(&self.provider);
-        let ids = ids.to_string();
-        tokio::spawn(async move { d.remove_albums(&ids).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.write_lane.enter().await;
+        self.provider.remove_albums(ids).await
     }
 
     pub async fn save_tracks(&self, ids: Vec<String>) -> Result<(), DomainError> {
@@ -554,10 +643,8 @@ impl ApiService {
         self.api_disk
             .invalidate(&CacheKey::SavedTracks.disk_key())
             .await;
-        let d = Arc::clone(&self.provider);
-        tokio::spawn(async move { d.save_tracks(ids).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.write_lane.enter().await;
+        self.provider.save_tracks(ids).await
     }
 
     pub async fn remove_tracks(&self, ids: Vec<String>) -> Result<(), DomainError> {
@@ -565,10 +652,8 @@ impl ApiService {
         self.api_disk
             .invalidate(&CacheKey::SavedTracks.disk_key())
             .await;
-        let d = Arc::clone(&self.provider);
-        tokio::spawn(async move { d.remove_tracks(ids).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.write_lane.enter().await;
+        self.provider.remove_tracks(ids).await
     }
 
     pub async fn add_to_playlist(&self, id: &str, uris: Vec<String>) -> Result<(), DomainError> {
@@ -580,11 +665,8 @@ impl ApiService {
         self.api_disk
             .invalidate(&CacheKey::PlaylistTracks(id.to_string()).disk_key())
             .await;
-        let d = Arc::clone(&self.provider);
-        let id = id.to_string();
-        tokio::spawn(async move { d.add_to_playlist(&id, uris, None).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.write_lane.enter().await;
+        self.provider.add_to_playlist(id, uris, None).await
     }
 
     pub async fn remove_from_playlist(
@@ -600,11 +682,8 @@ impl ApiService {
         self.api_disk
             .invalidate(&CacheKey::PlaylistTracks(id.to_string()).disk_key())
             .await;
-        let d = Arc::clone(&self.provider);
-        let id = id.to_string();
-        tokio::spawn(async move { d.remove_from_playlist(&id, uris, None).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.write_lane.enter().await;
+        self.provider.remove_from_playlist(id, uris, None).await
     }
 
     pub async fn create_playlist(
@@ -616,12 +695,10 @@ impl ApiService {
         self.api_disk
             .invalidate(&CacheKey::SavedPlaylists.disk_key())
             .await;
-        let d = Arc::clone(&self.provider);
-        let user_id = user_id.to_string();
-        let name = name.to_string();
-        tokio::spawn(async move { d.create_playlist(&user_id, &name, None, None, None).await })
+        let _lane = self.write_lane.enter().await;
+        self.provider
+            .create_playlist(user_id, name, None, None, None)
             .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
     }
 
     pub async fn follow_playlist(&self, id: &str) -> Result<(), DomainError> {
@@ -629,11 +706,8 @@ impl ApiService {
         self.api_disk
             .invalidate(&CacheKey::SavedPlaylists.disk_key())
             .await;
-        let d = Arc::clone(&self.provider);
-        let id = id.to_string();
-        tokio::spawn(async move { d.follow_playlist(&id).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.write_lane.enter().await;
+        self.provider.follow_playlist(id).await
     }
 
     pub async fn unfollow_playlist(&self, id: &str) -> Result<(), DomainError> {
@@ -649,11 +723,8 @@ impl ApiService {
         self.api_disk
             .invalidate(&CacheKey::PlaylistTracks(id.to_string()).disk_key())
             .await;
-        let d = Arc::clone(&self.provider);
-        let id = id.to_string();
-        tokio::spawn(async move { d.unfollow_playlist(&id).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.write_lane.enter().await;
+        self.provider.unfollow_playlist(id).await
     }
 
     pub async fn update_playlist_details(&self, id: &str, name: &str) -> Result<(), DomainError> {
@@ -665,44 +736,30 @@ impl ApiService {
         self.api_disk
             .invalidate(&CacheKey::PlaylistTracks(id.to_string()).disk_key())
             .await;
-        let d = Arc::clone(&self.provider);
-        let id = id.to_string();
-        let name = name.to_string();
-        tokio::spawn(async move {
-            d.update_playlist_details(&id, Some(&name), None, None, None)
-                .await
-        })
-        .await
-        .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.write_lane.enter().await;
+        self.provider
+            .update_playlist_details(id, Some(name), None, None, None)
+            .await
     }
 
-    pub async fn get_devices(&self) -> Result<Vec<Device>, DomainError> {
-        let d = Arc::clone(&self.provider);
-        tokio::spawn(async move { d.get_devices().await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+    pub async fn get_devices(&self, load: Load) -> Result<Vec<Device>, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_devices().await
     }
 
-    pub async fn get_player_queue(&self) -> Result<Queue, DomainError> {
-        let d = Arc::clone(&self.provider);
-        tokio::spawn(async move { d.get_player_queue().await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+    pub async fn get_player_queue(&self, load: Load) -> Result<Queue, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_player_queue().await
     }
 
-    pub async fn get_player_state(&self) -> Result<PlayerState, DomainError> {
-        let d = Arc::clone(&self.provider);
-        tokio::spawn(async move { d.get_player_state().await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+    pub async fn get_player_state(&self, load: Load) -> Result<PlayerState, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_player_state().await
     }
 
     pub async fn player_resume(&self, device_id: &str) -> Result<(), DomainError> {
-        let d = Arc::clone(&self.provider);
-        let device_id = device_id.to_string();
-        tokio::spawn(async move { d.player_resume(&device_id).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.player_lane.enter().await;
+        self.provider.player_resume(device_id).await
     }
 
     pub async fn player_play_in_context(
@@ -711,15 +768,10 @@ impl ApiService {
         context_uri: &str,
         offset: usize,
     ) -> Result<(), DomainError> {
-        let d = Arc::clone(&self.provider);
-        let device_id = device_id.to_string();
-        let context_uri = context_uri.to_string();
-        tokio::spawn(async move {
-            d.player_play_in_context(&device_id, &context_uri, offset)
-                .await
-        })
-        .await
-        .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.player_lane.enter().await;
+        self.provider
+            .player_play_in_context(device_id, context_uri, offset)
+            .await
     }
 
     pub async fn player_play_uris(
@@ -728,27 +780,20 @@ impl ApiService {
         uris: Vec<String>,
         offset: usize,
     ) -> Result<(), DomainError> {
-        let d = Arc::clone(&self.provider);
-        let device_id = device_id.to_string();
-        tokio::spawn(async move { d.player_play_uris(&device_id, uris, offset).await })
+        let _lane = self.player_lane.enter().await;
+        self.provider
+            .player_play_uris(device_id, uris, offset)
             .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
     }
 
     pub async fn player_pause(&self, device_id: &str) -> Result<(), DomainError> {
-        let d = Arc::clone(&self.provider);
-        let device_id = device_id.to_string();
-        tokio::spawn(async move { d.player_pause(&device_id).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.player_lane.enter().await;
+        self.provider.player_pause(device_id).await
     }
 
     pub async fn player_seek(&self, device_id: &str, position_ms: u32) -> Result<(), DomainError> {
-        let d = Arc::clone(&self.provider);
-        let device_id = device_id.to_string();
-        tokio::spawn(async move { d.player_seek(&device_id, position_ms).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.player_lane.enter().await;
+        self.provider.player_seek(device_id, position_ms).await
     }
 
     pub async fn player_repeat(
@@ -756,19 +801,13 @@ impl ApiService {
         device_id: &str,
         mode: RepeatMode,
     ) -> Result<(), DomainError> {
-        let d = Arc::clone(&self.provider);
-        let device_id = device_id.to_string();
-        tokio::spawn(async move { d.player_repeat(&device_id, mode).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.player_lane.enter().await;
+        self.provider.player_repeat(device_id, mode).await
     }
 
     pub async fn player_shuffle(&self, device_id: &str, state: bool) -> Result<(), DomainError> {
-        let d = Arc::clone(&self.provider);
-        let device_id = device_id.to_string();
-        tokio::spawn(async move { d.player_shuffle(&device_id, state).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.player_lane.enter().await;
+        self.provider.player_shuffle(device_id, state).await
     }
 
     pub async fn player_volume(
@@ -776,93 +815,88 @@ impl ApiService {
         device_id: &str,
         volume_percent: u8,
     ) -> Result<(), DomainError> {
-        let d = Arc::clone(&self.provider);
-        let device_id = device_id.to_string();
-        tokio::spawn(async move { d.player_volume(&device_id, volume_percent).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.player_lane.enter().await;
+        self.provider.player_volume(device_id, volume_percent).await
     }
 
     pub async fn get_followed_artists(
         &self,
         after: Option<&str>,
         limit: usize,
+        load: Load,
     ) -> Result<(Vec<Artist>, Option<String>), DomainError> {
-        let d = Arc::clone(&self.provider);
-        let after = after.map(|s| s.to_string());
-        tokio::spawn(async move { d.get_followed_artists(after.as_deref(), limit).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_followed_artists(after, limit).await
     }
 
     pub async fn follow_artists(&self, ids: &str) -> Result<(), DomainError> {
-        let d = Arc::clone(&self.provider);
-        let ids = ids.to_string();
-        tokio::spawn(async move { d.follow_artists(&ids).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.write_lane.enter().await;
+        self.provider.follow_artists(ids).await
     }
 
     pub async fn unfollow_artists(&self, ids: &str) -> Result<(), DomainError> {
-        let d = Arc::clone(&self.provider);
-        let ids = ids.to_string();
-        tokio::spawn(async move { d.unfollow_artists(&ids).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+        let _lane = self.write_lane.enter().await;
+        self.provider.unfollow_artists(ids).await
     }
 
-    pub async fn check_following_artists(&self, ids: &str) -> Result<Vec<bool>, DomainError> {
-        let d = Arc::clone(&self.provider);
-        let ids = ids.to_string();
-        tokio::spawn(async move { d.check_following_artists(&ids).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+    pub async fn check_following_artists(
+        &self,
+        ids: &str,
+        load: Load,
+    ) -> Result<Vec<bool>, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.check_following_artists(ids).await
     }
 
-    pub async fn check_saved_albums(&self, ids: &str) -> Result<Vec<bool>, DomainError> {
-        let d = Arc::clone(&self.provider);
-        let ids = ids.to_string();
-        tokio::spawn(async move { d.check_saved_albums(&ids).await })
-            .await
-            .map_err(|e| DomainError::Network(e.to_string()))?
+    pub async fn check_saved_albums(
+        &self,
+        ids: &str,
+        load: Load,
+    ) -> Result<Vec<bool>, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.check_saved_albums(ids).await
     }
 
-    pub async fn check_following_artist(&self, id: &str) -> Result<bool, DomainError> {
+    pub async fn check_following_artist(&self, id: &str, load: Load) -> Result<bool, DomainError> {
         Ok(self
-            .check_following_artists(id)
+            .check_following_artists(id, load)
             .await?
             .first()
             .copied()
             .unwrap_or(false))
     }
 
-    pub async fn check_saved_album(&self, id: &str) -> Result<bool, DomainError> {
+    pub async fn check_saved_album(&self, id: &str, load: Load) -> Result<bool, DomainError> {
         Ok(self
-            .check_saved_albums(id)
+            .check_saved_albums(id, load)
             .await?
             .first()
             .copied()
             .unwrap_or(false))
     }
 
-    fn image_key(url: &str, ext: &str) -> String {
-        format!("{url}.{ext}")
+    fn image_key(url: &str) -> String {
+        format!("{url}.{IMAGE_EXT}")
     }
 
     /// Load an image: memory LRU -> disk -> CDN.
+    ///
+    /// `load` carries the epoch from when the caller decided it needed this
+    /// image, since reading it later would stamp a deferred off-screen cover
+    /// with whatever view is current by then.
     pub async fn load_image(
         &self,
         url: &str,
-        ext: &str,
         width: i32,
         height: i32,
+        load: Load,
     ) -> Option<gdk::Texture> {
         // Bundled placeholder: load from GResource, bypass caches.
         if is_resource_url(url) {
             return load_resource_texture(url, width, height);
         }
 
-        let disk_key = Self::image_key(url, ext);
+        let disk_key = Self::image_key(url);
         let tex_key = format!("{disk_key}:{width}x{height}");
 
         // Tier 1: Memory LRU
@@ -874,7 +908,16 @@ impl ApiService {
         let bytes = if let Some(entry) = self.image_disk.read(&disk_key).await {
             entry.data
         } else {
-            // Tier 3: Network
+            // Tier 3: Network, gated so interactive loads preempt background ones.
+            let _slot = match self.image_queue.admit(load).await {
+                Admission::Granted(slot) => Some(slot),
+                Admission::Unslotted => None,
+                Admission::Denied => {
+                    debug!("cdn: image queue is full, skipping {url}");
+                    return None;
+                }
+            };
+
             let request = match isahc::http::Request::builder()
                 .method("GET")
                 .uri(url)
@@ -921,70 +964,63 @@ impl ApiService {
             buf.into_boxed_slice()
         };
 
-        let Some(texture) = crate::cache::decode_texture(&bytes, width, height) else {
-            warn!(
-                "cdn: failed to decode texture for {url} from {} bytes ({width}x{height}); no image",
-                bytes.len()
-            );
-            return None;
+        // Decode on a blocking thread so it does not stall the frame clock.
+        let byte_len = bytes.len();
+        let decoded = tokio::task::spawn_blocking(move || {
+            crate::cache::decode_texture(&bytes, width, height)
+        })
+        .await;
+
+        let texture = match decoded {
+            Ok(Some(texture)) => texture,
+            Ok(None) => {
+                warn!(
+                    "cdn: failed to decode texture for {url} from {byte_len} bytes \
+                     ({width}x{height}); no image"
+                );
+                return None;
+            }
+            Err(e) => {
+                warn!("cdn: decode task for {url} failed: {e}");
+                return None;
+            }
         };
-        let byte_size = (width as usize) * (height as usize) * 4;
+
+        let tex_w = texture.width().max(0) as usize;
+        let tex_h = texture.height().max(0) as usize;
+        let byte_size = tex_w * tex_h * 4;
         self.texture_cache
             .insert(tex_key, texture.clone(), byte_size);
         Some(texture)
-    }
-
-    /// Prefetch image bytes to disk without decoding a texture. Used by warming.
-    pub async fn prefetch_image(&self, url: &str, ext: &str) {
-        if is_resource_url(url) {
-            return;
-        }
-
-        let key = Self::image_key(url, ext);
-
-        // Already on disk - skip.
-        if self.image_disk.read_raw(&key).await.is_some() {
-            return;
-        }
-
-        let Ok(request) = isahc::http::Request::builder()
-            .method("GET")
-            .uri(url)
-            .body(Vec::new())
-        else {
-            warn!("cdn: prefetch failed to build request for {url}");
-            return;
-        };
-        let response = match self.cdn_client.execute(request).await {
-            Ok(response) => response,
-            Err(e) => {
-                warn!("cdn: prefetch request for {url} failed: {e}");
-                return;
-            }
-        };
-        if !response.status.is_success() {
-            warn!(
-                "cdn: prefetch {url} returned non-success status {} ({} bytes)",
-                response.status,
-                response.body.len()
-            );
-            return;
-        }
-        if response.body.is_empty() {
-            warn!(
-                "cdn: prefetch {url} returned success status {} but an EMPTY body",
-                response.status
-            );
-            return;
-        }
-        self.image_disk
-            .write(&key, &response.body, IMAGE_TTL, None)
-            .await;
     }
 }
 
 fn is_resource_url(url: &str) -> bool {
     url.starts_with("resource://")
+}
+
+/// Log a network fetch that failed.
+fn log_fetch_failure(key: &str, err: &DomainError, serving_stale: bool) {
+    if matches!(
+        err,
+        DomainError::NoToken | DomainError::AuthExpired | DomainError::Shed
+    ) {
+        return;
+    }
+    #[cfg(debug_assertions)]
+    if crate::dev::is_simulate_offline() {
+        return;
+    }
+    if serving_stale {
+        warn!(
+            "api: {key} fetch failed, serving the stale cached copy for {}s: {err}",
+            STALE_IF_ERROR_TTL.as_secs()
+        );
+    } else if err.is_transient() {
+        warn!("api: {key} fetch failed with no cached copy to fall back on: {err}");
+    } else {
+        error!("api: {key} fetch failed with no cached copy to fall back on: {err}");
+    }
 }
 
 fn load_resource_texture(url: &str, width: i32, height: i32) -> Option<gdk::Texture> {

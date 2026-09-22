@@ -13,8 +13,8 @@ use crate::app::components::DetailsPageModel;
 use crate::app::components::SimpleHeaderBarModel;
 use crate::app::components::SongActions;
 use crate::app::components::{
-    labels, CardListModel, HasHeaderBarModel, HeaderImageShape, ImageShape, PageModel,
-    PlaylistModel,
+    dispatch_api_call, dispatch_api_read, labels, CardListModel, HasHeaderBarModel,
+    HeaderImageShape, ImageShape, PageModel, PlaylistModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
@@ -22,7 +22,7 @@ use crate::app::state::CARD_BATCH_SIZE;
 use crate::app::state::{
     BrowserAction, BrowserEvent, PaginationTarget, PlaybackAction, SelectionState,
 };
-use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, ListStore, SongsSource};
+use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, ListStore, SongsSource};
 use crate::{impl_playlist_model_base, impl_toggle_play};
 use riff_api::DomainError;
 
@@ -41,7 +41,7 @@ impl Deref for ArtistDetailsModel {
 impl HasHeaderBarModel for ArtistDetailsModel {}
 
 impl ArtistDetailsModel {
-    pub fn new(id: String, app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(id: String, app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             base: DetailsPageModel::new(id, app_model, dispatcher),
         }
@@ -74,8 +74,8 @@ impl PageModel for ArtistDetailsModel {
 
         let id = self.id.clone();
         let info_api = api.clone();
-        self.dispatcher.call_api_and_dispatch(move || async move {
-            match info_api.get_artist(&id).await {
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            match info_api.get_artist(&id, tag).await {
                 Ok(artist) => Ok(BrowserAction::SetArtistInfo(Box::new(artist)).into()),
                 Err(DomainError::ClientError { status: 400, .. })
                 | Err(DomainError::NotFound { .. }) => Ok(BrowserAction::NavigationPop.into()),
@@ -86,9 +86,9 @@ impl PageModel for ArtistDetailsModel {
         // Initial album releases (the card list).
         let id = self.id.clone();
         let releases_api = api.clone();
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
             releases_api
-                .get_artist_albums(&id, 0, CARD_BATCH_SIZE)
+                .get_artist_albums(&id, 0, CARD_BATCH_SIZE, tag)
                 .await
                 .map(|page| BrowserAction::SetArtistReleases(id, page.items).into())
         });
@@ -96,17 +96,17 @@ impl PageModel for ArtistDetailsModel {
         // Top tracks (the playlist).
         let id = self.id.clone();
         let tracks_api = api.clone();
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
             tracks_api
-                .get_artist_top_tracks(&id)
+                .get_artist_top_tracks(&id, tag)
                 .await
                 .map(|tracks| BrowserAction::SetArtistTopTracks(id, tracks).into())
         });
 
         // Followed status
         let id = self.id.clone();
-        self.dispatcher.call_api_and_dispatch(move || async move {
-            let is_followed = api.check_following_artist(&id).await.unwrap_or(false);
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            let is_followed = api.check_following_artist(&id, tag).await.unwrap_or(false);
             Ok(BrowserAction::SetArtistFollowedStatus(id, is_followed).into())
         });
     }
@@ -133,8 +133,8 @@ impl PageModel for ArtistDetailsModel {
             BrowserAction::ConsumeNextPage(PaginationTarget::ArtistReleases(id.clone())).into(),
         );
 
-        self.dispatcher.call_api_and_dispatch(move || async move {
-            api.get_artist_albums(&id, offset, batch_size)
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            api.get_artist_albums(&id, offset, batch_size, tag)
                 .await
                 .map(|page| BrowserAction::AppendArtistReleases(id, page.items).into())
         });
@@ -187,7 +187,7 @@ impl PageModel for ArtistDetailsModel {
             })
         };
 
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        dispatch_api_call(&self.dispatcher, move || async move {
             if is_followed {
                 api.unfollow_artists(&id).await?;
                 Ok(BrowserAction::UnfollowArtist(id).into())
@@ -282,12 +282,12 @@ impl PlaylistModel for ArtistDetailsModel {
 
     fn actions_for(&self, song: &Track) -> Option<gio::ActionGroup> {
         let group = SimpleActionGroup::new();
-        for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
+        for a in song.make_artist_actions(self.dispatcher.clone(), None) {
             group.add_action(&a);
         }
-        group.add_action(&song.make_album_action(self.dispatcher.box_clone(), None));
+        group.add_action(&song.make_album_action(self.dispatcher.clone(), None));
         group.add_action(&song.make_link_action(None));
-        group.add_action(&song.make_queue_action(self.dispatcher.box_clone(), None));
+        group.add_action(&song.make_queue_action(self.dispatcher.clone(), None));
         Some(group.upcast())
     }
 

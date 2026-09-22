@@ -6,7 +6,7 @@ use glib::clone;
 
 use crate::app::components::EventListener;
 use crate::app::state::{SelectionContext, SelectionEvent};
-use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent};
+use crate::app::{AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Dispatcher};
 
 use super::widget::AppHeaderBar;
 
@@ -29,11 +29,11 @@ pub trait SimpleHeaderBarModel {
 
 pub struct SimpleHeaderBarModelWrapper<M> {
     wrapped_model: Rc<M>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl<M> SimpleHeaderBarModelWrapper<M> {
-    pub fn new(wrapped_model: Rc<M>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(wrapped_model: Rc<M>, dispatcher: Dispatcher) -> Self {
         Self {
             wrapped_model,
             dispatcher,
@@ -102,7 +102,7 @@ impl AppHeaderBarComponent {
     pub fn new(
         widget: AppHeaderBar,
         app_model: Rc<AppModel>,
-        dispatcher: Box<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
         models: HeaderModelRegistry,
     ) -> Self {
         let active_model: Rc<RefCell<Option<Rc<dyn HeaderBarModel>>>> = Rc::new(RefCell::new(None));

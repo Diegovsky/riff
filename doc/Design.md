@@ -47,8 +47,6 @@ That first line is the only time that the app state is borrowed mutably — to a
 
 On the technical side: all actions being dispatched, synchronous or not, are eventually sent through a `futures::channel::mpsc` channel. The consumer on the other end of the channel is a future that will be executed by GLib. This allows Gtk to process *all actions* at its own pace, as part of its main loop.
 
-Note: futures are used a lot in the code to perform asynchronous operations such as calls to the Spotify API. To ease the use of futures, the dispatcher allows working with asynchronous actions, that is, futures that output one or more actions. Again, these futures are eventually handled in the main Gtk loop.
-
 ## A listener: the player subsystem
 
 Any element that wishes to update the state or react to changes from the state has to follow that same pattern. For instance, the "player" part of Riff receives `Commands` (mapped from events by a `PlayerNotifier`) to start playing music, and dispatches actions back to the app through a `SpotifyPlayerDelegate` (see the figure below).

@@ -63,7 +63,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct SelectionToolbarWidget(ObjectSubclass<imp::SelectionToolbarWidget>) @extends gtk::Widget, gtk::Box;
+    pub struct SelectionToolbarWidget(ObjectSubclass<imp::SelectionToolbarWidget>) @extends gtk::Widget, gtk::Box,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 #[derive(Debug, Clone, Copy)]

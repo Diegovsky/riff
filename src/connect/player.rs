@@ -5,6 +5,7 @@ use std::sync::{Arc, RwLock};
 use futures::channel::mpsc::UnboundedSender;
 use gettextrs::gettext;
 
+use crate::app::load;
 use crate::app::models::{queue_songs, PlayerState, RepeatMode, Track};
 use crate::app::state::{Device, PlaybackAction};
 use crate::app::{AppAction, SongsSource};
@@ -68,7 +69,12 @@ impl ConnectPlayer {
 
     async fn get_queue_if_changed(&self) -> Option<Vec<Track>> {
         let last_queue = *self.last_queue.read().ok().as_deref().unwrap_or(&0u64);
-        let songs = self.api.get_player_queue().await.ok().map(queue_songs);
+        let songs = self
+            .api
+            .get_player_queue(load::transport())
+            .await
+            .ok()
+            .map(queue_songs);
         songs.filter(|songs| {
             let hash = {
                 let mut hasher = DefaultHasher::new();
@@ -113,7 +119,7 @@ impl ConnectPlayer {
 
     pub async fn sync_state(&self) {
         debug!("polling connect device...");
-        let player_state = self.api.get_player_state().await;
+        let player_state = self.api.get_player_state(load::transport()).await;
         let Ok(state) = player_state else {
             self.device_lost();
             return;

@@ -61,7 +61,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct AppHeaderBar(ObjectSubclass<imp::AppHeaderBar>) @extends gtk::Widget, libadwaita::Bin;
+    pub struct AppHeaderBar(ObjectSubclass<imp::AppHeaderBar>) @extends gtk::Widget, libadwaita::Bin,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl Default for AppHeaderBar {

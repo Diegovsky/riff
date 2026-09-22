@@ -26,6 +26,7 @@ pub struct UserProfileCheck {
 
 pub async fn check_user_profile(token: &str) -> Result<UserProfileCheck, DomainError> {
     let mut config = Configuration::new();
+    config.client = crate::http::api_client();
     config.oauth_access_token = Some(token.to_string());
     let user = apis::users_api::get_current_users_profile(&config).await?;
 
@@ -69,8 +70,14 @@ impl<T: std::fmt::Debug> From<apis::Error<T>> for DomainError {
             }
             apis::Error::Reqwest(e) => DomainError::Network(e.to_string()),
             apis::Error::ReqwestMiddleware(e) => DomainError::Network(e.to_string()),
-            apis::Error::Serde(e) => DomainError::Parse(e.to_string()),
-            apis::Error::Io(e) => DomainError::Network(e.to_string()),
+            apis::Error::Serde(e) => {
+                error!("spotify: response body did not match the expected schema: {e}");
+                DomainError::Parse(e.to_string())
+            }
+            apis::Error::Io(e) => {
+                error!("spotify: failed to read the response body: {e}");
+                DomainError::Network(e.to_string())
+            }
         }
     }
 }
@@ -85,7 +92,7 @@ pub struct SpotifyDomain {
     cached_config: RwLock<Option<CachedConfig>>,
 }
 
-use riff_config::CONFIG_CACHE_TTL_SECS;
+use riff_config::api::CONFIG_CACHE_TTL;
 
 impl SpotifyDomain {
     pub fn new(token_provider: Arc<dyn TokenProvider>) -> Self {
@@ -104,7 +111,7 @@ impl SpotifyDomain {
         {
             let guard = self.cached_config.read().unwrap();
             if let Some(ref cached) = *guard {
-                if cached.created_at.elapsed().as_secs() < CONFIG_CACHE_TTL_SECS {
+                if cached.created_at.elapsed() < CONFIG_CACHE_TTL {
                     return Ok(cached.config.clone());
                 }
             }
@@ -116,7 +123,10 @@ impl SpotifyDomain {
             .ok_or(DomainError::NoToken)?;
 
         let mut config = Configuration::new();
+        config.client = crate::http::api_client();
         config.oauth_access_token = Some(access_token);
+
+        debug!("spotify: rebuilt API config with a refreshed access token");
 
         let mut guard = self.cached_config.write().unwrap();
         *guard = Some(CachedConfig {
@@ -131,6 +141,7 @@ impl SpotifyDomain {
 #[async_trait]
 impl MusicProvider for SpotifyDomain {
     fn invalidate_config(&self) {
+        debug!("spotify: dropping the cached API config after an auth failure");
         let mut guard = self.cached_config.write().unwrap();
         *guard = None;
     }

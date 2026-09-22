@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use super::widget::CardList;
 use crate::app::components::{CardLayout, CardSize, SortOrder};
-use crate::app::{ActionDispatcher, BrowserAction};
+use crate::app::{BrowserAction, Dispatcher};
 
 // GObject subclass for the popover template
 
@@ -48,7 +48,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct CardViewMenuPopoverWidget(ObjectSubclass<imp::CardViewMenuPopover>)
-        @extends gtk::Widget, gtk::Popover;
+        @extends gtk::Widget, gtk::Popover,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Native, gtk::ShortcutManager;
 }
 
 impl CardViewMenuPopoverWidget {
@@ -94,7 +95,7 @@ impl CardViewMenu {
         size: Rc<Cell<CardSize>>,
         current_sort: Rc<Cell<SortOrder>>,
         card_list: Rc<CardList>,
-        dispatcher: Rc<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
     ) -> Self {
         let popover = CardViewMenuPopoverWidget::new();
         let imp = popover.imp();
@@ -106,7 +107,7 @@ impl CardViewMenu {
             size.get(),
             Rc::clone(&size),
             Rc::clone(&card_list),
-            Rc::clone(&dispatcher),
+            dispatcher.clone(),
         );
 
         // Wire sort radio buttons into sort_box
@@ -117,7 +118,7 @@ impl CardViewMenu {
             current_sort.get(),
             current_sort,
             Rc::clone(&card_list),
-            Rc::clone(&dispatcher),
+            dispatcher.clone(),
         );
 
         // Hide the entire sort section if no sort options are available.
@@ -139,7 +140,7 @@ impl CardViewMenu {
 
         let layout_ref = Rc::clone(&layout);
         let card_list_ref = Rc::clone(&card_list);
-        let dispatch = Rc::clone(&dispatcher);
+        let dispatch = dispatcher.clone();
         split_button.connect_clicked(move |btn| {
             let next = layout_ref.get().next();
             layout_ref.set(next);
@@ -165,7 +166,7 @@ impl CardViewMenu {
         current_size: CardSize,
         size: Rc<Cell<CardSize>>,
         card_list: Rc<CardList>,
-        dispatcher: Rc<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
     ) {
         decrease_btn.set_sensitive(current_size != CardSize::Small);
         increase_btn.set_sensitive(current_size != CardSize::Large);
@@ -173,7 +174,7 @@ impl CardViewMenu {
         let size_ref = Rc::clone(&size);
         let card_list_ref = Rc::clone(&card_list);
         let inc_btn = increase_btn.clone();
-        let dispatch = Rc::clone(&dispatcher);
+        let dispatch = dispatcher.clone();
         decrease_btn.connect_clicked(move |btn| {
             let new_size = size_ref.get().decrease();
             size_ref.set(new_size);
@@ -203,7 +204,7 @@ impl CardViewMenu {
         current_sort: SortOrder,
         sort: Rc<Cell<SortOrder>>,
         card_list: Rc<CardList>,
-        dispatcher: Rc<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
     ) {
         let all_sort_options = [
             SortOrder::RecentlyAdded,
@@ -229,7 +230,7 @@ impl CardViewMenu {
             let page = page_id.to_string();
             let card_list_ref = Rc::clone(&card_list);
             let sort_ref = Rc::clone(&sort);
-            let dispatch = Rc::clone(&dispatcher);
+            let dispatch = dispatcher.clone();
             btn.connect_toggled(move |b| {
                 if b.is_active() {
                     sort_ref.set(order);

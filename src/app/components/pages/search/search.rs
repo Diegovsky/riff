@@ -11,10 +11,9 @@ use crate::app::components::{
     display_add_css_provider, CardLayout, CardList, CardListModel, CardSize, CardWidget, Component,
     EventListener, HeaderRegistrar, ImageShape, Playlist, SortOrder, CLAMP_MAX_SIZE,
 };
-use crate::app::dispatch::Worker;
 use crate::app::models::{CardModel, SearchType, Track};
 use crate::app::state::{AppEvent, BrowserEvent};
-use crate::app::{ActionDispatcher, ListStore};
+use crate::app::{Dispatcher, ListStore};
 
 use super::{SearchResultsModel, SearchScopeCardsModel, SearchScopeTracksModel};
 
@@ -103,7 +102,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct SearchResultsWidget(ObjectSubclass<imp::SearchResultsWidget>) @extends gtk::Widget, gtk::Box;
+    pub struct SearchResultsWidget(ObjectSubclass<imp::SearchResultsWidget>) @extends gtk::Widget, gtk::Box,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 impl Default for SearchResultsWidget {
@@ -288,14 +288,13 @@ fn build_section(
     filter: SearchType,
     section: &Rc<SearchSectionModel>,
     model: &Rc<SearchResultsModel>,
-    worker: &Worker,
     layout: CardLayout,
     size: CardSize,
 ) -> Rc<CardList> {
     container.append(&make_section_header(title, filter, model));
     let card_list = Rc::new(CardList::new());
     container.append(card_list.widget());
-    card_list.bind(section, worker.clone(), layout, size);
+    card_list.bind(section, layout, size);
     card_list.set_max_rows(Some(SECTION_MAX_ROWS));
     card_list.widget().set_margin_bottom(SECTION_BOTTOM_MARGIN);
     card_list
@@ -324,7 +323,6 @@ pub struct SearchResults {
     view_menu: CardViewMenu,
     layout: Rc<Cell<CardLayout>>,
     size: Rc<Cell<CardSize>>,
-    worker: Worker,
     debouncer: Debouncer,
     children: Vec<Box<dyn EventListener>>,
     registrar: HeaderRegistrar,
@@ -333,10 +331,9 @@ pub struct SearchResults {
 impl SearchResults {
     pub fn new(
         model: SearchResultsModel,
-        worker: Worker,
         layout: Rc<Cell<CardLayout>>,
         size: Rc<Cell<CardSize>>,
-        dispatcher: Rc<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
         registrar: HeaderRegistrar,
     ) -> Self {
         display_add_css_provider(resource!("/components/search.css"));
@@ -399,7 +396,6 @@ impl SearchResults {
             SearchType::Tracks,
             &track_section,
             &model,
-            &worker,
             layout.get(),
             size.get(),
         );
@@ -437,7 +433,6 @@ impl SearchResults {
             SearchType::Artists,
             &artist_section,
             &model,
-            &worker,
             layout.get(),
             size.get(),
         );
@@ -448,7 +443,6 @@ impl SearchResults {
             SearchType::Albums,
             &album_section,
             &model,
-            &worker,
             layout.get(),
             size.get(),
         );
@@ -459,7 +453,6 @@ impl SearchResults {
             SearchType::Playlists,
             &playlist_section,
             &model,
-            &worker,
             layout.get(),
             size.get(),
         );
@@ -467,23 +460,19 @@ impl SearchResults {
         // --- Scoped card view (artists / albums / playlists) ---
         let scope_cards_model = Rc::new(SearchScopeCardsModel::new(
             model.app_model(),
-            dispatcher.box_clone(),
+            dispatcher.clone(),
         ));
         let scope_card_list = Rc::new(CardList::new());
-        scope_card_list.bind(&scope_cards_model, worker.clone(), layout.get(), size.get());
+        scope_card_list.bind(&scope_cards_model, layout.get(), size.get());
 
         // --- Scoped track view (songs) ---
         let scope_tracks_model = Rc::new(SearchScopeTracksModel::new(
             model.app_model(),
-            dispatcher.box_clone(),
+            dispatcher.clone(),
         ));
         let track_listview =
             gtk::ListView::new(None::<gtk::NoSelection>, None::<gtk::ListItemFactory>);
-        let scope_playlist = Playlist::new(
-            track_listview.clone(),
-            Rc::clone(&scope_tracks_model),
-            worker.clone(),
-        );
+        let scope_playlist = Playlist::new(track_listview.clone(), Rc::clone(&scope_tracks_model));
 
         // Constrain the track list width to match the Now Playing page.
         track_listview.set_hexpand(true);
@@ -517,7 +506,7 @@ impl SearchResults {
             Rc::clone(&size),
             current_sort,
             Rc::clone(&track_card_list),
-            Rc::clone(&dispatcher),
+            dispatcher.clone(),
         );
         registrar.add_end("search", view_menu.widget());
 
@@ -567,7 +556,6 @@ impl SearchResults {
             view_menu,
             layout,
             size,
-            worker,
             debouncer: Debouncer::new(),
             children: vec![Box::new(scope_playlist)],
             registrar,
@@ -649,7 +637,6 @@ impl SearchResults {
                 // Rebind so the correct image shape (round for artists) applies.
                 self.scope_card_list.bind(
                     &self.scope_cards_model,
-                    self.worker.clone(),
                     self.layout.get(),
                     self.size.get(),
                 );

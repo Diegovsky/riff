@@ -8,21 +8,22 @@ use super::{
     SidebarDestination, SidebarItem, CREATE_PLAYLIST_ITEM, LIBRARY_SECTION,
     SAVED_PLAYLISTS_SECTION,
 };
+use crate::app::components::{dispatch_api_call, dispatch_api_read, dispatch_api_read_many};
 use crate::app::models::{CardModel, PlaylistSummary};
 use crate::app::state::{PlaybackAction, ScreenName};
 use crate::app::{
-    ActionDispatcher, AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Component,
+    AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Component, Dispatcher,
     EventListener, PaginationTarget, SongsSource,
 };
 use crate::feature_flags::{self, FeatureFlag};
 
 pub struct SidebarModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl SidebarModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,
@@ -52,8 +53,8 @@ impl SidebarModel {
         self.app_model
             .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SavedPlaylists).into());
 
-        self.dispatcher.call_api_and_dispatch(move || async move {
-            api.get_saved_playlists(offset, batch_size)
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            api.get_saved_playlists(offset, batch_size, tag)
                 .await
                 .map(|page| BrowserAction::AppendPlaylistsContent(page.items).into())
         });
@@ -72,7 +73,7 @@ impl SidebarModel {
     fn create_new_playlist(&self, name: String) {
         let user_id = self.app_model.get_state().logged_user.user.clone().unwrap();
         let api = self.app_model.api();
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        dispatch_api_call(&self.dispatcher, move || async move {
             api.create_playlist(user_id.as_str(), name.as_str())
                 .await
                 .map(AppAction::CreatePlaylist)
@@ -89,7 +90,7 @@ impl SidebarModel {
 
     pub(super) fn unfollow_playlist(&self, id: String) {
         let api = self.app_model.api();
-        self.dispatcher.call_api_and_dispatch(move || async move {
+        dispatch_api_call(&self.dispatcher, move || async move {
             api.unfollow_playlist(&id).await?;
             Ok(AppAction::RemovePlaylist(id))
         })
@@ -98,43 +99,41 @@ impl SidebarModel {
     pub(super) fn play_playlist(&self, id: String) {
         let api = self.app_model.api();
         let source = SongsSource::Playlist(id.clone());
-        self.dispatcher
-            .call_api_and_dispatch_many(move || async move {
-                let batch = api.get_playlist_tracks(&id, 0, 50).await?;
-                let first_id = batch.items.first().map(|s| s.rri.id.clone());
-                let mut actions: Vec<AppAction> = vec![
-                    PlaybackAction::SetShuffled(false).into(),
-                    PlaybackAction::LoadPagedSongs(source, batch).into(),
-                ];
-                if let Some(track_id) = first_id {
-                    actions.push(PlaybackAction::Load(track_id).into());
-                }
-                Ok(actions)
-            });
+        dispatch_api_read_many(&self.dispatcher, move |tag| async move {
+            let batch = api.get_playlist_tracks(&id, 0, 50, tag).await?;
+            let first_id = batch.items.first().map(|s| s.rri.id.clone());
+            let mut actions: Vec<AppAction> = vec![
+                PlaybackAction::SetShuffled(false).into(),
+                PlaybackAction::LoadPagedSongs(source, batch).into(),
+            ];
+            if let Some(track_id) = first_id {
+                actions.push(PlaybackAction::Load(track_id).into());
+            }
+            Ok(actions)
+        });
     }
 
     pub(super) fn shuffle_playlist(&self, id: String) {
         let api = self.app_model.api();
         let source = SongsSource::Playlist(id.clone());
-        self.dispatcher
-            .call_api_and_dispatch_many(move || async move {
-                let batch = api.get_playlist_tracks(&id, 0, 50).await?;
-                let len = batch.items.len();
-                let track_id = if len > 0 {
-                    let index = rand::random::<usize>() % len;
-                    Some(batch.items[index].rri.id.clone())
-                } else {
-                    None
-                };
-                let mut actions: Vec<AppAction> = vec![
-                    PlaybackAction::SetShuffled(true).into(),
-                    PlaybackAction::LoadPagedSongs(source, batch).into(),
-                ];
-                if let Some(track_id) = track_id {
-                    actions.push(PlaybackAction::Load(track_id).into());
-                }
-                Ok(actions)
-            });
+        dispatch_api_read_many(&self.dispatcher, move |tag| async move {
+            let batch = api.get_playlist_tracks(&id, 0, 50, tag).await?;
+            let len = batch.items.len();
+            let track_id = if len > 0 {
+                let index = rand::random::<usize>() % len;
+                Some(batch.items[index].rri.id.clone())
+            } else {
+                None
+            };
+            let mut actions: Vec<AppAction> = vec![
+                PlaybackAction::SetShuffled(true).into(),
+                PlaybackAction::LoadPagedSongs(source, batch).into(),
+            ];
+            if let Some(track_id) = track_id {
+                actions.push(PlaybackAction::Load(track_id).into());
+            }
+            Ok(actions)
+        });
     }
 
     fn navigate(&self, dest: SidebarDestination) {

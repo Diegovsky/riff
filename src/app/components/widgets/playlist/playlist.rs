@@ -8,7 +8,7 @@ use crate::app::components::utils::{ancestor, AnimatorDefault};
 use crate::app::components::{Component, EventListener, SongWidget};
 use crate::app::models::{SongListModel, SongModel, SongState, Track, TrackExt};
 use crate::app::state::{BrowserEvent, PlaybackEvent, SelectionEvent, SelectionState};
-use crate::app::{AppEvent, ProvidesApi, Worker};
+use crate::app::{AppEvent, ProvidesApi};
 
 pub trait PlaylistModel: ProvidesApi {
     fn is_paused(&self) -> bool;
@@ -104,7 +104,7 @@ impl<Model> Playlist<Model>
 where
     Model: PlaylistModel + 'static,
 {
-    pub fn new(listview: gtk::ListView, model: Rc<Model>, worker: Worker) -> Self {
+    pub fn new(listview: gtk::ListView, model: Rc<Model>) -> Self {
         let list_model = model.song_list_model();
         let selection_model = gtk::NoSelection::new(Some(list_model.clone()));
         let factory = gtk::SignalListItemFactory::new();
@@ -159,12 +159,7 @@ where
                 // and menus are built from the SongModel's Track, not
                 // from a lookup into AppState.
                 let widget = item.child().unwrap().downcast::<SongWidget>().unwrap();
-                widget.bind(
-                    &song_model,
-                    worker.clone(),
-                    api_service.clone(),
-                    model.show_song_covers(),
-                );
+                widget.bind(&song_model, api_service.clone(), model.show_song_covers());
 
                 let song = song_model.description();
                 widget.set_actions(model.actions_for(&song).as_ref());

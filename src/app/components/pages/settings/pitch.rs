@@ -50,7 +50,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct PitchWidget(ObjectSubclass<imp::PitchWidget>)
-        @extends gtk::Widget, libadwaita::PreferencesGroup;
+        @extends gtk::Widget, libadwaita::PreferencesGroup,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl Default for PitchWidget {
