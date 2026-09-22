@@ -39,7 +39,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct CreatePlaylistPopover(ObjectSubclass<imp::CreatePlaylistPopover>) @extends gtk::Widget, gtk::Popover;
+    pub struct CreatePlaylistPopover(ObjectSubclass<imp::CreatePlaylistPopover>) @extends gtk::Widget, gtk::Popover,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Native, gtk::ShortcutManager;
 }
 
 impl Default for CreatePlaylistPopover {

@@ -1,17 +1,22 @@
 use crate::app::components::display_add_css_provider;
+use crate::app::components::utils::decode_px;
 use crate::app::models::SongModel;
-use crate::app::Worker;
 use gdk::Rectangle;
 use gettextrs::gettext;
 use gio::MenuModel;
 use glib::subclass::InitializingObject;
 use riff_api::ApiService;
+
+use crate::app::load;
 use std::sync::Arc;
 
 use gtk::graphene::Point;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
+
+/// Matches `pixel-size` on `song_cover` in song.blp.
+const COVER_SIZE: i32 = 30;
 
 mod imp {
 
@@ -190,7 +195,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct SongWidget(ObjectSubclass<imp::SongWidget>) @extends gtk::Widget, gtk::Grid;
+    pub struct SongWidget(ObjectSubclass<imp::SongWidget>) @extends gtk::Widget, gtk::Grid,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 impl Default for SongWidget {
@@ -276,7 +282,7 @@ impl SongWidget {
         self.imp().song_cover.set_paintable(Some(texture));
     }
 
-    pub fn set_art(&self, model: &SongModel, worker: Worker, api_service: Arc<ApiService>) {
+    pub fn set_art(&self, model: &SongModel, api_service: Arc<ApiService>) {
         if let Some(url) = model
             .description()
             .art
@@ -284,24 +290,25 @@ impl SongWidget {
             .map(str::to_owned)
         {
             let _self = self.downgrade();
-            worker.send_local_task(async move {
-                if let Some(_self) = _self.upgrade() {
-                    let result = api_service.load_image(&url, "jpg", 100, 100).await;
-                    if let Some(ref texture) = result {
-                        _self.set_image(texture);
+            // Captured now: these run at idle priority, so the view can change
+            // before any given one does.
+            let tag = load::visible();
+            let size = decode_px(COVER_SIZE);
+            glib::MainContext::default().spawn_local_with_priority(
+                glib::Priority::DEFAULT_IDLE,
+                async move {
+                    if let Some(_self) = _self.upgrade() {
+                        let result = api_service.load_image(&url, size, size, tag).await;
+                        if let Some(ref texture) = result {
+                            _self.set_image(texture);
+                        }
                     }
-                }
-            });
+                },
+            );
         }
     }
 
-    pub fn bind(
-        &self,
-        model: &SongModel,
-        worker: Worker,
-        api_service: Arc<ApiService>,
-        show_cover: bool,
-    ) {
+    pub fn bind(&self, model: &SongModel, api_service: Arc<ApiService>, show_cover: bool) {
         let widget = self.imp();
 
         model.bind_title(&*widget.song_title, "label");
@@ -315,7 +322,7 @@ impl SongWidget {
 
         self.set_show_cover(show_cover);
         if show_cover {
-            self.set_art(model, worker, api_service);
+            self.set_art(model, api_service);
         } else {
             model.bind_index(&*widget.song_index, "label");
         }

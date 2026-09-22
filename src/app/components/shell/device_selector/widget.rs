@@ -89,7 +89,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct DeviceSelectorWidget(ObjectSubclass<imp::DeviceSelectorWidget>) @extends gtk::Widget, gtk::Button;
+    pub struct DeviceSelectorWidget(ObjectSubclass<imp::DeviceSelectorWidget>) @extends gtk::Widget, gtk::Button,
+        @implements gtk::Accessible, gtk::Actionable, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl DeviceSelectorWidget {

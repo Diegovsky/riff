@@ -152,3 +152,15 @@ pub fn format_duration(duration: f64) -> String {
         format!("{minutes}∶{seconds:02}")
     }
 }
+
+/// Device pixels for `logical` px of artwork. Read from the display rather than
+/// a widget, so the cache warmer lands under the same texture cache keys.
+pub fn decode_px(logical: i32) -> i32 {
+    let scale = gdk::Display::default()
+        .and_then(|display| display.monitors().item(0))
+        .and_then(|monitor| monitor.downcast::<gdk::Monitor>().ok())
+        .map(|monitor| monitor.scale_factor())
+        .unwrap_or(1)
+        .clamp(1, 3);
+    logical * scale
+}

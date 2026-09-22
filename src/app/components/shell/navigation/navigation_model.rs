@@ -1,15 +1,15 @@
 use crate::app::state::ScreenName;
-use crate::app::{ActionDispatcher, AppModel, BrowserAction};
+use crate::app::{AppModel, BrowserAction, Dispatcher};
 use std::ops::Deref;
 use std::rc::Rc;
 
 pub struct NavigationModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl NavigationModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,

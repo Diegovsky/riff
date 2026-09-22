@@ -27,7 +27,7 @@ mod player;
 mod settings;
 
 use crate::app::components::expose_custom_widgets;
-use crate::app::dispatch::{spawn_task_handler, DispatchLoop};
+use crate::app::dispatch::DispatchLoop;
 use crate::app::{state::PlaybackAction, App, AppAction, BrowserAction};
 
 fn main() {
@@ -58,12 +58,7 @@ fn main() {
     about::setup_about(builder.object::<libadwaita::AboutDialog>("about").unwrap());
 
     // Main app logic is hooked up here
-    let app = App::new(
-        settings,
-        builder,
-        sender.clone(),
-        spawn_task_handler(&context),
-    );
+    let app = App::new(settings, builder, sender.clone());
     context.spawn_local(app.attach(dispatch_loop));
 
     let sender_clone = sender.clone();

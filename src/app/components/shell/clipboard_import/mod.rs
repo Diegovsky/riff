@@ -5,9 +5,9 @@ use gettextrs::gettext;
 use gtk::prelude::*;
 use libadwaita::prelude::*;
 
-use crate::app::components::{is_app_copied_link, EventListener};
+use crate::app::components::{dispatch_api_read, is_app_copied_link, EventListener};
 use crate::app::state::SpotifyLink;
-use crate::app::{ActionDispatcher, AppAction, AppModel};
+use crate::app::{AppAction, AppModel, Dispatcher};
 
 /// Watches the system clipboard and, when the Riff window is focused, offers to
 /// open a Spotify link the user copied from somewhere other than Riff.
@@ -20,7 +20,7 @@ pub struct ClipboardImport {
 impl ClipboardImport {
     pub fn new(
         window: libadwaita::ApplicationWindow,
-        dispatcher: Box<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
         app_model: Rc<AppModel>,
     ) -> Self {
         let watcher = Rc::new(ClipboardWatcher {
@@ -51,7 +51,7 @@ impl EventListener for ClipboardImport {}
 
 struct ClipboardWatcher {
     window: libadwaita::ApplicationWindow,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
     app_model: Rc<AppModel>,
     // The last link the user chose not to open (or already acted on). Prevents
     // re-prompting for the same link every time the window regains focus.
@@ -120,15 +120,19 @@ impl ClipboardWatcher {
         dialog.set_close_response("cancel");
 
         let this = Rc::clone(self);
-        dialog.choose(&self.window, gio::Cancellable::NONE, move |response| {
-            this.dialog_open.set(false);
-            // Regardless of the choice, remember this link so we don't
-            // prompt for it again until the clipboard changes.
-            this.dismissed.replace(Some(text.trim().to_string()));
-            if response.as_str() == "open" {
-                this.open_link(link);
-            }
-        });
+        dialog.choose(
+            Some(&self.window),
+            gio::Cancellable::NONE,
+            move |response| {
+                this.dialog_open.set(false);
+                // Remember this link either way, so it isn't prompted again
+                // until the clipboard changes.
+                this.dismissed.replace(Some(text.trim().to_string()));
+                if response.as_str() == "open" {
+                    this.open_link(link);
+                }
+            },
+        );
     }
 
     fn open_link(&self, link: SpotifyLink) {
@@ -141,8 +145,8 @@ impl ClipboardWatcher {
                 // No track detail screen exists: resolve the track's album and
                 // open that instead.
                 let api = self.app_model.api();
-                self.dispatcher.call_api_and_dispatch(move || async move {
-                    api.get_track(&id).await.map(|song| {
+                dispatch_api_read(&self.dispatcher, move |tag| async move {
+                    api.get_track(&id, tag).await.map(|song| {
                         AppAction::ViewAlbum(song.album.map(|a| a.rri.id).unwrap_or_default())
                     })
                 });

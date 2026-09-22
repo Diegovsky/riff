@@ -2,7 +2,8 @@ use std::cell::Ref;
 use std::ops::Deref;
 use std::rc::Rc;
 
-use crate::app::dispatch::ActionDispatcher;
+use crate::app::components::dispatch_api_call;
+use crate::app::dispatch::Dispatcher;
 use crate::app::models::SongListModel;
 use crate::app::state::{
     BrowserAction, PlaybackAction, SelectionAction, SelectionContext, SelectionState,
@@ -80,11 +81,11 @@ macro_rules! impl_toggle_play {
 pub struct DetailsPageModel {
     pub id: String,
     pub app_model: Rc<AppModel>,
-    pub dispatcher: Box<dyn ActionDispatcher>,
+    pub dispatcher: Dispatcher,
 }
 
 impl DetailsPageModel {
-    pub fn new(id: String, app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(id: String, app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             id,
             app_model,
@@ -92,7 +93,7 @@ impl DetailsPageModel {
         }
     }
 
-    pub fn new_without_id(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new_without_id(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self::new(String::new(), app_model, dispatcher)
     }
 
@@ -101,8 +102,8 @@ impl DetailsPageModel {
     }
 
     #[allow(dead_code)]
-    pub fn dispatcher(&self) -> &dyn ActionDispatcher {
-        &*self.dispatcher
+    pub fn dispatcher(&self) -> &Dispatcher {
+        &self.dispatcher
     }
 
     /// Copy a shareable link to the clipboard and show a confirmation toast.
@@ -235,12 +236,12 @@ impl DetailsPageModel {
         let is_liked = self.is_song_liked(id);
 
         if is_liked {
-            self.dispatcher.call_api_and_dispatch(move || async move {
+            dispatch_api_call(&self.dispatcher, move || async move {
                 api.remove_tracks(vec![song_id.clone()]).await?;
                 Ok(BrowserAction::RemoveSavedTracks(vec![song_id]).into())
             });
         } else {
-            self.dispatcher.call_api_and_dispatch(move || async move {
+            dispatch_api_call(&self.dispatcher, move || async move {
                 api.save_tracks(vec![song_id]).await?;
                 Ok(BrowserAction::SaveTracks(vec![song_desc]).into())
             });
@@ -254,155 +255,106 @@ mod tests {
     use std::cell::RefCell;
     use std::sync::Arc;
 
-    use crate::api::SpotifyApiClient;
     use crate::app::components::details_page::is_playback_event;
     use crate::app::models::*;
     use crate::app::state::{BrowserEvent, PlaybackEvent};
     use crate::app::AppEvent;
-    use futures::future::BoxFuture;
 
-    // Mock ActionDispatcher
-
-    #[derive(Clone, Default)]
-    struct MockDispatcher {
-        actions: Rc<RefCell<Vec<AppAction>>>,
+    // Dispatcher harness
+    struct TestDispatcher {
+        dispatcher: Dispatcher,
+        receiver: RefCell<futures::channel::mpsc::UnboundedReceiver<AppAction>>,
+        received: RefCell<Vec<AppAction>>,
     }
 
-    impl MockDispatcher {
+    impl TestDispatcher {
+        fn new() -> Self {
+            let (sender, receiver) = futures::channel::mpsc::unbounded();
+            Self {
+                dispatcher: Dispatcher::new(sender),
+                receiver: RefCell::new(receiver),
+                received: RefCell::new(Vec::new()),
+            }
+        }
+
+        fn dispatcher(&self) -> Dispatcher {
+            self.dispatcher.clone()
+        }
+
+        fn pump(&self) {
+            while let Ok(Some(action)) = self.receiver.borrow_mut().try_next() {
+                self.received.borrow_mut().push(action);
+            }
+        }
+
         fn dispatched(&self) -> Vec<AppAction> {
-            self.actions.borrow().clone()
+            self.pump();
+            self.received.borrow().clone()
         }
 
         fn last_action(&self) -> Option<AppAction> {
-            self.actions.borrow().last().cloned()
+            self.pump();
+            self.received.borrow().last().cloned()
         }
 
         fn clear(&self) {
-            self.actions.borrow_mut().clear();
+            self.pump();
+            self.received.borrow_mut().clear();
         }
     }
 
-    impl ActionDispatcher for MockDispatcher {
-        fn dispatch(&self, action: AppAction) {
-            self.actions.borrow_mut().push(action);
+    // Api service fixture
+
+    /// An `ApiService` that is never called; `AppModel` just needs one to exist.
+    /// No request is issued and no disk is touched, since cache directories are
+    /// created on first write. Shared, to avoid an HTTP client per test.
+    fn test_api_service() -> Arc<riff_api::ApiService> {
+        thread_local! {
+            static API: Arc<riff_api::ApiService> = {
+                let token_provider: Arc<dyn riff_api::TokenProvider> =
+                    Arc::new(|| None::<String>);
+                Arc::new(riff_api::spotify_service(
+                    token_provider,
+                    1024 * 1024,
+                    1024 * 1024,
+                ))
+            };
         }
-        fn dispatch_many(&self, actions: Vec<AppAction>) {
-            self.actions.borrow_mut().extend(actions);
-        }
-        fn dispatch_async(&self, _action: BoxFuture<'static, Option<AppAction>>) {}
-        fn dispatch_many_async(&self, _actions: BoxFuture<'static, Vec<AppAction>>) {}
-        fn box_clone(&self) -> Box<dyn ActionDispatcher> {
-            Box::new(self.clone())
-        }
-    }
-
-    // Mock SpotifyApiClient
-
-    struct MockApi;
-
-    macro_rules! stub_api_method {
-        ($name:ident($($arg:ident: $ty:ty),*) -> $ret:ty) => {
-            fn $name(&self, $($arg: $ty),*) -> BoxFuture<crate::api::SpotifyResult<$ret>> {
-                unimplemented!()
-            }
-        };
-    }
-
-    impl SpotifyApiClient for MockApi {
-        stub_api_method!(get_artist(_id: &str) -> ArtistDescription);
-        stub_api_method!(get_album(_id: &str) -> AlbumFullDescription);
-        stub_api_method!(get_track(_id: &str) -> SongDescription);
-        stub_api_method!(get_album_tracks(_id: &str, _offset: usize, _limit: usize) -> SongBatch);
-        stub_api_method!(get_playlist(_id: &str) -> PlaylistDescription);
-        stub_api_method!(get_playlist_tracks(_id: &str, _offset: usize, _limit: usize) -> SongBatch);
-        stub_api_method!(get_saved_albums(_offset: usize, _limit: usize) -> Vec<AlbumDescription>);
-        stub_api_method!(get_saved_tracks(_offset: usize, _limit: usize) -> SongBatch);
-        stub_api_method!(save_album(_id: &str) -> AlbumDescription);
-        stub_api_method!(save_tracks(_ids: Vec<String>) -> ());
-        stub_api_method!(remove_saved_album(_id: &str) -> ());
-        stub_api_method!(remove_saved_tracks(_ids: Vec<String>) -> ());
-        stub_api_method!(get_saved_playlists(_offset: usize, _limit: usize) -> Vec<PlaylistDescription>);
-        stub_api_method!(add_to_playlist(_id: &str, _uris: Vec<String>) -> ());
-        stub_api_method!(create_new_playlist(_name: &str, _user_id: &str) -> PlaylistDescription);
-        stub_api_method!(remove_from_playlist(_id: &str, _uris: Vec<String>) -> ());
-        stub_api_method!(follow_playlist(_id: &str) -> ());
-        stub_api_method!(unfollow_playlist(_id: &str) -> ());
-        stub_api_method!(update_playlist_details(_id: &str, _name: String) -> ());
-        stub_api_method!(search(_query: &str, _offset: usize, _limit: usize) -> SearchResults);
-        stub_api_method!(search_scoped(_query: &str, _search_type: SearchType, _offset: usize, _limit: usize) -> SearchResults);
-        stub_api_method!(get_artist_albums(_id: &str, _offset: usize, _limit: usize) -> Vec<AlbumDescription>);
-        stub_api_method!(get_user(_id: &str) -> UserDescription);
-        stub_api_method!(get_user_playlists(_id: &str, _offset: usize, _limit: usize) -> Vec<PlaylistDescription>);
-        stub_api_method!(list_available_devices() -> Vec<ConnectDevice>);
-        stub_api_method!(get_player_queue() -> Vec<SongDescription>);
-        stub_api_method!(player_pause(_device_id: String) -> ());
-        stub_api_method!(player_resume(_device_id: String) -> ());
-        stub_api_method!(player_seek(_device_id: String, _pos: usize) -> ());
-        stub_api_method!(player_repeat(_device_id: String, _mode: RepeatMode) -> ());
-        stub_api_method!(player_shuffle(_device_id: String, _shuffle: bool) -> ());
-        stub_api_method!(player_volume(_device_id: String, _volume: u8) -> ());
-        stub_api_method!(player_play_in_context(_device_id: String, _context: String, _offset: usize) -> ());
-        stub_api_method!(player_play_no_context(_device_id: String, _uris: Vec<String>, _offset: usize) -> ());
-        stub_api_method!(player_state() -> ConnectPlayerState);
-        stub_api_method!(get_followed_artists(_after: Option<String>, _limit: usize) -> (Vec<ArtistSummary>, Option<String>));
-        stub_api_method!(follow_artist(_id: &str) -> ());
-        stub_api_method!(unfollow_artist(_id: &str) -> ());
+        API.with(Arc::clone)
     }
 
     // Test helpers
 
-    fn make_model() -> (DetailsPageModel, MockDispatcher) {
-        let dispatcher = MockDispatcher::default();
-        let app_model = Rc::new(AppModel::new(AppState::new(), Arc::new(MockApi)));
-        let model = DetailsPageModel::new(
-            "test-id".to_string(),
-            app_model,
-            Box::new(dispatcher.clone()),
-        );
+    fn make_model() -> (DetailsPageModel, TestDispatcher) {
+        let dispatcher = TestDispatcher::new();
+        let app_model = Rc::new(AppModel::new(AppState::new(), test_api_service()));
+        let model =
+            DetailsPageModel::new("test-id".to_string(), app_model, dispatcher.dispatcher());
         (model, dispatcher)
     }
 
-    fn make_model_playing() -> (DetailsPageModel, MockDispatcher) {
-        let dispatcher = MockDispatcher::default();
-        let app_model = Rc::new(AppModel::new(AppState::new(), Arc::new(MockApi)));
+    fn make_model_playing() -> (DetailsPageModel, TestDispatcher) {
+        let dispatcher = TestDispatcher::new();
+        let app_model = Rc::new(AppModel::new(AppState::new(), test_api_service()));
         #[allow(deprecated)]
         app_model.update_state(PlaybackAction::LoadSongs(vec![song("s1"), song("s2")]).into());
         app_model.update_state(PlaybackAction::Load("s1".to_string()).into());
-        let model = DetailsPageModel::new(
-            "test-id".to_string(),
-            app_model,
-            Box::new(dispatcher.clone()),
-        );
+        let model =
+            DetailsPageModel::new("test-id".to_string(), app_model, dispatcher.dispatcher());
         (model, dispatcher)
     }
 
-    fn song(id: &str) -> SongDescription {
-        SongDescription {
-            id: id.to_string(),
-            uri: "".to_string(),
-            title: "Title".to_string(),
-            artists: vec![],
-            album: AlbumRef {
-                id: "".to_string(),
-                name: "".to_string(),
-            },
-            duration_ms: 1000,
-            art: None,
-            track_number: None,
-            explicit: false,
-            playable: true,
-        }
+    fn song(id: &str) -> Track {
+        make_track(id)
     }
 
-    fn make_song_list(songs: Vec<SongDescription>) -> SongListModel {
+    fn make_song_list(songs: Vec<Track>) -> SongListModel {
         let mut list = SongListModel::new(50);
-        let _ = list.add(SongBatch {
-            songs,
-            batch: Batch {
-                offset: 0,
-                batch_size: 50,
-                total: 50,
-            },
+        let _ = list.add(Page {
+            items: songs,
+            offset: Some(0),
+            total: None,
+            next_cursor: None,
         });
         list
     }
@@ -479,7 +431,7 @@ mod tests {
         model.select_song_from_list(&list, "b");
         let action = dispatcher.last_action().unwrap();
         assert!(
-            matches!(action, AppAction::SelectionAction(SelectionAction::Select(songs)) if songs.len() == 1 && songs[0].id == "b")
+            matches!(action, AppAction::SelectionAction(SelectionAction::Select(songs)) if songs.len() == 1 && songs[0].rri.id == "b")
         );
     }
 
@@ -615,9 +567,9 @@ mod tests {
 
     #[test]
     fn test_new_without_id() {
-        let dispatcher = MockDispatcher::default();
-        let app_model = Rc::new(AppModel::new(AppState::new(), Arc::new(MockApi)));
-        let model = DetailsPageModel::new_without_id(app_model, Box::new(dispatcher));
+        let dispatcher = TestDispatcher::new();
+        let app_model = Rc::new(AppModel::new(AppState::new(), test_api_service()));
+        let model = DetailsPageModel::new_without_id(app_model, dispatcher.dispatcher());
         assert_eq!(model.id, "");
     }
 }

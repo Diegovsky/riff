@@ -1,16 +1,16 @@
 use crate::app::state::{PlaybackAction, SettingsAction};
-use crate::app::{ActionDispatcher, AppAction, AppModel};
+use crate::app::{AppAction, AppModel, Dispatcher};
 use crate::settings::RiffSettings;
 use gettextrs::gettext;
 use std::rc::Rc;
 
 pub struct SettingsModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl SettingsModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,
@@ -30,12 +30,13 @@ impl SettingsModel {
     /// downloaded audio cache, then notify the user.
     pub fn clear_cache(&self) {
         let api = self.app_model.api();
-        self.dispatcher.dispatch_async(Box::pin(async move {
+        let dispatcher = self.dispatcher.clone();
+        tokio::spawn(async move {
             api.clear_user_cache().await;
             crate::player::clear_audio_cache();
             // Translators: Toast shown after the user clears the cache in settings.
-            Some(AppAction::ShowNotification(gettext("Cache cleared")))
-        }));
+            dispatcher.dispatch(AppAction::ShowNotification(gettext("Cache cleared")));
+        });
     }
 
     pub fn settings(&self) -> RiffSettings {

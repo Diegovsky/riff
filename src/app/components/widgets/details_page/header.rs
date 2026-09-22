@@ -122,7 +122,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct DetailsHeaderWidget(ObjectSubclass<imp::DetailsHeaderWidget>) @extends gtk::Widget;
+    pub struct DetailsHeaderWidget(ObjectSubclass<imp::DetailsHeaderWidget>) @extends gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 /// High-level wrapper around `DetailsHeaderWidget`.

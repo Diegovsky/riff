@@ -94,7 +94,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct EqualizerWidget(ObjectSubclass<imp::EqualizerWidget>)
-        @extends gtk::Widget, libadwaita::PreferencesGroup;
+        @extends gtk::Widget, libadwaita::PreferencesGroup,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl Default for EqualizerWidget {

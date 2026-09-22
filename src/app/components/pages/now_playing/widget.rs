@@ -11,7 +11,6 @@ use crate::app::components::{
     Component, DetailsPageComponent, DeviceSelector, DeviceSelectorWidget, EventListener,
     HasHeaderBarModel, HeaderRegistrar, PlaylistModel,
 };
-use crate::app::dispatch::Worker;
 use crate::app::state::PlaybackEvent;
 use crate::app::AppEvent;
 use crate::feature_flags::{self, FeatureFlag};
@@ -25,19 +24,9 @@ pub struct NowPlaying {
 }
 
 impl NowPlaying {
-    pub fn new(
-        model: Rc<NowPlayingModel>,
-        worker: Worker,
-        registrar: HeaderRegistrar,
-        name: String,
-    ) -> Self {
-        let mut component = DetailsPageComponent::new(
-            model.clone(),
-            model.to_headerbar_model(),
-            worker,
-            registrar,
-            name,
-        );
+    pub fn new(model: Rc<NowPlayingModel>, registrar: HeaderRegistrar, name: String) -> Self {
+        let mut component =
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), registrar, name);
         component.create_playlist(Some(&gettext("Queue")));
 
         if feature_flags::is_enabled(FeatureFlag::DeviceSelector) {

@@ -10,8 +10,8 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::future::Future;
 
-use crate::app::{ActionDispatcher, AppAction, AppEvent};
-use riff_api::DomainError;
+use crate::app::{load, AppAction, AppEvent, Dispatcher};
+use riff_api::{DomainError, Load, LoadPriority};
 
 mod pages;
 pub use pages::*;
@@ -45,51 +45,92 @@ pub fn expose_custom_widgets() {
     shell::window::expose_widgets();
 }
 
-impl dyn ActionDispatcher {
-    fn call_api_and_dispatch<F, C>(&self, call: C)
-    where
-        C: 'static + Send + Clone + FnOnce() -> F,
-        F: Send + Future<Output = Result<AppAction, DomainError>>,
-    {
-        self.call_api_and_dispatch_many(move || async { call().await.map(|a| vec![a]) })
-    }
+/// Run an api call that needs no scheduling tag (a mutation).
+pub fn dispatch_api_call<F, C>(dispatcher: &Dispatcher, call: C)
+where
+    C: 'static + Send + Clone + FnOnce() -> F,
+    F: Send + Future<Output = Result<AppAction, DomainError>>,
+{
+    dispatch_api_call_many(dispatcher, move || async { call().await.map(|a| vec![a]) })
+}
 
-    fn call_api_and_dispatch_many<F, C>(&self, call: C)
-    where
-        C: 'static + Send + Clone + FnOnce() -> F,
-        F: Send + Future<Output = Result<Vec<AppAction>, DomainError>>,
-    {
-        self.dispatch_many_async(Box::pin(async move {
-            let first_call = call.clone();
-            let result = first_call().await;
-            match result {
-                Ok(actions) => actions,
-                Err(DomainError::NoToken) => vec![],
-                Err(DomainError::AuthExpired) => call().await.unwrap_or_else(|_| Vec::new()),
-                Err(DomainError::RateLimited { .. }) => {
-                    error!("Spotify API error: rate limited");
-                    vec![AppAction::ShowNotification(gettext(
-                        // translators: This notification is shown when Spotify throttles requests.
-                        "Rate limited by Spotify. Please wait a moment and try again.",
-                    ))]
-                }
-                Err(err) => {
-                    // In debug builds the "Simulate Offline" dev switch surfaces
-                    // as a network error; suppress the generic error toast (the
-                    // connection-lost banner is driven entirely by the player's
-                    // session-health path, see SpotifyPlayer::set_connection_lost).
-                    #[cfg(debug_assertions)]
-                    if riff_api::is_simulate_offline() {
-                        return vec![];
-                    }
-                    error!("Spotify API error: {}", err);
-                    vec![AppAction::ShowNotification(gettext(
-                        // translators: This notification is the default message for unhandled errors. Logs refer to console output.
-                        "An error occured. Check logs for details!",
-                    ))]
-                }
+/// As [`dispatch_api_call`], for several actions.
+pub fn dispatch_api_call_many<F, C>(dispatcher: &Dispatcher, call: C)
+where
+    C: 'static + Send + Clone + FnOnce() -> F,
+    F: 'static + Send + Future<Output = Result<Vec<AppAction>, DomainError>>,
+{
+    spawn_api_call(dispatcher, call)
+}
+
+/// Run an api read for the current page, tagged [`LoadPriority::Visible`].
+///
+/// Built here rather than inside the closure, so a read issued just before a
+/// navigation cannot pick up the new epoch and compete with the page the user
+/// moved to.
+pub fn dispatch_api_read<F, C>(dispatcher: &Dispatcher, call: C)
+where
+    C: 'static + Send + Clone + FnOnce(Load) -> F,
+    F: Send + Future<Output = Result<AppAction, DomainError>>,
+{
+    dispatch_api_read_many(dispatcher, move |load| async move {
+        call(load).await.map(|a| vec![a])
+    })
+}
+
+/// As [`dispatch_api_read`], for several actions.
+pub fn dispatch_api_read_many<F, C>(dispatcher: &Dispatcher, call: C)
+where
+    C: 'static + Send + Clone + FnOnce(Load) -> F,
+    F: 'static + Send + Future<Output = Result<Vec<AppAction>, DomainError>>,
+{
+    let load = load::at(LoadPriority::Visible);
+    spawn_api_call(dispatcher, move || call(load))
+}
+
+fn spawn_api_call<F, C>(dispatcher: &Dispatcher, call: C)
+where
+    C: 'static + Send + Clone + FnOnce() -> F,
+    F: 'static + Send + Future<Output = Result<Vec<AppAction>, DomainError>>,
+{
+    let dispatcher = dispatcher.clone();
+    tokio::spawn(async move {
+        dispatcher.dispatch_many(resolve_api_call(call).await);
+    });
+}
+
+async fn resolve_api_call<F, C>(call: C) -> Vec<AppAction>
+where
+    C: Clone + FnOnce() -> F,
+    F: Future<Output = Result<Vec<AppAction>, DomainError>>,
+{
+    let first_call = call.clone();
+    let result = first_call().await;
+    match result {
+        Ok(actions) => actions,
+        Err(DomainError::NoToken) => vec![],
+        Err(DomainError::Shed) => vec![],
+        Err(DomainError::AuthExpired) => call().await.unwrap_or_else(|_| Vec::new()),
+        Err(DomainError::RateLimited { .. }) => {
+            error!("Spotify API error: rate limited");
+            vec![AppAction::ShowNotification(gettext(
+                // translators: This notification is shown when Spotify throttles requests.
+                "Rate limited by Spotify. Please wait a moment and try again.",
+            ))]
+        }
+        Err(err) => {
+            // "Simulate Offline" surfaces as a network error in debug builds;
+            // the connection-lost banner already covers it, so skip the toast.
+            #[cfg(debug_assertions)]
+            if riff_api::is_simulate_offline() {
+                return vec![];
             }
-        }))
+            error!("Spotify API error: {}", err);
+            vec![AppAction::ShowNotification(gettext(
+                // translators: This notification is the default message for unhandled errors. Logs refer to console output.
+                "An error occured. Check logs for details!",
+            ))]
+        }
     }
 }
 

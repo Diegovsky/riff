@@ -3,6 +3,7 @@ use super::{
     SearchState, UpdatableState, UserState,
 };
 use crate::app::components::{CardLayout, CardSize, SortOrder};
+use crate::app::load;
 use crate::app::models::*;
 use std::borrow::Cow;
 use std::iter::Iterator;
@@ -358,10 +359,12 @@ impl BrowserState {
             ScreenState::Current => vec![],
             ScreenState::Present => {
                 navigation.pop_to(name);
+                load::bump_epoch();
                 vec![BrowserEvent::NavigationPoppedTo(name.clone())]
             }
             ScreenState::NotPresent => {
                 navigation.push(BrowserScreen::from_name(name));
+                load::bump_epoch();
                 vec![BrowserEvent::NavigationPushed(name.clone())]
             }
         }
@@ -393,10 +396,12 @@ impl UpdatableState for BrowserState {
             BrowserAction::NavigationPush(name) => self.push_if_needed(name),
             BrowserAction::NavigationPopTo(name) => {
                 self.navigation.pop_to(name);
+                load::bump_epoch();
                 vec![BrowserEvent::NavigationPoppedTo(name.clone())]
             }
             BrowserAction::NavigationPop if can_pop => {
                 self.navigation.pop();
+                load::bump_epoch();
                 vec![BrowserEvent::NavigationPopped]
             }
             BrowserAction::NavigationPop if self.navigation_hidden => {
@@ -426,6 +431,50 @@ impl UpdatableState for BrowserState {
 pub mod tests {
 
     use super::*;
+
+    /// Going back must bump the epoch too, or work queued for the screen the
+    /// user left keeps competing with the one they moved to.
+    #[test]
+    fn every_navigation_advances_the_epoch() {
+        let mut state = BrowserState::new();
+        let artist = ScreenName::Artist("some_id".to_string());
+
+        let before_push = load::current_epoch();
+        state.update_with(Cow::Owned(BrowserAction::NavigationPush(artist.clone())));
+        let after_push = load::current_epoch();
+        assert!(after_push > before_push, "pushing a new screen");
+
+        state.update_with(Cow::Owned(BrowserAction::NavigationPop));
+        let after_pop = load::current_epoch();
+        assert!(after_pop > after_push, "popping back");
+
+        // Pushing a screen already in the stack pops back to it.
+        state.update_with(Cow::Owned(BrowserAction::NavigationPush(artist.clone())));
+        state.update_with(Cow::Owned(BrowserAction::NavigationPush(
+            ScreenName::Search,
+        )));
+        let before_pop_to = load::current_epoch();
+        state.update_with(Cow::Owned(BrowserAction::NavigationPush(artist)));
+        assert!(
+            load::current_epoch() > before_pop_to,
+            "popping back to a screen already in the stack"
+        );
+    }
+
+    /// Re-requesting the current screen must not demote its own work.
+    #[test]
+    fn renavigating_to_the_current_screen_is_not_a_navigation() {
+        let mut state = BrowserState::new();
+        let artist = ScreenName::Artist("current".to_string());
+        state.update_with(Cow::Owned(BrowserAction::NavigationPush(artist.clone())));
+
+        assert!(matches!(
+            state.navigation.screen_visibility(&artist),
+            ScreenState::Current
+        ));
+        // The `Current` arm returns no events and skips the bump.
+        assert!(state.push_if_needed(&artist).is_empty());
+    }
 
     #[test]
     fn test_navigation_push() {

@@ -12,7 +12,6 @@ use super::DetailsModel;
 use crate::app::components::{
     Component, DetailsPageComponent, EventListener, HasHeaderBarModel, HeaderRegistrar, PageModel,
 };
-use crate::app::dispatch::Worker;
 use crate::app::models::AlbumExt;
 use crate::app::AppEvent;
 
@@ -23,19 +22,9 @@ pub struct Details {
 }
 
 impl Details {
-    pub fn new(
-        model: Rc<DetailsModel>,
-        worker: Worker,
-        registrar: HeaderRegistrar,
-        name: String,
-    ) -> Self {
-        let mut component = DetailsPageComponent::new(
-            model.clone(),
-            model.to_headerbar_model(),
-            worker,
-            registrar,
-            name,
-        );
+    pub fn new(model: Rc<DetailsModel>, registrar: HeaderRegistrar, name: String) -> Self {
+        let mut component =
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), registrar, name);
         component.create_playlist(None);
 
         let modal = ReleaseDetailsDialog::new();

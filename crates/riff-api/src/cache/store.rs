@@ -7,7 +7,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use riff_config::BYTES_PER_ITEM;
+use riff_config::api::BYTES_PER_ITEM;
 
 use super::lru::LruCache;
 use super::CacheKey;

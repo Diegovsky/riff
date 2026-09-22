@@ -15,7 +15,7 @@ use crate::app::components::{labels, PlaylistModel};
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
 use crate::app::state::{PlaybackAction, SearchState, SelectionState, CARD_BATCH_SIZE};
-use crate::app::{ActionDispatcher, AppModel, SongsSource};
+use crate::app::{AppModel, Dispatcher, SongsSource};
 
 use super::load_more_scope;
 
@@ -31,7 +31,7 @@ impl Deref for SearchScopeTracksModel {
 }
 
 impl SearchScopeTracksModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             base: DetailsPageModel::new_without_id(app_model, dispatcher),
         }
@@ -46,11 +46,7 @@ impl SearchScopeTracksModel {
     }
 
     pub fn load_more(&self) {
-        load_more_scope(
-            &self.app_model,
-            self.dispatcher.as_ref(),
-            SearchType::Tracks,
-        );
+        load_more_scope(&self.app_model, &self.dispatcher, SearchType::Tracks);
     }
 }
 
@@ -82,10 +78,10 @@ impl PlaylistModel for SearchScopeTracksModel {
 
     fn actions_for(&self, song: &Track) -> Option<gio::ActionGroup> {
         let group = SimpleActionGroup::new();
-        for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
+        for a in song.make_artist_actions(self.dispatcher.clone(), None) {
             group.add_action(&a);
         }
-        group.add_action(&song.make_album_action(self.dispatcher.box_clone(), None));
+        group.add_action(&song.make_album_action(self.dispatcher.clone(), None));
         group.add_action(&song.make_link_action(None));
         Some(group.upcast())
     }

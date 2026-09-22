@@ -94,7 +94,7 @@ pub fn wire_dev_tools(
         // The connection-lost banner is deliberately NOT raised here. It
         // appears as a side effect once an actual API request fails while
         // offline, and clears itself once a request succeeds again (see
-        // call_api_and_dispatch_many), mirroring how a real outage is
+        // dispatch_api_call), mirroring how a real outage is
         // detected rather than the switch poking the toast directly.
         riff_api::set_simulate_offline(active);
         if active {

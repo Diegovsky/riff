@@ -7,14 +7,12 @@ use crate::app::components::{
     CardLayout, CardList, CardListModel, CardSize, Component, EmbeddedCardList, EventListener,
     FilterToggle, HeaderBarModel, HeaderRegistrar, Playlist, PlaylistModel, SortOrder,
 };
-use crate::app::dispatch::Worker;
-use crate::app::{ActionDispatcher, AppEvent};
+use crate::app::{AppEvent, Dispatcher};
 
 /// A generic details page component that wires all standard behavior
 /// from a `PageModel` implementation automatically.
 pub struct DetailsPageComponent<M> {
     model: Rc<M>,
-    worker: Worker,
     page: DetailsPage,
     content: gtk::Box,
     children: Vec<Box<dyn EventListener>>,
@@ -32,7 +30,6 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
     pub fn new<H: HeaderBarModel + 'static>(
         model: Rc<M>,
         headerbar_model: Rc<H>,
-        worker: Worker,
         registrar: HeaderRegistrar,
         name: String,
     ) -> Self {
@@ -49,7 +46,6 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
 
         let mut c = Self {
             model,
-            worker,
             page,
             content,
             children: vec![],
@@ -85,11 +81,7 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         let listview = gtk::ListView::new(None::<gtk::NoSelection>, None::<gtk::ListItemFactory>);
         listview.set_margin_bottom(16);
         self.content.append(&listview);
-        let playlist = Box::new(Playlist::new(
-            listview,
-            self.model.clone(),
-            self.worker.clone(),
-        ));
+        let playlist = Box::new(Playlist::new(listview, self.model.clone()));
         self.children.push(playlist);
     }
 
@@ -103,7 +95,7 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         available_sorts: &[SortOrder],
         shared_layout: Rc<Cell<CardLayout>>,
         shared_size: Rc<Cell<CardSize>>,
-        dispatcher: Rc<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
     ) where
         M: CardListModel,
     {
@@ -173,12 +165,7 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
 
         self.content.append(card_list.widget());
 
-        card_list.bind(
-            &self.model,
-            self.worker.clone(),
-            CardLayout::Vertical,
-            CardSize::Large,
-        );
+        card_list.bind(&self.model, CardLayout::Vertical, CardSize::Large);
         card_list.show_placeholders();
 
         let embedded = EmbeddedCardList::new(
@@ -300,11 +287,8 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
                 self.page.header().set_like_visible(false);
             }
         }
-        self.page.load_artwork_or_finish(
-            self.model.get_artwork().as_ref(),
-            self.model.api_service(),
-            &self.worker,
-        );
+        self.page
+            .load_artwork_or_finish(self.model.get_artwork().as_ref(), self.model.api_service());
     }
 
     /// Standard event handling. Returns true if the event was consumed.

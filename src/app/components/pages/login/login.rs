@@ -47,7 +47,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct LoginWindow(ObjectSubclass<imp::LoginWindow>) @extends gtk::Widget, libadwaita::Window;
+    pub struct LoginWindow(ObjectSubclass<imp::LoginWindow>) @extends gtk::Widget, gtk::Window, libadwaita::Window,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Native, gtk::Root, gtk::ShortcutManager;
 }
 
 impl Default for LoginWindow {

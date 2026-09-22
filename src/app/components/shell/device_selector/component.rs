@@ -3,22 +3,22 @@ use std::rc::Rc;
 
 use gtk::prelude::Cast;
 
-use crate::app::components::{Component, EventListener};
+use crate::app::components::{dispatch_api_read, Component, EventListener};
 // The data-layer device type, aliased to avoid clashing with the app-state
 // `Device` enum imported below.
 use crate::app::models::Device as ConnectDevice;
 use crate::app::state::{Device, LoginEvent, PlaybackAction, PlaybackEvent};
-use crate::app::{ActionDispatcher, AppEvent, AppModel};
+use crate::app::{AppEvent, AppModel, Dispatcher};
 
 use super::widget::DeviceSelectorWidget;
 
 pub struct DeviceSelectorModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl DeviceSelectorModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,
@@ -28,8 +28,8 @@ impl DeviceSelectorModel {
     pub fn refresh_available_devices(&self) {
         let api = self.app_model.api();
 
-        self.dispatcher.call_api_and_dispatch(move || async move {
-            api.get_devices()
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            api.get_devices(tag)
                 .await
                 .map(|devices| PlaybackAction::SetAvailableDevices(devices).into())
         });

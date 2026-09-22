@@ -6,7 +6,6 @@ use std::ops::Deref;
 use std::rc::Rc;
 
 use crate::app::components::{CardLayout, CardSize, CardWidget, ImageShape, SortOrder};
-use crate::app::dispatch::Worker;
 use crate::app::models::{CardModel, FilterOption};
 use crate::app::ListStore;
 use crate::app::ProvidesApi;
@@ -136,7 +135,6 @@ impl CardList {
     pub fn bind<M: CardListModel + ProvidesApi + 'static>(
         &self,
         model: &Rc<M>,
-        worker: Worker,
         layout: CardLayout,
         size: CardSize,
     ) {
@@ -185,7 +183,7 @@ impl CardList {
                     if let Some(card) = obj.downcast_ref::<CardModel>() {
                         card.set_insertion_position(counter);
                         counter += 1;
-                        self.add_child(card, &worker, &api_service, shape, layout, size);
+                        self.add_child(card, &api_service, shape, layout, size);
                     }
                 }
             }
@@ -200,7 +198,6 @@ impl CardList {
             let placeholder_count = Rc::clone(&self.placeholder_count);
             let constraint = Rc::clone(&self.max_rows);
             let current_filter = Rc::clone(&self.current_filter);
-            let worker_clone = worker.clone();
             let api_service_clone = api_service.clone();
             let handler_id =
                 inner.connect_items_changed(move |source, position, removed, added| {
@@ -259,7 +256,6 @@ impl CardList {
                                         card.set_insertion_position(pos);
                                         let child = create_child(
                                             card,
-                                            &worker_clone,
                                             &api_service_clone,
                                             shape,
                                             layout,
@@ -281,7 +277,6 @@ impl CardList {
                                         }
                                         let child = create_child(
                                             card,
-                                            &worker_clone,
                                             &api_service_clone,
                                             shape,
                                             layout,
@@ -329,13 +324,12 @@ impl CardList {
     fn add_child(
         &self,
         card: &CardModel,
-        worker: &Worker,
         api_service: &Arc<ApiService>,
         shape: ImageShape,
         layout: CardLayout,
         size: CardSize,
     ) {
-        let child = create_child(card, worker, api_service, shape, layout, size);
+        let child = create_child(card, api_service, shape, layout, size);
         self.flowbox.insert(&child, -1);
     }
 
@@ -529,20 +523,12 @@ impl Drop for CardList {
 /// Create a FlowBoxChild for a real card model.
 fn create_child(
     card: &CardModel,
-    worker: &Worker,
     api_service: &Arc<ApiService>,
     shape: ImageShape,
     layout: CardLayout,
     size: CardSize,
 ) -> gtk::FlowBoxChild {
-    let widget = CardWidget::for_model(
-        card,
-        worker.clone(),
-        api_service.clone(),
-        shape,
-        layout,
-        size,
-    );
+    let widget = CardWidget::for_model(card, api_service.clone(), shape, layout, size);
     let child = gtk::FlowBoxChild::new();
     child.set_halign(gtk::Align::Fill);
     child.set_hexpand(true);

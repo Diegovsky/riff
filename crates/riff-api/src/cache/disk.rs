@@ -7,9 +7,10 @@
 
 use std::os::unix::fs::DirBuilderExt;
 use std::path::PathBuf;
+use std::sync::{Arc, Once};
 use std::time::{Duration, SystemTime};
 
-use riff_config::EXPIRY_EXT;
+use riff_config::api::EXPIRY_EXT;
 use tokio::fs;
 use uuid::Uuid;
 
@@ -38,25 +39,37 @@ pub struct DiskCache {
     root: PathBuf,
     max_bytes: usize,
     default_ttl: Duration,
+    /// Shared across clones so the `mkdir` happens once per cache.
+    root_created: Arc<Once>,
 }
 
 impl DiskCache {
     pub fn new(subdir: &str, max_bytes: usize, default_ttl: Duration) -> Self {
         let root: PathBuf = glib::user_cache_dir();
-        let root = root.join(subdir);
-        // Owner-only: cache may hold ETags and API payloads tied to the user.
-        if let Err(e) = std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(&root)
-        {
-            warn!("disk cache: failed to create {}: {e}", root.display());
-        }
         Self {
-            root,
+            root: root.join(subdir),
             max_bytes,
             default_ttl,
+            root_created: Arc::new(Once::new()),
         }
+    }
+
+    /// Create the cache directory if needed.
+    ///
+    /// Not done in `new`, so building a cache and never writing to it (a test
+    /// that just needs an `ApiService`) leaves nothing behind. Reads of a
+    /// missing directory already fail cleanly.
+    fn ensure_root(&self) {
+        self.root_created.call_once(|| {
+            // Owner-only: cache may hold ETags and API payloads tied to the user.
+            if let Err(e) = std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(&self.root)
+            {
+                warn!("disk cache: failed to create {}: {e}", self.root.display());
+            }
+        });
     }
 
     pub async fn read(&self, key: &str) -> Option<DiskEntry> {
@@ -74,6 +87,7 @@ impl DiskCache {
     }
 
     pub async fn write(&self, key: &str, data: &[u8], ttl: Duration, etag: Option<&str>) {
+        self.ensure_root();
         let file_uuid = key_to_uuid(key);
         let path = self.root.join(file_uuid.to_string());
         let expiry_content = Self::build_expiry_content(ttl, etag);
@@ -181,6 +195,7 @@ impl DiskCache {
     }
 
     async fn write_expiry(&self, file_uuid: &Uuid, ttl: Duration, etag: Option<&str>) {
+        self.ensure_root();
         let content = Self::build_expiry_content(ttl, etag);
         let path = self.root.join(format!("{file_uuid}{EXPIRY_EXT}"));
         if let Err(e) = fs::write(&path, &content).await {

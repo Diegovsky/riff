@@ -12,7 +12,7 @@ use crate::app::components::{
     CardLayout, CardSize, Component, DetailsPageComponent, EventListener, HasHeaderBarModel,
     HeaderRegistrar, SortOrder,
 };
-use crate::app::{ActionDispatcher, AppEvent, Worker};
+use crate::app::{AppEvent, Dispatcher};
 
 /// GTK widget for the artist detail page.
 pub struct ArtistDetails {
@@ -22,20 +22,14 @@ pub struct ArtistDetails {
 impl ArtistDetails {
     pub fn new(
         model: Rc<ArtistDetailsModel>,
-        worker: Worker,
         shared_layout: Rc<Cell<CardLayout>>,
         shared_size: Rc<Cell<CardSize>>,
-        dispatcher: Rc<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
         registrar: HeaderRegistrar,
         name: String,
     ) -> Self {
-        let mut component = DetailsPageComponent::new(
-            model.clone(),
-            model.to_headerbar_model(),
-            worker,
-            registrar,
-            name,
-        );
+        let mut component =
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), registrar, name);
         component.create_playlist(Some(&gettext("Top Tracks")));
         component.create_embedded_card_list(
             Some(&gettext("Releases")),
