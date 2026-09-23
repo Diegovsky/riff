@@ -452,7 +452,7 @@ impl MusicProvider for SpotifyDomain {
         let page = apis::artists_api::get_an_artists_albums(
             &config,
             id,
-            Some("album,single"),
+            Some("album,single,compilation"),
             None,
             Some(limit as i32),
             Some(offset as i32),

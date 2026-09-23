@@ -9,6 +9,8 @@ use crate::app::components::{
 };
 use crate::app::{AppEvent, Dispatcher};
 
+const PLAYLIST_LOADING_HEIGHT: i32 = 400;
+
 /// A generic details page component that wires all standard behavior
 /// from a `PageModel` implementation automatically.
 pub struct DetailsPageComponent<M> {
@@ -80,7 +82,23 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         }
         let listview = gtk::ListView::new(None::<gtk::NoSelection>, None::<gtk::ListItemFactory>);
         listview.set_margin_bottom(16);
+
+        let list_model = self.model.song_list_model();
+        if list_model.n_items() == 0 {
+            listview.set_height_request(PLAYLIST_LOADING_HEIGHT);
+            list_model.connect_items_changed(clone!(
+                #[weak]
+                listview,
+                move |model, _, _, added| {
+                    if added > 0 && model.n_items() > 0 {
+                        listview.set_height_request(-1);
+                    }
+                }
+            ));
+        }
+
         self.content.append(&listview);
+
         let playlist = Box::new(Playlist::new(listview, self.model.clone()));
         self.children.push(playlist);
     }
@@ -286,6 +304,9 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             if !self.model.like_visible() {
                 self.page.header().set_like_visible(false);
             }
+            if let Some(tooltip) = self.model.like_tooltip(self.model.is_liked()) {
+                self.page.header().set_like_tooltip(&tooltip);
+            }
         }
         self.page
             .load_artwork_or_finish(self.model.get_artwork().as_ref(), self.model.api_service());
@@ -317,6 +338,9 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
                 self.page.header().set_liked(self.model.is_liked());
                 if !self.model.like_visible() {
                     self.page.header().set_like_visible(false);
+                }
+                if let Some(tooltip) = self.model.like_tooltip(self.model.is_liked()) {
+                    self.page.header().set_like_tooltip(&tooltip);
                 }
             }
             return true;

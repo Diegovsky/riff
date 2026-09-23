@@ -1,4 +1,3 @@
-use gettextrs::*;
 use gio::{prelude::ActionMapExt, SimpleAction, SimpleActionGroup};
 use gtk::prelude::*;
 use libadwaita::prelude::AdwDialogExt;
@@ -9,16 +8,17 @@ use crate::app::components::{EventListener, Settings};
 use crate::app::{state::LoginEvent, AppEvent};
 
 pub struct UserMenu {
-    user_button: gtk::MenuButton,
     model: Rc<UserMenuModel>,
 }
 
 impl UserMenu {
     pub fn new(
         user_button: gtk::MenuButton,
+        main_menu: gio::Menu,
         settings: Settings,
         about: libadwaita::AboutDialog,
-        parent: gtk::Window,
+        shortcuts_dialog: libadwaita::ShortcutsDialog,
+        parent: libadwaita::ApplicationWindow,
         model: UserMenuModel,
     ) -> Self {
         let model = Rc::new(model);
@@ -37,12 +37,26 @@ impl UserMenu {
             logout
         });
 
-        action_group.add_action(&{
-            let settings_action = SimpleAction::new("settings", None);
-            settings_action.connect_activate(move |_, _| {
+        parent.add_action(&{
+            let preferences_action = SimpleAction::new("preferences", None);
+            preferences_action.connect_activate(move |_, _| {
                 settings.show_self();
             });
-            settings_action
+            preferences_action
+        });
+
+        parent.add_action(&{
+            let show_shortcuts_action = SimpleAction::new("show-shortcuts", None);
+            show_shortcuts_action.connect_activate(clone!(
+                #[weak]
+                shortcuts_dialog,
+                #[weak]
+                parent,
+                move |_, _| {
+                    shortcuts_dialog.present(Some(&parent));
+                }
+            ));
+            show_shortcuts_action
         });
 
         action_group.add_action(&{
@@ -59,39 +73,25 @@ impl UserMenu {
             about_action
         });
 
+        action_group.add_action(&{
+            let report_issue_action = SimpleAction::new("report-issue", None);
+            report_issue_action.connect_activate(move |_, _| {
+                crate::app::components::report_issue();
+            });
+            report_issue_action
+        });
+
         user_button.insert_action_group("menu", Some(&action_group));
+        user_button.set_menu_model(Some(&main_menu));
 
-        Self { user_button, model }
-    }
-
-    fn update_menu(&self) {
-        let menu = gio::Menu::new();
-        // translators: This is a menu entry.
-        menu.append(Some(&gettext("Preferences")), Some("menu.settings"));
-        // translators: This is a menu entry.
-        menu.append(Some(&gettext("About")), Some("menu.about"));
-        // translators: This is a menu entry.
-        menu.append(Some(&gettext("Quit")), Some("app.quit"));
-
-        if let Some(username) = self.model.username() {
-            let user_menu = gio::Menu::new();
-            // translators: This is a menu entry.
-            user_menu.append(Some(&gettext("Log Out")), Some("menu.logout"));
-            menu.insert_section(0, Some(&username), &user_menu);
-        }
-
-        self.user_button.set_menu_model(Some(&menu));
+        Self { model }
     }
 }
 
 impl EventListener for UserMenu {
     fn on_event(&mut self, event: &AppEvent) {
-        match event {
-            AppEvent::LoginEvent(LoginEvent::LoginCompleted) | AppEvent::Started => {
-                self.update_menu();
-                self.model.fetch_user_playlists();
-            }
-            _ => {}
+        if let AppEvent::LoginEvent(LoginEvent::LoginCompleted) | AppEvent::Started = event {
+            self.model.fetch_user_playlists();
         }
     }
 }

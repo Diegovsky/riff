@@ -127,6 +127,10 @@ impl SongModel {
         self.imp().unbind_all(self);
     }
 
+    pub fn push_signal(&self, id: SignalHandlerId) {
+        self.imp().push_signal(id);
+    }
+
     pub fn description(&self) -> impl Deref<Target = Track> + '_ {
         Ref::map(self.imp().song.borrow(), |s| {
             s.as_ref().expect("song set at constructor")
@@ -199,18 +203,22 @@ mod imp {
             // Can be true when playback is paused; just means this is the current song
             glib::ParamSpecBoolean::builder("playing")
                 .readwrite()
+                .explicit_notify()
                 .build(),
             glib::ParamSpecBoolean::builder("selected")
                 .readwrite()
+                .explicit_notify()
                 .build(),
             glib::ParamSpecBoolean::builder("liked")
                 .readwrite()
+                .explicit_notify()
                 .build(),
             glib::ParamSpecBoolean::builder("playable")
                 .read_only()
                 .build(),
             glib::ParamSpecBoolean::builder("explicit-filtered")
                 .readwrite()
+                .explicit_notify()
                 .build(),
         ];
     }
@@ -221,77 +229,41 @@ mod imp {
         }
 
         fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
-            match pspec.name() {
-                "playing" => {
-                    let is_playing = value
+            let state = self.state.get();
+            let new_state = match pspec.name() {
+                "playing" => SongState {
+                    is_playing: value
                         .get()
-                        .expect("type conformity checked by `Object::set_property`");
-                    let SongState {
-                        is_selected,
-                        is_liked,
-                        is_explicit_filtered,
-                        ..
-                    } = self.state.get();
-                    self.state.set(SongState {
-                        is_playing,
-                        is_selected,
-                        is_liked,
-                        is_explicit_filtered,
-                    });
-                }
-                "selected" => {
-                    let is_selected = value
+                        .expect("type conformity checked by `Object::set_property`"),
+                    ..state
+                },
+                "selected" => SongState {
+                    is_selected: value
                         .get()
-                        .expect("type conformity checked by `Object::set_property`");
-                    let SongState {
-                        is_playing,
-                        is_liked,
-                        is_explicit_filtered,
-                        ..
-                    } = self.state.get();
-                    self.state.set(SongState {
-                        is_playing,
-                        is_selected,
-                        is_liked,
-                        is_explicit_filtered,
-                    });
-                }
-                "liked" => {
-                    let is_liked = value
+                        .expect("type conformity checked by `Object::set_property`"),
+                    ..state
+                },
+                "liked" => SongState {
+                    is_liked: value
                         .get()
-                        .expect("type conformity checked by `Object::set_property`");
-                    let SongState {
-                        is_playing,
-                        is_selected,
-                        is_explicit_filtered,
-                        ..
-                    } = self.state.get();
-                    self.state.set(SongState {
-                        is_playing,
-                        is_selected,
-                        is_liked,
-                        is_explicit_filtered,
-                    });
-                }
-                "explicit-filtered" => {
-                    let is_explicit_filtered = value
+                        .expect("type conformity checked by `Object::set_property`"),
+                    ..state
+                },
+                "explicit-filtered" => SongState {
+                    is_explicit_filtered: value
                         .get()
-                        .expect("type conformity checked by `Object::set_property`");
-                    let SongState {
-                        is_playing,
-                        is_selected,
-                        is_liked,
-                        ..
-                    } = self.state.get();
-                    self.state.set(SongState {
-                        is_playing,
-                        is_selected,
-                        is_liked,
-                        is_explicit_filtered,
-                    });
-                }
+                        .expect("type conformity checked by `Object::set_property`"),
+                    ..state
+                },
                 _ => unimplemented!(),
+            };
+
+            if new_state == state {
+                return;
             }
+            self.state.set(new_state);
+            // These properties are `explicit_notify`, so we own the notification.
+            self.obj().notify_by_pspec(pspec);
         }
 
         fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
@@ -356,5 +328,72 @@ mod imp {
                 _ => unimplemented!(),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::models::make_track;
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    fn count_notifications(property: &str, apply: impl Fn(&SongModel)) -> u32 {
+        let model = SongModel::new(make_track("song1"));
+        let count = Rc::new(Cell::new(0u32));
+        let counter = count.clone();
+        model.connect_notify_local(Some(property), move |_, _| {
+            counter.set(counter.get() + 1);
+        });
+        apply(&model);
+        count.get()
+    }
+
+    #[test]
+    fn test_state_setters_do_not_notify_when_unchanged() {
+        // Song state is re-seeded in bulk on most app events, usually with the
+        // values the model already holds. Listeners on these properties can be
+        // expensive, so a no-op set must stay silent.
+        assert_eq!(
+            count_notifications("liked", |m| {
+                m.set_liked(false);
+                m.set_liked(false);
+            }),
+            0
+        );
+        assert_eq!(count_notifications("playing", |m| m.set_playing(false)), 0);
+        assert_eq!(
+            count_notifications("selected", |m| m.set_selected(false)),
+            0
+        );
+        assert_eq!(
+            count_notifications("explicit-filtered", |m| m.set_explicit_filtered(false)),
+            0
+        );
+    }
+
+    #[test]
+    fn test_state_setters_notify_once_per_change() {
+        assert_eq!(
+            count_notifications("liked", |m| {
+                m.set_liked(true);
+                m.set_liked(true);
+                m.set_liked(false);
+            }),
+            2
+        );
+    }
+
+    #[test]
+    fn test_state_setters_update_values() {
+        let model = SongModel::new(make_track("song1"));
+        model.set_liked(true);
+        model.set_playing(true);
+        model.set_selected(true);
+        model.set_explicit_filtered(true);
+        assert!(model.get_liked());
+        assert!(model.get_playing());
+        assert!(model.get_selected());
+        assert!(model.property::<bool>("explicit-filtered"));
     }
 }

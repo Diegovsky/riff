@@ -115,7 +115,7 @@ pub struct PlaylistSummary {
     pub title: String,
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, PartialEq, Eq)]
 pub struct SongState {
     pub is_playing: bool,
     pub is_selected: bool,

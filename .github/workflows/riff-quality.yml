@@ -37,10 +37,11 @@ jobs:
     name: "Blueprint Lint"
     runs-on: ubuntu-latest
     # Ubuntu's apt libadwaita typelib lags behind; run in a Fedora container
-    # that ships libadwaita 1.7 so blueprints using Adw 1.7 widgets (e.g.
-    # Adw.WrapBox) validate against the version the app actually builds against.
+    # that ships libadwaita 1.8+ so blueprints using newer Adw widgets (e.g.
+    # Adw.WrapBox, Adw.ShortcutsDialog) validate against the version the app
+    # actually builds against (Cargo.toml pins the `v1_8` libadwaita feature).
     container:
-      image: fedora:42
+      image: fedora:43
     steps:
       - uses: actions/checkout@v4
 

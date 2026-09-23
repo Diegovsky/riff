@@ -241,6 +241,14 @@ impl DetailsHeader {
         self.widget.imp().like_button.set_visible(visible);
     }
 
+    /// Override the like button's tooltip.
+    pub fn set_like_tooltip(&self, tooltip: &str) {
+        self.widget
+            .imp()
+            .like_button
+            .set_tooltip_text(Some(tooltip));
+    }
+
     // Signal connections
 
     /// Connect a handler to the play button. Also makes the button visible.

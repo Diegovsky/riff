@@ -70,15 +70,6 @@
   animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 
-/* === Body skeleton (default before loaded) === */
-.details-page-content .details-content-clamp listview {
-  background-color: @skeleton_color;
-  border-radius: 12px;
-  min-height: 400px;
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
-}
-
-
 /* === Loaded state clears skeletons === */
 
 .details-page--loaded .details-header__title {
@@ -110,11 +101,6 @@
   transition: opacity 0.3s ease;
 }
 
-.details-page--loaded .details-content-clamp listview {
-  animation: none;
-  background-color: transparent;
-  min-height: unset;
-}
 
 
 /* Circular variant for artist avatars */

@@ -133,6 +133,15 @@ impl Navigation {
             }
         ));
 
+        // Hide scrollbars on the stack's pages while the slide transition is running
+        navigation_stack.connect_transition_running_notify(|stack| {
+            if stack.is_transition_running() {
+                stack.add_css_class("transitioning");
+            } else {
+                stack.remove_css_class("transitioning");
+            }
+        });
+
         Self {
             model,
             split_view,

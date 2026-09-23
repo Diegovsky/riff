@@ -80,6 +80,9 @@ pub trait PageModel: ProvidesApi {
     fn like_visible(&self) -> bool {
         self.has_like_button()
     }
+    fn like_tooltip(&self, _is_liked: bool) -> Option<String> {
+        None
+    }
 
     // Info button
 
