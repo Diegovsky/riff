@@ -100,6 +100,7 @@ template $PlaybackWidget : Box {
         // when a track is playing.
         Box now_playing_button_box {
           visible: false;
+          width-request: 40;
           valign: center;
 
           Button now_playing_button {
@@ -177,6 +178,7 @@ template $PlaybackWidget : Box {
 
         MenuButton volume_button {
           visible: false;
+          width-request: 40;
           icon-name: 'multimedia-volume-control-symbolic';
           tooltip-text: _("Volume");
           halign: end;

@@ -10,8 +10,8 @@ use std::rc::Rc;
 use crate::app::components::DetailsPageModel;
 use crate::app::components::SongActions;
 use crate::app::components::{
-    dispatch_api_call, dispatch_api_read, labels, HasHeaderBarModel, HeaderImageShape, PageModel,
-    PlaylistModel, SimpleHeaderBarModel,
+    build_song_menu, dispatch_api_call, dispatch_api_read, labels, HasHeaderBarModel,
+    HeaderImageShape, PageModel, PlaylistModel, QueueMenuEntry, SimpleHeaderBarModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
@@ -66,7 +66,12 @@ impl PageModel for DetailsModel {
     }
 
     fn get_caption(&self) -> Option<String> {
-        Some("Album".to_string())
+        let album = self.get_album_info()?;
+        Some(match album.album_type {
+            AlbumType::Single => labels::SINGLE_CAPTION.clone(),
+            AlbumType::Compilation => labels::COMPILATION_CAPTION.clone(),
+            _ => labels::ALBUM_CAPTION.clone(),
+        })
     }
 
     fn header_image_shape(&self) -> HeaderImageShape {
@@ -154,6 +159,14 @@ impl PageModel for DetailsModel {
 
     fn has_like_button(&self) -> bool {
         true
+    }
+
+    fn like_tooltip(&self, is_liked: bool) -> Option<String> {
+        Some(if is_liked {
+            labels::UNLIKE_ALBUM.clone()
+        } else {
+            labels::LIKE_ALBUM.clone()
+        })
     }
 
     fn is_liked(&self) -> bool {
@@ -266,17 +279,14 @@ impl PlaylistModel for DetailsModel {
         Some(group.upcast())
     }
 
-    fn menu_for(&self, song: &Track) -> Option<gio::MenuModel> {
-        let menu = gio::Menu::new();
-        for artist in song.artists.iter() {
-            menu.append(
-                Some(&labels::more_from_label(&artist.name)),
-                Some(&format!("song.view_artist_{}", artist.rri.id)),
-            );
-        }
-        menu.append(Some(&*labels::COPY_LINK), Some("song.copy_link"));
-        menu.append(Some(&*labels::ADD_TO_QUEUE), Some("song.queue"));
-        Some(menu.upcast())
+    fn menu_for(&self, song: &Track, liked: bool) -> Option<gio::MenuModel> {
+        Some(build_song_menu(
+            song,
+            false,
+            None,
+            QueueMenuEntry::Add,
+            Some(liked),
+        ))
     }
 }
 

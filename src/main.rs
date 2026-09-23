@@ -15,7 +15,6 @@ use gio::ApplicationFlags;
 use gio::SimpleAction;
 use gtk::prelude::*;
 
-mod about;
 mod app;
 mod audio_engine;
 mod config;
@@ -55,7 +54,11 @@ fn main() {
 
     // Couple of actions used with shortcuts
     register_actions(&gtk_app, sender.clone());
-    about::setup_about(builder.object::<libadwaita::AboutDialog>("about").unwrap());
+    // Displayed as the accelerator hint next to "Preferences" in the main menu.
+    gtk_app.set_accels_for_action("win.preferences", &["<Ctrl>comma"]);
+    // Displayed as the accelerator hint next to "Keyboard Shortcuts" in the main menu.
+    gtk_app.set_accels_for_action("win.show-shortcuts", &["<Ctrl>question"]);
+    app::components::setup_about(builder.object::<libadwaita::AboutDialog>("about").unwrap());
 
     // Main app logic is hooked up here
     let app = App::new(settings, builder, sender.clone());

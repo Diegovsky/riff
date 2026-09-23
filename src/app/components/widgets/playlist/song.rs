@@ -119,11 +119,13 @@ mod imp {
                     if is_liked {
                         self.obj().add_css_class(LIKED_CLASS);
                         self.like_btn.set_icon_name("starred-symbolic");
-                        self.like_btn.set_tooltip_text(Some("Unlike"));
+                        self.like_btn
+                            .set_tooltip_text(Some(&crate::app::components::labels::UNLIKE));
                     } else {
                         self.obj().remove_css_class(LIKED_CLASS);
                         self.like_btn.set_icon_name("non-starred-symbolic");
-                        self.like_btn.set_tooltip_text(Some("Like"));
+                        self.like_btn
+                            .set_tooltip_text(Some(&crate::app::components::labels::LIKE));
                     }
                 }
                 "playable" => {

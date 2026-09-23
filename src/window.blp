@@ -163,8 +163,99 @@ Adw.ApplicationWindow window {
 Adw.AboutDialog about {
   application-name: "Riff";
   application-icon: "dev.diegovsky.Riff";
+  developer-name: "The Riff Team";
   website: "https://github.com/Diegovsky/riff";
   support-url: "https://discord.gg/rAAvFSC7VQ";
   issue-url: "https://github.com/Diegovsky/riff/issues";
   license-type: mit_x11;
+}
+
+Adw.ShortcutsDialog shortcuts_dialog {
+  Adw.ShortcutsSection {
+    title: _("Playback");
+
+    Adw.ShortcutsItem {
+      title: _("Play/Pause");
+      accelerator: "space";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Previous Track");
+      accelerator: "P";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Next Track");
+      accelerator: "N";
+    }
+  }
+
+  Adw.ShortcutsSection {
+    title: _("Navigation");
+
+    Adw.ShortcutsItem {
+      title: _("Search");
+      accelerator: "<Ctrl>F";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Go Back");
+      accelerator: "<Alt>Left";
+    }
+  }
+
+  Adw.ShortcutsSection {
+    title: _("General");
+
+    Adw.ShortcutsItem {
+      title: _("Preferences");
+      accelerator: "<Ctrl>comma";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Keyboard Shortcuts");
+      accelerator: "<Ctrl>question";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Quit");
+      accelerator: "<Ctrl>Q";
+    }
+  }
+}
+
+menu main_menu {
+  section {
+    item {
+      label: _("Preferences");
+      action: "win.preferences";
+    }
+
+    item {
+      label: _("Keyboard Shortcuts");
+      action: "win.show-shortcuts";
+    }
+
+    item {
+      label: _("Report Issue");
+      action: "menu.report-issue";
+    }
+
+    item {
+      label: _("About Riff");
+      action: "menu.about";
+    }
+  }
+
+  section {
+    item {
+      label: _("Log Out");
+      action: "menu.logout";
+    }
+
+    item {
+      label: _("Quit");
+      action: "app.quit";
+    }
+  }
 }

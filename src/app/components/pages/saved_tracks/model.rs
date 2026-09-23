@@ -13,8 +13,8 @@ use crate::{impl_playlist_model_base, impl_toggle_play};
 use crate::app::components::DetailsPageModel;
 use crate::app::components::SongActions;
 use crate::app::components::{
-    dispatch_api_read, labels, HasHeaderBarModel, HeaderImageShape, PageModel, PlaylistModel,
-    SimpleHeaderBarModel,
+    build_song_menu, dispatch_api_read, HasHeaderBarModel, HeaderImageShape, PageModel,
+    PlaylistModel, QueueMenuEntry, SimpleHeaderBarModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
@@ -179,17 +179,14 @@ impl PlaylistModel for SavedTracksModel {
         Some(group.upcast())
     }
 
-    fn menu_for(&self, song: &Track) -> Option<gio::MenuModel> {
-        let menu = gio::Menu::new();
-        menu.append(Some(&*labels::VIEW_ALBUM), Some("song.view_album"));
-        for artist in song.artists.iter() {
-            menu.append(
-                Some(&labels::more_from_label(&artist.name)),
-                Some(&format!("song.view_artist_{}", artist.rri.id)),
-            );
-        }
-        menu.append(Some(&*labels::COPY_LINK), Some("song.copy_link"));
-        Some(menu.upcast())
+    fn menu_for(&self, song: &Track, liked: bool) -> Option<gio::MenuModel> {
+        Some(build_song_menu(
+            song,
+            true,
+            None,
+            QueueMenuEntry::None,
+            Some(liked),
+        ))
     }
 }
 

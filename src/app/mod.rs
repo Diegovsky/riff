@@ -3,6 +3,7 @@ use crate::player::Command;
 use crate::settings::{RiffSettings, StateTracker};
 use futures::channel::mpsc::UnboundedSender;
 use gio::prelude::SettingsExt;
+use glib::object::Cast;
 use riff_auth::TokenStore;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -265,14 +266,25 @@ impl App {
         app_model: Rc<AppModel>,
         dispatcher: Dispatcher,
     ) -> Box<UserMenu> {
-        let parent: gtk::Window = builder.object("window").unwrap();
+        let parent: libadwaita::ApplicationWindow = builder.object("window").unwrap();
         let settings_model = SettingsModel::new(app_model.clone(), dispatcher.clone());
-        let settings = Settings::new(parent.clone(), settings_model);
+        let settings = Settings::new(parent.clone().upcast(), settings_model);
 
         let button: gtk::MenuButton = builder.object("user").unwrap();
+        let main_menu: gio::Menu = builder.object("main_menu").unwrap();
         let about: libadwaita::AboutDialog = builder.object("about").unwrap();
+        let shortcuts_dialog: libadwaita::ShortcutsDialog =
+            builder.object("shortcuts_dialog").unwrap();
         let model = UserMenuModel::new(app_model, dispatcher);
-        let user_menu = UserMenu::new(button, settings, about, parent, model);
+        let user_menu = UserMenu::new(
+            button,
+            main_menu,
+            settings,
+            about,
+            shortcuts_dialog,
+            parent,
+            model,
+        );
         Box::new(user_menu)
     }
 

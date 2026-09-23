@@ -12,8 +12,8 @@ use std::rc::Rc;
 use crate::app::components::DetailsPageModel;
 use crate::app::components::SongActions;
 use crate::app::components::{
-    dispatch_api_call, dispatch_api_read, labels, HasHeaderBarModel, HeaderImageShape, PageModel,
-    PlaylistModel, SimpleHeaderBarModel,
+    build_song_menu, dispatch_api_call, dispatch_api_read, labels, HasHeaderBarModel,
+    HeaderImageShape, PageModel, PlaylistModel, QueueMenuEntry, SimpleHeaderBarModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
@@ -179,6 +179,14 @@ impl PageModel for PlaylistDetailsModel {
         true
     }
 
+    fn like_tooltip(&self, is_liked: bool) -> Option<String> {
+        Some(if is_liked {
+            labels::UNLIKE_PLAYLIST.clone()
+        } else {
+            labels::LIKE_PLAYLIST.clone()
+        })
+    }
+
     fn is_liked(&self) -> bool {
         self.app_model
             .get_state()
@@ -307,18 +315,14 @@ impl PlaylistModel for PlaylistDetailsModel {
         Some(group.upcast())
     }
 
-    fn menu_for(&self, song: &Track) -> Option<gio::MenuModel> {
-        let menu = gio::Menu::new();
-        menu.append(Some(&*labels::VIEW_ALBUM), Some("song.view_album"));
-        for artist in song.artists.iter() {
-            menu.append(
-                Some(&labels::more_from_label(&artist.name)),
-                Some(&format!("song.view_artist_{}", artist.rri.id)),
-            );
-        }
-        menu.append(Some(&*labels::COPY_LINK), Some("song.copy_link"));
-        menu.append(Some(&*labels::ADD_TO_QUEUE), Some("song.queue"));
-        Some(menu.upcast())
+    fn menu_for(&self, song: &Track, liked: bool) -> Option<gio::MenuModel> {
+        Some(build_song_menu(
+            song,
+            true,
+            None,
+            QueueMenuEntry::Add,
+            Some(liked),
+        ))
     }
 }
 

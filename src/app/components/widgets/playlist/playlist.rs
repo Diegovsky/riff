@@ -1,14 +1,81 @@
 use gdk::ffi::GDK_BUTTON_SECONDARY;
 use gio::prelude::*;
+use gio::SimpleActionGroup;
 use gtk::{prelude::*, GestureClick};
 use std::ops::Deref;
 use std::rc::Rc;
 
+use crate::app::components::labels;
 use crate::app::components::utils::{ancestor, AnimatorDefault};
 use crate::app::components::{Component, EventListener, SongWidget};
 use crate::app::models::{SongListModel, SongModel, SongState, Track, TrackExt};
 use crate::app::state::{BrowserEvent, PlaybackEvent, SelectionEvent, SelectionState};
 use crate::app::{AppEvent, ProvidesApi};
+
+/// Whether a song's context menu should offer a queue entry, and which one.
+pub enum QueueMenuEntry {
+    /// No queue entry (e.g. saved tracks, search results).
+    None,
+    /// "Add to Queue", appending the song to the play queue.
+    Add,
+    /// "Remove from Queue", used on the Now Playing page itself.
+    Remove,
+}
+
+pub fn build_song_menu(
+    song: &Track,
+    show_view_album: bool,
+    exclude_artist_id: Option<&str>,
+    queue_entry: QueueMenuEntry,
+    liked: Option<bool>,
+) -> gio::MenuModel {
+    let info_section = gio::Menu::new();
+    if show_view_album {
+        info_section.append(Some(&*labels::VIEW_ALBUM), Some("song.view_album"));
+    }
+    for artist in song
+        .artists
+        .iter()
+        .filter(|a| exclude_artist_id != Some(a.rri.id.as_str()))
+    {
+        info_section.append(
+            Some(&labels::more_from_label(&artist.name)),
+            Some(&format!("song.view_artist_{}", artist.rri.id)),
+        );
+    }
+
+    let queue_section = gio::Menu::new();
+    match queue_entry {
+        QueueMenuEntry::None => {}
+        QueueMenuEntry::Add => {
+            queue_section.append(Some(&*labels::ADD_TO_QUEUE), Some("song.queue"));
+        }
+        QueueMenuEntry::Remove => {
+            queue_section.append(Some(&*labels::REMOVE_FROM_QUEUE), Some("song.dequeue"));
+        }
+    }
+    if let Some(liked) = liked {
+        let label = if liked {
+            &*labels::UNLIKE
+        } else {
+            &*labels::LIKE
+        };
+        queue_section.append(Some(label), Some("song.like"));
+    }
+
+    let link_section = gio::Menu::new();
+    link_section.append(Some(&*labels::COPY_LINK), Some("song.copy_link"));
+
+    let menu = gio::Menu::new();
+    if info_section.n_items() > 0 {
+        menu.append_section(None, &info_section);
+    }
+    if queue_section.n_items() > 0 {
+        menu.append_section(None, &queue_section);
+    }
+    menu.append_section(None, &link_section);
+    menu.upcast()
+}
 
 pub trait PlaylistModel: ProvidesApi {
     fn is_paused(&self) -> bool;
@@ -30,7 +97,8 @@ pub trait PlaylistModel: ProvidesApi {
     fn actions_for(&self, _song: &Track) -> Option<gio::ActionGroup> {
         None
     }
-    fn menu_for(&self, _song: &Track) -> Option<gio::MenuModel> {
+
+    fn menu_for(&self, _song: &Track, _liked: bool) -> Option<gio::MenuModel> {
         None
     }
 
@@ -146,24 +214,45 @@ where
                 let item = item.downcast_ref::<gtk::ListItem>().unwrap();
                 let song_model = item.item().unwrap().downcast::<SongModel>().unwrap();
 
-                // IMPORTANT: this callback must NOT read AppState (e.g. via
-                // model.song_state / current_song_id / selection). It runs while
-                // GTK emits items_changed, which we now emit synchronously from
-                // inside AppState's borrow_mut. Reading AppState here would panic
-                // (already-borrowed) and reintroduce the crash class this design
-                // avoids.
-                //
-                // The widget's appearance is driven entirely by the SongModel's
-                // own GObject properties (playing/selected/liked), which are
-                // seeded/updated out-of-band by Playlist::update_list. actions
-                // and menus are built from the SongModel's Track, not
-                // from a lookup into AppState.
                 let widget = item.child().unwrap().downcast::<SongWidget>().unwrap();
                 widget.bind(&song_model, api_service.clone(), model.show_song_covers());
 
                 let song = song_model.description();
-                widget.set_actions(model.actions_for(&song).as_ref());
-                widget.set_menu(model.menu_for(&song).as_ref());
+                let actions = model.actions_for(&song);
+                if let Some(group) = actions
+                    .as_ref()
+                    .and_then(|a| a.downcast_ref::<SimpleActionGroup>())
+                {
+                    let like = gio::SimpleAction::new("like", None);
+                    let like_id = song.rri.id.clone();
+                    like.connect_activate(clone!(
+                        #[weak]
+                        model,
+                        move |_, _| {
+                            model.toggle_song_like(&like_id);
+                        }
+                    ));
+                    group.add_action(&like);
+                }
+                widget.set_actions(actions.as_ref());
+                widget.set_menu(model.menu_for(&song, song_model.get_liked()).as_ref());
+
+                let menu_song = song.clone();
+                let handler_id = song_model.connect_notify_local(
+                    Some("liked"),
+                    clone!(
+                        #[weak]
+                        model,
+                        #[weak]
+                        widget,
+                        move |song_model, _| {
+                            widget.set_menu(
+                                model.menu_for(&menu_song, song_model.get_liked()).as_ref(),
+                            );
+                        }
+                    ),
+                );
+                song_model.push_signal(handler_id);
 
                 let like_id = song.rri.id.clone();
                 widget.connect_like(clone!(
@@ -262,15 +351,6 @@ where
         }
     }
 
-    /// Refresh every loaded song's presentation state (playing/selected/liked)
-    /// from the model. Has NO side effects on scroll position.
-    ///
-    /// Use this for content-change events (initial load, pagination, queue
-    /// changes). Autoscrolling on those events is wrong and, on multi-section
-    /// pages (e.g. the artist page, where a playlist and a card list share one
-    /// scrolled window), drives a feedback loop: autoscroll -> bottom edge ->
-    /// card-list load_more -> content event -> autoscroll ... which hammers
-    /// pagination and can surface duplicate cards.
     fn seed_song_states(&self) {
         self.model.song_list_model().for_each(|_, model_song| {
             let state = self.model.song_state(&model_song.get_id());

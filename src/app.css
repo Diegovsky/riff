@@ -20,3 +20,8 @@
 .playlist__title-entry--ro {
   background: none;
 }
+
+/* Hide scrollbars while the navigation stack's page transition is running */
+stack.transitioning scrollbar {
+  opacity: 0;
+}

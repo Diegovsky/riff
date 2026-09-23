@@ -1,3 +1,6 @@
+mod about;
+pub use about::*;
+
 mod details_album;
 pub use details_album::*;
 

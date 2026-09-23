@@ -11,7 +11,7 @@ use crate::impl_playlist_model_base;
 
 use crate::app::components::DetailsPageModel;
 use crate::app::components::SongActions;
-use crate::app::components::{labels, PlaylistModel};
+use crate::app::components::{build_song_menu, PlaylistModel, QueueMenuEntry};
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
 use crate::app::state::{PlaybackAction, SearchState, SelectionState, CARD_BATCH_SIZE};
@@ -86,17 +86,14 @@ impl PlaylistModel for SearchScopeTracksModel {
         Some(group.upcast())
     }
 
-    fn menu_for(&self, song: &Track) -> Option<gio::MenuModel> {
-        let menu = gio::Menu::new();
-        menu.append(Some(&*labels::VIEW_ALBUM), Some("song.view_album"));
-        for artist in song.artists.iter() {
-            menu.append(
-                Some(&labels::more_from_label(&artist.name)),
-                Some(&format!("song.view_artist_{}", artist.rri.id)),
-            );
-        }
-        menu.append(Some(&*labels::COPY_LINK), Some("song.copy_link"));
-        Some(menu.upcast())
+    fn menu_for(&self, song: &Track, liked: bool) -> Option<gio::MenuModel> {
+        Some(build_song_menu(
+            song,
+            true,
+            None,
+            QueueMenuEntry::None,
+            Some(liked),
+        ))
     }
 }
 
