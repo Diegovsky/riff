@@ -1,5 +1,5 @@
 // Model for the saved tracks (liked songs) page.
-// Implements PageModel, PlaylistModel, and SimpleHeaderBarModel to drive
+// Implements PageModel, TrackListModel, and SimpleHeaderBarModel to drive
 // track listing, pagination, playback, and selection.
 
 use gettextrs::gettext;
@@ -8,13 +8,13 @@ use gio::SimpleActionGroup;
 use std::ops::Deref;
 use std::rc::Rc;
 
-use crate::{impl_playlist_model_base, impl_toggle_play};
+use crate::{impl_toggle_play, impl_track_list_model_base};
 
 use crate::app::components::DetailsPageModel;
 use crate::app::components::SongActions;
 use crate::app::components::{
     build_song_menu, dispatch_api_read, HasHeaderBarModel, HeaderImageShape, PageModel,
-    PlaylistModel, QueueMenuEntry, SimpleHeaderBarModel,
+    QueueMenuEntry, SimpleHeaderBarModel, TrackListModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
@@ -62,7 +62,7 @@ impl PageModel for SavedTracksModel {
     }
 
     fn get_subtitle(&self) -> Option<String> {
-        let loaded = PlaylistModel::song_list_model(self).len();
+        let loaded = TrackListModel::song_list_model(self).len();
         let count = self
             .app_model
             .get_state()
@@ -138,7 +138,7 @@ impl PageModel for SavedTracksModel {
     }
 }
 
-impl PlaylistModel for SavedTracksModel {
+impl TrackListModel for SavedTracksModel {
     fn song_list_model(&self) -> SongListModel {
         self.app_model
             .get_state()
@@ -153,14 +153,22 @@ impl PlaylistModel for SavedTracksModel {
         true
     }
 
-    impl_playlist_model_base!();
+    fn show_album_column(&self) -> bool {
+        true
+    }
+
+    fn load_more(&self) {
+        PageModel::load_more(self);
+    }
+
+    impl_track_list_model_base!();
 
     fn enable_selection(&self) -> bool {
         self.enable_selection_with_context(SelectionContext::SavedTracks)
     }
 
     fn play_song_at(&self, pos: usize, id: &str) {
-        let batch = PlaylistModel::song_list_model(self).song_batch_for(pos);
+        let batch = TrackListModel::song_list_model(self).song_batch_for(pos);
         if let Some(batch) = batch {
             self.dispatcher
                 .dispatch(PlaybackAction::LoadPagedSongs(SongsSource::SavedTracks, batch).into());
@@ -169,14 +177,14 @@ impl PlaylistModel for SavedTracksModel {
         }
     }
 
-    fn actions_for(&self, song: &Track) -> Option<gio::ActionGroup> {
+    fn actions_for(&self, song: &Track) -> Option<SimpleActionGroup> {
         let group = SimpleActionGroup::new();
-        for a in song.make_artist_actions(self.dispatcher.clone(), None) {
+        for a in song.make_artist_actions(self.dispatcher.clone()) {
             group.add_action(&a);
         }
-        group.add_action(&song.make_album_action(self.dispatcher.clone(), None));
-        group.add_action(&song.make_link_action(None));
-        Some(group.upcast())
+        group.add_action(&song.make_album_action(self.dispatcher.clone()));
+        group.add_action(&song.make_link_action());
+        Some(group)
     }
 
     fn menu_for(&self, song: &Track, liked: bool) -> Option<gio::MenuModel> {
@@ -199,7 +207,7 @@ impl SimpleHeaderBarModel for SavedTracksModel {
     }
 
     fn select_all(&self) {
-        let songs: Vec<Track> = PlaylistModel::song_list_model(self).collect();
+        let songs: Vec<Track> = TrackListModel::song_list_model(self).collect();
         self.dispatcher
             .dispatch(SelectionAction::Select(songs).into());
     }

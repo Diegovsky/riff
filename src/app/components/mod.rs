@@ -88,6 +88,30 @@ where
     spawn_api_call(dispatcher, move || call(load))
 }
 
+pub fn dispatch_api_read_with_fallback<F, C, OnFail>(
+    dispatcher: &Dispatcher,
+    call: C,
+    on_fail: OnFail,
+) where
+    C: 'static + Send + Clone + FnOnce(Load) -> F,
+    F: 'static + Send + Future<Output = Result<AppAction, DomainError>>,
+    OnFail: 'static + Send + FnOnce() -> AppAction,
+{
+    let load = load::at(LoadPriority::Visible);
+    let dispatcher = dispatcher.clone();
+    tokio::spawn(async move {
+        let (mut actions, succeeded) = resolve_api_call(move || {
+            let call = call.clone();
+            async move { call(load).await.map(|a| vec![a]) }
+        })
+        .await;
+        if !succeeded {
+            actions.push(on_fail());
+        }
+        dispatcher.dispatch_many(actions);
+    });
+}
+
 fn spawn_api_call<F, C>(dispatcher: &Dispatcher, call: C)
 where
     C: 'static + Send + Clone + FnOnce() -> F,
@@ -95,11 +119,13 @@ where
 {
     let dispatcher = dispatcher.clone();
     tokio::spawn(async move {
-        dispatcher.dispatch_many(resolve_api_call(call).await);
+        dispatcher.dispatch_many(resolve_api_call(call).await.0);
     });
 }
 
-async fn resolve_api_call<F, C>(call: C) -> Vec<AppAction>
+/// Resolves an api call to the actions it produces, alongside whether the
+/// underlying call ultimately succeeded (after any internal auth retry).
+async fn resolve_api_call<F, C>(call: C) -> (Vec<AppAction>, bool)
 where
     C: Clone + FnOnce() -> F,
     F: Future<Output = Result<Vec<AppAction>, DomainError>>,
@@ -107,29 +133,39 @@ where
     let first_call = call.clone();
     let result = first_call().await;
     match result {
-        Ok(actions) => actions,
-        Err(DomainError::NoToken) => vec![],
-        Err(DomainError::Shed) => vec![],
-        Err(DomainError::AuthExpired) => call().await.unwrap_or_else(|_| Vec::new()),
+        Ok(actions) => (actions, true),
+        Err(DomainError::NoToken) => (vec![], false),
+        Err(DomainError::Shed) => (vec![], false),
+        Err(DomainError::AuthExpired) => {
+            let retried = call().await;
+            let ok = retried.is_ok();
+            (retried.unwrap_or_else(|_| Vec::new()), ok)
+        }
         Err(DomainError::RateLimited { .. }) => {
             error!("Spotify API error: rate limited");
-            vec![AppAction::ShowNotification(gettext(
-                // translators: This notification is shown when Spotify throttles requests.
-                "Rate limited by Spotify. Please wait a moment and try again.",
-            ))]
+            (
+                vec![AppAction::ShowNotification(gettext(
+                    // translators: This notification is shown when Spotify throttles requests.
+                    "Rate limited by Spotify. Please wait a moment and try again.",
+                ))],
+                false,
+            )
         }
         Err(err) => {
             // "Simulate Offline" surfaces as a network error in debug builds;
             // the connection-lost banner already covers it, so skip the toast.
             #[cfg(debug_assertions)]
             if riff_api::is_simulate_offline() {
-                return vec![];
+                return (vec![], false);
             }
             error!("Spotify API error: {}", err);
-            vec![AppAction::ShowNotification(gettext(
-                // translators: This notification is the default message for unhandled errors. Logs refer to console output.
-                "An error occured. Check logs for details!",
-            ))]
+            (
+                vec![AppAction::ShowNotification(gettext(
+                    // translators: This notification is the default message for unhandled errors. Logs refer to console output.
+                    "An error occured. Check logs for details!",
+                ))],
+                false,
+            )
         }
     }
 }

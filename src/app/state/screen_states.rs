@@ -101,6 +101,12 @@ impl UpdatableState for DetailsState {
                 self.next_tracks_page.next_offset_take();
                 vec![]
             }
+            BrowserAction::PageRequestFailed(PaginationTarget::AlbumTracks(id), offset)
+                if id == &self.id =>
+            {
+                self.next_tracks_page.restore_offset(*offset);
+                vec![]
+            }
             BrowserAction::SaveAlbum(album) if album.rri.id == self.id => {
                 self.is_liked = true;
                 vec![BrowserEvent::AlbumSaved(album.rri.id.clone())]
@@ -166,6 +172,12 @@ impl UpdatableState for PlaylistDetailsState {
                 if id == &self.id =>
             {
                 self.next_tracks_page.next_offset_take();
+                vec![]
+            }
+            BrowserAction::PageRequestFailed(PaginationTarget::PlaylistTracks(id), offset)
+                if id == &self.id =>
+            {
+                self.next_tracks_page.restore_offset(*offset);
                 vec![]
             }
             BrowserAction::RemoveTracksFromPlaylist(id, uris) if id == &self.id => {
@@ -684,6 +696,68 @@ mod tests {
 
         let next = &artist_state.next_page;
         assert_eq!(None, next.next_offset);
+    }
+
+    #[test]
+    fn test_album_tracks_page_request_failed_restores_offset() {
+        let id = "album-id".to_string();
+        let mut state = DetailsState::new(id.clone());
+        state.update_with(Cow::Owned(BrowserAction::SetAlbumTracks(
+            id.clone(),
+            Box::new(Page {
+                items: (0..50).map(|i| make_track(&format!("t{i}"))).collect(),
+                offset: Some(0),
+                total: None,
+                next_cursor: None,
+            }),
+        )));
+        assert_eq!(state.next_tracks_page.next_offset, Some(50));
+
+        // ConsumeNextPage eagerly advances the offset before the request completes.
+        state.update_with(Cow::Owned(BrowserAction::ConsumeNextPage(
+            PaginationTarget::AlbumTracks(id.clone()),
+        )));
+        assert_eq!(state.next_tracks_page.next_offset, Some(100));
+
+        // The request for offset 50 failed - it must be retried, not skipped.
+        state.update_with(Cow::Owned(BrowserAction::PageRequestFailed(
+            PaginationTarget::AlbumTracks(id.clone()),
+            50,
+        )));
+        assert_eq!(state.next_tracks_page.next_offset, Some(50));
+    }
+
+    #[test]
+    fn test_playlist_tracks_page_request_failed_restores_offset() {
+        let id = "playlist-id".to_string();
+        let mut state = PlaylistDetailsState::new(id.clone());
+        state.update_with(Cow::Owned(BrowserAction::SetPlaylistDetails(
+            Box::new(crate::app::models::Playlist {
+                rri: crate::app::models::ResourceId::new(
+                    riff_api::models::Provider::Spotify,
+                    id.clone(),
+                ),
+                ..Default::default()
+            }),
+            Box::new(Page {
+                items: (0..50).map(|i| make_track(&format!("t{i}"))).collect(),
+                offset: Some(0),
+                total: None,
+                next_cursor: None,
+            }),
+        )));
+        assert_eq!(state.next_tracks_page.next_offset, Some(50));
+
+        state.update_with(Cow::Owned(BrowserAction::ConsumeNextPage(
+            PaginationTarget::PlaylistTracks(id.clone()),
+        )));
+        assert_eq!(state.next_tracks_page.next_offset, Some(100));
+
+        state.update_with(Cow::Owned(BrowserAction::PageRequestFailed(
+            PaginationTarget::PlaylistTracks(id.clone()),
+            50,
+        )));
+        assert_eq!(state.next_tracks_page.next_offset, Some(50));
     }
 
     fn playlist(id: &str, title: &str) -> Playlist {

@@ -12,8 +12,9 @@ use std::rc::Rc;
 use crate::app::components::DetailsPageModel;
 use crate::app::components::SongActions;
 use crate::app::components::{
-    build_song_menu, dispatch_api_call, dispatch_api_read, labels, HasHeaderBarModel,
-    HeaderImageShape, PageModel, PlaylistModel, QueueMenuEntry, SimpleHeaderBarModel,
+    build_song_menu, dispatch_api_call, dispatch_api_read, dispatch_api_read_with_fallback, labels,
+    HasHeaderBarModel, HeaderImageShape, PageModel, QueueMenuEntry, SimpleHeaderBarModel,
+    TrackListModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
@@ -22,7 +23,7 @@ use crate::app::state::{
 };
 use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, PaginationTarget, SongsSource};
 use crate::feature_flags::{self, FeatureFlag};
-use crate::{impl_playlist_model_base, impl_toggle_play};
+use crate::{impl_toggle_play, impl_track_list_model_base};
 use riff_api::DomainError;
 
 /// Data model for the playlist detail page. Composes `DetailsPageModel` via Deref.
@@ -152,13 +153,21 @@ impl PageModel for PlaylistDetailsModel {
             BrowserAction::ConsumeNextPage(PaginationTarget::PlaylistTracks(id.clone())).into(),
         );
 
-        dispatch_api_read(&self.dispatcher, move |tag| async move {
-            api.get_playlist_tracks(&id, offset, batch_size, tag)
-                .await
-                .map(|song_batch| {
-                    BrowserAction::AppendPlaylistTracks(id, Box::new(song_batch)).into()
-                })
-        });
+        let restore_target = PaginationTarget::PlaylistTracks(id.clone());
+        dispatch_api_read_with_fallback(
+            &self.dispatcher,
+            move |tag| {
+                let id = id.clone();
+                async move {
+                    api.get_playlist_tracks(&id, offset, batch_size, tag)
+                        .await
+                        .map(|song_batch| {
+                            BrowserAction::AppendPlaylistTracks(id, Box::new(song_batch)).into()
+                        })
+                }
+            },
+            move || BrowserAction::PageRequestFailed(restore_target.clone(), offset).into(),
+        );
     }
 
     fn is_loaded(&self) -> bool {
@@ -268,7 +277,7 @@ impl PageModel for PlaylistDetailsModel {
     }
 }
 
-impl PlaylistModel for PlaylistDetailsModel {
+impl TrackListModel for PlaylistDetailsModel {
     fn song_list_model(&self) -> SongListModel {
         self.state()
             .browser
@@ -278,7 +287,15 @@ impl PlaylistModel for PlaylistDetailsModel {
             .clone()
     }
 
-    impl_playlist_model_base!();
+    fn load_more(&self) {
+        PageModel::load_more(self);
+    }
+
+    fn show_album_column(&self) -> bool {
+        true
+    }
+
+    impl_track_list_model_base!();
 
     fn enable_selection(&self) -> bool {
         if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
@@ -293,7 +310,7 @@ impl PlaylistModel for PlaylistDetailsModel {
     }
 
     fn play_song_at(&self, pos: usize, id: &str) {
-        let batch = PlaylistModel::song_list_model(self).song_batch_for(pos);
+        let batch = TrackListModel::song_list_model(self).song_batch_for(pos);
         if let Some(batch) = batch {
             self.dispatcher.dispatch(
                 PlaybackAction::LoadPagedSongs(SongsSource::Playlist(self.id.clone()), batch)
@@ -304,15 +321,15 @@ impl PlaylistModel for PlaylistDetailsModel {
         }
     }
 
-    fn actions_for(&self, song: &Track) -> Option<gio::ActionGroup> {
+    fn actions_for(&self, song: &Track) -> Option<SimpleActionGroup> {
         let group = SimpleActionGroup::new();
-        for a in song.make_artist_actions(self.dispatcher.clone(), None) {
+        for a in song.make_artist_actions(self.dispatcher.clone()) {
             group.add_action(&a);
         }
-        group.add_action(&song.make_album_action(self.dispatcher.clone(), None));
-        group.add_action(&song.make_link_action(None));
-        group.add_action(&song.make_queue_action(self.dispatcher.clone(), None));
-        Some(group.upcast())
+        group.add_action(&song.make_album_action(self.dispatcher.clone()));
+        group.add_action(&song.make_link_action());
+        group.add_action(&song.make_queue_action(self.dispatcher.clone()));
+        Some(group)
     }
 
     fn menu_for(&self, song: &Track, liked: bool) -> Option<gio::MenuModel> {
@@ -339,7 +356,7 @@ impl SimpleHeaderBarModel for PlaylistDetailsModel {
     }
 
     fn select_all(&self) {
-        let songs: Vec<Track> = PlaylistModel::song_list_model(self).collect();
+        let songs: Vec<Track> = TrackListModel::song_list_model(self).collect();
         self.dispatcher
             .dispatch(SelectionAction::Select(songs).into());
     }

@@ -9,7 +9,7 @@ use crate::app::components::utils::Debouncer;
 use crate::app::components::widgets::card_list::card_view_menu::CardViewMenu;
 use crate::app::components::{
     display_add_css_provider, CardLayout, CardList, CardListModel, CardSize, CardWidget, Component,
-    EventListener, HeaderRegistrar, ImageShape, Playlist, SortOrder, CLAMP_MAX_SIZE,
+    EventListener, HeaderRegistrar, ImageShape, SortOrder, TrackList, CLAMP_MAX_SIZE,
 };
 use crate::app::models::{CardModel, SearchType, Track};
 use crate::app::state::{AppEvent, BrowserEvent};
@@ -472,7 +472,8 @@ impl SearchResults {
         ));
         let track_listview =
             gtk::ListView::new(None::<gtk::NoSelection>, None::<gtk::ListItemFactory>);
-        let scope_playlist = Playlist::new(track_listview.clone(), Rc::clone(&scope_tracks_model));
+        let scope_track_list =
+            TrackList::new(track_listview.clone(), Rc::clone(&scope_tracks_model));
 
         // Constrain the track list width to match the Now Playing page.
         track_listview.set_hexpand(true);
@@ -496,6 +497,8 @@ impl SearchResults {
         content_stack.add_named(&tracks_clamp, Some(PAGE_TRACKS));
         content_stack.set_visible_child_name(PAGE_ALL);
         widget.imp().results_box.append(&content_stack);
+
+        scope_track_list.connect_scrolling();
 
         // Card view menu (layout/size/sort controls) in the headerbar.
         let current_sort = Rc::new(Cell::new(SortOrder::RecentlyAdded));
@@ -557,7 +560,7 @@ impl SearchResults {
             layout,
             size,
             debouncer: Debouncer::new(),
-            children: vec![Box::new(scope_playlist)],
+            children: vec![Box::new(scope_track_list)],
             registrar,
         }
     }

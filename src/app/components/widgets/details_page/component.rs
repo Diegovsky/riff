@@ -5,11 +5,9 @@ use std::rc::Rc;
 use super::{is_playback_event, DetailsPage, PageModel};
 use crate::app::components::{
     CardLayout, CardList, CardListModel, CardSize, Component, EmbeddedCardList, EventListener,
-    FilterToggle, HeaderBarModel, HeaderRegistrar, Playlist, PlaylistModel, SortOrder,
+    FilterToggle, HeaderBarModel, HeaderRegistrar, SortOrder, TrackList, TrackListModel,
 };
 use crate::app::{AppEvent, Dispatcher};
-
-const PLAYLIST_LOADING_HEIGHT: i32 = 400;
 
 /// A generic details page component that wires all standard behavior
 /// from a `PageModel` implementation automatically.
@@ -27,7 +25,7 @@ pub struct DetailsPageComponent<M> {
 impl<M: PageModel + 'static> DetailsPageComponent<M> {
     /// Create a details page with an internal content box.
     ///
-    /// Use [`Self::create_playlist`] and [`Self::create_card_list`] to append
+    /// Use [`Self::create_track_list`] and [`Self::create_card_list`] to append
     /// widgets into the content area in call order.
     pub fn new<H: HeaderBarModel + 'static>(
         model: Rc<M>,
@@ -65,11 +63,11 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         self.end_box.append(widget);
     }
 
-    /// Create a [`Playlist`] child, appending an optional label and a `ListView`
-    /// to the content box. Registers the playlist as an event listener.
-    pub fn create_playlist(&mut self, label: Option<&str>)
+    /// Create a [`TrackList`] child, appending an optional label and a `ListView`
+    /// to the content box. Registers the track list as an event listener.
+    pub fn create_track_list(&mut self, label: Option<&str>)
     where
-        M: PlaylistModel,
+        M: TrackListModel,
     {
         if let Some(text) = label {
             let lbl = gtk::Label::builder()
@@ -83,24 +81,13 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         let listview = gtk::ListView::new(None::<gtk::NoSelection>, None::<gtk::ListItemFactory>);
         listview.set_margin_bottom(16);
 
-        let list_model = self.model.song_list_model();
-        if list_model.n_items() == 0 {
-            listview.set_height_request(PLAYLIST_LOADING_HEIGHT);
-            list_model.connect_items_changed(clone!(
-                #[weak]
-                listview,
-                move |model, _, _, added| {
-                    if added > 0 && model.n_items() > 0 {
-                        listview.set_height_request(-1);
-                    }
-                }
-            ));
-        }
-
         self.content.append(&listview);
 
-        let playlist = Box::new(Playlist::new(listview, self.model.clone()));
-        self.children.push(playlist);
+        let track_list = TrackList::new(listview, self.model.clone());
+        // Requires an ancestor ScrolledWindow, provided by DetailsPage; must
+        // run after the listview above is appended into the page's content.
+        track_list.connect_scrolling();
+        self.children.push(Box::new(track_list));
     }
 
     /// Create an [`EmbeddedCardList`] with view controls, appending it to the content box

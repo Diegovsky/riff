@@ -9,7 +9,7 @@ use std::rc::Rc;
 use super::NowPlayingModel;
 use crate::app::components::{
     Component, DetailsPageComponent, DeviceSelector, DeviceSelectorWidget, EventListener,
-    HasHeaderBarModel, HeaderRegistrar, PlaylistModel,
+    HasHeaderBarModel, HeaderRegistrar, TrackListModel,
 };
 use crate::app::state::PlaybackEvent;
 use crate::app::AppEvent;
@@ -27,7 +27,7 @@ impl NowPlaying {
     pub fn new(model: Rc<NowPlayingModel>, registrar: HeaderRegistrar, name: String) -> Self {
         let mut component =
             DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), registrar, name);
-        component.create_playlist(Some(&gettext("Queue")));
+        component.create_track_list(Some(&gettext("Queue")));
 
         if feature_flags::is_enabled(FeatureFlag::DeviceSelector) {
             let ds_widget: DeviceSelectorWidget = glib::Object::new();

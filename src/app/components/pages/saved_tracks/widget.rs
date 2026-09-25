@@ -20,7 +20,7 @@ impl SavedTracks {
     pub fn new(model: Rc<SavedTracksModel>, registrar: HeaderRegistrar, name: String) -> Self {
         let mut component =
             DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), registrar, name);
-        component.create_playlist(None);
+        component.create_track_list(None);
 
         Self { model, component }
     }

@@ -132,6 +132,7 @@ impl ListRangeUpdate {
 #[derive(Clone, Debug)]
 pub struct SongList {
     total_loaded: usize,
+    total: Option<usize>,
     batch_size: usize,
     last_batch_key: usize,
     complete: bool,
@@ -145,6 +146,7 @@ impl SongList {
     pub fn new_sized(batch_size: usize) -> Self {
         Self {
             total_loaded: 0,
+            total: None,
             batch_size,
             last_batch_key: 0,
             complete: false,
@@ -154,7 +156,7 @@ impl SongList {
     }
 
     pub fn is_complete(&self) -> bool {
-        self.complete
+        self.complete && !self.has_gap()
     }
 
     pub fn batch_size(&self) -> usize {
@@ -182,9 +184,14 @@ impl SongList {
         batch_size * batch_count
     }
 
-    // The theoretical len of the playlist, if we had all songs
+    // The theoretical len of the collection if we had all track
     pub fn len(&self) -> usize {
-        self.total_loaded
+        self.total.unwrap_or(self.total_loaded)
+    }
+
+    // True if any batch request is still loading.
+    pub fn has_gap(&self) -> bool {
+        (0..self.last_batch_key).any(|i| !self.batches.contains_key(&i))
     }
 
     fn iter_ids_from(&self, i: usize) -> impl Iterator<Item = (usize, &'_ String)> {
@@ -301,7 +308,12 @@ impl SongList {
     // (every fetch uses the same limit), so the page drops in at
     // `offset / batch_size`.
     pub fn add(&mut self, batch: Page<Track>) -> Option<ListRangeUpdate> {
-        let Page { items, offset, .. } = batch;
+        let Page {
+            items,
+            offset,
+            total,
+            ..
+        } = batch;
         let index = offset.unwrap_or(0) / self.batch_size;
 
         let insertion_start = self.estimated_len(index);
@@ -310,6 +322,9 @@ impl SongList {
         // means we've reached the end of the collection.
         if len < self.batch_size {
             self.complete = true;
+        }
+        if let Some(total) = total {
+            self.total = Some(self.total.map_or(total, |t| t.max(total)));
         }
         let ids = items
             .into_iter()
@@ -650,5 +665,100 @@ mod tests {
         assert_eq!(list_iter.next().unwrap().description().rri.id, "song2");
         assert_eq!(list_iter.next().unwrap().description().rri.id, "song0");
         assert!(list_iter.next().is_none());
+    }
+
+    #[test]
+    fn test_len_reports_api_total_when_known() {
+        let mut list = SongList::new_sized(50);
+        list.add(Page {
+            items: (0..50).map(|i| song(&format!("song{i}"))).collect(),
+            offset: Some(0),
+            total: Some(1000),
+            next_cursor: None,
+        });
+
+        assert_eq!(list.partial_len(), 50);
+        assert_eq!(list.len(), 1000);
+    }
+
+    #[test]
+    fn test_len_falls_back_to_loaded_count_when_total_unknown() {
+        let mut list = SongList::new_sized(50);
+        list.add(Page {
+            items: (0..50).map(|i| song(&format!("song{i}"))).collect(),
+            offset: Some(0),
+            total: None,
+            next_cursor: None,
+        });
+
+        assert_eq!(list.len(), 50);
+    }
+
+    #[test]
+    fn test_len_keeps_max_total_seen() {
+        let mut list = SongList::new_sized(50);
+        list.add(Page {
+            items: (0..50).map(|i| song(&format!("song{i}"))).collect(),
+            offset: Some(0),
+            total: Some(1000),
+            next_cursor: None,
+        });
+        // A stale/racing response reporting a smaller total must not shrink len().
+        list.add(Page {
+            items: (50..100).map(|i| song(&format!("song{i}"))).collect(),
+            offset: Some(50),
+            total: Some(900),
+            next_cursor: None,
+        });
+
+        assert_eq!(list.len(), 1000);
+    }
+
+    #[test]
+    fn test_has_gap_detects_missing_batch() {
+        let mut list = SongList::new_sized(2);
+        list.add(batch(0));
+        list.add(batch(2)); // batch 1 never arrived
+
+        assert!(list.has_gap());
+    }
+
+    #[test]
+    fn test_has_gap_false_when_contiguous() {
+        let mut list = SongList::new_sized(2);
+        list.add(batch(0));
+        list.add(batch(1));
+
+        assert!(!list.has_gap());
+    }
+
+    #[test]
+    fn test_is_complete_false_while_gap_exists() {
+        let mut list = SongList::new_sized(2);
+        list.add(batch(0));
+        // Short page at the tail marks `complete`, but a gap remains behind it.
+        list.add(Page {
+            items: vec![song("song4")],
+            offset: Some(4),
+            total: None,
+            next_cursor: None,
+        });
+
+        assert!(!list.is_complete());
+    }
+
+    #[test]
+    fn test_is_complete_true_once_gap_filled() {
+        let mut list = SongList::new_sized(2);
+        list.add(batch(0));
+        list.add(Page {
+            items: vec![song("song4")],
+            offset: Some(4),
+            total: None,
+            next_cursor: None,
+        });
+        list.add(batch(1)); // fills the gap
+
+        assert!(list.is_complete());
     }
 }

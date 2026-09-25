@@ -140,7 +140,7 @@ pub(super) fn track_from_object(t: &sp::TrackObject) -> Option<Track> {
         }),
         duration_ms: t.duration_ms.unwrap_or(0) as u32,
         track_number: t.track_number.map(|n| n as u32),
-        disc_number: None,
+        disc_number: t.disc_number.map(|n| n as u32),
         content_rating: content_rating_from_explicit(t.explicit),
         isrc: None,
         art: t

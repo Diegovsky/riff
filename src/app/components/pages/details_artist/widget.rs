@@ -30,7 +30,7 @@ impl ArtistDetails {
     ) -> Self {
         let mut component =
             DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), registrar, name);
-        component.create_playlist(Some(&gettext("Top Tracks")));
+        component.create_track_list(Some(&gettext("Top Tracks")));
         component.create_embedded_card_list(
             Some(&gettext("Releases")),
             "artist_releases",
