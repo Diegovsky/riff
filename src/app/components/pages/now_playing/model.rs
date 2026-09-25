@@ -11,8 +11,8 @@ use std::rc::Rc;
 use crate::app::components::SongActions;
 use crate::app::components::{
     build_song_menu, dispatch_api_call, dispatch_api_read, labels, DetailsPageModel,
-    DeviceSelectorModel, HasHeaderBarModel, HeaderImageShape, PageModel, QueueMenuEntry,
-    SimpleHeaderBarModel, TrackListModel,
+    DeviceSelectorModel, HasHeaderBarModel, HeaderImageShape, PageModel, PinnedPageModel,
+    QueueMenuEntry, SimpleHeaderBarModel, TrackListModel,
 };
 use crate::app::models::{ArtistRef, ImageSet, SongListModel, SongsSource, Track, TrackExt};
 use crate::app::state::Device;
@@ -22,6 +22,7 @@ use crate::app::state::{
 use crate::app::{AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Dispatcher};
 use crate::feature_flags::{self, FeatureFlag};
 use crate::impl_toggle_play;
+use crate::settings;
 
 /// Data model for the now-playing page. Composes `DetailsPageModel` via Deref.
 pub struct NowPlayingModel {
@@ -207,6 +208,20 @@ impl PageModel for NowPlayingModel {
             event,
             AppEvent::BrowserEvent(BrowserEvent::SavedTracksUpdated)
         )
+    }
+}
+
+impl PinnedPageModel for NowPlayingModel {
+    fn pin_kind(&self) -> settings::PinnedKind {
+        settings::PinnedKind::Track
+    }
+
+    fn pinned_object_id(&self) -> Option<String> {
+        self.current_song().map(|song| song.rri.id)
+    }
+
+    fn supports_pin_button(&self) -> bool {
+        true
     }
 }
 

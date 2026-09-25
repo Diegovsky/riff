@@ -4,9 +4,10 @@ use crate::app::components::{
     HeaderBarModel, HeaderImageShape, SimpleHeaderBarModel, SimpleHeaderBarModelWrapper,
 };
 use crate::app::models::{ArtistRef, ImageSet};
-use crate::app::state::PlaybackEvent;
+use crate::app::state::{BrowserAction, PlaybackEvent};
 use crate::app::AppEvent;
 use crate::app::ProvidesApi;
+use crate::settings;
 
 use super::DetailsPageModel;
 
@@ -98,18 +99,6 @@ pub trait PageModel: ProvidesApi {
     }
     fn on_share_clicked(&self) {}
 
-    // Pin button
-
-    /// Whether this page type supports a pin control (independent of feature flag).
-    fn supports_pin_button(&self) -> bool {
-        false
-    }
-
-    fn is_pinned(&self) -> bool {
-        false
-    }
-    fn toggle_pin(&self) {}
-
     // Subtitle links
 
     /// Returns a list of clickable links for the subtitle area.
@@ -129,6 +118,59 @@ pub trait PageModel: ProvidesApi {
     /// Returns true if this event means liked state changed.
     fn should_refresh_liked(&self, _event: &AppEvent) -> bool {
         false
+    }
+}
+
+/// Provides pin/unpin behavior for detail pages, alongside the like button.
+///
+/// Like [`HasHeaderBarModel`], providing defaults here avoids duplicating the
+/// same pin wiring (reading and writing the shared pin store, then notifying
+/// listeners) in every concrete model. Pages only opt in via
+/// [`Self::supports_pin_button`] and describe which object they pin.
+pub trait PinnedPageModel: PageModel + std::ops::Deref<Target = DetailsPageModel> {
+    fn pin_kind(&self) -> settings::PinnedKind {
+        settings::PinnedKind::Playlist
+    }
+
+    /// The store id of the object this page pins. Defaults to the page's own
+    /// id; override for pages whose target is dynamic (e.g. the currently
+    /// playing song on the now-playing page).
+    fn pinned_object_id(&self) -> Option<String> {
+        Some(self.id.clone())
+    }
+
+    /// Whether this page type supports a pin control (independent of feature flag).
+    fn supports_pin_button(&self) -> bool {
+        false
+    }
+
+    fn is_pinned(&self) -> bool {
+        let Some(id) = self.pinned_object_id() else {
+            return false;
+        };
+        let state = self.app_model.get_state();
+        let Some(user_id) = state.logged_user.user.as_ref() else {
+            return false;
+        };
+        settings::is_object_pinned(user_id, &id, self.pin_kind())
+    }
+
+    fn toggle_pin(&self) {
+        let Some(id) = self.pinned_object_id() else {
+            return;
+        };
+        let Some(user_id) = self.app_model.get_state().logged_user.user.clone() else {
+            return;
+        };
+        let changed = if self.is_pinned() {
+            settings::unpin_object(&user_id, self.pin_kind(), &id)
+        } else {
+            settings::pin_object(&user_id, self.pin_kind(), &id)
+        };
+        if changed {
+            self.dispatcher
+                .dispatch(BrowserAction::NotifyPinnedPlaylistsUpdated.into());
+        }
     }
 }
 

@@ -14,7 +14,8 @@ use crate::app::components::SimpleHeaderBarModel;
 use crate::app::components::SongActions;
 use crate::app::components::{
     build_song_menu, dispatch_api_call, dispatch_api_read, labels, CardListModel,
-    HasHeaderBarModel, HeaderImageShape, ImageShape, PageModel, QueueMenuEntry, TrackListModel,
+    HasHeaderBarModel, HeaderImageShape, ImageShape, PageModel, PinnedPageModel, QueueMenuEntry,
+    TrackListModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
@@ -23,6 +24,7 @@ use crate::app::state::{
     BrowserAction, BrowserEvent, PaginationTarget, PlaybackAction, SelectionState,
 };
 use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, ListStore, SongsSource};
+use crate::settings;
 use crate::{impl_toggle_play, impl_track_list_model_base};
 use riff_api::DomainError;
 
@@ -223,6 +225,16 @@ impl PageModel for ArtistDetailsModel {
 
     fn on_share_clicked(&self) {
         self.share_link(&format!("https://open.spotify.com/artist/{}", self.id));
+    }
+}
+
+impl PinnedPageModel for ArtistDetailsModel {
+    fn pin_kind(&self) -> settings::PinnedKind {
+        settings::PinnedKind::Artist
+    }
+
+    fn supports_pin_button(&self) -> bool {
+        true
     }
 }
 

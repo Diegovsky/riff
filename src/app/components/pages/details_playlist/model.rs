@@ -13,8 +13,8 @@ use crate::app::components::DetailsPageModel;
 use crate::app::components::SongActions;
 use crate::app::components::{
     build_song_menu, dispatch_api_call, dispatch_api_read, dispatch_api_read_with_fallback, labels,
-    HasHeaderBarModel, HeaderImageShape, PageModel, QueueMenuEntry, SimpleHeaderBarModel,
-    TrackListModel,
+    HasHeaderBarModel, HeaderImageShape, PageModel, PinnedPageModel, QueueMenuEntry,
+    SimpleHeaderBarModel, TrackListModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
@@ -283,35 +283,11 @@ impl PageModel for PlaylistDetailsModel {
             if id == &self.id
         )
     }
+}
 
+impl PinnedPageModel for PlaylistDetailsModel {
     fn supports_pin_button(&self) -> bool {
         true
-    }
-
-    fn is_pinned(&self) -> bool {
-        self.app_model
-            .get_state()
-            .logged_user
-            .user
-            .as_ref()
-            .is_some_and(|user_id| {
-                settings::is_object_pinned(user_id, &self.id, settings::PinnedKind::Playlist)
-            })
-    }
-
-    fn toggle_pin(&self) {
-        let Some(user_id) = self.app_model.get_state().logged_user.user.clone() else {
-            return;
-        };
-        let changed = if self.is_pinned() {
-            settings::unpin_object(&user_id, settings::PinnedKind::Playlist, &self.id)
-        } else {
-            settings::pin_object(&user_id, settings::PinnedKind::Playlist, &self.id)
-        };
-        if changed {
-            self.dispatcher
-                .dispatch(BrowserAction::NotifyPinnedPlaylistsUpdated.into());
-        }
     }
 }
 

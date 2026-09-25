@@ -91,7 +91,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct SegmentedButtonWidget(ObjectSubclass<imp::SegmentedButtonWidget>) @extends gtk::Widget, gtk::Box;
+    pub struct SegmentedButtonWidget(ObjectSubclass<imp::SegmentedButtonWidget>) @extends gtk::Widget, gtk::Box,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 impl SegmentedButtonWidget {

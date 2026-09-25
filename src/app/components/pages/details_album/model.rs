@@ -11,8 +11,8 @@ use crate::app::components::DetailsPageModel;
 use crate::app::components::SongActions;
 use crate::app::components::{
     build_song_menu, dispatch_api_call, dispatch_api_read, dispatch_api_read_with_fallback, labels,
-    HasHeaderBarModel, HeaderImageShape, PageModel, QueueMenuEntry, SimpleHeaderBarModel,
-    TrackListModel,
+    HasHeaderBarModel, HeaderImageShape, PageModel, PinnedPageModel, QueueMenuEntry,
+    SimpleHeaderBarModel, TrackListModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
@@ -22,6 +22,7 @@ use crate::app::state::{
 };
 use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, PaginationTarget, SongsSource};
 use crate::feature_flags::{self, FeatureFlag};
+use crate::settings;
 use crate::{impl_toggle_play, impl_track_list_model_base};
 use riff_api::DomainError;
 
@@ -244,6 +245,16 @@ impl PageModel for DetailsModel {
             AppEvent::BrowserEvent(BrowserEvent::AlbumSaved(id)) | AppEvent::BrowserEvent(BrowserEvent::AlbumUnsaved(id))
             if id == &self.id
         )
+    }
+}
+
+impl PinnedPageModel for DetailsModel {
+    fn pin_kind(&self) -> settings::PinnedKind {
+        settings::PinnedKind::Album
+    }
+
+    fn supports_pin_button(&self) -> bool {
+        true
     }
 }
 

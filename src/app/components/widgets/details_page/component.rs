@@ -2,7 +2,7 @@ use gtk::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
 
-use super::{is_playback_event, DetailsHeader, DetailsPage, PageModel};
+use super::{is_playback_event, DetailsHeader, DetailsPage, PinnedPageModel};
 use crate::app::components::{
     CardLayout, CardList, CardListModel, CardSize, Component, EmbeddedCardList, EventListener,
     FilterToggle, HeaderBarModel, HeaderRegistrar, SortOrder, TrackList, TrackListModel,
@@ -25,7 +25,16 @@ pub struct DetailsPageComponent<M> {
     _pin_settings: Option<gio::Settings>,
 }
 
-impl<M: PageModel + 'static> DetailsPageComponent<M> {
+/// Sync the pin segment of the like+pin control from the model's current state.
+fn set_pin_button_state<M: PinnedPageModel>(model: &M, header: &DetailsHeader) {
+    let pin_visible = is_enabled(FeatureFlag::PinnedPlaylists) && model.is_liked();
+    header.set_pin_visible(pin_visible);
+    if pin_visible {
+        header.set_pinned(model.is_pinned());
+    }
+}
+
+impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
     /// Create a details page with an internal content box.
     ///
     /// Use [`Self::create_track_list`] and [`Self::create_card_list`] to append
@@ -276,11 +285,7 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
                 header_widget,
                 move || {
                     let header = DetailsHeader::from_widget(header_widget.clone());
-                    let pin_visible = is_enabled(FeatureFlag::PinnedPlaylists) && m.is_liked();
-                    header.set_pin_visible(pin_visible);
-                    if pin_visible {
-                        header.set_pinned(m.is_pinned());
-                    }
+                    set_pin_button_state(&*m, &header);
                 }
             );
             sync_pin_button();
@@ -345,11 +350,7 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         self.page
             .load_artwork_or_finish(self.model.get_artwork().as_ref(), self.model.api_service());
         if self.model.supports_pin_button() {
-            let pin_enabled = is_enabled(FeatureFlag::PinnedPlaylists) && self.model.is_liked();
-            self.page.header().set_pin_visible(pin_enabled);
-            if pin_enabled {
-                self.page.header().set_pinned(self.model.is_pinned());
-            }
+            set_pin_button_state(&*self.model, self.page.header());
         }
     }
 
@@ -384,12 +385,7 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
                     self.page.header().set_like_tooltip(&tooltip);
                 }
                 if self.model.supports_pin_button() {
-                    let pin_visible =
-                        is_enabled(FeatureFlag::PinnedPlaylists) && self.model.is_liked();
-                    self.page.header().set_pin_visible(pin_visible);
-                    if pin_visible {
-                        self.page.header().set_pinned(self.model.is_pinned());
-                    }
+                    set_pin_button_state(&*self.model, self.page.header());
                 }
             }
             return true;
@@ -415,7 +411,7 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
     }
 }
 
-impl<M: PageModel + 'static> Component for DetailsPageComponent<M> {
+impl<M: PinnedPageModel + 'static> Component for DetailsPageComponent<M> {
     fn get_root_widget(&self) -> &gtk::Widget {
         self.page.widget().upcast_ref()
     }
@@ -431,7 +427,7 @@ impl<M> Drop for DetailsPageComponent<M> {
     }
 }
 
-impl<M: PageModel + 'static> EventListener for DetailsPageComponent<M> {
+impl<M: PinnedPageModel + 'static> EventListener for DetailsPageComponent<M> {
     fn on_event(&mut self, event: &AppEvent) {
         self.handle_event(event);
         self.broadcast_event(event);

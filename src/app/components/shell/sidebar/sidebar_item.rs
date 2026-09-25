@@ -11,8 +11,11 @@ const NOW_PLAYING: &str = "now_playing";
 const SAVED_PLAYLISTS: &str = "saved_playlists";
 const SAVED_ARTISTS: &str = "saved_artists";
 const PLAYLIST: &str = "playlist";
+const ALBUM: &str = "album";
+const ARTIST: &str = "artist";
+const TRACK: &str = "track";
 pub const SAVED_PLAYLISTS_SECTION: &str = "saved_playlists_section";
-pub const PINNED_PLAYLISTS_SECTION: &str = "pinned_playlists_section";
+pub const PINNED_SECTION: &str = "pinned_section";
 pub const LIBRARY_SECTION: &str = "library_section";
 pub const CREATE_PLAYLIST_ITEM: &str = "create_playlist";
 
@@ -24,6 +27,9 @@ pub enum SidebarDestination {
     SavedPlaylists,
     SavedArtists,
     Playlist(PlaylistSummary),
+    Album { id: String, title: String },
+    Artist { id: String, title: String },
+    Track { id: String, title: String },
 }
 
 impl SidebarDestination {
@@ -35,6 +41,9 @@ impl SidebarDestination {
             Self::SavedPlaylists => SAVED_PLAYLISTS,
             Self::SavedArtists => SAVED_ARTISTS,
             Self::Playlist(_) => PLAYLIST,
+            Self::Album { .. } => ALBUM,
+            Self::Artist { .. } => ARTIST,
+            Self::Track { .. } => TRACK,
         }
     }
 
@@ -50,7 +59,10 @@ impl SidebarDestination {
             Self::SavedPlaylists => gettext("Playlists"),
             // translators: This is a sidebar entry to browse to followed artists.
             Self::SavedArtists => gettext("Artists"),
-            Self::Playlist(PlaylistSummary { title, .. }) => title.clone(),
+            Self::Playlist(PlaylistSummary { title, .. })
+            | Self::Album { title, .. }
+            | Self::Artist { title, .. }
+            | Self::Track { title, .. } => title.clone(),
         }
     }
 
@@ -62,6 +74,9 @@ impl SidebarDestination {
             Self::SavedPlaylists => "playlist2-symbolic",
             Self::SavedArtists => "avatar-default-symbolic",
             Self::Playlist(_) => "playlist2-symbolic",
+            Self::Album { .. } => "media-optical-symbolic",
+            Self::Artist { .. } => "avatar-default-symbolic",
+            Self::Track { .. } => "audio-x-generic-symbolic",
         }
     }
 }
@@ -72,6 +87,9 @@ impl SidebarItem {
             SidebarDestination::Playlist(PlaylistSummary { id, title }) => {
                 (PLAYLIST, Some(id), title)
             }
+            SidebarDestination::Album { id, title } => (ALBUM, Some(id), title),
+            SidebarDestination::Artist { id, title } => (ARTIST, Some(id), title),
+            SidebarDestination::Track { id, title } => (TRACK, Some(id), title),
             _ => (dest.id(), None, dest.title()),
         };
         glib::Object::builder()
@@ -91,11 +109,11 @@ impl SidebarItem {
             .build()
     }
 
-    pub fn pinned_playlists_section() -> Self {
+    pub fn pinned_section() -> Self {
         glib::Object::builder()
-            .property("id", PINNED_PLAYLISTS_SECTION)
+            .property("id", PINNED_SECTION)
             .property("data", String::new())
-            .property("title", gettext("Pinned Playlists"))
+            .property("title", gettext("Pinned"))
             .property("navigatable", false)
             .build()
     }
@@ -134,6 +152,9 @@ impl SidebarItem {
                     id: data,
                     title,
                 })),
+                ALBUM => Some(SidebarDestination::Album { id: data, title }),
+                ARTIST => Some(SidebarDestination::Artist { id: data, title }),
+                TRACK => Some(SidebarDestination::Track { id: data, title }),
                 _ => None,
             }
         } else {

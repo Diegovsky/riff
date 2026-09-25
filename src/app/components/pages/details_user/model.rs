@@ -9,7 +9,7 @@ use std::rc::Rc;
 use crate::app::components::DetailsPageModel;
 use crate::app::components::{
     dispatch_api_read, CardListModel, HasHeaderBarModel, HeaderImageShape, ImageShape, PageModel,
-    SimpleHeaderBarModel,
+    PinnedPageModel, SimpleHeaderBarModel,
 };
 use crate::app::models::*;
 use crate::app::state::{BrowserAction, BrowserEvent, SelectionContext, CARD_BATCH_SIZE};
@@ -28,6 +28,8 @@ impl Deref for UserDetailsModel {
 }
 
 impl HasHeaderBarModel for UserDetailsModel {}
+
+impl PinnedPageModel for UserDetailsModel {}
 
 impl UserDetailsModel {
     pub fn new(id: String, app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
