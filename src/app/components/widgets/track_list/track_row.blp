@@ -1,0 +1,206 @@
+using Gtk 4.0;
+using Adw 1;
+
+// Row height, cover size and the width breakpoints that hide columns
+// (HIDE_ALBUM_AT_PX, HIDE_TIME_AT_PX) live in track_row.rs.
+template $TrackRow : Box {
+  orientation: vertical;
+
+  Adw.BreakpointBin card {
+    width-request: 1;
+    hexpand: true;
+
+    styles [
+      "song__card",
+    ]
+
+    child: Grid {
+      margin-start: 7;
+      margin-end: 7;
+      margin-top: 7;
+      margin-bottom: 7;
+      column-spacing: 6;
+
+      styles [
+        "song",
+      ]
+
+      Overlay {
+        layout {
+          column: "0";
+          row: "0";
+        }
+
+        Label song_index {
+          label: "1";
+          sensitive: false;
+          halign: center;
+
+          styles [
+            "song__index",
+            "numeric",
+          ]
+        }
+
+        [overlay]
+        Image song_cover {
+          overflow: hidden;
+          halign: center;
+          valign: center;
+
+          styles [
+            "song__cover",
+          ]
+        }
+
+        [overlay]
+        Spinner song_icon {
+          halign: center;
+          valign: center;
+
+          styles [
+            "song__icon",
+          ]
+        }
+
+        [overlay]
+        Image song_play_hover {
+          icon-name: "media-playback-start-symbolic";
+          halign: center;
+          valign: center;
+          can-target: false;
+
+          styles [
+            "song__play-hover",
+          ]
+        }
+
+        [overlay]
+        CheckButton song_checkbox {
+          halign: center;
+          valign: center;
+          sensitive: false;
+
+          styles [
+            "song__checkbox",
+          ]
+        }
+      }
+
+      Overlay {
+        hexpand: true;
+
+        layout {
+          column: "1";
+          row: "0";
+        }
+
+        Grid text_grid {
+          column-spacing: 6;
+          column-homogeneous: true;
+
+          Box title_artist_box {
+            orientation: vertical;
+            hexpand: true;
+            vexpand: true;
+            valign: center;
+
+            layout {
+              column: "0";
+              row: "0";
+            }
+
+            Label song_title {
+              label: "Title";
+              ellipsize: end;
+              xalign: 0;
+              height-request: 18;
+
+              styles [
+                "title",
+              ]
+            }
+
+            $SubtitleLinksBox song_artist {
+              halign: start;
+              height-request: 18;
+            }
+          }
+
+          Label song_album {
+            label: "Album";
+            visible: false;
+            ellipsize: end;
+            xalign: 0;
+            hexpand: true;
+            valign: center;
+
+            layout {
+              column: "1";
+              row: "0";
+            }
+
+            // SECONDARY_TEXT_CLASSES
+            styles [
+              "subtitle",
+              "dimmed",
+            ]
+          }
+        }
+
+        [overlay]
+        Button like_btn {
+          icon-name: "non-starred-symbolic";
+          has-frame: false;
+          halign: end;
+          valign: center;
+          visible: false;
+          tooltip-text: _("Add to Saved Tracks");
+
+          styles [
+            "circular",
+            "flat",
+            "song__like",
+          ]
+        }
+      }
+
+      Box {
+        layout {
+          column: "2";
+          row: "0";
+        }
+
+        Label song_length {
+          label: "0∶00";
+          sensitive: false;
+          width-chars: 5;
+          max-width-chars: 5;
+          xalign: 1;
+          valign: center;
+          margin-end: 6;
+
+          styles [
+            "numeric",
+          ]
+        }
+
+        MenuButton menu_btn {
+          icon-name: "view-more-symbolic";
+          tooltip-text: "Menu";
+          has-frame: false;
+          focus-on-click: false;
+          receives-default: true;
+          valign: center;
+          visible: false;
+
+          styles [
+            "circular",
+            "flat",
+            "song__menu",
+          ]
+        }
+      }
+    };
+  }
+}

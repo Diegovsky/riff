@@ -180,7 +180,7 @@ pub fn wire_dev_tools(
         ),
         concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/src/app/components/widgets/playlist/song.css"
+            "/src/app/components/widgets/track_list/track_row.css"
         ),
         concat!(
             env!("CARGO_MANIFEST_DIR"),

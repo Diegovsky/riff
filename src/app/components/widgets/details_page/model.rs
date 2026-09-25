@@ -11,10 +11,10 @@ use crate::app::state::{
 use crate::app::{AppAction, AppModel, AppState};
 use crate::feature_flags::{self, FeatureFlag};
 
-/// Generates the boilerplate PlaylistModel methods that delegate to `self.base`.
-/// Use inside an `impl PlaylistModel for X { ... }` block.
+/// Generates the boilerplate TrackListModel methods that delegate to `self.base`.
+/// Use inside an `impl TrackListModel for X { ... }` block.
 #[macro_export]
-macro_rules! impl_playlist_model_base {
+macro_rules! impl_track_list_model_base {
     () => {
         fn is_paused(&self) -> bool {
             self.base.is_paused()
@@ -23,7 +23,7 @@ macro_rules! impl_playlist_model_base {
             self.base.current_song_id()
         }
         fn select_song(&self, id: &str) {
-            self.select_song_from_list(&PlaylistModel::song_list_model(self), id);
+            self.select_song_from_list(&TrackListModel::song_list_model(self), id);
         }
         fn deselect_song(&self, id: &str) {
             self.base.deselect_song(id);
@@ -35,7 +35,7 @@ macro_rules! impl_playlist_model_base {
             self.base.is_song_liked(id)
         }
         fn toggle_song_like(&self, id: &str) {
-            let songs = PlaylistModel::song_list_model(self);
+            let songs = TrackListModel::song_list_model(self);
             self.base.toggle_song_like(&songs, id);
         }
         fn skip_explicit(&self) -> bool {
@@ -45,29 +45,29 @@ macro_rules! impl_playlist_model_base {
 }
 
 /// Generates the standard `toggle_play` and `shuffle_play` methods for models
-/// that implement both `PageModel` and `PlaylistModel`.
+/// that implement both `PageModel` and `TrackListModel`.
 #[macro_export]
 macro_rules! impl_toggle_play {
     () => {
         fn start_play(&self, id: &str) {
-            let songs = PlaylistModel::song_list_model(self);
+            let songs = TrackListModel::song_list_model(self);
             match songs.find_index(id) {
-                Some(index) => PlaylistModel::play_song_at(self, index, id),
+                Some(index) => TrackListModel::play_song_at(self, index, id),
                 None => error!("Failed to play track {id}"),
             }
         }
         fn toggle_play(&self) {
-            let songs = PlaylistModel::song_list_model(self);
+            let songs = TrackListModel::song_list_model(self);
             self.base
                 .toggle_playback(self.source_is_playing(), &songs, |pos, id| {
-                    PlaylistModel::play_song_at(self, pos, id);
+                    TrackListModel::play_song_at(self, pos, id);
                 });
         }
 
         fn shuffle_play(&self) {
-            let songs = PlaylistModel::song_list_model(self);
+            let songs = TrackListModel::song_list_model(self);
             self.base.shuffle_playback(&songs, |pos, id| {
-                PlaylistModel::play_song_at(self, pos, id);
+                TrackListModel::play_song_at(self, pos, id);
             });
         }
     };

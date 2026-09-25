@@ -11,8 +11,8 @@ use std::rc::Rc;
 use crate::app::components::SongActions;
 use crate::app::components::{
     build_song_menu, dispatch_api_call, dispatch_api_read, labels, DetailsPageModel,
-    DeviceSelectorModel, HasHeaderBarModel, HeaderImageShape, PageModel, PlaylistModel,
-    QueueMenuEntry, SimpleHeaderBarModel,
+    DeviceSelectorModel, HasHeaderBarModel, HeaderImageShape, PageModel, QueueMenuEntry,
+    SimpleHeaderBarModel, TrackListModel,
 };
 use crate::app::models::{ArtistRef, ImageSet, SongListModel, SongsSource, Track, TrackExt};
 use crate::app::state::Device;
@@ -210,7 +210,7 @@ impl PageModel for NowPlayingModel {
     }
 }
 
-impl PlaylistModel for NowPlayingModel {
+impl TrackListModel for NowPlayingModel {
     fn song_list_model(&self) -> SongListModel {
         self.queue().songs().clone()
     }
@@ -224,11 +224,23 @@ impl PlaylistModel for NowPlayingModel {
     fn autoscroll_to_playing(&self) -> bool {
         false
     }
+
+    fn show_album_column(&self) -> bool {
+        true
+    }
+
+    fn show_loading_skeleton(&self) -> bool {
+        false
+    }
     fn deselect_song(&self, id: &str) {
         self.base.deselect_song(id);
     }
     fn selection(&self) -> Option<Box<dyn Deref<Target = SelectionState> + '_>> {
         self.base.selection()
+    }
+
+    fn load_more(&self) {
+        PageModel::load_more(self);
     }
 
     fn play_song_at(&self, _pos: usize, id: &str) {
@@ -256,7 +268,7 @@ impl PlaylistModel for NowPlayingModel {
     }
 
     fn toggle_song_like(&self, id: &str) {
-        let songs = PlaylistModel::song_list_model(self);
+        let songs = TrackListModel::song_list_model(self);
         self.base.toggle_song_like(&songs, id);
     }
 
@@ -264,15 +276,15 @@ impl PlaylistModel for NowPlayingModel {
         self.base.skip_explicit()
     }
 
-    fn actions_for(&self, song: &Track) -> Option<gio::ActionGroup> {
+    fn actions_for(&self, song: &Track) -> Option<SimpleActionGroup> {
         let group = SimpleActionGroup::new();
-        for a in song.make_artist_actions(self.dispatcher.clone(), None) {
+        for a in song.make_artist_actions(self.dispatcher.clone()) {
             group.add_action(&a);
         }
-        group.add_action(&song.make_album_action(self.dispatcher.clone(), None));
-        group.add_action(&song.make_link_action(None));
-        group.add_action(&song.make_dequeue_action(self.dispatcher.clone(), None));
-        Some(group.upcast())
+        group.add_action(&song.make_album_action(self.dispatcher.clone()));
+        group.add_action(&song.make_link_action());
+        group.add_action(&song.make_dequeue_action(self.dispatcher.clone()));
+        Some(group)
     }
 
     fn menu_for(&self, song: &Track, liked: bool) -> Option<gio::MenuModel> {

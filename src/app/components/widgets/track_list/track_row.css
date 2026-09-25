@@ -1,0 +1,258 @@
+/* TrackRow and DiscHeaderRow. */
+
+.playlist {
+  background: transparent;
+}
+
+
+/* Leading column: index, cover, and indicators layered on top */
+
+/* The bordered cover's width (40px + 2px border). */
+.playlist .song__index,
+.track-list__index-slot {
+  margin: 0;
+  padding: 0;
+  min-width: 42px;
+}
+
+.song__cover {
+  border-radius: 6px;
+  border: 1px solid @card_shade_color;
+}
+
+.song__index,
+.song__cover,
+.song__icon,
+.song__checkbox,
+.song__play-hover {
+  transition: opacity 150ms ease;
+}
+
+/* Hidden by default; each state below reveals one layer. */
+.song__icon,
+.song__checkbox,
+.song__play-hover,
+.song--playing .song__index,
+.song--playing .song__cover,
+.playlist--selectable .song__index,
+.playlist--selectable .song__cover {
+  opacity: 0;
+}
+
+/* Playing: the animated indicator replaces the index/cover. */
+.song--playing .song__icon {
+  opacity: 1;
+  animation: playing 1s linear infinite;
+  color: @accent_bg_color;
+  min-width: 16px;
+  -gtk-icon-source: -gtk-icontheme("playback-0-symbolic");
+}
+
+.playlist--paused .song--playing .song__icon {
+  animation: none;
+  -gtk-icon-source: -gtk-icontheme("playback-paused-symbolic");
+}
+
+@keyframes playing {
+  0% { -gtk-icon-source: -gtk-icontheme("playback-0-symbolic"); }
+  6% { -gtk-icon-source: -gtk-icontheme("playback-1-symbolic"); }
+  12% { -gtk-icon-source: -gtk-icontheme("playback-2-symbolic"); }
+  18% { -gtk-icon-source: -gtk-icontheme("playback-3-symbolic"); }
+  24% { -gtk-icon-source: -gtk-icontheme("playback-4-symbolic"); }
+  30% { -gtk-icon-source: -gtk-icontheme("playback-5-symbolic"); }
+  36% { -gtk-icon-source: -gtk-icontheme("playback-6-symbolic"); }
+  42% { -gtk-icon-source: -gtk-icontheme("playback-7-symbolic"); }
+  49% { -gtk-icon-source: -gtk-icontheme("playback-8-symbolic"); }
+  54% { -gtk-icon-source: -gtk-icontheme("playback-9-symbolic"); }
+  60% { -gtk-icon-source: -gtk-icontheme("playback-10-symbolic"); }
+  66% { -gtk-icon-source: -gtk-icontheme("playback-11-symbolic"); }
+  72% { -gtk-icon-source: -gtk-icontheme("playback-12-symbolic"); }
+  79% { -gtk-icon-source: -gtk-icontheme("playback-13-symbolic"); }
+  85% { -gtk-icon-source: -gtk-icontheme("playback-14-symbolic"); }
+  90% { -gtk-icon-source: -gtk-icontheme("playback-15-symbolic"); }
+  96% { -gtk-icon-source: -gtk-icontheme("playback-16-symbolic"); }
+  100% { -gtk-icon-source: -gtk-icontheme("playback-0-symbolic"); }
+}
+
+/* Hover: a play icon replaces the index/cover, except on the playing row
+   and in selection mode. */
+.song__play-hover {
+  min-width: 16px;
+}
+
+row:hover .song__play-hover {
+  opacity: 1;
+}
+
+row:hover .song__index,
+row:hover .song__cover,
+row:hover .song--playing .song__play-hover,
+.playlist--selectable row:hover .song__play-hover,
+.playlist--selectable .song__icon {
+  opacity: 0;
+}
+
+/* Selection mode: only the checkbox shows, hovered or not. */
+.playlist--selectable .song__checkbox,
+.playlist--selectable .song__checkbox check {
+  opacity: 1;
+  filter: none;
+}
+
+
+/* Text */
+
+.song--playing label.title {
+  font-weight: bold;
+}
+
+/* Artist and album links: underlined only while hovered. */
+.song__link.song__link--hover {
+  text-decoration-line: underline;
+}
+
+/* Unplayable tracks. The menu stays usable. */
+.song--unplayable label.title,
+.song--unplayable label.subtitle,
+.song--unplayable .song__index,
+.song--unplayable .song__cover {
+  opacity: 0.4;
+}
+
+
+/* Like and menu buttons */
+
+.song__like {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+row:hover .song__like {
+  opacity: 0.6;
+}
+
+row:hover .song__like:hover {
+  opacity: 1;
+}
+
+.song--liked .song__like {
+  opacity: 1;
+  color: alpha(currentColor, 0.55);
+}
+
+.song__menu {
+  opacity: 0.2;
+}
+
+row:hover .song__menu,
+.song__menu:checked {
+  opacity: 1;
+}
+
+
+/* Drop Adwaita's 2px row padding so cards touch and span the full width. */
+.playlist > row {
+  padding: 0;
+}
+
+/* The card highlights itself; the square row highlight would show
+   around its rounded corners. */
+.playlist > row.activatable:hover,
+.playlist > row.activatable:active {
+  background-color: transparent;
+}
+
+.playlist .song__card {
+  background: @card_bg_color;
+  transition: background-color 150ms ease;
+}
+
+.playlist row:hover .song__card {
+  background-image: image(alpha(currentColor, 0.03));
+}
+
+.playlist row:active .song__card {
+  background-image: image(alpha(currentColor, 0.08));
+}
+
+/* Adwaita's card box-shadow */
+.playlist .song__card {
+  box-shadow: inset 0 -1px @card_shade_color,
+              inset 1px 0 rgb(0 0 6 / 3%),
+              inset -1px 0 rgb(0 0 6 / 3%);
+}
+
+.playlist .song--disc-start .song__card {
+  border-radius: 12px 12px 0 0;
+  box-shadow: inset 0 -1px @card_shade_color,
+              inset 1px 0 rgb(0 0 6 / 3%),
+              inset -1px 0 rgb(0 0 6 / 3%),
+              inset 0 1px rgb(0 0 6 / 3%);
+}
+
+.playlist .song--disc-end .song__card {
+  border-radius: 0 0 12px 12px;
+  box-shadow: inset 1px 0 rgb(0 0 6 / 3%),
+              inset -1px 0 rgb(0 0 6 / 3%),
+              inset 0 -1px rgb(0 0 6 / 3%),
+              0 2px 3px -1px rgb(0 0 6 / 7%),
+              0 4px 6px -2px rgb(0 0 6 / 3%);
+}
+
+.playlist .song--disc-start.song--disc-end .song__card {
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgb(0 0 6 / 3%),
+              0 2px 3px -1px rgb(0 0 6 / 7%),
+              0 4px 6px -2px rgb(0 0 6 / 3%);
+}
+
+
+/* Disc headers */
+
+.track-list__disc-header {
+  background: none;
+}
+
+.track-list__disc-header-icon {
+  opacity: 0.7;
+}
+
+.track-list__disc-header-spacer {
+  opacity: 0;
+}
+
+
+/* Loading placeholders (TrackRow::bind_skeleton). */
+.song--skeleton .song__cover,
+.song--skeleton label.title,
+.song--skeleton label.subtitle,
+.song--skeleton label.numeric {
+  background-color: @skeleton_color;
+  color: transparent;
+  border-radius: 6px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.song--skeleton label.title {
+  margin-bottom: 2px;
+}
+
+.song--skeleton .song__cover,
+row:hover .song--skeleton .song__cover {
+  border-color: transparent;
+  opacity: 1;
+}
+
+.song--skeleton .song__index,
+.song--skeleton .song__icon,
+.song--skeleton .song__checkbox,
+row:hover .song--skeleton .song__play-hover,
+.song--skeleton .song__play-hover,
+row:hover .song--skeleton .song__menu,
+.song--skeleton .song__menu {
+  opacity: 0;
+}
+
+.playlist row:hover .song--skeleton .song__card {
+  background-image: none;
+}

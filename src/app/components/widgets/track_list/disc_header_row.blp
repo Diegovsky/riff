@@ -1,0 +1,68 @@
+using Gtk 4.0;
+
+// Mirrors TrackRow's Grid (margins, spacing, first column) so the icon and
+// text line up with the tracks. Keep the two in sync.
+template $DiscHeaderRow : Box {
+  styles [
+    "track-list__disc-header",
+  ]
+
+  Grid {
+    hexpand: true;
+    margin-start: 7;
+    margin-end: 7;
+    margin-top: 7;
+    margin-bottom: 7;
+    column-spacing: 6;
+
+    Overlay {
+      vexpand: true;
+
+      layout {
+        column: "0";
+        row: "0";
+      }
+
+      Label {
+        label: "1";
+        can-target: false;
+        halign: center;
+
+        styles [
+          "track-list__index-slot",
+          "track-list__disc-header-spacer",
+          "numeric",
+        ]
+      }
+
+      [overlay]
+      Image {
+        icon-name: "media-optical-cd-audio-symbolic";
+        pixel-size: 30;
+        halign: center;
+        valign: center;
+
+        styles [
+          "track-list__disc-header-icon",
+        ]
+      }
+    }
+
+    Label disc_header_label {
+      label: "Disc 1";
+      xalign: 0;
+      hexpand: true;
+      valign: center;
+      ellipsize: end;
+
+      layout {
+        column: "1";
+        row: "0";
+      }
+
+      styles [
+        "heading",
+      ]
+    }
+  }
+}

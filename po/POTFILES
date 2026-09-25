@@ -30,8 +30,9 @@ src/app/components/widgets/card_list/component.rs
 src/app/components/widgets/details_page/component.rs
 src/app/components/widgets/details_page/header.rs
 src/app/components/widgets/details_page/model.rs
-src/app/components/widgets/playlist/song.rs
+src/app/components/widgets/track_list/track_row.rs
 src/app/components/widgets/selection/component.rs
+src/app/components/widgets/track_list/track_list.rs
 src/app/models/card_enums.rs
 src/app/models/card_model.rs
 src/connect/player.rs
@@ -60,7 +61,7 @@ src/app/components/widgets/card_list/card_list.blp
 src/app/components/widgets/card_list/card_view_menu.blp
 src/app/components/widgets/card_list/filter_toggle.blp
 src/app/components/widgets/details_page/header.blp
-src/app/components/widgets/playlist/song.blp
+src/app/components/widgets/track_list/track_row.blp
 src/app/components/widgets/selection/selection_toolbar.blp
 src/app/dev_tools/dev_tools.blp
 src/window.blp

@@ -141,6 +141,14 @@ where
     })
 }
 
+pub fn set_css_class(widget: &impl IsA<gtk::Widget>, class: &str, on: bool) {
+    if on {
+        widget.add_css_class(class);
+    } else {
+        widget.remove_css_class(class);
+    }
+}
+
 pub fn format_duration(duration: f64) -> String {
     let seconds = (duration / 1000.0) as i32;
     let hours = seconds.div_euclid(3600);

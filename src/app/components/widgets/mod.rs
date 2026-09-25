@@ -10,8 +10,8 @@ pub use card_list::*;
 pub mod details_page;
 pub use details_page::*;
 
-pub mod playlist;
-pub use playlist::*;
+pub mod track_list;
+pub use track_list::*;
 
 pub mod selection;
 pub use selection::*;

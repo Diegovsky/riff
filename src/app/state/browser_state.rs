@@ -74,6 +74,7 @@ pub enum BrowserAction {
     SavePlaylist(Box<Playlist>),
     UnsavePlaylist(String),
     ConsumeNextPage(PaginationTarget),
+    PageRequestFailed(PaginationTarget, usize),
     ChangeCardLayout(CardLayout),
     ChangeCardSize(CardSize),
     ChangeSortOrder(String, SortOrder),

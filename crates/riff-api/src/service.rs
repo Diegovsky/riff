@@ -407,24 +407,18 @@ impl ApiService {
             )
             .await?;
 
-        if result.items.iter().any(|t| t.art.is_resource()) {
-            let art = match self
+        let needs_art = |t: &Track| t.art.is_resource();
+        let needs_name = |t: &Track| t.album.as_ref().is_some_and(|a| a.name.is_empty());
+        if result.items.iter().any(|t| needs_art(t) || needs_name(t)) {
+            let album = match self
                 .json_cache
                 .get_single::<Album>(&CacheKey::Album(id2.clone()))
             {
-                Some(album) if !album.art.is_resource() => Some(album.art),
-                Some(_) => None,
-                None => match self.get_album(&id2, load).await {
-                    Ok(album) if !album.art.is_resource() => Some(album.art),
-                    _ => None,
-                },
+                Some(album) => Some(album),
+                None => self.get_album(&id2, load).await.ok(),
             };
-            if let Some(art) = art {
-                for track in result.items.iter_mut() {
-                    if track.art.is_resource() {
-                        track.art = art.clone();
-                    }
-                }
+            if let Some(album) = album {
+                backfill_album_tracks(&mut result.items, &album);
             }
         }
         Ok(result)
@@ -995,6 +989,19 @@ impl ApiService {
     }
 }
 
+fn backfill_album_tracks(tracks: &mut [Track], album: &Album) {
+    for track in tracks.iter_mut() {
+        if track.art.is_resource() && !album.art.is_resource() {
+            track.art = album.art.clone();
+        }
+        if let Some(album_ref) = track.album.as_mut() {
+            if album_ref.name.is_empty() {
+                album_ref.name = album.title.clone();
+            }
+        }
+    }
+}
+
 fn is_resource_url(url: &str) -> bool {
     url.starts_with("resource://")
 }
@@ -1027,4 +1034,106 @@ fn load_resource_texture(url: &str, width: i32, height: i32) -> Option<gdk::Text
     let path = url.strip_prefix("resource://")?;
     let pixbuf = gdk_pixbuf::Pixbuf::from_resource_at_scale(path, width, height, true).ok()?;
     Some(gdk::Texture::for_pixbuf(&pixbuf))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn image_set(url: &str) -> ImageSet {
+        ImageSet {
+            images: vec![Image {
+                url: url.to_string(),
+                width: None,
+                height: None,
+            }],
+            template: None,
+        }
+    }
+
+    fn album(title: &str, art: ImageSet) -> Album {
+        Album {
+            rri: ResourceId::default(),
+            title: title.to_string(),
+            artists: vec![],
+            art,
+            album_type: AlbumType::Album,
+            release_date: None,
+            total_tracks: None,
+            label: None,
+            copyright: None,
+            upc: None,
+            genres: vec![],
+            popularity: None,
+            content_rating: ContentRating::None,
+            saved: None,
+            tracks: None,
+            url: None,
+        }
+    }
+
+    fn track(album_name: Option<&str>, art: ImageSet) -> Track {
+        Track {
+            rri: ResourceId::default(),
+            title: "Track".to_string(),
+            artists: vec![],
+            album: album_name.map(|name| AlbumRef {
+                rri: ResourceId::default(),
+                name: name.to_string(),
+            }),
+            duration_ms: 0,
+            track_number: None,
+            disc_number: None,
+            content_rating: ContentRating::None,
+            isrc: None,
+            art,
+            playable: true,
+            popularity: None,
+            saved: None,
+            preview_url: None,
+            url: None,
+        }
+    }
+
+    const PLACEHOLDER: &str = "resource:///dev/diegovsky/Riff/defaults/track-default.svg";
+    const REAL: &str = "https://i.scdn.co/image/album";
+
+    #[test]
+    fn backfill_fills_empty_album_name() {
+        let mut tracks = vec![track(Some(""), image_set(PLACEHOLDER))];
+        backfill_album_tracks(&mut tracks, &album("Kind of Blue", image_set(REAL)));
+        assert_eq!(tracks[0].album.as_ref().unwrap().name, "Kind of Blue");
+    }
+
+    #[test]
+    fn backfill_keeps_existing_album_name() {
+        let mut tracks = vec![track(Some("Original"), image_set(PLACEHOLDER))];
+        backfill_album_tracks(&mut tracks, &album("Other", image_set(REAL)));
+        assert_eq!(tracks[0].album.as_ref().unwrap().name, "Original");
+    }
+
+    #[test]
+    fn backfill_leaves_missing_album_ref_alone() {
+        let mut tracks = vec![track(None, image_set(PLACEHOLDER))];
+        backfill_album_tracks(&mut tracks, &album("Kind of Blue", image_set(REAL)));
+        assert!(tracks[0].album.is_none());
+    }
+
+    #[test]
+    fn backfill_replaces_placeholder_art_only_with_real_art() {
+        let mut tracks = vec![track(Some(""), image_set(PLACEHOLDER))];
+        backfill_album_tracks(&mut tracks, &album("A", image_set(PLACEHOLDER)));
+        assert!(tracks[0].art.is_resource());
+
+        backfill_album_tracks(&mut tracks, &album("A", image_set(REAL)));
+        assert_eq!(tracks[0].art, image_set(REAL));
+    }
+
+    #[test]
+    fn backfill_keeps_existing_real_art() {
+        let own = "https://i.scdn.co/image/track";
+        let mut tracks = vec![track(Some("A"), image_set(own))];
+        backfill_album_tracks(&mut tracks, &album("A", image_set(REAL)));
+        assert_eq!(tracks[0].art, image_set(own));
+    }
 }

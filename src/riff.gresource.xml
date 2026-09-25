@@ -33,9 +33,10 @@
     <!-- now playing -->
     <file alias="components/device_selector.ui">app/components/shell/device_selector/device_selector.ui</file>
     <!-- liked songs -->
-    <!-- song -->
-    <file alias="components/song.css">app/components/widgets/playlist/song.css</file>
-    <file alias="components/song.ui">app/components/widgets/playlist/song.ui</file>
+    <!-- track_list / track_row -->
+    <file alias="components/track_row.css">app/components/widgets/track_list/track_row.css</file>
+    <file alias="components/track_row.ui">app/components/widgets/track_list/track_row.ui</file>
+    <file alias="components/disc_header_row.ui">app/components/widgets/track_list/disc_header_row.ui</file>
     <!-- playback -->
     <file alias="components/playback.css">app/components/shell/playback/playback.css</file>
     <file alias="components/playback_controls.ui">app/components/shell/playback/playback_controls.ui</file>
@@ -64,23 +65,23 @@
     <file compressed="true" preprocess="xml-stripblanks" alias="nautilus-search-filters-symbolic.svg">app/icons/nautilus-search-filters-symbolic.svg</file>
   </gresource>
 	<gresource prefix="/dev/diegovsky/Riff/icons/scalable/actions/">
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-paused-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-paused-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-0-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-0-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-1-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-1-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-2-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-2-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-3-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-3-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-4-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-4-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-5-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-5-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-6-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-6-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-7-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-7-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-8-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-8-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-9-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-9-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-10-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-10-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-11-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-11-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-12-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-12-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-13-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-13-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-14-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-14-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-15-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-15-symbolic.svg</file>
-	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-16-symbolic.svg">app/components/widgets/playlist/playback-indicator/playback-16-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-paused-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-paused-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-0-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-0-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-1-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-1-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-2-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-2-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-3-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-3-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-4-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-4-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-5-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-5-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-6-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-6-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-7-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-7-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-8-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-8-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-9-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-9-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-10-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-10-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-11-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-11-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-12-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-12-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-13-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-13-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-14-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-14-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-15-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-15-symbolic.svg</file>
+	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-16-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-16-symbolic.svg</file>
   </gresource>
 </gresources>
