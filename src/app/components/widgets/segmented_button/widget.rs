@@ -138,16 +138,20 @@ impl SegmentedButton {
 
         let imp = self.widget.imp();
         if imp.count.get() == 0 {
-            let widget = self.widget.clone();
-            button.connect_clicked(move |_| {
-                let behavior = widget.imp().behavior.get();
-                if behavior == ExpandBehavior::AlwaysExpanded || behavior == ExpandBehavior::OnHover
-                {
-                    return;
+            button.connect_clicked(clone!(
+                #[weak(rename_to = widget)]
+                self.widget,
+                move |_| {
+                    let behavior = widget.imp().behavior.get();
+                    if behavior == ExpandBehavior::AlwaysExpanded
+                        || behavior == ExpandBehavior::OnHover
+                    {
+                        return;
+                    }
+                    let next = !widget.imp().expanded.get();
+                    widget.set_expanded_internal(next);
                 }
-                let next = !widget.imp().expanded.get();
-                widget.set_expanded_internal(next);
-            });
+            ));
             button.connect_clicked(move |_| on_click());
             self.widget.prepend(&button);
         } else {
@@ -184,30 +188,42 @@ impl SegmentedButton {
         if let Some(ctrl) = imp.hover_controller.take() {
             self.widget.remove_controller(&ctrl);
         }
-
+        imp.collapse_debouncer.stop();
         imp.behavior.set(behavior);
 
         match behavior {
             ExpandBehavior::OnHover => {
-                let widget_enter = self.widget.clone();
-                let widget_leave = self.widget.clone();
-
+                // Weak: the widget owns this controller, so a strong ref would leak it.
                 let ctrl = gtk::EventControllerMotion::new();
-                ctrl.connect_enter(move |_, _, _| {
-                    widget_enter.imp().collapse_debouncer.stop();
-                    widget_enter.set_expanded_internal(true);
-                });
-                ctrl.connect_leave(move |_| {
-                    let widget = widget_leave.clone();
-                    widget_leave
-                        .imp()
-                        .collapse_debouncer
-                        .debounce(HOVER_COLLAPSE_DELAY_MS, move || {
-                            widget.set_expanded_internal(false)
-                        });
-                });
+                ctrl.connect_enter(clone!(
+                    #[weak(rename_to = widget)]
+                    self.widget,
+                    move |_, _, _| {
+                        widget.imp().collapse_debouncer.stop();
+                        widget.set_expanded_internal(true);
+                    }
+                ));
+                ctrl.connect_leave(clone!(
+                    #[weak(rename_to = widget)]
+                    self.widget,
+                    move |_| {
+                        widget.imp().collapse_debouncer.debounce(
+                            HOVER_COLLAPSE_DELAY_MS,
+                            clone!(
+                                #[weak]
+                                widget,
+                                move || {
+                                    if widget.imp().behavior.get() == ExpandBehavior::OnHover {
+                                        widget.set_expanded_internal(false);
+                                    }
+                                }
+                            ),
+                        );
+                    }
+                ));
                 self.widget.add_controller(ctrl.clone());
                 imp.hover_controller.replace(Some(ctrl));
+                self.widget.set_expanded_internal(false);
             }
             ExpandBehavior::AlwaysExpanded => {
                 self.widget.set_expanded_internal(true);
@@ -216,6 +232,10 @@ impl SegmentedButton {
                 // No controller needed as toggle is wired in add_icon.
             }
         }
+    }
+
+    pub fn expand_behavior(&self) -> ExpandBehavior {
+        self.widget.imp().behavior.get()
     }
 
     /// Force the control open or closed.

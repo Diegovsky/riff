@@ -120,6 +120,7 @@ pub struct SongState {
     pub is_playing: bool,
     pub is_selected: bool,
     pub is_liked: bool,
+    pub is_pinned: bool,
     pub is_explicit_filtered: bool,
 }
 

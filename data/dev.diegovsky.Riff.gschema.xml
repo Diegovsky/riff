@@ -227,7 +227,7 @@
       <default>false</default>
       <summary>Show audio normalisation settings for fine-tuning loudness between tracks</summary>
     </key>
-    <key name="feature-pinned-playlists" type="b">
+    <key name="feature-pinned-objects" type="b">
       <default>false</default>
       <summary>Enable pinning objects to the sidebar</summary>
     </key>

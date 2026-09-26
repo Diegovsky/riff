@@ -9,7 +9,6 @@ use crate::app::components::{
 };
 use crate::app::{AppEvent, Dispatcher};
 use crate::feature_flags::{is_enabled, FeatureFlag};
-use crate::settings;
 
 /// A generic details page component that wires all standard behavior
 /// from a `PageModel` implementation automatically.
@@ -22,12 +21,13 @@ pub struct DetailsPageComponent<M> {
     name: String,
     header_title: libadwaita::WindowTitle,
     end_box: gtk::Box,
-    _pin_settings: Option<gio::Settings>,
 }
 
 /// Sync the pin segment of the like+pin control from the model's current state.
 fn set_pin_button_state<M: PinnedPageModel>(model: &M, header: &DetailsHeader) {
-    let pin_visible = is_enabled(FeatureFlag::PinnedPlaylists) && model.is_liked();
+    let pin_enabled = is_enabled(FeatureFlag::PinnedObjects);
+    header.set_pin_enabled(pin_enabled);
+    let pin_visible = pin_enabled && model.is_liked();
     header.set_pin_visible(pin_visible);
     if pin_visible {
         header.set_pinned(model.is_pinned());
@@ -65,7 +65,6 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
             name,
             header_title,
             end_box,
-            _pin_settings: None,
         };
         c.wire();
         c
@@ -226,29 +225,28 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
             ));
         }
 
-        let pin_on = self.model.supports_pin_button() && is_enabled(FeatureFlag::PinnedPlaylists);
-
         if self.model.has_like_button() {
-            if pin_on {
-                // Replace the standalone like button with a like+pin segmented
-                // control: hovering the like segment reveals the pin segment.
+            self.page.header().connect_liked(clone!(
+                #[weak(rename_to = m)]
+                self.model,
+                move || m.toggle_like()
+            ));
+            if self.model.supports_pin_button() {
                 let (like, pin) = self.page.header().add_like_pin_segmented_button();
                 like.connect_clicked(clone!(
                     #[weak(rename_to = m)]
                     self.model,
-                    move |_| m.toggle_like()
+                    move |_| {
+                        if m.is_liked() && m.is_pinned() {
+                            m.toggle_pin();
+                        }
+                        m.toggle_like()
+                    }
                 ));
                 pin.connect_clicked(clone!(
                     #[weak(rename_to = m)]
                     self.model,
                     move |_| m.toggle_pin()
-                ));
-                self.page.header().hide_standalone_like_button();
-            } else {
-                self.page.header().connect_liked(clone!(
-                    #[weak(rename_to = m)]
-                    self.model,
-                    move || m.toggle_like()
                 ));
             }
         }
@@ -276,23 +274,7 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
         ));
 
         if self.model.supports_pin_button() {
-            let settings = gio::Settings::new(settings::SETTINGS);
-            let header_widget = self.page.header().clone_inner();
-            let sync_pin_button = clone!(
-                #[weak(rename_to = m)]
-                self.model,
-                #[strong]
-                header_widget,
-                move || {
-                    let header = DetailsHeader::from_widget(header_widget.clone());
-                    set_pin_button_state(&*m, &header);
-                }
-            );
-            sync_pin_button();
-            settings.connect_changed(Some("feature-pinned-playlists"), move |_, _| {
-                sync_pin_button()
-            });
-            self._pin_settings = Some(settings);
+            set_pin_button_state(&*self.model, self.page.header());
         }
 
         // Initial state
@@ -394,8 +376,8 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
             event,
             AppEvent::BrowserEvent(crate::app::BrowserEvent::PinnedPlaylistsUpdated)
         ) {
-            if self.model.supports_pin_button() && is_enabled(FeatureFlag::PinnedPlaylists) {
-                self.page.header().set_pinned(self.model.is_pinned());
+            if self.model.supports_pin_button() {
+                set_pin_button_state(&*self.model, self.page.header());
             }
             return true;
         }

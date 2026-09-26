@@ -19,6 +19,12 @@ lazy_static! {
     // translators: This is part of a contextual menu attached to a single track; this entry removes the track from the user's saved tracks.
     pub static ref UNLIKE: String = gettext("Remove from Saved Tracks");
 
+    // translators: This is part of a contextual menu attached to a single track, and the tooltip of the pin button on a detail page; this entry pins the item to the sidebar.
+    pub static ref PIN_TO_SIDEBAR: String = gettext("Pin to Sidebar");
+
+    // translators: This is part of a contextual menu attached to a single track, and the tooltip of the pin button on a detail page; this entry removes the item from the sidebar.
+    pub static ref UNPIN_FROM_SIDEBAR: String = gettext("Unpin from Sidebar");
+
     // translators: This is the tooltip for the like/star button on an album's detail page; it saves the album to the user's saved albums.
     pub static ref LIKE_ALBUM: String = gettext("Add to Saved Albums");
 

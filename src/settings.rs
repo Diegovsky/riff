@@ -10,7 +10,6 @@ use crate::{
 use gio::prelude::SettingsExt;
 use libadwaita::ColorScheme;
 use librespot::playback::config::{AudioFormat, Bitrate, NormalisationMethod, NormalisationType};
-use serde_json;
 use std::collections::HashMap;
 
 pub const SETTINGS: &str = "dev.diegovsky.Riff";
@@ -28,11 +27,13 @@ pub enum PinnedKind {
     Track,
 }
 
-/// A single user-pinned object. Serializes as `{"id":"...","kind":"..."}`.
+/// A single user-pinned object. Serializes as `{"id":"...","kind":"...","title":"..."}`.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PinnedObject {
     pub id: String,
     pub kind: PinnedKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
 }
 
 impl PinnedObject {
@@ -40,6 +41,7 @@ impl PinnedObject {
         Self {
             id: id.into(),
             kind,
+            title: None,
         }
     }
 }
@@ -135,10 +137,14 @@ pub fn is_object_pinned(user_id: &str, id: &str, kind: PinnedKind) -> bool {
         .any(|o| o.id == id && o.kind == kind)
 }
 
-pub fn pin_object(user_id: &str, kind: PinnedKind, id: &str) -> bool {
+pub fn pin_object(user_id: &str, kind: PinnedKind, id: &str, title: Option<String>) -> bool {
     let settings = gio::Settings::new(SETTINGS);
     let mut map = load_pinned_map(&settings);
-    if !pin_in_map(&mut map, user_id, &PinnedObject::new(id, kind)) {
+    let object = PinnedObject {
+        title,
+        ..PinnedObject::new(id, kind)
+    };
+    if !pin_in_map(&mut map, user_id, &object) {
         return false;
     }
     save_pinned_map(&settings, &map)
@@ -649,5 +655,16 @@ mod pinned_playlists_tests {
         );
         let json = serde_json::to_string(&map).unwrap();
         assert!(json.contains(r#""kind":"album""#));
+        assert!(!json.contains("title"));
+    }
+
+    #[test]
+    fn title_round_trips_and_is_optional() {
+        let with_title: PinnedObject =
+            serde_json::from_str(r#"{"id":"alb1","kind":"album","title":"Blue"}"#).unwrap();
+        assert_eq!(with_title.title.as_deref(), Some("Blue"));
+        let without_title: PinnedObject =
+            serde_json::from_str(r#"{"id":"alb1","kind":"album"}"#).unwrap();
+        assert_eq!(without_title.title, None);
     }
 }

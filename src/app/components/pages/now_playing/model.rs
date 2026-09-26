@@ -287,6 +287,14 @@ impl TrackListModel for NowPlayingModel {
         self.base.toggle_song_like(&songs, id);
     }
 
+    fn pinned_song_ids(&self) -> Option<std::collections::HashSet<String>> {
+        self.base.pinned_song_ids()
+    }
+
+    fn toggle_song_pin(&self, song: &Track) {
+        self.base.toggle_song_pin(song);
+    }
+
     fn skip_explicit(&self) -> bool {
         self.base.skip_explicit()
     }
@@ -302,13 +310,14 @@ impl TrackListModel for NowPlayingModel {
         Some(group)
     }
 
-    fn menu_for(&self, song: &Track, liked: bool) -> Option<gio::MenuModel> {
+    fn menu_for(&self, song: &Track, liked: bool, pinned: Option<bool>) -> Option<gio::MenuModel> {
         Some(build_song_menu(
             song,
             true,
             None,
             QueueMenuEntry::Remove,
             Some(liked),
+            pinned,
         ))
     }
 }

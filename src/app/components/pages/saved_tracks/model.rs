@@ -189,13 +189,14 @@ impl TrackListModel for SavedTracksModel {
         Some(group)
     }
 
-    fn menu_for(&self, song: &Track, liked: bool) -> Option<gio::MenuModel> {
+    fn menu_for(&self, song: &Track, liked: bool, pinned: Option<bool>) -> Option<gio::MenuModel> {
         Some(build_song_menu(
             song,
             true,
             None,
             QueueMenuEntry::None,
             Some(liked),
+            pinned,
         ))
     }
 }

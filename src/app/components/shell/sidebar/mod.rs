@@ -5,6 +5,9 @@ pub use sidebar::*;
 mod sidebar_item;
 pub use sidebar_item::*;
 
+mod context_menu;
+mod model;
+pub use model::*;
+
 mod create_playlist;
-mod playlist_actions;
 mod sidebar_row;

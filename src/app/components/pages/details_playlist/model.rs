@@ -209,7 +209,7 @@ impl PageModel for PlaylistDetailsModel {
         let id = self.id.clone();
         let is_saved = self.is_liked();
         let api = self.app_model.api();
-        let pin_enabled = is_enabled(FeatureFlag::PinnedPlaylists);
+        let pin_enabled = is_enabled(FeatureFlag::PinnedObjects);
         let user_id = self.app_model.get_state().logged_user.user.clone();
 
         let description = {
@@ -346,13 +346,14 @@ impl TrackListModel for PlaylistDetailsModel {
         Some(group)
     }
 
-    fn menu_for(&self, song: &Track, liked: bool) -> Option<gio::MenuModel> {
+    fn menu_for(&self, song: &Track, liked: bool, pinned: Option<bool>) -> Option<gio::MenuModel> {
         Some(build_song_menu(
             song,
             true,
             None,
             QueueMenuEntry::Add,
             Some(liked),
+            pinned,
         ))
     }
 }

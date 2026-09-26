@@ -164,8 +164,11 @@ pub trait PinnedPageModel: PageModel + std::ops::Deref<Target = DetailsPageModel
         };
         let changed = if self.is_pinned() {
             settings::unpin_object(&user_id, self.pin_kind(), &id)
+        } else if !self.is_liked() {
+            // Only liked items can be pinned.
+            return;
         } else {
-            settings::pin_object(&user_id, self.pin_kind(), &id)
+            settings::pin_object(&user_id, self.pin_kind(), &id, self.get_title())
         };
         if changed {
             self.dispatcher

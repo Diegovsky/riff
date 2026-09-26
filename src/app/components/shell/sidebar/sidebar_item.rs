@@ -74,7 +74,7 @@ impl SidebarDestination {
             Self::SavedPlaylists => "playlist2-symbolic",
             Self::SavedArtists => "avatar-default-symbolic",
             Self::Playlist(_) => "playlist2-symbolic",
-            Self::Album { .. } => "media-optical-symbolic",
+            Self::Album { .. } => "library-music-symbolic",
             Self::Artist { .. } => "avatar-default-symbolic",
             Self::Track { .. } => "audio-x-generic-symbolic",
         }

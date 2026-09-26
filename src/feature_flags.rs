@@ -24,7 +24,7 @@ pub enum FeatureFlag {
     being validated for usability before exposing to all users.
     */
     Normalisation,
-    PinnedPlaylists,
+    PinnedObjects,
 }
 
 impl FeatureFlag {
@@ -33,7 +33,7 @@ impl FeatureFlag {
         FeatureFlag::CreateNewPlaylist,
         FeatureFlag::DeviceSelector,
         FeatureFlag::Normalisation,
-        FeatureFlag::PinnedPlaylists,
+        FeatureFlag::PinnedObjects,
     ];
 
     pub fn key(&self) -> &'static str {
@@ -42,7 +42,7 @@ impl FeatureFlag {
             FeatureFlag::CreateNewPlaylist => "feature-create-new-playlist",
             FeatureFlag::DeviceSelector => "feature-device-selector",
             FeatureFlag::Normalisation => "feature-normalisation",
-            FeatureFlag::PinnedPlaylists => "feature-pinned-playlists",
+            FeatureFlag::PinnedObjects => "feature-pinned-objects",
         }
     }
 
@@ -52,7 +52,7 @@ impl FeatureFlag {
             FeatureFlag::CreateNewPlaylist => "Create New Playlist",
             FeatureFlag::DeviceSelector => "Device Selector",
             FeatureFlag::Normalisation => "Audio Normalisation",
-            FeatureFlag::PinnedPlaylists => "Pinned Playlists",
+            FeatureFlag::PinnedObjects => "Pinned Items",
         }
     }
 
@@ -68,7 +68,9 @@ impl FeatureFlag {
             FeatureFlag::Normalisation => {
                 "Show audio normalisation settings for fine-tuning loudness between tracks."
             }
-            FeatureFlag::PinnedPlaylists => "Enable pinning objects to the sidebar.",
+            FeatureFlag::PinnedObjects => {
+                "Enable pinning saved playlists, albums, artists, and tracks to the sidebar."
+            }
         }
     }
 }

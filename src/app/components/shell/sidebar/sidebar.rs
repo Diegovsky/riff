@@ -1,329 +1,14 @@
-use gettextrs::gettext;
 use gtk::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::{
-    create_playlist::CreatePlaylistPopover, playlist_actions, sidebar_row::SidebarRow,
-    SidebarDestination, SidebarItem, CREATE_PLAYLIST_ITEM, LIBRARY_SECTION, PINNED_SECTION,
-    SAVED_PLAYLISTS_SECTION,
+    context_menu::build_context_menu, create_playlist::CreatePlaylistPopover,
+    sidebar_row::SidebarRow, SidebarDestination, SidebarItem, SidebarModel, CREATE_PLAYLIST_ITEM,
+    LIBRARY_SECTION, PINNED_SECTION, SAVED_PLAYLISTS_SECTION,
 };
-use crate::app::components::{dispatch_api_call, dispatch_api_read, dispatch_api_read_many};
-use crate::app::models::{CardModel, PlaylistSummary};
-use crate::app::state::{PlaybackAction, ScreenName};
-use crate::app::{
-    AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Component, Dispatcher,
-    EventListener, PaginationTarget, SongsSource,
-};
+use crate::app::{AppEvent, BrowserEvent, Component, EventListener};
 use crate::feature_flags::{is_enabled, FeatureFlag};
-use crate::settings;
-
-pub struct SidebarModel {
-    app_model: Rc<AppModel>,
-    dispatcher: Dispatcher,
-}
-
-impl SidebarModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
-        Self {
-            app_model,
-            dispatcher,
-        }
-    }
-
-    fn get_playlists(&self) -> Vec<SidebarDestination> {
-        self.app_model
-            .get_state()
-            .browser
-            .home_state()
-            .expect("expected HomeState to be available")
-            .playlists
-            .iter()
-            .map(Self::map_to_destination)
-            .collect()
-    }
-
-    pub fn load_more_playlists(&self) -> Option<()> {
-        let api = self.app_model.api();
-        let state = self.app_model.get_state();
-        let home = state.browser.home_state()?;
-        let batch_size = home.next_playlists_page.batch_size;
-        let offset = home.next_playlists_page.next_offset?;
-        drop(state);
-
-        self.app_model
-            .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SavedPlaylists).into());
-
-        dispatch_api_read(&self.dispatcher, move |tag| async move {
-            api.get_saved_playlists(offset, batch_size, tag)
-                .await
-                .map(|page| BrowserAction::AppendPlaylistsContent(page.items).into())
-        });
-
-        Some(())
-    }
-
-    fn map_to_destination(a: CardModel) -> SidebarDestination {
-        let title = Some(a.title())
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| gettext("Unnamed Playlist"));
-        let id = a.id();
-        SidebarDestination::Playlist(PlaylistSummary { id, title })
-    }
-
-    fn create_new_playlist(&self, name: String) {
-        let user_id = self.app_model.get_state().logged_user.user.clone().unwrap();
-        let api = self.app_model.api();
-        dispatch_api_call(&self.dispatcher, move || async move {
-            api.create_playlist(user_id.as_str(), name.as_str())
-                .await
-                .map(AppAction::CreatePlaylist)
-        })
-    }
-
-    pub(super) fn is_playlist_owned(&self, id: &str) -> bool {
-        self.app_model
-            .get_state()
-            .logged_user
-            .playlist_ids
-            .contains(id)
-    }
-
-    fn logged_user_id(&self) -> Option<String> {
-        self.app_model.get_state().logged_user.user.clone()
-    }
-
-    pub(super) fn unfollow_playlist(&self, id: String) {
-        let pin_enabled = is_enabled(FeatureFlag::PinnedPlaylists);
-        let user_id = self.logged_user_id();
-        let api = self.app_model.api();
-        dispatch_api_call(&self.dispatcher, move || async move {
-            api.unfollow_playlist(&id).await?;
-            if pin_enabled {
-                if let Some(user_id) = user_id {
-                    settings::unpin_object(&user_id, settings::PinnedKind::Playlist, &id);
-                }
-            }
-            Ok(AppAction::RemovePlaylist(id))
-        })
-    }
-
-    pub(super) fn play_playlist(&self, id: String) {
-        let api = self.app_model.api();
-        let source = SongsSource::Playlist(id.clone());
-        dispatch_api_read_many(&self.dispatcher, move |tag| async move {
-            let batch = api.get_playlist_tracks(&id, 0, 50, tag).await?;
-            let first_id = batch.items.first().map(|s| s.rri.id.clone());
-            let mut actions: Vec<AppAction> = vec![
-                PlaybackAction::SetShuffled(false).into(),
-                PlaybackAction::LoadPagedSongs(source, batch).into(),
-            ];
-            if let Some(track_id) = first_id {
-                actions.push(PlaybackAction::Load(track_id).into());
-            }
-            Ok(actions)
-        });
-    }
-
-    pub(super) fn shuffle_playlist(&self, id: String) {
-        let api = self.app_model.api();
-        let source = SongsSource::Playlist(id.clone());
-        dispatch_api_read_many(&self.dispatcher, move |tag| async move {
-            let batch = api.get_playlist_tracks(&id, 0, 50, tag).await?;
-            let len = batch.items.len();
-            let track_id = if len > 0 {
-                let index = rand::random::<usize>() % len;
-                Some(batch.items[index].rri.id.clone())
-            } else {
-                None
-            };
-            let mut actions: Vec<AppAction> = vec![
-                PlaybackAction::SetShuffled(true).into(),
-                PlaybackAction::LoadPagedSongs(source, batch).into(),
-            ];
-            if let Some(track_id) = track_id {
-                actions.push(PlaybackAction::Load(track_id).into());
-            }
-            Ok(actions)
-        });
-    }
-
-    fn navigate(&self, dest: SidebarDestination) {
-        let actions = match dest {
-            SidebarDestination::Library
-            | SidebarDestination::SavedTracks
-            | SidebarDestination::NowPlaying
-            | SidebarDestination::SavedPlaylists
-            | SidebarDestination::SavedArtists => {
-                vec![
-                    BrowserAction::NavigationPopTo(ScreenName::Home).into(),
-                    BrowserAction::SetHomeVisiblePage(dest.id()).into(),
-                ]
-            }
-            SidebarDestination::Playlist(PlaylistSummary { id, .. }) => {
-                vec![AppAction::ViewPlaylist(id)]
-            }
-            SidebarDestination::Album { id, .. } => vec![AppAction::ViewAlbum(id)],
-            SidebarDestination::Artist { id, .. } => vec![AppAction::ViewArtist(id)],
-            SidebarDestination::Track { id, .. } => vec![PlaybackAction::Load(id).into()],
-        };
-        self.dispatcher.dispatch_many(actions);
-    }
-
-    pub(super) fn toggle_pin_playlist(&self, id: &str) {
-        let Some(user_id) = self.logged_user_id() else {
-            return;
-        };
-        let changed = if settings::is_object_pinned(&user_id, id, settings::PinnedKind::Playlist) {
-            settings::unpin_object(&user_id, settings::PinnedKind::Playlist, id)
-        } else {
-            settings::pin_object(&user_id, settings::PinnedKind::Playlist, id)
-        };
-        if changed {
-            self.dispatcher
-                .dispatch(BrowserAction::NotifyPinnedPlaylistsUpdated.into());
-        }
-    }
-
-    fn prune_stale_pins(&self) {
-        if !is_enabled(FeatureFlag::PinnedPlaylists) {
-            return;
-        }
-        let Some(user_id) = self.logged_user_id() else {
-            return;
-        };
-        // Only playlist pins can be pruned reliably: the saved-playlists list
-        // is the authoritative set of playlists that still exist. Albums,
-        // artists and tracks are pinned from detail pages that may be opened
-        // before the corresponding home lists are loaded, so pruning against
-        // those lists could drop valid pins.
-        let saved_ids: Vec<String> = self
-            .get_playlists()
-            .into_iter()
-            .filter_map(|destination| {
-                if let SidebarDestination::Playlist(summary) = destination {
-                    Some(summary.id)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        let _ =
-            settings::prune_pinned_objects(&user_id, settings::PinnedKind::Playlist, &saved_ids);
-    }
-
-    pub fn apply_sidebar_items(&self, list_store: &gio::ListStore, num_fixed_entries: u32) {
-        self.prune_stale_pins();
-        let items = self.build_sidebar_items();
-        list_store.splice(
-            num_fixed_entries,
-            list_store.n_items().saturating_sub(num_fixed_entries),
-            items.as_slice(),
-        );
-    }
-
-    fn pinned_title_for(&self, object: &settings::PinnedObject) -> String {
-        let fallback = match object.kind {
-            settings::PinnedKind::Playlist => gettext("Pinned Playlist"),
-            settings::PinnedKind::Album => gettext("Pinned Album"),
-            settings::PinnedKind::Artist => gettext("Pinned Artist"),
-            settings::PinnedKind::Track => gettext("Pinned Track"),
-        };
-        let state = self.app_model.get_state();
-        let Some(home) = state.browser.home_state() else {
-            return fallback;
-        };
-        match object.kind {
-            settings::PinnedKind::Playlist => home
-                .playlists
-                .iter()
-                .find(|c| c.id() == object.id)
-                .map(|c| c.title())
-                .unwrap_or(fallback),
-            settings::PinnedKind::Album => home
-                .albums
-                .iter()
-                .find(|c| c.id() == object.id)
-                .map(|c| c.title())
-                .unwrap_or(fallback),
-            settings::PinnedKind::Artist => home
-                .artists
-                .iter()
-                .find(|c| c.id() == object.id)
-                .map(|c| c.title())
-                .unwrap_or(fallback),
-            settings::PinnedKind::Track => home
-                .saved_tracks
-                .get(&object.id)
-                .map(|sm| sm.description().title.clone())
-                .unwrap_or(fallback),
-        }
-    }
-
-    fn to_pinned_item(&self, object: settings::PinnedObject) -> SidebarItem {
-        let title = self.pinned_title_for(&object);
-        SidebarItem::from_destination(match object.kind {
-            settings::PinnedKind::Playlist => SidebarDestination::Playlist(PlaylistSummary {
-                id: object.id,
-                title,
-            }),
-            settings::PinnedKind::Album => SidebarDestination::Album {
-                id: object.id,
-                title,
-            },
-            settings::PinnedKind::Artist => SidebarDestination::Artist {
-                id: object.id,
-                title,
-            },
-            settings::PinnedKind::Track => SidebarDestination::Track {
-                id: object.id,
-                title,
-            },
-        })
-    }
-
-    fn build_sidebar_items(&self) -> Vec<SidebarItem> {
-        let mut items = Vec::new();
-        let pinned_enabled = is_enabled(FeatureFlag::PinnedPlaylists);
-        let playlists = self.get_playlists();
-        let pinned: Vec<settings::PinnedObject> = self
-            .logged_user_id()
-            .map(|user_id| settings::get_pinned_objects(&user_id))
-            .unwrap_or_default();
-        let pinned_playlist_ids: Vec<String> = pinned
-            .iter()
-            .filter(|o| o.kind == settings::PinnedKind::Playlist)
-            .map(|o| o.id.clone())
-            .collect();
-
-        if pinned_enabled {
-            if !pinned.is_empty() {
-                items.push(SidebarItem::pinned_section());
-                for object in pinned {
-                    items.push(self.to_pinned_item(object));
-                }
-            }
-
-            let mut unpinned = Vec::new();
-            for p in playlists {
-                if let SidebarDestination::Playlist(ref summary) = p {
-                    if pinned_playlist_ids.contains(&summary.id) {
-                        continue;
-                    }
-                }
-                unpinned.push(p);
-            }
-
-            items.push(SidebarItem::playlists_section());
-            items.extend(unpinned.into_iter().map(SidebarItem::from_destination));
-        } else {
-            items.push(SidebarItem::playlists_section());
-            items.extend(playlists.into_iter().map(SidebarItem::from_destination));
-        }
-
-        items
-    }
-}
 
 pub struct Sidebar {
     listbox: gtk::ListBox,
@@ -331,7 +16,6 @@ pub struct Sidebar {
     model: Rc<SidebarModel>,
     _context_menu: gtk::PopoverMenu,
     num_fixed_entries: u32,
-    _settings: gio::Settings,
 }
 
 impl Sidebar {
@@ -365,6 +49,7 @@ impl Sidebar {
         list_store.append(&SidebarItem::from_destination(
             SidebarDestination::SavedTracks,
         ));
+        list_store.append(&SidebarItem::playlists_section());
         if create_playlist_enabled {
             list_store.append(&SidebarItem::create_playlist_item());
         }
@@ -456,8 +141,10 @@ impl Sidebar {
                 let Some(row) = row.downcast_ref::<SidebarRow>() else {
                     return;
                 };
-                let Some(SidebarDestination::Playlist(PlaylistSummary { id, .. })) =
-                    row.item().destination()
+                let Some((prefix, actions, menu)) = row
+                    .item()
+                    .destination()
+                    .and_then(|destination| build_context_menu(&destination, &model))
                 else {
                     return;
                 };
@@ -465,16 +152,8 @@ impl Sidebar {
                 row.set_state_flags(gtk::StateFlags::SELECTED, false);
                 context_row.replace(Some(row.clone()));
 
-                let actions = playlist_actions::build_playlist_actions(&id, &model);
-                context_menu.insert_action_group("playlist", Some(&actions));
-
-                let is_owned = model.is_playlist_owned(&id);
-                let user_id = model.logged_user_id();
-                context_menu.set_menu_model(Some(&playlist_actions::build_playlist_menu(
-                    is_owned,
-                    &id,
-                    user_id.as_deref(),
-                )));
+                context_menu.insert_action_group(prefix, Some(&actions));
+                context_menu.set_menu_model(Some(&menu));
 
                 // Translate coordinates from listbox space to the popover parent (sidebar Box) space
                 let popover_parent = context_menu.parent().unwrap();
@@ -528,13 +207,6 @@ impl Sidebar {
 
         let num_fixed_entries = list_store.n_items();
 
-        let settings = gio::Settings::new(settings::SETTINGS);
-        let list_store_watch = list_store.clone();
-        let model_watch = Rc::clone(&model);
-        settings.connect_changed(Some("feature-pinned-playlists"), move |_, _| {
-            model_watch.apply_sidebar_items(&list_store_watch, num_fixed_entries);
-        });
-
         model.apply_sidebar_items(&list_store, num_fixed_entries);
 
         Self {
@@ -543,7 +215,6 @@ impl Sidebar {
             model,
             _context_menu: context_menu,
             num_fixed_entries,
-            _settings: settings,
         }
     }
 
