@@ -14,7 +14,7 @@ use crate::app::components::DetailsPageModel;
 use crate::app::components::SongActions;
 use crate::app::components::{
     build_song_menu, dispatch_api_read, HasHeaderBarModel, HeaderImageShape, PageModel,
-    QueueMenuEntry, SimpleHeaderBarModel, TrackListModel,
+    PinnedPageModel, QueueMenuEntry, SimpleHeaderBarModel, TrackListModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
@@ -37,6 +37,8 @@ impl Deref for SavedTracksModel {
 }
 
 impl HasHeaderBarModel for SavedTracksModel {}
+
+impl PinnedPageModel for SavedTracksModel {}
 
 impl SavedTracksModel {
     pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
@@ -187,13 +189,14 @@ impl TrackListModel for SavedTracksModel {
         Some(group)
     }
 
-    fn menu_for(&self, song: &Track, liked: bool) -> Option<gio::MenuModel> {
+    fn menu_for(&self, song: &Track, liked: bool, pinned: Option<bool>) -> Option<gio::MenuModel> {
         Some(build_song_menu(
             song,
             true,
             None,
             QueueMenuEntry::None,
             Some(liked),
+            pinned,
         ))
     }
 }

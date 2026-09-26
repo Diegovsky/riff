@@ -48,6 +48,9 @@
     <file alias="components/selection_toolbar.css">app/components/widgets/selection/selection_toolbar.css</file>
     <!-- app header -->
     <file alias="components/headerbar.ui">app/components/shell/headerbar/headerbar.ui</file>
+    <!-- segmented button -->
+    <file alias="components/segmented_button.css">app/components/widgets/segmented_button/style.css</file>
+    <file alias="components/segmented_button.ui">app/components/widgets/segmented_button/segmented_button.ui</file>
     <!-- sidebar -->
     <file alias="sidebar/sidebar_row.ui">app/components/shell/sidebar/sidebar_row.ui</file>
     <file alias="components/create_playlist.ui">app/components/shell/sidebar/create_playlist.ui</file>
@@ -63,6 +66,7 @@
     <file compressed="true" preprocess="xml-stripblanks" alias="playlist2-symbolic.svg">app/icons/playlist2-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="library-music-symbolic.svg">app/icons/library-music-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="nautilus-search-filters-symbolic.svg">app/icons/nautilus-search-filters-symbolic.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="view-pin-outline-symbolic.svg">app/icons/view-pin-outline.svg</file>
   </gresource>
 	<gresource prefix="/dev/diegovsky/Riff/icons/scalable/actions/">
 	   <file compressed="true" preprocess="xml-stripblanks" alias="playback-paused-symbolic.svg">app/components/widgets/track_list/playback-indicator/playback-paused-symbolic.svg</file>

@@ -31,6 +31,10 @@ impl SongModel {
         self.set_property("liked", is_liked);
     }
 
+    pub fn set_pinned(&self, is_pinned: bool) {
+        self.set_property("pinned", is_pinned);
+    }
+
     pub fn set_explicit_filtered(&self, is_explicit_filtered: bool) {
         self.set_property("explicit-filtered", is_explicit_filtered);
     }
@@ -45,6 +49,10 @@ impl SongModel {
 
     pub fn get_liked(&self) -> bool {
         self.property("liked")
+    }
+
+    pub fn get_pinned(&self) -> bool {
+        self.property("pinned")
     }
 
     pub fn get_id(&self) -> String {
@@ -190,7 +198,7 @@ mod imp {
     }
 
     lazy_static! {
-        static ref PROPERTIES: [glib::ParamSpec; 11] = [
+        static ref PROPERTIES: [glib::ParamSpec; 12] = [
             glib::ParamSpecString::builder("id").read_only().build(),
             glib::ParamSpecUInt::builder("index").read_only().build(),
             glib::ParamSpecString::builder("title").read_only().build(),
@@ -210,6 +218,10 @@ mod imp {
                 .explicit_notify()
                 .build(),
             glib::ParamSpecBoolean::builder("liked")
+                .readwrite()
+                .explicit_notify()
+                .build(),
+            glib::ParamSpecBoolean::builder("pinned")
                 .readwrite()
                 .explicit_notify()
                 .build(),
@@ -245,6 +257,12 @@ mod imp {
                 },
                 "liked" => SongState {
                     is_liked: value
+                        .get()
+                        .expect("type conformity checked by `Object::set_property`"),
+                    ..state
+                },
+                "pinned" => SongState {
+                    is_pinned: value
                         .get()
                         .expect("type conformity checked by `Object::set_property`"),
                     ..state
@@ -317,6 +335,7 @@ mod imp {
                 "playing" => self.state.get().is_playing.to_value(),
                 "selected" => self.state.get().is_selected.to_value(),
                 "liked" => self.state.get().is_liked.to_value(),
+                "pinned" => self.state.get().is_pinned.to_value(),
                 "playable" => self
                     .song
                     .borrow()

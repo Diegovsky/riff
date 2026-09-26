@@ -1,15 +1,17 @@
 use std::cell::Ref;
+use std::collections::HashSet;
 use std::ops::Deref;
 use std::rc::Rc;
 
 use crate::app::components::dispatch_api_call;
 use crate::app::dispatch::Dispatcher;
-use crate::app::models::SongListModel;
+use crate::app::models::{SongListModel, Track};
 use crate::app::state::{
     BrowserAction, PlaybackAction, SelectionAction, SelectionContext, SelectionState,
 };
 use crate::app::{AppAction, AppModel, AppState};
 use crate::feature_flags::{self, FeatureFlag};
+use crate::settings;
 
 /// Generates the boilerplate TrackListModel methods that delegate to `self.base`.
 /// Use inside an `impl TrackListModel for X { ... }` block.
@@ -37,6 +39,12 @@ macro_rules! impl_track_list_model_base {
         fn toggle_song_like(&self, id: &str) {
             let songs = TrackListModel::song_list_model(self);
             self.base.toggle_song_like(&songs, id);
+        }
+        fn pinned_song_ids(&self) -> Option<std::collections::HashSet<String>> {
+            self.base.pinned_song_ids()
+        }
+        fn toggle_song_pin(&self, song: &Track) {
+            self.base.toggle_song_pin(song);
         }
         fn skip_explicit(&self) -> bool {
             self.base.skip_explicit()
@@ -224,6 +232,42 @@ impl DetailsPageModel {
             return home.saved_tracks.get(id).is_some();
         }
         false
+    }
+
+    /// IDs of the tracks pinned to the sidebar, or `None` when pinning is
+    /// disabled or no user is logged in.
+    pub fn pinned_song_ids(&self) -> Option<HashSet<String>> {
+        if !feature_flags::is_enabled(FeatureFlag::PinnedObjects) {
+            return None;
+        }
+        let user_id = self.app_model.get_state().logged_user.user.clone()?;
+        Some(
+            settings::get_pinned_objects(&user_id)
+                .into_iter()
+                .filter(|o| o.kind == settings::PinnedKind::Track)
+                .map(|o| o.id)
+                .collect(),
+        )
+    }
+
+    pub fn toggle_song_pin(&self, song: &Track) {
+        let Some(user_id) = self.app_model.get_state().logged_user.user.clone() else {
+            return;
+        };
+        let kind = settings::PinnedKind::Track;
+        let id = &song.rri.id;
+        let changed = if settings::is_object_pinned(&user_id, id, kind) {
+            settings::unpin_object(&user_id, kind, id)
+        } else if !self.is_song_liked(id) {
+            // Only saved tracks can be pinned.
+            return;
+        } else {
+            settings::pin_object(&user_id, kind, id, Some(song.title.clone()))
+        };
+        if changed {
+            self.dispatcher
+                .dispatch(BrowserAction::NotifyPinnedPlaylistsUpdated.into());
+        }
     }
 
     pub fn toggle_song_like(&self, song_list: &SongListModel, id: &str) {

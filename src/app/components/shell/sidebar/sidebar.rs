@@ -1,160 +1,14 @@
-use gettextrs::gettext;
 use gtk::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::{
-    create_playlist::CreatePlaylistPopover, playlist_actions, sidebar_row::SidebarRow,
-    SidebarDestination, SidebarItem, CREATE_PLAYLIST_ITEM, LIBRARY_SECTION,
-    SAVED_PLAYLISTS_SECTION,
+    context_menu::build_context_menu, create_playlist::CreatePlaylistPopover,
+    sidebar_row::SidebarRow, SidebarDestination, SidebarItem, SidebarModel, CREATE_PLAYLIST_ITEM,
+    LIBRARY_SECTION, PINNED_SECTION, SAVED_PLAYLISTS_SECTION,
 };
-use crate::app::components::{dispatch_api_call, dispatch_api_read, dispatch_api_read_many};
-use crate::app::models::{CardModel, PlaylistSummary};
-use crate::app::state::{PlaybackAction, ScreenName};
-use crate::app::{
-    AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Component, Dispatcher,
-    EventListener, PaginationTarget, SongsSource,
-};
-use crate::feature_flags::{self, FeatureFlag};
-
-pub struct SidebarModel {
-    app_model: Rc<AppModel>,
-    dispatcher: Dispatcher,
-}
-
-impl SidebarModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
-        Self {
-            app_model,
-            dispatcher,
-        }
-    }
-
-    fn get_playlists(&self) -> Vec<SidebarDestination> {
-        self.app_model
-            .get_state()
-            .browser
-            .home_state()
-            .expect("expected HomeState to be available")
-            .playlists
-            .iter()
-            .map(Self::map_to_destination)
-            .collect()
-    }
-
-    pub fn load_more_playlists(&self) -> Option<()> {
-        let api = self.app_model.api();
-        let state = self.app_model.get_state();
-        let home = state.browser.home_state()?;
-        let batch_size = home.next_playlists_page.batch_size;
-        let offset = home.next_playlists_page.next_offset?;
-        drop(state);
-
-        self.app_model
-            .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SavedPlaylists).into());
-
-        dispatch_api_read(&self.dispatcher, move |tag| async move {
-            api.get_saved_playlists(offset, batch_size, tag)
-                .await
-                .map(|page| BrowserAction::AppendPlaylistsContent(page.items).into())
-        });
-
-        Some(())
-    }
-
-    fn map_to_destination(a: CardModel) -> SidebarDestination {
-        let title = Some(a.title())
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| gettext("Unnamed Playlist"));
-        let id = a.id();
-        SidebarDestination::Playlist(PlaylistSummary { id, title })
-    }
-
-    fn create_new_playlist(&self, name: String) {
-        let user_id = self.app_model.get_state().logged_user.user.clone().unwrap();
-        let api = self.app_model.api();
-        dispatch_api_call(&self.dispatcher, move || async move {
-            api.create_playlist(user_id.as_str(), name.as_str())
-                .await
-                .map(AppAction::CreatePlaylist)
-        })
-    }
-
-    pub(super) fn is_playlist_owned(&self, id: &str) -> bool {
-        self.app_model
-            .get_state()
-            .logged_user
-            .playlist_ids
-            .contains(id)
-    }
-
-    pub(super) fn unfollow_playlist(&self, id: String) {
-        let api = self.app_model.api();
-        dispatch_api_call(&self.dispatcher, move || async move {
-            api.unfollow_playlist(&id).await?;
-            Ok(AppAction::RemovePlaylist(id))
-        })
-    }
-
-    pub(super) fn play_playlist(&self, id: String) {
-        let api = self.app_model.api();
-        let source = SongsSource::Playlist(id.clone());
-        dispatch_api_read_many(&self.dispatcher, move |tag| async move {
-            let batch = api.get_playlist_tracks(&id, 0, 50, tag).await?;
-            let first_id = batch.items.first().map(|s| s.rri.id.clone());
-            let mut actions: Vec<AppAction> = vec![
-                PlaybackAction::SetShuffled(false).into(),
-                PlaybackAction::LoadPagedSongs(source, batch).into(),
-            ];
-            if let Some(track_id) = first_id {
-                actions.push(PlaybackAction::Load(track_id).into());
-            }
-            Ok(actions)
-        });
-    }
-
-    pub(super) fn shuffle_playlist(&self, id: String) {
-        let api = self.app_model.api();
-        let source = SongsSource::Playlist(id.clone());
-        dispatch_api_read_many(&self.dispatcher, move |tag| async move {
-            let batch = api.get_playlist_tracks(&id, 0, 50, tag).await?;
-            let len = batch.items.len();
-            let track_id = if len > 0 {
-                let index = rand::random::<usize>() % len;
-                Some(batch.items[index].rri.id.clone())
-            } else {
-                None
-            };
-            let mut actions: Vec<AppAction> = vec![
-                PlaybackAction::SetShuffled(true).into(),
-                PlaybackAction::LoadPagedSongs(source, batch).into(),
-            ];
-            if let Some(track_id) = track_id {
-                actions.push(PlaybackAction::Load(track_id).into());
-            }
-            Ok(actions)
-        });
-    }
-
-    fn navigate(&self, dest: SidebarDestination) {
-        let actions = match dest {
-            SidebarDestination::Library
-            | SidebarDestination::SavedTracks
-            | SidebarDestination::NowPlaying
-            | SidebarDestination::SavedPlaylists
-            | SidebarDestination::SavedArtists => {
-                vec![
-                    BrowserAction::NavigationPopTo(ScreenName::Home).into(),
-                    BrowserAction::SetHomeVisiblePage(dest.id()).into(),
-                ]
-            }
-            SidebarDestination::Playlist(PlaylistSummary { id, .. }) => {
-                vec![AppAction::ViewPlaylist(id)]
-            }
-        };
-        self.dispatcher.dispatch_many(actions);
-    }
-}
+use crate::app::{AppEvent, BrowserEvent, Component, EventListener};
+use crate::feature_flags::{is_enabled, FeatureFlag};
 
 pub struct Sidebar {
     listbox: gtk::ListBox,
@@ -166,7 +20,7 @@ pub struct Sidebar {
 
 impl Sidebar {
     pub fn new(listbox: gtk::ListBox, model: Rc<SidebarModel>) -> Self {
-        let create_playlist_enabled = feature_flags::is_enabled(FeatureFlag::CreateNewPlaylist);
+        let create_playlist_enabled = is_enabled(FeatureFlag::CreateNewPlaylist);
 
         let popover = if create_playlist_enabled {
             let p = CreatePlaylistPopover::new();
@@ -211,7 +65,7 @@ impl Sidebar {
                         Self::make_navigatable(item)
                     } else {
                         match item.id().as_str() {
-                            SAVED_PLAYLISTS_SECTION | LIBRARY_SECTION => {
+                            SAVED_PLAYLISTS_SECTION | PINNED_SECTION | LIBRARY_SECTION => {
                                 Self::make_section_label(item)
                             }
                             CREATE_PLAYLIST_ITEM => Self::make_create_playlist(
@@ -287,8 +141,10 @@ impl Sidebar {
                 let Some(row) = row.downcast_ref::<SidebarRow>() else {
                     return;
                 };
-                let Some(SidebarDestination::Playlist(PlaylistSummary { id, .. })) =
-                    row.item().destination()
+                let Some((prefix, actions, menu)) = row
+                    .item()
+                    .destination()
+                    .and_then(|destination| build_context_menu(&destination, &model))
                 else {
                     return;
                 };
@@ -296,11 +152,8 @@ impl Sidebar {
                 row.set_state_flags(gtk::StateFlags::SELECTED, false);
                 context_row.replace(Some(row.clone()));
 
-                let actions = playlist_actions::build_playlist_actions(&id, &model);
-                context_menu.insert_action_group("playlist", Some(&actions));
-
-                let is_owned = model.is_playlist_owned(&id);
-                context_menu.set_menu_model(Some(&playlist_actions::build_playlist_menu(is_owned)));
+                context_menu.insert_action_group(prefix, Some(&actions));
+                context_menu.set_menu_model(Some(&menu));
 
                 // Translate coordinates from listbox space to the popover parent (sidebar Box) space
                 let popover_parent = context_menu.parent().unwrap();
@@ -354,6 +207,8 @@ impl Sidebar {
 
         let num_fixed_entries = list_store.n_items();
 
+        model.apply_sidebar_items(&list_store, num_fixed_entries);
+
         Self {
             listbox,
             list_store,
@@ -391,17 +246,8 @@ impl Sidebar {
     }
 
     fn update_playlists_in_sidebar(&self) {
-        let playlists: Vec<SidebarItem> = self
-            .model
-            .get_playlists()
-            .into_iter()
-            .map(SidebarItem::from_destination)
-            .collect();
-        self.list_store.splice(
-            self.num_fixed_entries,
-            self.list_store.n_items() - self.num_fixed_entries,
-            playlists.as_slice(),
-        );
+        self.model
+            .apply_sidebar_items(&self.list_store, self.num_fixed_entries);
     }
 }
 
@@ -413,7 +259,11 @@ impl Component for Sidebar {
 
 impl EventListener for Sidebar {
     fn on_event(&mut self, event: &AppEvent) {
-        if let AppEvent::BrowserEvent(BrowserEvent::SavedPlaylistsUpdated) = event {
+        if matches!(
+            event,
+            AppEvent::BrowserEvent(BrowserEvent::SavedPlaylistsUpdated)
+                | AppEvent::BrowserEvent(BrowserEvent::PinnedPlaylistsUpdated)
+        ) {
             self.update_playlists_in_sidebar();
         }
     }

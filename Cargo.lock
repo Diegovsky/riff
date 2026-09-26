@@ -3932,6 +3932,8 @@ dependencies = [
  "ref_filter_map",
  "riff-api",
  "riff-auth",
+ "serde",
+ "serde_json",
  "tokio",
  "url",
  "zbus 4.4.0",

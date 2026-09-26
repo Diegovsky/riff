@@ -2,12 +2,13 @@ use gtk::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
 
-use super::{is_playback_event, DetailsPage, PageModel};
+use super::{is_playback_event, DetailsHeader, DetailsPage, PinnedPageModel};
 use crate::app::components::{
     CardLayout, CardList, CardListModel, CardSize, Component, EmbeddedCardList, EventListener,
     FilterToggle, HeaderBarModel, HeaderRegistrar, SortOrder, TrackList, TrackListModel,
 };
 use crate::app::{AppEvent, Dispatcher};
+use crate::feature_flags::{is_enabled, FeatureFlag};
 
 /// A generic details page component that wires all standard behavior
 /// from a `PageModel` implementation automatically.
@@ -22,7 +23,18 @@ pub struct DetailsPageComponent<M> {
     end_box: gtk::Box,
 }
 
-impl<M: PageModel + 'static> DetailsPageComponent<M> {
+/// Sync the pin segment of the like+pin control from the model's current state.
+fn set_pin_button_state<M: PinnedPageModel>(model: &M, header: &DetailsHeader) {
+    let pin_enabled = is_enabled(FeatureFlag::PinnedObjects);
+    header.set_pin_enabled(pin_enabled);
+    let pin_visible = pin_enabled && model.is_liked();
+    header.set_pin_visible(pin_visible);
+    if pin_visible {
+        header.set_pinned(model.is_pinned());
+    }
+}
+
+impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
     /// Create a details page with an internal content box.
     ///
     /// Use [`Self::create_track_list`] and [`Self::create_card_list`] to append
@@ -219,6 +231,24 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
                 self.model,
                 move || m.toggle_like()
             ));
+            if self.model.supports_pin_button() {
+                let (like, pin) = self.page.header().add_like_pin_segmented_button();
+                like.connect_clicked(clone!(
+                    #[weak(rename_to = m)]
+                    self.model,
+                    move |_| {
+                        if m.is_liked() && m.is_pinned() {
+                            m.toggle_pin();
+                        }
+                        m.toggle_like()
+                    }
+                ));
+                pin.connect_clicked(clone!(
+                    #[weak(rename_to = m)]
+                    self.model,
+                    move |_| m.toggle_pin()
+                ));
+            }
         }
 
         if self.model.has_info_button() {
@@ -242,6 +272,10 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             self.model,
             move || m.load_more()
         ));
+
+        if self.model.supports_pin_button() {
+            set_pin_button_state(&*self.model, self.page.header());
+        }
 
         // Initial state
         if let Some(icon) = self.model.default_icon() {
@@ -297,6 +331,9 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         }
         self.page
             .load_artwork_or_finish(self.model.get_artwork().as_ref(), self.model.api_service());
+        if self.model.supports_pin_button() {
+            set_pin_button_state(&*self.model, self.page.header());
+        }
     }
 
     /// Standard event handling. Returns true if the event was consumed.
@@ -329,6 +366,18 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
                 if let Some(tooltip) = self.model.like_tooltip(self.model.is_liked()) {
                     self.page.header().set_like_tooltip(&tooltip);
                 }
+                if self.model.supports_pin_button() {
+                    set_pin_button_state(&*self.model, self.page.header());
+                }
+            }
+            return true;
+        }
+        if matches!(
+            event,
+            AppEvent::BrowserEvent(crate::app::BrowserEvent::PinnedPlaylistsUpdated)
+        ) {
+            if self.model.supports_pin_button() {
+                set_pin_button_state(&*self.model, self.page.header());
             }
             return true;
         }
@@ -344,7 +393,7 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
     }
 }
 
-impl<M: PageModel + 'static> Component for DetailsPageComponent<M> {
+impl<M: PinnedPageModel + 'static> Component for DetailsPageComponent<M> {
     fn get_root_widget(&self) -> &gtk::Widget {
         self.page.widget().upcast_ref()
     }
@@ -360,7 +409,7 @@ impl<M> Drop for DetailsPageComponent<M> {
     }
 }
 
-impl<M: PageModel + 'static> EventListener for DetailsPageComponent<M> {
+impl<M: PinnedPageModel + 'static> EventListener for DetailsPageComponent<M> {
     fn on_event(&mut self, event: &AppEvent) {
         self.handle_event(event);
         self.broadcast_event(event);

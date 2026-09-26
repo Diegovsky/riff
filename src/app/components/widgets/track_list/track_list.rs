@@ -1,7 +1,7 @@
 use gio::SimpleActionGroup;
 use gtk::prelude::*;
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -15,6 +15,7 @@ use crate::app::components::{
 use crate::app::models::{SongListModel, SongModel, SongState, Track, TrackExt};
 use crate::app::state::{BrowserEvent, PlaybackEvent, SelectionEvent, SelectionState};
 use crate::app::{AppEvent, ProvidesApi};
+use crate::feature_flags::{is_enabled, FeatureFlag};
 
 const SKELETON_ROW_COUNT: usize = 10;
 
@@ -38,6 +39,7 @@ pub fn build_song_menu(
     exclude_artist_id: Option<&str>,
     queue_entry: QueueMenuEntry,
     liked: Option<bool>,
+    pinned: Option<bool>,
 ) -> gio::MenuModel {
     let info_section = gio::Menu::new();
     if show_view_album {
@@ -71,6 +73,14 @@ pub fn build_song_menu(
             &*labels::LIKE
         };
         queue_section.append(Some(label), Some("song.like"));
+    }
+    if let Some(pinned) = pinned {
+        let label = if pinned {
+            &*labels::UNPIN_FROM_SIDEBAR
+        } else {
+            &*labels::PIN_TO_SIDEBAR
+        };
+        queue_section.append(Some(label), Some("song.pin"));
     }
 
     let link_section = gio::Menu::new();
@@ -120,7 +130,12 @@ pub trait TrackListModel: ProvidesApi {
         None
     }
 
-    fn menu_for(&self, _song: &Track, _liked: bool) -> Option<gio::MenuModel> {
+    fn menu_for(
+        &self,
+        _song: &Track,
+        _liked: bool,
+        _pinned: Option<bool>,
+    ) -> Option<gio::MenuModel> {
         None
     }
 
@@ -156,6 +171,12 @@ pub trait TrackListModel: ProvidesApi {
 
     fn toggle_song_like(&self, _id: &str) {}
 
+    fn pinned_song_ids(&self) -> Option<HashSet<String>> {
+        None
+    }
+
+    fn toggle_song_pin(&self, _song: &Track) {}
+
     fn skip_explicit(&self) -> bool {
         false
     }
@@ -170,6 +191,7 @@ pub trait TrackListModel: ProvidesApi {
             is_playing: self.current_song_id().is_some_and(|s| s == id),
             is_selected: self.selection().is_some_and(|s| s.is_song_selected(id)),
             is_liked: self.is_song_liked(id),
+            is_pinned: false,
             is_explicit_filtered,
         }
     }
@@ -464,8 +486,13 @@ where
     fn update_song_states(&self, autoscroll: bool) {
         let follow_playing =
             autoscroll && self.model.autoscroll_to_playing() && !self.model.is_selection_enabled();
+        let pinned = self.model.pinned_song_ids().unwrap_or_default();
         self.model.song_list_model().for_each(|i, song| {
-            let state = self.model.song_state(&song.get_id());
+            let id = song.get_id();
+            let state = SongState {
+                is_pinned: pinned.contains(&id),
+                ..self.model.song_state(&id)
+            };
             song.set_state(state);
             if state.is_playing && follow_playing {
                 self.autoscroll_to_playing(i);
@@ -672,23 +699,43 @@ fn bind_track<Model: TrackListModel + 'static>(
         }
     });
     actions.add_action(&like);
+    let pin = gio::SimpleAction::new("pin", None);
+    let pin_track = track.clone();
+    let pin_model = Rc::downgrade(model);
+    pin.connect_activate(move |_, _| {
+        if let Some(model) = pin_model.upgrade() {
+            model.toggle_song_pin(&pin_track);
+        }
+    });
+    actions.add_action(&pin);
     row.set_actions(Some(actions.upcast_ref()));
 
-    row.set_menu(model.menu_for(&track, song.get_liked()).as_ref());
+    let pin_enabled = is_enabled(FeatureFlag::PinnedObjects);
+    let menu_for = move |model: &Model, song: &SongModel| {
+        let pinned = song.get_pinned();
+        let pinned = (pin_enabled && (song.get_liked() || pinned)).then_some(pinned);
+        model.menu_for(&track, song.get_liked(), pinned)
+    };
+    row.set_menu(menu_for(model, song).as_ref());
     let model = Rc::clone(model);
-    let handler = song.connect_notify_local(
-        Some("liked"),
-        clone!(
-            #[weak]
-            model,
-            #[weak]
-            row,
-            move |song, _| {
-                row.set_menu(model.menu_for(&track, song.get_liked()).as_ref());
-            }
-        ),
-    );
-    song.push_signal(handler);
+    let menu_for = Rc::new(menu_for);
+    for property in ["liked", "pinned"] {
+        let handler = song.connect_notify_local(
+            Some(property),
+            clone!(
+                #[weak]
+                model,
+                #[weak]
+                row,
+                #[strong]
+                menu_for,
+                move |song, _| {
+                    row.set_menu(menu_for(&model, song).as_ref());
+                }
+            ),
+        );
+        song.push_signal(handler);
+    }
 }
 
 impl SongModel {
@@ -698,12 +745,14 @@ impl SongModel {
             is_playing,
             is_selected,
             is_liked,
+            is_pinned,
             is_explicit_filtered,
         }: SongState,
     ) {
         self.set_playing(is_playing);
         self.set_selected(is_selected);
         self.set_liked(is_liked);
+        self.set_pinned(is_pinned);
         self.set_explicit_filtered(is_explicit_filtered);
     }
 }
@@ -730,7 +779,9 @@ where
                 self.update_song_states(true);
             }
             AppEvent::SelectionEvent(SelectionEvent::SelectionChanged)
-            | AppEvent::BrowserEvent(BrowserEvent::SavedTracksUpdated) => {
+            | AppEvent::BrowserEvent(
+                BrowserEvent::SavedTracksUpdated | BrowserEvent::PinnedPlaylistsUpdated,
+            ) => {
                 self.update_song_states(true);
             }
             // No autoscroll: these fire during pagination, and scrolling
@@ -1331,5 +1382,49 @@ mod tests {
 
         let ids: Vec<String> = list_model.collect().into_iter().map(|s| s.rri.id).collect();
         assert_eq!(ids, vec!["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]);
+    }
+
+    /// Action names of each section of `menu`, in order.
+    fn menu_actions(menu: &gio::MenuModel) -> Vec<Vec<String>> {
+        (0..menu.n_items())
+            .map(|i| {
+                let section = menu
+                    .item_link(i, gio::MENU_LINK_SECTION)
+                    .expect("menu items are sections");
+                (0..section.n_items())
+                    .filter_map(|j| {
+                        section
+                            .item_attribute_value(j, gio::MENU_ATTRIBUTE_ACTION, None)
+                            .and_then(|v| v.get::<String>())
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn song_menu_places_pin_under_saved_tracks_entry() {
+        let track = crate::app::models::make_track("a");
+        let menu = build_song_menu(
+            &track,
+            false,
+            None,
+            QueueMenuEntry::Add,
+            Some(false),
+            Some(false),
+        );
+        assert_eq!(
+            menu_actions(&menu)[0],
+            vec!["song.queue", "song.like", "song.pin"]
+        );
+    }
+
+    #[test]
+    fn song_menu_has_no_pin_entry_when_pinning_unavailable() {
+        let track = crate::app::models::make_track("a");
+        let menu = build_song_menu(&track, false, None, QueueMenuEntry::Add, Some(true), None);
+        assert!(!menu_actions(&menu)
+            .concat()
+            .contains(&"song.pin".to_string()));
     }
 }

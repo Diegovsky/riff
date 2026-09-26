@@ -13,8 +13,8 @@ use crate::app::components::DetailsPageModel;
 use crate::app::components::SongActions;
 use crate::app::components::{
     build_song_menu, dispatch_api_call, dispatch_api_read, dispatch_api_read_with_fallback, labels,
-    HasHeaderBarModel, HeaderImageShape, PageModel, QueueMenuEntry, SimpleHeaderBarModel,
-    TrackListModel,
+    HasHeaderBarModel, HeaderImageShape, PageModel, PinnedPageModel, QueueMenuEntry,
+    SimpleHeaderBarModel, TrackListModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
@@ -22,7 +22,8 @@ use crate::app::state::{
     BrowserAction, BrowserEvent, PlaybackAction, SelectionAction, SelectionState,
 };
 use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, PaginationTarget, SongsSource};
-use crate::feature_flags::{self, FeatureFlag};
+use crate::feature_flags::{is_enabled, FeatureFlag};
+use crate::settings;
 use crate::{impl_toggle_play, impl_track_list_model_base};
 use riff_api::DomainError;
 
@@ -208,6 +209,8 @@ impl PageModel for PlaylistDetailsModel {
         let id = self.id.clone();
         let is_saved = self.is_liked();
         let api = self.app_model.api();
+        let pin_enabled = is_enabled(FeatureFlag::PinnedObjects);
+        let user_id = self.app_model.get_state().logged_user.user.clone();
 
         let description = {
             let state = self.app_model.get_state();
@@ -220,6 +223,11 @@ impl PageModel for PlaylistDetailsModel {
         dispatch_api_call(&self.dispatcher, move || async move {
             if is_saved {
                 api.unfollow_playlist(&id).await?;
+                if pin_enabled {
+                    if let Some(user_id) = user_id {
+                        settings::unpin_object(&user_id, settings::PinnedKind::Playlist, &id);
+                    }
+                }
                 Ok(BrowserAction::UnsavePlaylist(id).into())
             } else {
                 api.follow_playlist(&id).await?;
@@ -277,6 +285,12 @@ impl PageModel for PlaylistDetailsModel {
     }
 }
 
+impl PinnedPageModel for PlaylistDetailsModel {
+    fn supports_pin_button(&self) -> bool {
+        true
+    }
+}
+
 impl TrackListModel for PlaylistDetailsModel {
     fn song_list_model(&self) -> SongListModel {
         self.state()
@@ -298,7 +312,7 @@ impl TrackListModel for PlaylistDetailsModel {
     impl_track_list_model_base!();
 
     fn enable_selection(&self) -> bool {
-        if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
+        if !is_enabled(FeatureFlag::SelectMode) {
             return false;
         }
         let context = if self.is_playlist_editable() {
@@ -332,20 +346,21 @@ impl TrackListModel for PlaylistDetailsModel {
         Some(group)
     }
 
-    fn menu_for(&self, song: &Track, liked: bool) -> Option<gio::MenuModel> {
+    fn menu_for(&self, song: &Track, liked: bool, pinned: Option<bool>) -> Option<gio::MenuModel> {
         Some(build_song_menu(
             song,
             true,
             None,
             QueueMenuEntry::Add,
             Some(liked),
+            pinned,
         ))
     }
 }
 
 impl SimpleHeaderBarModel for PlaylistDetailsModel {
     fn selection_context(&self) -> Option<SelectionContext> {
-        if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
+        if !is_enabled(FeatureFlag::SelectMode) {
             return None;
         }
         if self.is_playlist_editable() {

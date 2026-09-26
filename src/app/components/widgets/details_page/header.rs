@@ -1,3 +1,4 @@
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gettextrs::gettext;
@@ -6,6 +7,7 @@ use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
 
 use super::{SubtitleLinksBox, HEADER_IMAGE_SIZE};
+use crate::app::components::{labels, ExpandBehavior, SegmentedButton};
 
 /// Controls the shape of the artwork in the details header.
 /// - `Square`: used for albums/playlists (rendered with rounded card corners).
@@ -60,6 +62,9 @@ mod imp {
 
         #[template_child]
         pub share_button: TemplateChild<gtk::Button>,
+
+        #[template_child]
+        pub button_box: TemplateChild<gtk::Box>,
 
         #[template_child]
         pub info_button: TemplateChild<gtk::Button>,
@@ -132,6 +137,15 @@ glib::wrapper! {
 /// buttons without touching GObject internals directly.
 pub struct DetailsHeader {
     widget: DetailsHeaderWidget,
+    like_pin: LikePinState,
+}
+
+#[derive(Default)]
+struct LikePinState {
+    seg: RefCell<Option<(SegmentedButton, gtk::Button, gtk::Button)>>,
+    like_visible: Cell<bool>,
+    pin_enabled: Cell<bool>,
+    liked: Cell<bool>,
 }
 
 impl DetailsHeader {
@@ -151,7 +165,11 @@ impl DetailsHeader {
                 .add_css_class("details-header__image--circular");
         }
 
-        Self { widget }
+        let like_pin = LikePinState {
+            like_visible: Cell::new(true),
+            ..Default::default()
+        };
+        Self { widget, like_pin }
     }
 
     pub fn widget(&self) -> &gtk::Widget {
@@ -234,11 +252,20 @@ impl DetailsHeader {
             "non-starred-symbolic"
         };
         self.widget.imp().like_button.set_icon_name(icon);
+        if let Some((_, like, _)) = &*self.like_pin.seg.borrow() {
+            like.set_icon_name(icon);
+        }
+        self.like_pin.liked.set(is_liked);
+        self.sync_like_controls();
     }
 
     /// Show or hide the like button.
     pub fn set_like_visible(&self, visible: bool) {
-        self.widget.imp().like_button.set_visible(visible);
+        self.like_pin.like_visible.set(visible);
+        if self.like_pin.seg.borrow().is_none() {
+            self.widget.imp().like_button.set_visible(visible);
+        }
+        self.sync_like_controls();
     }
 
     /// Override the like button's tooltip.
@@ -292,6 +319,76 @@ impl DetailsHeader {
         let button = &self.widget.imp().edit_button;
         button.set_visible(true);
         button.connect_clicked(move |_| f());
+    }
+
+    /// Update the pin button icon and tooltip to reflect pinned state.
+    pub fn set_pinned(&self, is_pinned: bool) {
+        let (icon, tooltip) = if is_pinned {
+            ("view-pin-symbolic", &*labels::UNPIN_FROM_SIDEBAR)
+        } else {
+            ("view-pin-outline-symbolic", &*labels::PIN_TO_SIDEBAR)
+        };
+        if let Some((_, _, pin)) = &*self.like_pin.seg.borrow() {
+            pin.set_icon_name(icon);
+            pin.set_tooltip_text(Some(tooltip));
+        }
+    }
+
+    pub fn set_pin_visible(&self, visible: bool) {
+        if let Some((seg, _, _)) = &*self.like_pin.seg.borrow() {
+            seg.set_icon_visible(1, visible);
+        }
+        self.sync_like_controls();
+    }
+
+    /// Hide the standalone like button.
+    pub fn set_pin_enabled(&self, enabled: bool) {
+        self.like_pin.pin_enabled.set(enabled);
+        self.sync_like_controls();
+    }
+
+    fn sync_like_controls(&self) {
+        let seg = self.like_pin.seg.borrow();
+        let Some((seg, _, pin)) = &*seg else {
+            return;
+        };
+        let like_visible = self.like_pin.like_visible.get();
+        let like_button = &self.widget.imp().like_button;
+        let pin_enabled = self.like_pin.pin_enabled.get();
+        like_button.set_visible(like_visible && !pin_enabled);
+        seg.widget()
+            .set_visible(pin_enabled && (like_visible || pin.is_visible()));
+        seg.set_icon_visible(0, like_visible);
+        // Keep the pin segment revealed for liked items, and when there is
+        // no like segment to hover.
+        let behavior = if like_visible && !self.like_pin.liked.get() {
+            ExpandBehavior::OnHover
+        } else {
+            ExpandBehavior::AlwaysExpanded
+        };
+        if seg.expand_behavior() != behavior {
+            seg.set_expand_behavior(behavior);
+        }
+    }
+
+    /// Add a like+pin segmented control after the standalone pin button.
+    ///
+    /// The like segment is always visible and acts as the expand trigger;
+    /// hovering reveals the pin segment. Returns `(like_segment, pin_segment)`
+    /// for wiring actions and state updates.
+    pub fn add_like_pin_segmented_button(&self) -> (gtk::Button, gtk::Button) {
+        let seg = SegmentedButton::new(ExpandBehavior::OnHover);
+        seg.widget().set_valign(gtk::Align::Center);
+
+        let like = seg.add_icon("non-starred-symbolic", &gettext("Add to Library"), || {});
+        let pin = seg.add_icon("view-pin-outline-symbolic", &labels::PIN_TO_SIDEBAR, || {});
+
+        let imp = self.widget.imp();
+        imp.button_box
+            .insert_child_after(seg.widget(), Some(&*imp.like_button));
+        *self.like_pin.seg.borrow_mut() = Some((seg, like.clone(), pin.clone()));
+        self.sync_like_controls();
+        (like, pin)
     }
 
     /// Set multiple artist link buttons in the subtitle area.
