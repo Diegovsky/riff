@@ -59,6 +59,21 @@ template $SettingsWindow : Adw.PreferencesDialog {
 
         subtitle: _("Automatically skip tracks marked as explicit");
       }
+
+      Adw.SpinRow shuffle_separation {
+        /* Translators: Title for the shuffle separation preference */
+
+        title: _("Shuffle Separation");
+
+        // The subtitle is set from the code: it includes the value
+        adjustment: Adjustment {
+          lower: 1;
+          upper: 10;
+          value: 2;
+          step-increment: 1;
+          page-increment: 1;
+        };
+      }
     }
 
     Adw.PreferencesGroup {

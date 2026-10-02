@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 
 use gdk::Rectangle;
@@ -138,6 +138,9 @@ mod imp {
         pub(super) explicit_filtered: Cell<bool>,
 
         pub(super) skeleton: Cell<bool>,
+
+        pub(super) row_key: RefCell<Option<String>>,
+        pub(super) draggable: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -371,6 +374,19 @@ impl TrackRow {
         popover.popup();
     }
 
+    pub fn mark_draggable(&self) -> bool {
+        !self.imp().draggable.replace(true)
+    }
+
+    pub fn row_key(&self) -> Option<String> {
+        self.imp().row_key.borrow().clone()
+    }
+
+    pub fn set_drop_indicator(&self, after: Option<bool>) {
+        set_css_class(self, "song--drop-above", after == Some(false));
+        set_css_class(self, "song--drop-below", after == Some(true));
+    }
+
     pub fn set_disc_position(&self, is_disc_start: bool, is_disc_end: bool) {
         set_css_class(self, "song--disc-start", is_disc_start);
         set_css_class(self, "song--disc-end", is_disc_end);
@@ -380,6 +396,7 @@ impl TrackRow {
         let imp = self.imp();
         let song = model.description().clone();
         self.set_skeleton(false);
+        imp.row_key.replace(Some(model.row_key()));
 
         model.bind_title(&*imp.song_title, "label");
         model.bind_duration(&*imp.song_length, "label");
@@ -407,6 +424,7 @@ impl TrackRow {
     pub fn bind_skeleton(&self) {
         let imp = self.imp();
         self.set_skeleton(true);
+        imp.row_key.replace(None);
         for class in [imp::PLAYING_CLASS, imp::LIKED_CLASS, imp::UNPLAYABLE_CLASS] {
             self.remove_css_class(class);
         }

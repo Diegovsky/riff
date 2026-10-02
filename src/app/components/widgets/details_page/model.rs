@@ -3,13 +3,19 @@ use std::collections::HashSet;
 use std::ops::Deref;
 use std::rc::Rc;
 
-use crate::app::components::dispatch_api_call;
+use gio::prelude::*;
+use gio::SimpleActionGroup;
+
+use crate::app::components::{
+    build_song_menu, dispatch_api_call, queue_source_tracks, QueueMenuEntry, SongActions,
+};
 use crate::app::dispatch::Dispatcher;
 use crate::app::models::{SongListModel, Track};
 use crate::app::state::{
-    BrowserAction, PlaybackAction, SelectionAction, SelectionContext, SelectionState,
+    load_context, start_actions, BrowserAction, PlaybackAction, SelectionAction, SelectionContext,
+    SelectionState,
 };
-use crate::app::{AppAction, AppModel, AppState};
+use crate::app::{AppAction, AppModel, AppState, SongsSource};
 use crate::feature_flags::{self, FeatureFlag};
 use crate::settings;
 
@@ -52,11 +58,16 @@ macro_rules! impl_track_list_model_base {
     };
 }
 
-/// Generates the standard `toggle_play` and `shuffle_play` methods for models
-/// that implement both `PageModel` and `TrackListModel`.
+/// The `PageModel` methods of a page with a source (see
+/// `PageModel::songs_source`).
 #[macro_export]
-macro_rules! impl_toggle_play {
+macro_rules! impl_source_page {
     () => {
+        fn source_is_playing(&self) -> bool {
+            self.base
+                .is_playing_source(PageModel::songs_source(self).as_ref())
+        }
+
         fn start_play(&self, id: &str) {
             let songs = TrackListModel::song_list_model(self);
             match songs.find_index(id) {
@@ -64,21 +75,122 @@ macro_rules! impl_toggle_play {
                 None => error!("Failed to play track {id}"),
             }
         }
+
         fn toggle_play(&self) {
-            let songs = TrackListModel::song_list_model(self);
-            self.base
-                .toggle_playback(self.source_is_playing(), &songs, |pos, id| {
-                    TrackListModel::play_song_at(self, pos, id);
-                });
+            self.base.toggle_playback(self.source_is_playing(), || {
+                TrackListModel::context_actions(self, 0)
+            });
         }
 
         fn shuffle_play(&self) {
-            let songs = TrackListModel::song_list_model(self);
-            self.base.shuffle_playback(&songs, |pos, id| {
-                TrackListModel::play_song_at(self, pos, id);
-            });
+            self.base
+                .start_playback(true, TrackListModel::context_actions(self, 0));
+        }
+
+        fn queue_all(&self) {
+            if let Some(source) = PageModel::songs_source(self) {
+                self.base
+                    .queue_source(source, &TrackListModel::song_list_model(self));
+            }
+        }
+
+        fn on_share_clicked(&self) {
+            if let Some(url) = PageModel::songs_source(self).and_then(|s| s.spotify_url()) {
+                self.base.share_link(&url);
+            }
         }
     };
+}
+
+/// The `TrackListModel` methods of a page with a source.
+#[macro_export]
+macro_rules! impl_source_track_list {
+    () => {
+        fn load_more(&self) {
+            PageModel::load_more(self);
+        }
+
+        fn play_song_at(&self, pos: usize, id: &str) {
+            self.play_in_context(TrackListModel::context_actions(self, pos), id);
+        }
+
+        fn context_actions(&self, pos: usize) -> Option<Vec<$crate::app::AppAction>> {
+            $crate::app::components::source_context_actions(
+                PageModel::songs_source(self)?,
+                PageModel::context_name(self),
+                &TrackListModel::song_list_model(self),
+                pos,
+            )
+        }
+
+        fn actions_for(
+            &self,
+            _row: &$crate::app::models::SongModel,
+            song: &$crate::app::models::Track,
+        ) -> Option<gio::SimpleActionGroup> {
+            Some(
+                self.base
+                    .track_actions(song, PageModel::songs_source(self).as_ref()),
+            )
+        }
+
+        fn menu_for(
+            &self,
+            _row: &$crate::app::models::SongModel,
+            song: &$crate::app::models::Track,
+            liked: bool,
+            pinned: Option<bool>,
+        ) -> Option<gio::MenuModel> {
+            Some($crate::app::components::track_menu(
+                song,
+                PageModel::songs_source(self).as_ref(),
+                liked,
+                pinned,
+            ))
+        }
+    };
+}
+
+/// Loads the page holding `pos` for a paginated source, all of `songs`
+/// otherwise.
+pub fn source_context_actions(
+    source: SongsSource,
+    name: Option<String>,
+    songs: &SongListModel,
+    pos: usize,
+) -> Option<Vec<AppAction>> {
+    let load = if source.is_paginated() {
+        PlaybackAction::LoadPagedSongs(source.clone(), songs.song_batch_for(pos)?)
+    } else {
+        let tracks: Vec<Track> = songs.collect();
+        if tracks.is_empty() {
+            return None;
+        }
+        PlaybackAction::LoadContextSongs(source.clone(), tracks)
+    };
+    Some(load_context(source, name, load))
+}
+
+/// No "View Album" on its album's page, nor "More from" on its artist's.
+pub fn track_menu(
+    song: &Track,
+    source: Option<&SongsSource>,
+    liked: bool,
+    pinned: Option<bool>,
+) -> gio::MenuModel {
+    let show_view_album = !matches!(source, Some(SongsSource::Album(_)));
+    let artist = match source {
+        Some(SongsSource::Artist(id)) => Some(id.as_str()),
+        _ => None,
+    };
+    build_song_menu(
+        song,
+        show_view_album,
+        artist,
+        QueueMenuEntry::Add,
+        Some(liked),
+        pinned,
+    )
 }
 
 /// Base struct shared by all detail page models.
@@ -115,6 +227,36 @@ impl DetailsPageModel {
     }
 
     /// Copy a shareable link to the clipboard and show a confirmation toast.
+    pub fn is_playing_source(&self, source: Option<&SongsSource>) -> bool {
+        source.is_some() && self.state().playback.current_source() == source
+    }
+
+    /// Every page of a paginated source, else `songs` as listed.
+    pub fn queue_source(&self, source: SongsSource, songs: &SongListModel) {
+        if source.is_paginated() {
+            queue_source_tracks(&self.app_model, &self.dispatcher, source);
+        } else {
+            let tracks: Vec<Track> = songs.collect();
+            let tracks = tracks.into_iter().filter(|t| t.playable).collect();
+            self.dispatcher.dispatch(AppAction::QueueTracks { tracks });
+        }
+    }
+
+    pub fn track_actions(&self, song: &Track, source: Option<&SongsSource>) -> SimpleActionGroup {
+        let group = SimpleActionGroup::new();
+        for action in song.make_artist_actions(self.dispatcher.clone()) {
+            group.add_action(&action);
+        }
+        if !matches!(source, Some(SongsSource::Album(_))) {
+            group.add_action(&song.make_album_action(self.dispatcher.clone()));
+        }
+        group.add_action(&song.make_link_action());
+        for action in song.make_queue_actions(self.dispatcher.clone()) {
+            group.add_action(&action);
+        }
+        group
+    }
+
     pub fn share_link(&self, link: &str) {
         crate::app::components::copy_link_to_clipboard(link);
         self.dispatcher
@@ -131,10 +273,6 @@ impl DetailsPageModel {
 
     pub fn is_playing(&self) -> bool {
         self.state().playback.is_playing()
-    }
-
-    pub fn is_shuffled(&self) -> bool {
-        self.state().playback.is_shuffled()
     }
 
     pub fn current_song_id(&self) -> Option<String> {
@@ -174,16 +312,14 @@ impl DetailsPageModel {
 
     // Playback control helpers
 
-    /// Toggle play/pause. If not currently playing this source, starts playback
-    /// (with shuffle disabled). If already playing, toggles pause/resume.
+    /// Toggle play/pause, or start the source over with `context`.
     pub fn toggle_playback(
         &self,
         source_is_playing: bool,
-        song_list: &SongListModel,
-        play_song_at: impl FnOnce(usize, &str),
+        context: impl FnOnce() -> Option<Vec<AppAction>>,
     ) {
         if !source_is_playing {
-            self.start_playback(false, song_list, play_song_at);
+            self.start_playback(false, context());
         } else if self.is_playing() {
             self.dispatcher.dispatch(PlaybackAction::Pause.into());
         } else {
@@ -191,37 +327,17 @@ impl DetailsPageModel {
         }
     }
 
-    /// Start playback in shuffle mode.
-    pub fn shuffle_playback(
-        &self,
-        song_list: &SongListModel,
-        play_song_at: impl FnOnce(usize, &str),
-    ) {
-        self.start_playback(true, song_list, play_song_at);
+    pub fn start_playback(&self, shuffle: bool, context: Option<Vec<AppAction>>) {
+        if let Some(context) = context {
+            self.dispatcher
+                .dispatch_many(start_actions(shuffle, context));
+        }
     }
 
-    /// Start playback. When shuffle is enabled, picks a random track; otherwise starts from the first.
-    pub fn start_playback(
-        &self,
-        shuffle: bool,
-        song_list: &SongListModel,
-        play_song_at: impl FnOnce(usize, &str),
-    ) {
-        if shuffle != self.is_shuffled() {
-            self.dispatcher
-                .dispatch(PlaybackAction::ToggleShuffle.into());
-        }
-        let len = song_list.partial_len();
-        if len == 0 {
-            return;
-        }
-        let index = if shuffle {
-            rand::random::<usize>() % len
-        } else {
-            0
-        };
-        if let Some(song) = song_list.index(index) {
-            play_song_at(index, &song.get_id());
+    pub fn play_in_context(&self, context: Option<Vec<AppAction>>, id: &str) {
+        if let Some(mut actions) = context {
+            actions.push(PlaybackAction::Load(id.to_string()).into());
+            self.dispatcher.dispatch_many(actions);
         }
     }
 
@@ -234,7 +350,7 @@ impl DetailsPageModel {
         false
     }
 
-    /// IDs of the tracks pinned to the sidebar, or `None` when pinning is
+    /// IDs of the tracks pinned to the navigation panel, or `None` when pinning is
     /// disabled or no user is logged in.
     pub fn pinned_song_ids(&self) -> Option<HashSet<String>> {
         if !feature_flags::is_enabled(FeatureFlag::PinnedObjects) {
@@ -436,7 +552,6 @@ mod tests {
         let (model, _) = make_model();
         assert!(model.is_paused());
         assert!(!model.is_playing());
-        assert!(!model.is_shuffled());
         assert_eq!(model.current_song_id(), None);
     }
 
@@ -500,105 +615,150 @@ mod tests {
         }
     }
 
-    // Tests: playback control helpers
-
     #[test]
-    fn test_toggle_playback_starts_when_not_playing_source() {
+    fn test_source_helpers() {
+        use crate::app::models::ArtistRef;
+        let album = SongsSource::Album("al".into());
+        let artist = SongsSource::Artist("ar".into());
+        assert_eq!(
+            album.spotify_url().as_deref(),
+            Some("https://open.spotify.com/album/al")
+        );
+        assert_eq!(SongsSource::SavedTracks.spotify_url(), None);
+
+        let mut track = song("t");
+        track.artists = vec![ArtistRef {
+            rri: ResourceId {
+                id: "ar".into(),
+                ..Default::default()
+            },
+            name: "Artist".into(),
+        }];
+        let entries = |source: Option<&SongsSource>| -> Vec<String> {
+            let menu = track_menu(&track, source, false, None);
+            (0..menu.n_items())
+                .filter_map(|i| menu.item_link(i, gio::MENU_LINK_SECTION))
+                .flat_map(|section| {
+                    (0..section.n_items())
+                        .filter_map(|j| {
+                            section
+                                .item_attribute_value(j, gio::MENU_ATTRIBUTE_ACTION, None)
+                                .and_then(|v| v.get::<String>())
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        };
+        let has = |source, action: &str| entries(source).iter().any(|a| a == action);
+        assert!(has(None, "song.view_album") && has(None, "song.view_artist_ar"));
+        assert!(!has(Some(&album), "song.view_album"));
+        assert!(!has(Some(&artist), "song.view_artist_ar"));
+        assert!(has(Some(&album), "song.queue"));
+
         let (model, dispatcher) = make_model();
-        let list = make_song_list(vec![song("first"), song("second")]);
-        let called = Rc::new(RefCell::new(None));
-        let called_clone = called.clone();
+        assert!(model
+            .track_actions(&track, Some(&album))
+            .lookup_action("view_album")
+            .is_none());
+        assert!(model
+            .track_actions(&track, None)
+            .lookup_action("view_album")
+            .is_some());
 
-        model.toggle_playback(false, &list, move |pos, id| {
-            *called_clone.borrow_mut() = Some((pos, id.to_string()));
-        });
-
-        assert_eq!(*called.borrow(), Some((0, "first".to_string())));
-        assert!(dispatcher.dispatched().is_empty());
-    }
-
-    #[test]
-    fn test_toggle_playback_pauses_when_playing() {
-        let (model, dispatcher) = make_model_playing();
-        let list = make_song_list(vec![song("x")]);
-
-        model.toggle_playback(true, &list, |_, _| panic!("should not start playback"));
-
-        let action = dispatcher.last_action().unwrap();
+        let mut unplayable = song("u");
+        unplayable.playable = false;
+        let list = make_song_list(vec![song("a"), unplayable]);
+        let paged = source_context_actions(album.clone(), Some("A".into()), &list, 0).unwrap();
         assert!(matches!(
-            action,
-            AppAction::PlaybackAction(PlaybackAction::Pause)
+            paged[..],
+            [
+                AppAction::PlaybackAction(PlaybackAction::SetContextName(..)),
+                AppAction::PlaybackAction(PlaybackAction::LoadPagedSongs(..))
+            ]
         ));
-    }
-
-    #[test]
-    fn test_toggle_playback_resumes_when_paused_but_source_playing() {
-        let (model, dispatcher) = make_model();
-        let list = make_song_list(vec![song("x")]);
-
-        model.toggle_playback(true, &list, |_, _| panic!("should not start playback"));
-
-        let action = dispatcher.last_action().unwrap();
+        let whole = source_context_actions(artist.clone(), None, &list, 0).unwrap();
         assert!(matches!(
-            action,
-            AppAction::PlaybackAction(PlaybackAction::Play)
+            whole[..],
+            [AppAction::PlaybackAction(PlaybackAction::LoadContextSongs(_, ref tracks))] if tracks.len() == 2
         ));
+        assert!(source_context_actions(artist.clone(), None, &make_song_list(vec![]), 0).is_none());
+
+        model.queue_source(artist, &list);
+        assert!(matches!(
+            dispatcher.last_action(),
+            Some(AppAction::QueueTracks { ref tracks }) if tracks.len() == 1
+        ));
+        assert!(!model.is_playing_source(Some(&album)));
+        assert!(!model.is_playing_source(None));
     }
 
-    #[test]
-    fn test_shuffle_playback_enables_shuffle() {
-        let (model, dispatcher) = make_model();
-        let list = make_song_list(vec![song("a"), song("b")]);
-        let called = Rc::new(RefCell::new(None));
-        let called_clone = called.clone();
-
-        model.shuffle_playback(&list, move |pos, id| {
-            *called_clone.borrow_mut() = Some((pos, id.to_string()));
-        });
-
-        let actions = dispatcher.dispatched();
-        assert!(actions
+    fn kinds(actions: &[AppAction]) -> Vec<&'static str> {
+        actions
             .iter()
-            .any(|a| matches!(a, AppAction::PlaybackAction(PlaybackAction::ToggleShuffle))));
-        let (pos, id) = called
-            .borrow()
-            .clone()
-            .expect("play_song_at should be called");
-        assert!(pos < 2);
-        assert!(id == "a" || id == "b");
+            .map(|a| match a {
+                AppAction::PlaybackAction(PlaybackAction::SetShuffled(_)) => "SetShuffled",
+                AppAction::PlaybackAction(PlaybackAction::ReplaceQueue) => "ReplaceQueue",
+                AppAction::PlaybackAction(PlaybackAction::LoadContextSongs(..)) => {
+                    "LoadContextSongs"
+                }
+                AppAction::PlaybackAction(PlaybackAction::Load(_)) => "Load",
+                AppAction::PlaybackAction(PlaybackAction::Play) => "Play",
+                _ => "other",
+            })
+            .collect()
     }
 
     #[test]
-    fn test_start_playback_disables_shuffle_when_not_wanted() {
-        let (model, dispatcher) = make_model_playing();
-        model
-            .app_model
-            .update_state(PlaybackAction::ToggleShuffle.into());
-        assert!(model.is_shuffled());
+    fn test_playback_helpers() {
+        let context = || {
+            Some(vec![PlaybackAction::LoadContextSongs(
+                crate::app::SongsSource::Artist("a".into()),
+                vec![song("x")],
+            )
+            .into()])
+        };
+
+        let (model, dispatcher) = make_model();
+        model.toggle_playback(false, context);
+        let actions = dispatcher.dispatched();
+        assert!(matches!(
+            actions[0],
+            AppAction::PlaybackAction(PlaybackAction::SetShuffled(false))
+        ));
+        assert_eq!(
+            kinds(&actions),
+            ["SetShuffled", "ReplaceQueue", "LoadContextSongs", "Play"]
+        );
+
         dispatcher.clear();
+        model.start_playback(true, context());
+        assert!(matches!(
+            dispatcher.dispatched()[0],
+            AppAction::PlaybackAction(PlaybackAction::SetShuffled(true))
+        ));
 
-        let list = make_song_list(vec![song("x")]);
-        model.start_playback(false, &list, |_, _| {});
-
-        let actions = dispatcher.dispatched();
-        assert!(actions
-            .iter()
-            .any(|a| matches!(a, AppAction::PlaybackAction(PlaybackAction::ToggleShuffle))));
-    }
-
-    #[test]
-    fn test_start_playback_empty_list() {
-        let (model, dispatcher) = make_model();
-        let list = make_song_list(vec![]);
-        let called = Rc::new(RefCell::new(false));
-        let called_clone = called.clone();
-
-        model.start_playback(false, &list, move |_, _| {
-            *called_clone.borrow_mut() = true;
-        });
-
-        assert!(!*called.borrow());
+        dispatcher.clear();
+        model.toggle_playback(false, || None);
+        model.play_in_context(None, "x");
         assert!(dispatcher.dispatched().is_empty());
+        model.play_in_context(context(), "x");
+        assert_eq!(
+            kinds(&dispatcher.dispatched()),
+            ["LoadContextSongs", "Load"]
+        );
+
+        dispatcher.clear();
+        model.toggle_playback(true, || panic!("should not start playback"));
+        assert!(matches!(
+            dispatcher.last_action(),
+            Some(AppAction::PlaybackAction(PlaybackAction::Play))
+        ));
+        let (model, dispatcher) = make_model_playing();
+        model.toggle_playback(true, || panic!("should not start playback"));
+        assert!(matches!(
+            dispatcher.last_action(),
+            Some(AppAction::PlaybackAction(PlaybackAction::Pause))
+        ));
     }
 
     // Tests: construction

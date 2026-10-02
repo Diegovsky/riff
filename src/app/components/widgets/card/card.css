@@ -20,11 +20,11 @@
 }
 
 /* Shape variants */
-navigation-split-view .card--square .card {
+overlay-split-view .card--square .card {
   border-radius: 6px;
 }
 
-navigation-split-view .card--round .card {
+overlay-split-view .card--round .card {
   border-radius: 50%;
 }
 

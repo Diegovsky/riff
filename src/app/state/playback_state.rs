@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
 use crate::app::models::*;
@@ -6,23 +7,23 @@ use crate::app::models::*;
 // own `Device` enum (local vs. Connect target), which would clash with the
 // glob-imported name.
 use crate::app::models::Device as ConnectDevice;
+
+use crate::app::components::labels;
 use crate::app::state::{AppAction, AppEvent, UpdatableState};
-use crate::app::LazyRandomIndex;
+use crate::play_queue::{EntryKey, PlayQueue, CONTEXT_PAGE_SIZE};
 
 #[derive(Debug)]
 pub struct PlaybackState {
     available_devices: Vec<ConnectDevice>,
     current_device: Device,
-    // A mapping of indices for shuffled playback
-    index: LazyRandomIndex,
-    // The actual list like thing backing the currently playing tracks
-    songs: SongListModel,
-    list_position: Option<usize>,
+    queue: PlayQueue,
+    view: SongListModel,
+    view_keys: Vec<EntryKey>,
+    view_models: HashMap<EntryKey, SongModel>,
+    context_name: Option<(SongsSource, String)>,
     seek_position: PositionMillis,
-    source: Option<SongsSource>,
     repeat: RepeatMode,
     is_playing: bool,
-    is_shuffled: bool,
     // Whether to skip explicit tracks
     skip_explicit: bool,
     // Whether the Spotify account has locked the explicit filter (e.g. via a
@@ -36,16 +37,43 @@ pub struct PlaybackState {
 // Most mutatings methods shouldn't be pub
 // If they are, they probably are only used by the app state
 impl PlaybackState {
-    pub fn songs(&self) -> &SongListModel {
-        &self.songs
+    pub fn queue_view(&self) -> &SongListModel {
+        &self.view
+    }
+
+    pub fn view_keys(&self) -> &[EntryKey] {
+        &self.view_keys
+    }
+
+    pub fn view_key(&self, index: usize) -> Option<EntryKey> {
+        self.view_keys.get(index).copied()
+    }
+
+    pub fn upcoming_keys(&self) -> &[EntryKey] {
+        let current = self.current_key();
+        let skip = (current.is_some() && self.view_keys.first() == current.as_ref()) as usize;
+        &self.view_keys[skip..]
+    }
+
+    pub fn view_track(&self, key: EntryKey) -> Option<Track> {
+        let index = self.view_keys.iter().position(|k| *k == key)?;
+        Some(self.view.index_continuous(index)?.into_description())
+    }
+
+    pub fn header_track(&self) -> Option<Track> {
+        self.queue.header_track().cloned()
+    }
+
+    pub fn queue_is_empty(&self) -> bool {
+        self.view_keys.is_empty()
     }
 
     pub fn is_playing(&self) -> bool {
-        self.is_playing && self.list_position.is_some()
+        self.is_playing && self.queue.current().is_some()
     }
 
     pub fn is_shuffled(&self) -> bool {
-        self.is_shuffled
+        self.queue.is_shuffled()
     }
 
     pub fn explicit_filter_locked(&self) -> bool {
@@ -60,208 +88,210 @@ impl PlaybackState {
         self.repeat
     }
 
-    // Whatever batch of songs we would need to grab if we were to play the next track
-    pub fn next_query(&self) -> Option<(SongsSource, PageRequest)> {
-        let next_index = self.next_index()?;
-        let next_index = if self.is_shuffled {
-            self.index.get(next_index)?
-        } else {
-            next_index
-        };
-        let batch = self.songs.needed_batch_for(next_index);
-        if let Some(batch) = batch {
-            let source = self.source.as_ref().cloned()?;
-            Some((source, batch))
-        } else {
-            None
-        }
-    }
-
-    fn index(&self, i: usize) -> Option<Track> {
-        let song = if self.is_shuffled {
-            self.songs.index(self.index.get(i)?)
-        } else {
-            self.songs.index(i)
-        };
-        Some(song?.into_description())
+    pub fn next_query(&self, for_view: bool) -> Option<(SongsSource, PageRequest)> {
+        let source = self.queue.source().filter(|s| s.is_paginated())?;
+        let request = self.queue.next_page_request(self.repeat, for_view)?;
+        Some((source.clone(), request))
     }
 
     pub fn current_source(&self) -> Option<&SongsSource> {
-        self.source.as_ref()
+        self.queue.source()
     }
 
-    pub fn current_song_index(&self) -> Option<usize> {
-        self.list_position
+    pub fn current_context_index(&self) -> Option<usize> {
+        self.queue.current_context_index()
+    }
+
+    pub fn current_key(&self) -> Option<EntryKey> {
+        self.queue.current_key()
     }
 
     pub fn current_song_id(&self) -> Option<String> {
-        Some(self.index(self.list_position?)?.rri.id)
+        Some(self.queue.current()?.rri.id.clone())
     }
 
     pub fn current_song(&self) -> Option<Track> {
-        self.index(self.list_position?)
+        self.queue.current().cloned()
     }
 
-    fn next_id(&self) -> Option<String> {
-        self.next_index()
-            .and_then(|i| Some(self.songs().index(i)?.description().rri.id.clone()))
+    pub fn upcoming_ids(&self) -> Vec<String> {
+        self.queue
+            .upcoming()
+            .into_iter()
+            .map(|t| t.rri.id.clone())
+            .collect()
     }
 
-    fn clear(&mut self, source: Option<SongsSource>) -> SongListModelPending {
-        self.source = source;
-        self.index = Default::default();
-        self.list_position = None;
-        self.songs.clear()
+    pub fn has_next(&self) -> bool {
+        self.queue.has_next(self.repeat)
     }
 
-    // Replaces (!) the current playlist with the contents of a song batch
-    fn set_batch(&mut self, source: Option<SongsSource>, song_batch: Page<Track>) -> bool {
-        let ok = self.clear(source).and(|s| s.add(song_batch)).commit();
-        self.index.resize(self.songs.partial_len());
-        ok
+    pub fn next_song(&self) -> Option<Track> {
+        self.queue.peek_next(true, self.repeat, self.skipper())
     }
 
-    fn add_batch(&mut self, song_batch: Page<Track>) -> bool {
-        let ok = self.songs.add(song_batch).commit();
-        self.index.resize(self.songs.partial_len());
-        ok
+    pub fn has_prev(&self) -> bool {
+        self.queue.current().is_some()
     }
 
-    // Replaces (!) the current playlist with a bunch of songs (not batched, not expected to grow)
-    fn set_queue(&mut self, tracks: Vec<Track>) {
-        self.set_queue_with_source(None, tracks);
+    fn view_model(&mut self, key: EntryKey, track: Track, role: QueueRole) -> SongModel {
+        match self.view_models.get(&key) {
+            Some(model) if model.get_id() == track.rri.id && model.queue_role() == Some(role) => {
+                model.clone()
+            }
+            _ => {
+                let model = SongModel::new_keyed(track, key.to_string());
+                model.set_queue_role(Some(role));
+                self.view_models.insert(key, model.clone());
+                model
+            }
+        }
+    }
+
+    fn refresh_view(&mut self) {
+        let local = matches!(self.current_device, Device::Local);
+        let view = self.queue.view(self.repeat);
+        let queue_group = labels::QUEUE_NEXT_IN_QUEUE.clone();
+        let context_group = self
+            .context_name
+            .as_ref()
+            .filter(|(named, _)| Some(named) == self.queue.source())
+            .map(|(_, name)| labels::queue_context_label(name));
+
+        let current = self
+            .queue
+            .current_key()
+            .zip(self.queue.current().cloned())
+            .map(|row| {
+                let group = Some(labels::QUEUE_NOW_PLAYING.clone());
+                (row, group, QueueRole::Current)
+            });
+
+        let mut keys = Vec::with_capacity(view.queued.len() + view.context.len() + 1);
+        let mut songs = Vec::with_capacity(keys.capacity());
+        let rows = current
+            .into_iter()
+            .chain(
+                view.queued
+                    .into_iter()
+                    .map(|row| (row, Some(queue_group.clone()), QueueRole::Queued)),
+            )
+            .chain(
+                view.context
+                    .into_iter()
+                    .map(|row| (row, context_group.clone(), QueueRole::Context)),
+            );
+        for ((key, track), group, role) in rows {
+            let role = if local { role } else { QueueRole::Fixed };
+            let model = self.view_model(key, track, role);
+            model.set_group(group);
+            keys.push(key);
+            songs.push(model);
+        }
+        let listed: HashSet<EntryKey> = keys.iter().copied().collect();
+        self.view_models.retain(|key, _| listed.contains(key));
+        self.view_keys = keys;
+        self.view.replace_models(songs).commit();
     }
 
     fn set_queue_with_source(&mut self, source: Option<SongsSource>, tracks: Vec<Track>) {
-        self.clear(source).and(|s| s.append(tracks)).commit();
-        self.index.grow(self.songs.len());
+        self.queue.set_context(source, tracks);
+        self.refresh_view();
     }
 
     pub fn queue(&mut self, tracks: Vec<Track>) {
-        self.source = None;
-        self.songs.append(tracks).commit();
-        self.index.grow(self.songs.len());
+        self.queue.enqueue(tracks);
+        self.refresh_view();
     }
 
-    pub fn dequeue(&mut self, ids: &[String]) {
-        let current_id = self.current_song_id();
-        self.songs.remove(ids).commit();
-        self.list_position = current_id.and_then(|id| self.songs.find_index(&id));
-        self.index.shrink(self.songs.len());
+    pub fn dequeue(&mut self, keys: &[EntryKey]) -> bool {
+        let changed = self.queue.remove(keys);
+        self.refresh_view();
+        changed
     }
 
-    // Update the current playing track (identified by a position in the list) if we're swapping songs
-    fn swap_pos(&mut self, index: usize, other_index: usize) {
-        let len = self.songs.len();
-        self.list_position = self
-            .list_position
-            .map(|position| match position {
-                i if i == index => other_index,
-                i if i == other_index => index,
-                _ => position,
-            })
-            .map(|p| usize::min(p, len - 1))
-    }
-
-    pub fn move_down(&mut self, id: &str) -> Option<usize> {
-        let index = self.songs.find_index(id)?;
-        self.songs.move_down(index).commit();
-        self.swap_pos(index + 1, index);
-        Some(index)
-    }
-
-    pub fn move_up(&mut self, id: &str) -> Option<usize> {
-        let index = self.songs.find_index(id).filter(|&index| index > 0)?;
-        self.songs.move_up(index).commit();
-        self.swap_pos(index - 1, index);
-        Some(index)
-    }
-
-    fn play(&mut self, id: &str) -> bool {
-        if self.current_song_id().map(|cur| cur == id).unwrap_or(false) {
-            return false;
+    pub fn move_queued(&mut self, key: EntryKey, to: usize) -> bool {
+        let changed = self.queue.move_queued(key, to);
+        if changed {
+            self.refresh_view();
         }
-        debug!("Playing {id}");
-
-        let found_index = self.songs.find_index(id);
-
-        if let Some(index) = found_index {
-            // If shufflings songs, we make sure the track we just picked is the first to come up
-            if self.is_shuffled {
-                self.index.reset_picking_first(index);
-                self.play_index(0);
-            } else {
-                self.play_index(index);
-            }
-            true
-        } else {
-            debug!("Song not found");
-            false
-        }
+        changed
     }
 
-    fn stop(&mut self) {
-        self.list_position = None;
-        self.is_playing = false;
-        self.seek_position.set(0, false);
+    fn skipper(&self) -> impl Fn(&Track) -> bool {
+        let skip_explicit = self.skip_explicit;
+        move |track: &Track| !track.playable || (skip_explicit && track.is_explicit())
     }
 
-    fn play_index(&mut self, index: usize) -> Option<String> {
+    fn started_playing(&mut self) -> Option<String> {
         self.is_playing = true;
-        self.list_position.replace(index);
         self.seek_position.set(0, true);
-        self.index.next_until(index + 1);
+        self.refresh_view();
         self.current_song_id()
     }
 
-    fn play_next(&mut self) -> Option<String> {
-        self.next_index().and_then(|i| {
-            self.seek_position.set(0, true);
-            self.play_index(i)
-        })
+    fn select_id(&mut self, id: &str) -> bool {
+        if self.current_song_id().as_deref() == Some(id) {
+            return false;
+        }
+        debug!("Playing {id}");
+        let found = self.queue.play_id(id);
+        if !found {
+            debug!("Song not found");
+        }
+        found
+    }
+
+    fn jumped(&mut self) -> Vec<PlaybackEvent> {
+        if self.current_song_should_skip() {
+            debug!("Track must be skipped (unplayable or explicit-filtered)");
+            return self.play_next_events(false);
+        }
+        self.started_playing()
+            .map(PlaybackEvent::TrackChanged)
+            .into_iter()
+            .collect()
+    }
+
+    fn set_repeat(&mut self, mode: RepeatMode) -> Vec<PlaybackEvent> {
+        self.repeat = mode;
+        self.refresh_view();
+        vec![
+            PlaybackEvent::RepeatModeChanged(mode),
+            PlaybackEvent::PlaylistChanged,
+        ]
+    }
+
+    fn stop(&mut self) {
+        self.queue.stop();
+        self.is_playing = false;
+        self.seek_position.set(0, false);
+        self.refresh_view();
     }
 
     /// Advance to the next playable track. Unplayable tracks are always
     /// skipped; explicit tracks only when skip_explicit is on. Stops before
-    /// returning None.
-    fn play_next_skippable(&mut self) -> Option<String> {
-        // Cap iterations to avoid looping forever when all tracks are skippable;
-        // len() can under-report, so fall back to partial_len and at least 1.
-        let max_skips = self.songs.len().max(self.songs.partial_len()).max(1);
-        for _ in 0..max_skips {
-            let id = match self.play_next() {
-                Some(id) => id,
-                None => {
-                    self.stop();
-                    return None;
-                }
-            };
-            if !self.current_song_should_skip() {
-                return Some(id);
-            }
-            debug!("Skipping track '{}' (unplayable or explicit-filtered)", id);
+    /// returning None. `auto` means the current track ended by itself.
+    fn play_next_skippable(&mut self, auto: bool) -> Option<String> {
+        let skip = self.skipper();
+        if self.queue.advance(auto, self.repeat, skip).is_some() {
+            self.started_playing()
+        } else {
+            self.stop();
+            None
         }
-        // Nothing left to play.
-        self.stop();
-        None
     }
 
-    /// Returns true if the current song is marked as explicit.
-    fn current_song_is_explicit(&self) -> bool {
-        self.current_song()
-            .map(|s| s.is_explicit())
-            .unwrap_or(false)
+    fn play_next_events(&mut self, auto: bool) -> Vec<PlaybackEvent> {
+        if let Some(id) = self.play_next_skippable(auto) {
+            vec![PlaybackEvent::TrackChanged(id)]
+        } else {
+            vec![PlaybackEvent::PlaybackStopped]
+        }
     }
 
-    /// True if the current song is not playable (e.g. region locked).
-    fn current_song_is_unplayable(&self) -> bool {
-        self.current_song().map(|s| !s.playable).unwrap_or(false)
-    }
-
-    /// True if the current song must be skipped: unplayable, or explicit while
-    /// skip_explicit is on.
     fn current_song_should_skip(&self) -> bool {
-        self.current_song_is_unplayable() || (self.skip_explicit && self.current_song_is_explicit())
+        self.current_song().is_some_and(|s| self.skipper()(&s))
     }
 
     /// If the current track must be skipped, advance to the next playable one.
@@ -269,100 +299,30 @@ impl PlaybackState {
     fn skip_current_if_needed(&mut self) -> Vec<PlaybackEvent> {
         if self.current_song_should_skip() {
             debug!("Current track must be skipped (unplayable or explicit-filtered)");
-            if let Some(next_id) = self.play_next_skippable() {
-                vec![PlaybackEvent::TrackChanged(next_id)]
-            } else {
-                // play_next_skippable already stopped playback.
-                vec![PlaybackEvent::PlaybackStopped]
-            }
+            self.play_next_events(false)
         } else {
             vec![]
         }
     }
 
-    pub fn next_index(&self) -> Option<usize> {
-        let loaded = self.songs.partial_len();
-        let complete = self.is_shuffled || self.songs.is_complete();
-        self.list_position.and_then(|p| match self.repeat {
-            RepeatMode::Track => Some(p),
-            RepeatMode::Context if !complete => Some(p + 1),
-            RepeatMode::Context if loaded != 0 => Some((p + 1) % loaded),
-            RepeatMode::Off => Some(p + 1).filter(|&i| i < loaded || !complete),
-            _ => None,
-        })
-    }
-
-    fn play_prev(&mut self) -> Option<String> {
-        self.prev_index().and_then(|i| {
-            // Only jump to the previous track if we aren't more than 2 seconds (2,000 ms) into the current track.
-            // Otherwise, seek to the start of the current track.
-            // (This replicates the behavior of official Spotify clients.)
-            if self.seek_position.current() <= 2000 {
-                self.seek_position.set(0, true);
-                self.play_index(i)
-            } else {
-                self.seek_position.set(0, true);
-                None
-            }
-        })
-    }
-
-    /// Go to the previous playable track, skipping any that must not be played.
-    /// Returns Some(id), or None if play_prev seeked to start or no playable
-    /// previous track remains (playback stopped).
-    fn play_prev_skippable(&mut self) -> Option<String> {
-        // play_prev handles the "more than 2s in, seek to start" case; None here
-        // means it seeked or there is no previous track, so leave playback alone.
-        let first = self.play_prev()?;
-        if !self.current_song_should_skip() {
-            return Some(first);
+    fn play_prev_events(&mut self) -> Vec<PlaybackEvent> {
+        if self.queue.current().is_none() {
+            return vec![];
         }
-        debug!(
-            "Skipping track '{}' (previous, unplayable or explicit-filtered)",
-            first
-        );
-
-        // Force position to 0 so play_prev doesn't restart the current track.
-        let max_skips = self.songs.len().max(self.songs.partial_len()).max(1);
-        for _ in 1..max_skips {
-            self.seek_position.set(0, true);
-            let id = match self.play_prev() {
-                Some(id) => id,
-                None => {
-                    // Nothing playable behind us.
-                    self.stop();
-                    return None;
+        if self.seek_position.current() <= 2000 {
+            let skip = self.skipper();
+            if self.queue.go_back(self.repeat, skip).is_some() {
+                if let Some(id) = self.started_playing() {
+                    return vec![PlaybackEvent::TrackChanged(id)];
                 }
-            };
-            if !self.current_song_should_skip() {
-                return Some(id);
             }
-            debug!(
-                "Skipping track '{}' (previous, unplayable or explicit-filtered)",
-                id
-            );
         }
-        // Nothing playable left.
-        self.stop();
-        None
-    }
-
-    pub fn prev_index(&self) -> Option<usize> {
-        let len = if self.is_shuffled {
-            self.songs.partial_len()
-        } else {
-            self.songs.len()
-        };
-        self.list_position.and_then(|p| match self.repeat {
-            RepeatMode::Track => Some(p),
-            RepeatMode::Context if len != 0 => Some((if p == 0 { len } else { p }) - 1),
-            RepeatMode::Off => Some(p).filter(|&i| i > 0).map(|i| i - 1),
-            _ => None,
-        })
+        self.seek_position.set(0, self.is_playing);
+        vec![PlaybackEvent::TrackSeeked(0)]
     }
 
     fn toggle_play(&mut self) -> Option<bool> {
-        if self.list_position.is_some() {
+        if self.queue.current().is_some() {
             self.is_playing = !self.is_playing;
 
             match self.is_playing {
@@ -376,10 +336,21 @@ impl PlaybackState {
         }
     }
 
-    fn set_shuffled(&mut self, shuffled: bool) {
-        self.is_shuffled = shuffled;
-        let old = self.list_position.replace(0).unwrap_or(0);
-        self.index.reset_picking_first(old);
+    fn start_from_queue(&mut self) -> Vec<PlaybackEvent> {
+        if self.queue.current().is_none() && self.has_next() {
+            self.play_next_events(false)
+        } else {
+            vec![]
+        }
+    }
+
+    fn set_shuffled(&mut self, shuffled: bool) -> Vec<PlaybackEvent> {
+        self.queue.set_shuffled(shuffled);
+        self.refresh_view();
+        vec![
+            PlaybackEvent::ShuffleChanged(shuffled),
+            PlaybackEvent::PlaylistChanged,
+        ]
     }
 
     pub fn available_devices(&self) -> &Vec<ConnectDevice> {
@@ -396,14 +367,14 @@ impl Default for PlaybackState {
         Self {
             available_devices: vec![],
             current_device: Device::Local,
-            index: LazyRandomIndex::default(),
-            songs: SongListModel::new(50),
-            list_position: None,
+            queue: PlayQueue::default(),
+            view: SongListModel::new(CONTEXT_PAGE_SIZE as u32),
+            view_keys: vec![],
+            view_models: HashMap::new(),
+            context_name: None,
             seek_position: PositionMillis::new(1.0),
-            source: None,
             repeat: RepeatMode::Off,
             is_playing: false,
-            is_shuffled: false,
             skip_explicit: false,
             explicit_filter_locked: false,
             volume: -1.0,
@@ -428,7 +399,6 @@ pub enum PlaybackAction {
     ToggleRepeat,
     ToggleShuffle,
     Seek(u32),
-    // I can't remember the diff betweek Seek and SyncSeek right now. Probably the source of the action
     SyncSeek(u32),
     Load(String),
     #[deprecated]
@@ -437,12 +407,40 @@ pub enum PlaybackAction {
     LoadContextSongs(SongsSource, Vec<Track>),
     SetVolume(f64),
     Next,
+    TrackEnded,
     Previous,
     PreloadNext,
-    Queue(Vec<Track>),
-    Dequeue(String),
+    ReplaceQueue,
+    ClearQueued,
+    SetContextName(SongsSource, String),
+    SetShuffleSeparation(u32),
+    PlayEntry(EntryKey),
+    RemoveEntries(Vec<EntryKey>),
+    MoveQueued {
+        key: EntryKey,
+        to: usize,
+    },
     SwitchDevice(Device),
     SetAvailableDevices(Vec<ConnectDevice>),
+}
+
+pub fn load_context(
+    source: SongsSource,
+    name: Option<String>,
+    load: PlaybackAction,
+) -> Vec<AppAction> {
+    let name = name.map(|name| PlaybackAction::SetContextName(source, name).into());
+    name.into_iter().chain([load.into()]).collect()
+}
+
+pub fn start_actions(shuffle: bool, context: Vec<AppAction>) -> Vec<AppAction> {
+    let mut actions = vec![
+        PlaybackAction::SetShuffled(shuffle).into(),
+        PlaybackAction::ReplaceQueue.into(),
+    ];
+    actions.extend(context);
+    actions.push(PlaybackAction::Play.into());
+    actions
 }
 
 impl From<PlaybackAction> for AppAction {
@@ -485,6 +483,14 @@ impl From<PlaybackEvent> for AppEvent {
     }
 }
 
+fn changed_events(changed: bool) -> Vec<PlaybackEvent> {
+    if changed {
+        vec![PlaybackEvent::PlaylistChanged]
+    } else {
+        vec![]
+    }
+}
+
 impl UpdatableState for PlaybackState {
     type Action = PlaybackAction;
     type Event = PlaybackEvent;
@@ -492,19 +498,15 @@ impl UpdatableState for PlaybackState {
     // Main "reducer" :)
     fn update_with(&mut self, action: Cow<Self::Action>) -> Vec<Self::Event> {
         match action.into_owned() {
-            PlaybackAction::TogglePlay => {
-                if let Some(playing) = self.toggle_play() {
-                    if playing {
-                        vec![PlaybackEvent::PlaybackResumed]
-                    } else {
-                        vec![PlaybackEvent::PlaybackPaused]
-                    }
-                } else {
-                    vec![]
-                }
-            }
+            PlaybackAction::TogglePlay => match self.toggle_play() {
+                Some(true) => vec![PlaybackEvent::PlaybackResumed],
+                Some(false) => vec![PlaybackEvent::PlaybackPaused],
+                None => self.start_from_queue(),
+            },
             PlaybackAction::Play => {
-                if !self.is_playing() && self.toggle_play() == Some(true) {
+                if self.queue.current().is_none() {
+                    self.start_from_queue()
+                } else if !self.is_playing() && self.toggle_play() == Some(true) {
                     vec![PlaybackEvent::PlaybackResumed]
                 } else {
                     vec![]
@@ -517,21 +519,14 @@ impl UpdatableState for PlaybackState {
                     vec![]
                 }
             }
-            PlaybackAction::ToggleRepeat => {
-                self.repeat = match self.repeat {
-                    RepeatMode::Track => RepeatMode::Off,
-                    RepeatMode::Context => RepeatMode::Track,
-                    RepeatMode::Off => RepeatMode::Context,
-                };
-                vec![PlaybackEvent::RepeatModeChanged(self.repeat)]
-            }
-            PlaybackAction::SetRepeatMode(mode) if self.repeat != mode => {
-                self.repeat = mode;
-                vec![PlaybackEvent::RepeatModeChanged(self.repeat)]
-            }
-            PlaybackAction::SetShuffled(shuffled) if self.is_shuffled != shuffled => {
-                self.set_shuffled(shuffled);
-                vec![PlaybackEvent::ShuffleChanged(shuffled)]
+            PlaybackAction::ToggleRepeat => self.set_repeat(match self.repeat {
+                RepeatMode::Track => RepeatMode::Off,
+                RepeatMode::Context => RepeatMode::Track,
+                RepeatMode::Off => RepeatMode::Context,
+            }),
+            PlaybackAction::SetRepeatMode(mode) if self.repeat != mode => self.set_repeat(mode),
+            PlaybackAction::SetShuffled(shuffled) if self.is_shuffled() != shuffled => {
+                self.set_shuffled(shuffled)
             }
             PlaybackAction::SetSkipExplicit(skip) => {
                 let changed = self.skip_explicit != skip;
@@ -558,94 +553,81 @@ impl UpdatableState for PlaybackState {
                 events.extend(self.skip_current_if_needed());
                 events
             }
-            PlaybackAction::ToggleShuffle => {
-                self.set_shuffled(!self.is_shuffled);
-                vec![PlaybackEvent::ShuffleChanged(self.is_shuffled)]
-            }
-            PlaybackAction::Next => {
-                if let Some(id) = self.play_next_skippable() {
-                    vec![PlaybackEvent::TrackChanged(id)]
-                } else {
-                    self.stop();
-                    vec![PlaybackEvent::PlaybackStopped]
-                }
-            }
+            PlaybackAction::ToggleShuffle => self.set_shuffled(!self.is_shuffled()),
+            PlaybackAction::Next => self.play_next_events(false),
+            PlaybackAction::TrackEnded => self.play_next_events(true),
             PlaybackAction::Stop => {
                 self.stop();
                 vec![PlaybackEvent::PlaybackStopped]
             }
-            PlaybackAction::Previous => {
-                if let Some(id) = self.play_prev_skippable() {
-                    vec![PlaybackEvent::TrackChanged(id)]
-                } else if self.list_position.is_some() {
-                    // A track is still loaded, so play_prev seeked to its start
-                    // rather than stopping. (list_position stays Some when
-                    // paused, so we can't rely on is_playing here.)
-                    vec![PlaybackEvent::TrackSeeked(0)]
+            PlaybackAction::Previous => self.play_prev_events(),
+            PlaybackAction::Load(id) => {
+                if self.select_id(&id) {
+                    self.jumped()
                 } else {
-                    // All previous tracks were explicit and playback was
-                    // stopped (stop() clears list_position).
-                    vec![PlaybackEvent::PlaybackStopped]
+                    vec![]
                 }
             }
-            PlaybackAction::Load(id) => {
-                if self.play(&id) {
-                    // If the loaded track must be skipped, advance to the next playable one.
-                    if self.current_song_should_skip() {
-                        debug!("Requested track '{}' must be skipped (unplayable or explicit-filtered)", id);
-                        if let Some(next_id) = self.play_next_skippable() {
-                            vec![PlaybackEvent::TrackChanged(next_id)]
-                        } else {
-                            // play_next_skippable already stopped playback.
-                            vec![PlaybackEvent::PlaybackStopped]
-                        }
-                    } else {
-                        vec![PlaybackEvent::TrackChanged(id)]
-                    }
+            PlaybackAction::PlayEntry(key) => {
+                if self.queue.play_key(key) {
+                    self.jumped()
                 } else {
                     vec![]
                 }
             }
             PlaybackAction::PreloadNext => {
-                if let Some(id) = self.next_id() {
-                    vec![PlaybackEvent::Preload(id)]
-                } else {
-                    vec![]
+                let skip = self.skipper();
+                match self.queue.peek_next(true, self.repeat, skip) {
+                    Some(track) => vec![PlaybackEvent::Preload(track.rri.id)],
+                    None => vec![],
                 }
             }
-            PlaybackAction::LoadPagedSongs(source, batch)
-                if Some(&source) == self.source.as_ref() =>
-            {
-                if self.add_batch(batch) {
+            PlaybackAction::LoadPagedSongs(source, batch) => {
+                let new_source = self.queue.add_page(source, batch);
+                self.refresh_view();
+                if new_source {
+                    vec![PlaybackEvent::PlaylistChanged, PlaybackEvent::SourceChanged]
+                } else {
                     vec![PlaybackEvent::PlaylistChanged]
-                } else {
-                    vec![]
                 }
-            }
-            PlaybackAction::LoadPagedSongs(source, batch)
-                if Some(&source) != self.source.as_ref() =>
-            {
-                debug!("new source: {:?}", &source);
-                self.set_batch(Some(source), batch);
-                vec![PlaybackEvent::PlaylistChanged, PlaybackEvent::SourceChanged]
             }
             #[allow(deprecated)]
             PlaybackAction::LoadSongs(tracks) => {
-                self.set_queue(tracks);
+                self.queue.clear();
+                self.set_queue_with_source(None, tracks);
                 vec![PlaybackEvent::PlaylistChanged, PlaybackEvent::SourceChanged]
             }
             PlaybackAction::LoadContextSongs(source, tracks) => {
                 self.set_queue_with_source(Some(source), tracks);
                 vec![PlaybackEvent::PlaylistChanged, PlaybackEvent::SourceChanged]
             }
-            PlaybackAction::Queue(tracks) => {
-                self.queue(tracks);
+            PlaybackAction::ReplaceQueue => {
+                self.queue.clear();
+                self.refresh_view();
                 vec![PlaybackEvent::PlaylistChanged]
             }
-            PlaybackAction::Dequeue(id) => {
-                self.dequeue(&[id]);
+            PlaybackAction::SetContextName(source, name) => {
+                let playing = self.queue.source() == Some(&source);
+                self.context_name = Some((source, name));
+                if playing {
+                    self.refresh_view();
+                    vec![PlaybackEvent::PlaylistChanged]
+                } else {
+                    vec![]
+                }
+            }
+            PlaybackAction::SetShuffleSeparation(separation) => {
+                self.queue.set_separation(separation as usize);
+                self.refresh_view();
                 vec![PlaybackEvent::PlaylistChanged]
             }
+            PlaybackAction::ClearQueued => {
+                let changed = self.queue.clear_queued();
+                self.refresh_view();
+                changed_events(changed)
+            }
+            PlaybackAction::RemoveEntries(keys) => changed_events(self.dequeue(&keys)),
+            PlaybackAction::MoveQueued { key, to } => changed_events(self.move_queued(key, to)),
             PlaybackAction::Seek(pos) => {
                 self.seek_position.set(pos as u64 * 1000, true);
                 vec![PlaybackEvent::TrackSeeked(pos)]
@@ -674,6 +656,7 @@ impl UpdatableState for PlaybackState {
             }
             PlaybackAction::SwitchDevice(new_device) => {
                 self.current_device = new_device.clone();
+                self.refresh_view();
                 vec![PlaybackEvent::SwitchedDevice(new_device)]
             }
             _ => vec![],
@@ -737,23 +720,222 @@ mod tests {
         make_track(id)
     }
 
+    fn load(state: &mut PlaybackState, tracks: Vec<Track>) {
+        state.set_queue_with_source(None, tracks);
+    }
+
     impl PlaybackState {
-        fn current_position(&self) -> Option<usize> {
-            self.list_position
-        }
-
-        fn prev_id(&self) -> Option<String> {
-            self.prev_index()
-                .and_then(|i| Some(self.songs().index(i)?.description().rri.id.clone()))
-        }
-
         fn song_ids(&self) -> Vec<String> {
-            self.songs()
-                .collect()
-                .iter()
-                .map(|s| s.rri.id.clone())
-                .collect()
+            self.upcoming_ids()
         }
+
+        fn act(&mut self, action: PlaybackAction) -> Vec<PlaybackEvent> {
+            self.update_with(Cow::Owned(action))
+        }
+
+        fn play(&mut self, id: &str) {
+            self.act(PlaybackAction::Load(id.to_string()));
+        }
+    }
+
+    fn playing(ids: &[&str], current: &str) -> PlaybackState {
+        let mut state = PlaybackState::default();
+        load(&mut state, ids.iter().map(|id| song(id)).collect());
+        state.play(current);
+        state
+    }
+
+    fn track_changes(
+        state: &mut PlaybackState,
+        action: PlaybackAction,
+        times: usize,
+    ) -> Vec<String> {
+        (0..times)
+            .flat_map(|_| state.act(action.clone()))
+            .filter_map(|e| match e {
+                PlaybackEvent::TrackChanged(id) => Some(id),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_user_queue() {
+        let mut state = PlaybackState::default();
+        state.queue(vec![song("a"), song("b")]);
+        assert_eq!(state.song_ids(), ["a", "b"]);
+        assert!(state.current_song().is_none());
+        assert_eq!(
+            track_changes(&mut state, PlaybackAction::TogglePlay, 1),
+            ["a"]
+        );
+        assert!(state.is_playing());
+
+        let mut state = playing(&["1", "2", "3"], "1");
+        state.queue(vec![song("a"), song("a"), song("b"), song("c")]);
+        assert_eq!(state.song_ids(), ["1", "a", "a", "b", "c", "2", "3"]);
+        let keys = state.upcoming_keys().to_vec();
+
+        state.act(PlaybackAction::RemoveEntries(vec![keys[1]]));
+        assert_eq!(state.song_ids(), ["1", "a", "b", "c", "2", "3"]);
+        assert!(state.view_track(keys[1]).is_none());
+        assert!(!state.dequeue(&[state.current_key().unwrap()]));
+
+        let events = state.act(PlaybackAction::MoveQueued {
+            key: keys[3],
+            to: 0,
+        });
+        assert!(matches!(&events[..], [PlaybackEvent::PlaylistChanged]));
+        assert_eq!(state.song_ids(), ["1", "c", "a", "b", "2", "3"]);
+        assert!(state
+            .act(PlaybackAction::MoveQueued {
+                key: keys[3],
+                to: 1
+            })
+            .is_empty());
+
+        assert_eq!(
+            track_changes(&mut state, PlaybackAction::PlayEntry(keys[2]), 1),
+            ["b"]
+        );
+        assert_eq!(state.song_ids(), ["b", "c", "a", "2", "3"]);
+        assert!(!state
+            .upcoming_keys()
+            .contains(&state.current_key().unwrap()));
+
+        assert_eq!(
+            track_changes(&mut state, PlaybackAction::Next, 4),
+            ["c", "a", "2", "3"]
+        );
+        let events = state.act(PlaybackAction::Next);
+        assert!(matches!(&events[..], [PlaybackEvent::PlaybackStopped]));
+        assert!(!state.is_playing());
+    }
+
+    #[test]
+    fn test_queue_view() {
+        let mut state = PlaybackState::default();
+        let album = SongsSource::Album("a".to_string());
+        state.act(PlaybackAction::SetContextName(
+            album.clone(),
+            "Blue Train".to_string(),
+        ));
+        state.act(PlaybackAction::LoadContextSongs(
+            album,
+            vec![song("1"), song("2"), song("3")],
+        ));
+        state.act(PlaybackAction::Load("1".to_string()));
+        state.queue(vec![song("q")]);
+        let rows = |view: &SongListModel| -> Vec<(String, Option<String>, Option<QueueRole>)> {
+            (0..view.partial_len())
+                .filter_map(|i| view.index_continuous(i))
+                .map(|m| (m.get_id(), m.group(), m.queue_role()))
+                .collect()
+        };
+
+        let all = rows(state.queue_view());
+        assert_eq!(all.len(), 4);
+        assert_eq!(
+            all[0],
+            (
+                "1".to_string(),
+                Some(labels::QUEUE_NOW_PLAYING.clone()),
+                Some(QueueRole::Current)
+            )
+        );
+        assert_eq!(all[1].0, "q");
+        assert_eq!(all[3].1.as_deref(), Some("Next from: Blue Train"));
+        assert_eq!(state.view_key(0), state.current_key());
+        assert_eq!(state.view_keys()[1..], *state.upcoming_keys());
+
+        state.act(PlaybackAction::Next);
+        let all = rows(state.queue_view());
+        assert_eq!(
+            (all[0].0.as_str(), all[0].2),
+            ("q", Some(QueueRole::Current))
+        );
+        assert_eq!(all.len(), 3);
+
+        state.act(PlaybackAction::Stop);
+        assert_eq!(state.view_keys(), state.upcoming_keys());
+
+        state.act(PlaybackAction::SetContextName(
+            SongsSource::Album("b".to_string()),
+            "Kind of Blue".to_string(),
+        ));
+        state.act(PlaybackAction::LoadContextSongs(
+            SongsSource::Album("c".to_string()),
+            vec![song("4"), song("5")],
+        ));
+        state.act(PlaybackAction::Load("4".to_string()));
+        assert_eq!(rows(state.queue_view())[1].1, None);
+    }
+
+    #[test]
+    fn test_context_source() {
+        let mut state = PlaybackState::default();
+        let source = SongsSource::Album("a".to_string());
+        state.act(PlaybackAction::LoadPagedSongs(
+            source.clone(),
+            Page {
+                items: (0..50).map(|i| song(&i.to_string())).collect(),
+                offset: Some(0),
+                total: Some(60),
+                next_cursor: None,
+            },
+        ));
+        state.act(PlaybackAction::Load("45".to_string()));
+        state.queue(vec![song("x")]);
+        assert_eq!(state.current_source(), Some(&source));
+        let (query_source, request) = state.next_query(false).unwrap();
+        assert_eq!((query_source, request.offset), (source.clone(), 50));
+
+        state.act(PlaybackAction::ReplaceQueue);
+        state.act(PlaybackAction::LoadContextSongs(
+            source,
+            vec![song("1"), song("2")],
+        ));
+        state.act(PlaybackAction::Load("1".to_string()));
+        assert_eq!(state.song_ids(), ["1", "2"]);
+    }
+
+    #[test]
+    fn test_repeat_modes() {
+        let mut state = playing(&["1", "2"], "1");
+        state.act(PlaybackAction::SetRepeatMode(RepeatMode::Track));
+        assert_eq!(
+            track_changes(&mut state, PlaybackAction::TrackEnded, 1),
+            ["1"]
+        );
+        let events = state.act(PlaybackAction::PreloadNext);
+        assert!(matches!(&events[..], [PlaybackEvent::Preload(id)] if id == "1"));
+        assert_eq!(track_changes(&mut state, PlaybackAction::Next, 1), ["2"]);
+
+        state.act(PlaybackAction::SetRepeatMode(RepeatMode::Context));
+        state.queue(vec![song("a")]);
+        assert_eq!(state.song_ids(), ["2", "a"]);
+        assert_eq!(
+            track_changes(&mut state, PlaybackAction::TrackEnded, 5),
+            ["a", "1", "2", "1", "2"]
+        );
+    }
+
+    #[test]
+    fn test_shuffle_keeps_queue_order_and_preloads_play_order() {
+        let ids: Vec<String> = (0..20).map(|i| i.to_string()).collect();
+        let mut state = playing(&ids.iter().map(String::as_str).collect::<Vec<_>>(), "0");
+        let queued: Vec<String> = (0..10).map(|i| format!("q{}", i)).collect();
+        state.queue(queued.iter().map(|id| song(id)).collect());
+
+        state.act(PlaybackAction::ToggleShuffle);
+        assert!(state.is_shuffled());
+        assert_eq!(state.song_ids()[1..11], queued[..]);
+
+        state.act(PlaybackAction::ClearQueued);
+        let next = state.song_ids()[1].clone();
+        let events = state.act(PlaybackAction::PreloadNext);
+        assert!(matches!(&events[..], [PlaybackEvent::Preload(id)] if *id == next));
+        assert_eq!(track_changes(&mut state, PlaybackAction::Next, 1), [next]);
     }
 
     #[test]
@@ -762,211 +944,88 @@ mod tests {
         assert!(!state.is_playing());
         assert!(!state.is_shuffled());
         assert!(state.current_song().is_none());
-        assert!(state.prev_index().is_none());
-        assert!(state.next_index().is_none());
+        assert!(!state.has_prev());
+        assert!(!state.has_next());
     }
 
     #[test]
     fn test_play_one() {
         let mut state = PlaybackState::default();
-        state.queue(vec![song("foo")]);
+        load(&mut state, vec![song("foo")]);
 
         state.play("foo");
         assert!(state.is_playing());
 
         assert_eq!(state.current_song_id(), Some("foo".to_string()));
-        assert!(state.prev_index().is_none());
-        assert!(state.next_index().is_none());
+        assert!(!state.has_next());
 
         state.toggle_play();
         assert!(!state.is_playing());
-    }
-
-    #[test]
-    fn test_queue() {
-        let mut state = PlaybackState::default();
-        state.queue(vec![song("1"), song("2"), song("3")]);
-
-        assert_eq!(state.songs().len(), 3);
-
-        state.play("2");
-
-        state.queue(vec![song("4")]);
-        assert_eq!(state.songs().len(), 4);
     }
 
     #[test]
     fn test_play_multiple() {
         let mut state = PlaybackState::default();
-        state.queue(vec![song("1"), song("2"), song("3")]);
-        assert_eq!(state.songs().len(), 3);
+        load(&mut state, vec![song("1"), song("2"), song("3")]);
 
         state.play("2");
         assert!(state.is_playing());
-
-        assert_eq!(state.current_position(), Some(1));
-        assert_eq!(state.prev_id(), Some("1".to_string()));
+        assert!(state.has_prev());
+        assert!(state.has_next());
         assert_eq!(state.current_song_id(), Some("2".to_string()));
-        assert_eq!(state.next_id(), Some("3".to_string()));
 
         state.toggle_play();
         assert!(!state.is_playing());
 
-        state.play_next();
+        state.act(PlaybackAction::Next);
         assert!(state.is_playing());
-        assert_eq!(state.current_position(), Some(2));
-        assert_eq!(state.prev_id(), Some("2".to_string()));
         assert_eq!(state.current_song_id(), Some("3".to_string()));
-        assert!(state.next_index().is_none());
+        assert!(!state.has_next());
 
-        state.play_next();
+        state.act(PlaybackAction::Previous);
+        state.act(PlaybackAction::Previous);
         assert!(state.is_playing());
-        assert_eq!(state.current_position(), Some(2));
-        assert_eq!(state.current_song_id(), Some("3".to_string()));
-
-        state.play_prev();
-        state.play_prev();
-        assert!(state.is_playing());
-        assert_eq!(state.current_position(), Some(0));
-        assert!(state.prev_index().is_none());
         assert_eq!(state.current_song_id(), Some("1".to_string()));
-        assert_eq!(state.next_id(), Some("2".to_string()));
 
-        state.play_prev();
-        assert!(state.is_playing());
-        assert_eq!(state.current_position(), Some(0));
+        let events = state.act(PlaybackAction::Previous);
+        assert!(matches!(&events[..], [PlaybackEvent::TrackSeeked(0)]));
         assert_eq!(state.current_song_id(), Some("1".to_string()));
     }
 
     #[test]
     fn test_shuffle() {
         let mut state = PlaybackState::default();
-        state.queue(vec![song("1"), song("2"), song("3"), song("4")]);
-
-        assert_eq!(state.songs().len(), 4);
+        load(&mut state, vec![song("1"), song("2"), song("3"), song("4")]);
 
         state.play("2");
-        assert_eq!(state.current_position(), Some(1));
-
         state.set_shuffled(true);
         assert!(state.is_shuffled());
-        assert_eq!(state.current_position(), Some(0));
+        assert_eq!(state.current_song_id(), Some("2".to_string()));
+        let order = state.song_ids();
+        assert_eq!(order[0], "2");
+        assert_eq!(order.len(), 4);
 
-        state.play_next();
-        assert_eq!(state.current_position(), Some(1));
+        state.act(PlaybackAction::Next);
+        assert_eq!(state.current_song_id(), Some(order[1].clone()));
 
         state.set_shuffled(false);
         assert!(!state.is_shuffled());
-
-        let ids = state.song_ids();
-        assert_eq!(
-            ids,
-            vec![
-                "1".to_string(),
-                "2".to_string(),
-                "3".to_string(),
-                "4".to_string()
-            ]
-        );
-    }
-
-    #[test]
-    fn test_shuffle_queue() {
-        let mut state = PlaybackState::default();
-        state.queue(vec![song("1"), song("2"), song("3")]);
-
-        state.set_shuffled(true);
-        assert!(state.is_shuffled());
-
-        state.queue(vec![song("4")]);
-
-        state.set_shuffled(false);
-        assert!(!state.is_shuffled());
-
-        let ids = state.song_ids();
-        assert_eq!(
-            ids,
-            vec![
-                "1".to_string(),
-                "2".to_string(),
-                "3".to_string(),
-                "4".to_string()
-            ]
-        );
-    }
-
-    #[test]
-    fn test_move() {
-        let mut state = PlaybackState::default();
-        state.queue(vec![song("1"), song("2"), song("3")]);
-
-        state.play("2");
-        assert!(state.is_playing());
-
-        state.move_down("1");
-        assert_eq!(state.current_song_id(), Some("2".to_string()));
-        let ids = state.song_ids();
-        assert_eq!(ids, vec!["2".to_string(), "1".to_string(), "3".to_string()]);
-
-        state.move_down("2");
-        state.move_down("2");
-        assert_eq!(state.current_song_id(), Some("2".to_string()));
-        let ids = state.song_ids();
-        assert_eq!(ids, vec!["1".to_string(), "3".to_string(), "2".to_string()]);
-
-        state.move_down("2");
-        assert_eq!(state.current_song_id(), Some("2".to_string()));
-        let ids = state.song_ids();
-        assert_eq!(ids, vec!["1".to_string(), "3".to_string(), "2".to_string()]);
-
-        state.move_up("2");
-
-        assert_eq!(state.current_song_id(), Some("2".to_string()));
-        let ids = state.song_ids();
-        assert_eq!(ids, vec!["1".to_string(), "2".to_string(), "3".to_string()]);
-    }
-
-    #[test]
-    fn test_dequeue_last() {
-        let mut state = PlaybackState::default();
-        state.queue(vec![song("1"), song("2"), song("3")]);
-
-        state.play("3");
-        assert!(state.is_playing());
-
-        state.dequeue(&["3".to_string()]);
-        assert_eq!(state.current_song_id(), None);
+        let current: usize = order[1].parse().unwrap();
+        let expected: Vec<String> = (current..=4).map(|i| i.to_string()).collect();
+        assert_eq!(state.song_ids(), expected);
     }
 
     #[test]
     fn test_dequeue_a_few_songs() {
         let mut state = PlaybackState::default();
-        state.queue(vec![
-            song("1"),
-            song("2"),
-            song("3"),
-            song("4"),
-            song("5"),
-            song("6"),
-        ]);
+        load(&mut state, vec![song("1"), song("2")]);
+        state.play("1");
+        state.queue(vec![song("a"), song("b"), song("c"), song("d")]);
 
-        state.play("5");
-        assert!(state.is_playing());
-
-        state.dequeue(&["1".to_string(), "2".to_string(), "3".to_string()]);
-        assert_eq!(state.current_song_id(), Some("5".to_string()));
-    }
-
-    #[test]
-    fn test_dequeue_all() {
-        let mut state = PlaybackState::default();
-        state.queue(vec![song("3")]);
-
-        state.play("3");
-        assert!(state.is_playing());
-
-        state.dequeue(&["3".to_string()]);
-        assert_eq!(state.current_song_id(), None);
+        let keys: Vec<EntryKey> = state.upcoming_keys()[1..].to_vec();
+        state.dequeue(&keys);
+        assert_eq!(state.current_song_id(), Some("1".to_string()));
+        assert_eq!(state.song_ids(), ["1", "a", "2"]);
     }
 
     #[test]
@@ -989,7 +1048,7 @@ mod tests {
             SongsSource::Album("album1".to_string()),
             batch,
         )));
-        assert_eq!(state.songs().len(), 5);
+        assert_eq!(state.song_ids().len(), 5);
 
         // Step 3: Load first song
         state.update_with(Cow::Owned(PlaybackAction::Load("1".to_string())));
@@ -1000,9 +1059,9 @@ mod tests {
         let events = state.update_with(Cow::Owned(PlaybackAction::Next));
         assert!(
             state.is_playing(),
-            "Playback stopped after Next! current_song_id={:?}, list_position={:?}",
+            "Playback stopped after Next! current_song_id={:?}, current_key={:?}",
             state.current_song_id(),
-            state.current_position(),
+            state.current_key(),
         );
         assert!(
             events
@@ -1039,7 +1098,7 @@ mod tests {
             SongsSource::Artist("artist1".to_string()),
             songs.clone(),
         )));
-        assert_eq!(state.songs().len(), 5);
+        assert_eq!(state.song_ids().len(), 5);
 
         // Step 3: Load first song
         state.update_with(Cow::Owned(PlaybackAction::Load("1".to_string())));
@@ -1050,9 +1109,9 @@ mod tests {
         let events = state.update_with(Cow::Owned(PlaybackAction::Next));
         assert!(
             state.is_playing(),
-            "Playback stopped after Next! current_song_id={:?}, list_position={:?}",
+            "Playback stopped after Next! current_song_id={:?}, current_key={:?}",
             state.current_song_id(),
-            state.current_position(),
+            state.current_key(),
         );
         assert!(
             events
@@ -1083,7 +1142,7 @@ mod tests {
             SongsSource::Playlist("pl1".to_string()),
             batch,
         )));
-        assert_eq!(state.songs().len(), 50);
+        assert_eq!(state.song_ids().len(), 50);
 
         // Step 3: Load first song
         state.update_with(Cow::Owned(PlaybackAction::Load("1".to_string())));
@@ -1115,12 +1174,10 @@ mod tests {
     fn test_skip_explicit_next() {
         let mut state = PlaybackState::default();
         state.update_with(Cow::Owned(PlaybackAction::SetSkipExplicit(true)));
-        state.queue(vec![
-            song("1"),
-            explicit_song("2"),
-            explicit_song("3"),
-            song("4"),
-        ]);
+        load(
+            &mut state,
+            vec![song("1"), explicit_song("2"), explicit_song("3"), song("4")],
+        );
 
         state.play("1");
         assert!(state.is_playing());
@@ -1139,7 +1196,7 @@ mod tests {
     fn test_skip_explicit_load() {
         let mut state = PlaybackState::default();
         state.update_with(Cow::Owned(PlaybackAction::SetSkipExplicit(true)));
-        state.queue(vec![song("1"), explicit_song("2"), song("3")]);
+        load(&mut state, vec![song("1"), explicit_song("2"), song("3")]);
 
         // Trying to load an explicit track should skip forward to "3"
         let events = state.update_with(Cow::Owned(PlaybackAction::Load("2".to_string())));
@@ -1154,7 +1211,10 @@ mod tests {
     fn test_skip_explicit_all_explicit_stops_playback() {
         let mut state = PlaybackState::default();
         state.update_with(Cow::Owned(PlaybackAction::SetSkipExplicit(true)));
-        state.queue(vec![song("1"), explicit_song("2"), explicit_song("3")]);
+        load(
+            &mut state,
+            vec![song("1"), explicit_song("2"), explicit_song("3")],
+        );
 
         state.play("1");
         assert!(state.is_playing());
@@ -1171,7 +1231,7 @@ mod tests {
     fn test_skip_explicit_disabled_plays_explicit() {
         let mut state = PlaybackState::default();
         // skip_explicit is false by default
-        state.queue(vec![song("1"), explicit_song("2"), song("3")]);
+        load(&mut state, vec![song("1"), explicit_song("2"), song("3")]);
 
         state.play("1");
         let events = state.update_with(Cow::Owned(PlaybackAction::Next));
@@ -1187,12 +1247,10 @@ mod tests {
     fn test_skip_explicit_previous() {
         let mut state = PlaybackState::default();
         state.update_with(Cow::Owned(PlaybackAction::SetSkipExplicit(true)));
-        state.queue(vec![
-            song("1"),
-            explicit_song("2"),
-            explicit_song("3"),
-            song("4"),
-        ]);
+        load(
+            &mut state,
+            vec![song("1"), explicit_song("2"), explicit_song("3"), song("4")],
+        );
 
         state.play("4");
         assert!(state.is_playing());
@@ -1215,7 +1273,7 @@ mod tests {
         assert!(state.skip_explicit);
         assert!(state.explicit_filter_locked());
 
-        state.queue(vec![song("1"), explicit_song("2"), song("3")]);
+        load(&mut state, vec![song("1"), explicit_song("2"), song("3")]);
         state.play("1");
         let events = state.update_with(Cow::Owned(PlaybackAction::Next));
         assert_eq!(state.current_song_id(), Some("3".to_string()));
@@ -1249,7 +1307,7 @@ mod tests {
     #[test]
     fn test_enable_filter_skips_current_explicit_track() {
         let mut state = PlaybackState::default();
-        state.queue(vec![song("1"), explicit_song("2"), song("3")]);
+        load(&mut state, vec![song("1"), explicit_song("2"), song("3")]);
         state.play("2");
         assert_eq!(state.current_song_id(), Some("2".to_string()));
         assert!(state.is_playing());
@@ -1266,7 +1324,7 @@ mod tests {
     #[test]
     fn test_lock_filter_skips_current_explicit_track() {
         let mut state = PlaybackState::default();
-        state.queue(vec![song("1"), explicit_song("2"), song("3")]);
+        load(&mut state, vec![song("1"), explicit_song("2"), song("3")]);
         state.play("2");
         assert_eq!(state.current_song_id(), Some("2".to_string()));
 
@@ -1281,7 +1339,7 @@ mod tests {
     #[test]
     fn test_enable_filter_leaves_non_explicit_current_track() {
         let mut state = PlaybackState::default();
-        state.queue(vec![song("1"), explicit_song("2")]);
+        load(&mut state, vec![song("1"), explicit_song("2")]);
         state.play("1");
 
         // Current track is not explicit: enabling the filter does not skip.
@@ -1297,7 +1355,7 @@ mod tests {
     #[test]
     fn test_enable_filter_all_explicit_stops_playback() {
         let mut state = PlaybackState::default();
-        state.queue(vec![explicit_song("1"), explicit_song("2")]);
+        load(&mut state, vec![explicit_song("1"), explicit_song("2")]);
         state.play("1");
         assert!(state.is_playing());
 
@@ -1312,7 +1370,7 @@ mod tests {
     #[test]
     fn test_previous_while_paused_seeks_to_start() {
         let mut state = PlaybackState::default();
-        state.queue(vec![song("1"), song("2")]);
+        load(&mut state, vec![song("1"), song("2")]);
         state.play("2");
         // Simulate being more than 2s into the track so Previous seeks to start.
         state.seek_position.set(5000, true);
@@ -1332,24 +1390,25 @@ mod tests {
     }
 
     #[test]
-    fn test_skip_explicit_previous_all_explicit_stops_playback() {
+    fn test_skip_explicit_previous_all_explicit_restarts_track() {
         let mut state = PlaybackState::default();
         state.update_with(Cow::Owned(PlaybackAction::SetSkipExplicit(true)));
-        state.queue(vec![explicit_song("1"), explicit_song("2"), song("3")]);
+        load(
+            &mut state,
+            vec![explicit_song("1"), explicit_song("2"), song("3")],
+        );
 
         state.play("3");
         assert!(state.is_playing());
 
         // Previous should try to go back but all previous tracks are explicit,
-        // so playback stops and PlaybackStopped is emitted (not TrackSeeked).
+        // so the current track restarts instead.
         let events = state.update_with(Cow::Owned(PlaybackAction::Previous));
-        assert!(!state.is_playing());
+        assert!(state.is_playing());
+        assert_eq!(state.current_song_id(), Some("3".to_string()));
         assert!(events
             .iter()
-            .any(|e| matches!(e, PlaybackEvent::PlaybackStopped)));
-        assert!(!events
-            .iter()
-            .any(|e| matches!(e, PlaybackEvent::TrackSeeked(_))));
+            .any(|e| matches!(e, PlaybackEvent::TrackSeeked(0))));
     }
 
     fn unplayable_song(id: &str) -> Track {
@@ -1363,12 +1422,15 @@ mod tests {
     fn test_unplayable_track_skipped_on_next_without_filter() {
         let mut state = PlaybackState::default();
         // skip_explicit is off by default; unplayable tracks must still skip.
-        state.queue(vec![
-            song("1"),
-            unplayable_song("2"),
-            unplayable_song("3"),
-            song("4"),
-        ]);
+        load(
+            &mut state,
+            vec![
+                song("1"),
+                unplayable_song("2"),
+                unplayable_song("3"),
+                song("4"),
+            ],
+        );
 
         state.play("1");
         assert_eq!(state.current_song_id(), Some("1".to_string()));
@@ -1384,7 +1446,7 @@ mod tests {
     #[test]
     fn test_unplayable_track_skipped_on_load() {
         let mut state = PlaybackState::default();
-        state.queue(vec![song("1"), unplayable_song("2"), song("3")]);
+        load(&mut state, vec![song("1"), unplayable_song("2"), song("3")]);
 
         // Trying to load an unplayable track skips forward to "3".
         let events = state.update_with(Cow::Owned(PlaybackAction::Load("2".to_string())));
@@ -1398,12 +1460,15 @@ mod tests {
     #[test]
     fn test_unplayable_track_skipped_on_previous() {
         let mut state = PlaybackState::default();
-        state.queue(vec![
-            song("1"),
-            unplayable_song("2"),
-            unplayable_song("3"),
-            song("4"),
-        ]);
+        load(
+            &mut state,
+            vec![
+                song("1"),
+                unplayable_song("2"),
+                unplayable_song("3"),
+                song("4"),
+            ],
+        );
 
         state.play("4");
         assert_eq!(state.current_song_id(), Some("4".to_string()));
@@ -1419,7 +1484,10 @@ mod tests {
     #[test]
     fn test_all_unplayable_stops_playback() {
         let mut state = PlaybackState::default();
-        state.queue(vec![song("1"), unplayable_song("2"), unplayable_song("3")]);
+        load(
+            &mut state,
+            vec![song("1"), unplayable_song("2"), unplayable_song("3")],
+        );
 
         state.play("1");
         assert!(state.is_playing());
@@ -1436,12 +1504,15 @@ mod tests {
     fn test_unplayable_skipped_together_with_explicit() {
         let mut state = PlaybackState::default();
         state.update_with(Cow::Owned(PlaybackAction::SetSkipExplicit(true)));
-        state.queue(vec![
-            song("1"),
-            unplayable_song("2"),
-            explicit_song("3"),
-            song("4"),
-        ]);
+        load(
+            &mut state,
+            vec![
+                song("1"),
+                unplayable_song("2"),
+                explicit_song("3"),
+                song("4"),
+            ],
+        );
 
         state.play("1");
 

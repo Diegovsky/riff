@@ -78,7 +78,7 @@ pub enum BrowserAction {
     ChangeCardLayout(CardLayout),
     ChangeCardSize(CardSize),
     ChangeSortOrder(String, SortOrder),
-    /// Refresh sidebar and details pin UI without reloading saved playlists from Spotify.
+    /// Refresh navigation panel and details pin UI without reloading saved playlists from Spotify.
     NotifyPinnedPlaylistsUpdated,
 }
 

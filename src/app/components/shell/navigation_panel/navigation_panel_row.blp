@@ -1,0 +1,38 @@
+using Gtk 4.0;
+
+template $NavigationPanelRow : ListBoxRow {
+  Box {
+    visible: true;
+    spacing: 12;
+
+    Image icon {
+    }
+
+    // The Now Playing row's icon (see app.css)
+    Overlay now_playing_icon {
+      visible: false;
+
+      child: Image {
+        icon-name: "music-queue-symbolic";
+
+        styles [
+          "now-playing__idle",
+        ]
+      };
+
+      [overlay]
+      Spinner {
+        styles [
+          "playback-indicator",
+          "now-playing__playing",
+        ]
+      }
+    }
+
+    Label title {
+      hexpand: true;
+      ellipsize: end;
+      xalign: 0;
+    }
+  }
+}

@@ -2,37 +2,40 @@ use gettextrs::gettext;
 use gtk::prelude::*;
 use std::rc::Rc;
 
-use super::{SidebarDestination, SidebarItem, PINNED_SECTION, SAVED_PLAYLISTS_SECTION};
+use super::{
+    NavigationPanelDestination, NavigationPanelItem, PINNED_SECTION, SAVED_PLAYLISTS_SECTION,
+};
 use crate::app::components::{
     dispatch_api_call, dispatch_api_call_many, dispatch_api_read, dispatch_api_read_many,
+    queue_source_tracks,
 };
 use crate::app::models::{CardModel, PlaylistSummary};
-use crate::app::state::{PlaybackAction, ScreenName};
+use crate::app::state::{load_context, start_actions, PlaybackAction, ScreenName};
 use crate::app::{AppAction, AppModel, BrowserAction, Dispatcher, PaginationTarget, SongsSource};
 use crate::feature_flags::{is_enabled, FeatureFlag};
+use crate::play_queue::CONTEXT_PAGE_SIZE;
 use crate::settings;
 
-/// Load `tracks` into the queue via `load`, then start playing from the
-/// first track, or from a random one when `shuffle` is set.
-fn playback_actions(load: AppAction, track_ids: &[String], shuffle: bool) -> Vec<AppAction> {
-    let start = if shuffle && !track_ids.is_empty() {
-        track_ids.get(rand::random::<usize>() % track_ids.len())
-    } else {
-        track_ids.first()
-    };
-    let mut actions = vec![PlaybackAction::SetShuffled(shuffle).into(), load];
-    if let Some(id) = start {
-        actions.push(PlaybackAction::Load(id.clone()).into());
+// Nothing for an empty context
+fn start_context(
+    empty: bool,
+    source: SongsSource,
+    name: Option<String>,
+    load: PlaybackAction,
+    shuffle: bool,
+) -> Vec<AppAction> {
+    if empty {
+        return vec![];
     }
-    actions
+    start_actions(shuffle, load_context(source, name, load))
 }
 
-pub struct SidebarModel {
+pub struct NavigationPanelModel {
     app_model: Rc<AppModel>,
     dispatcher: Dispatcher,
 }
 
-impl SidebarModel {
+impl NavigationPanelModel {
     pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
@@ -40,7 +43,11 @@ impl SidebarModel {
         }
     }
 
-    fn get_playlists(&self) -> Vec<SidebarDestination> {
+    pub fn is_playing(&self) -> bool {
+        self.app_model.get_state().playback.is_playing()
+    }
+
+    fn get_playlists(&self) -> Vec<NavigationPanelDestination> {
         self.app_model
             .get_state()
             .browser
@@ -72,12 +79,12 @@ impl SidebarModel {
         Some(())
     }
 
-    fn map_to_destination(a: CardModel) -> SidebarDestination {
+    fn map_to_destination(a: CardModel) -> NavigationPanelDestination {
         let title = Some(a.title())
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| gettext("Unnamed Playlist"));
         let id = a.id();
-        SidebarDestination::Playlist(PlaylistSummary { id, title })
+        NavigationPanelDestination::Playlist(PlaylistSummary { id, title })
     }
 
     pub(super) fn create_new_playlist(&self, name: String) {
@@ -117,44 +124,42 @@ impl SidebarModel {
         })
     }
 
+    fn playlist_title(&self, id: &str) -> Option<String> {
+        self.get_playlists()
+            .into_iter()
+            .find_map(|dest| match dest {
+                NavigationPanelDestination::Playlist(summary) if summary.id == id => {
+                    Some(summary.title)
+                }
+                _ => None,
+            })
+    }
+
     pub(super) fn play_playlist(&self, id: String) {
-        let api = self.app_model.api();
-        let source = SongsSource::Playlist(id.clone());
-        dispatch_api_read_many(&self.dispatcher, move |tag| async move {
-            let batch = api.get_playlist_tracks(&id, 0, 50, tag).await?;
-            let first_id = batch.items.first().map(|s| s.rri.id.clone());
-            let mut actions: Vec<AppAction> = vec![
-                PlaybackAction::SetShuffled(false).into(),
-                PlaybackAction::LoadPagedSongs(source, batch).into(),
-            ];
-            if let Some(track_id) = first_id {
-                actions.push(PlaybackAction::Load(track_id).into());
-            }
-            Ok(actions)
-        });
+        self.start_playlist(id, false);
     }
 
     pub(super) fn shuffle_playlist(&self, id: String) {
+        self.start_playlist(id, true);
+    }
+
+    fn start_playlist(&self, id: String, shuffle: bool) {
         let api = self.app_model.api();
         let source = SongsSource::Playlist(id.clone());
+        let name = self.playlist_title(&id);
         dispatch_api_read_many(&self.dispatcher, move |tag| async move {
-            let batch = api.get_playlist_tracks(&id, 0, 50, tag).await?;
-            let len = batch.items.len();
-            let track_id = if len > 0 {
-                let index = rand::random::<usize>() % len;
-                Some(batch.items[index].rri.id.clone())
-            } else {
-                None
-            };
-            let mut actions: Vec<AppAction> = vec![
-                PlaybackAction::SetShuffled(true).into(),
-                PlaybackAction::LoadPagedSongs(source, batch).into(),
-            ];
-            if let Some(track_id) = track_id {
-                actions.push(PlaybackAction::Load(track_id).into());
-            }
-            Ok(actions)
+            let batch = api
+                .get_playlist_tracks(&id, 0, CONTEXT_PAGE_SIZE, tag)
+                .await?;
+            let empty = batch.items.is_empty();
+            let load = PlaybackAction::LoadPagedSongs(source.clone(), batch);
+            Ok(start_context(empty, source, name, load, shuffle))
         });
+    }
+
+    pub(super) fn queue_playlist(&self, id: String) {
+        let source = SongsSource::Playlist(id);
+        queue_source_tracks(&self.app_model, &self.dispatcher, source);
     }
 
     /// Play a pinned album from its first track, or shuffled.
@@ -162,10 +167,14 @@ impl SidebarModel {
         let api = self.app_model.api();
         let source = SongsSource::Album(id.clone());
         dispatch_api_read_many(&self.dispatcher, move |tag| async move {
-            let batch = api.get_album_tracks(&id, 0, 50, tag).await?;
-            let ids: Vec<String> = batch.items.iter().map(|t| t.rri.id.clone()).collect();
-            let load = PlaybackAction::LoadPagedSongs(source, batch).into();
-            Ok(playback_actions(load, &ids, shuffle))
+            let batch = api.get_album_tracks(&id, 0, CONTEXT_PAGE_SIZE, tag).await?;
+            let empty = batch.items.is_empty();
+            let name = batch
+                .items
+                .iter()
+                .find_map(|t| Some(t.album.as_ref()?.name.clone()));
+            let load = PlaybackAction::LoadPagedSongs(source.clone(), batch);
+            Ok(start_context(empty, source, name, load, shuffle))
         });
     }
 
@@ -175,9 +184,14 @@ impl SidebarModel {
         let source = SongsSource::Artist(id.clone());
         dispatch_api_read_many(&self.dispatcher, move |tag| async move {
             let tracks = api.get_artist_top_tracks(&id, tag).await?;
-            let ids: Vec<String> = tracks.iter().map(|t| t.rri.id.clone()).collect();
-            let load = PlaybackAction::LoadContextSongs(source, tracks).into();
-            Ok(playback_actions(load, &ids, shuffle))
+            let empty = tracks.is_empty();
+            let name = tracks
+                .iter()
+                .flat_map(|t| t.artists.iter())
+                .find(|a| a.rri.id == id)
+                .map(|a| a.name.clone());
+            let load = PlaybackAction::LoadContextSongs(source.clone(), tracks);
+            Ok(start_context(empty, source, name, load, shuffle))
         });
     }
 
@@ -228,24 +242,24 @@ impl SidebarModel {
         });
     }
 
-    pub(super) fn navigate(&self, dest: SidebarDestination) {
+    pub(super) fn navigate(&self, dest: NavigationPanelDestination) {
         let actions = match dest {
-            SidebarDestination::Library
-            | SidebarDestination::SavedTracks
-            | SidebarDestination::NowPlaying
-            | SidebarDestination::SavedPlaylists
-            | SidebarDestination::SavedArtists => {
+            NavigationPanelDestination::Library
+            | NavigationPanelDestination::SavedTracks
+            | NavigationPanelDestination::NowPlaying
+            | NavigationPanelDestination::SavedPlaylists
+            | NavigationPanelDestination::SavedArtists => {
                 vec![
                     BrowserAction::NavigationPopTo(ScreenName::Home).into(),
                     BrowserAction::SetHomeVisiblePage(dest.id()).into(),
                 ]
             }
-            SidebarDestination::Playlist(PlaylistSummary { id, .. }) => {
+            NavigationPanelDestination::Playlist(PlaylistSummary { id, .. }) => {
                 vec![AppAction::ViewPlaylist(id)]
             }
-            SidebarDestination::Album { id, .. } => vec![AppAction::ViewAlbum(id)],
-            SidebarDestination::Artist { id, .. } => vec![AppAction::ViewArtist(id)],
-            SidebarDestination::Track { id, .. } => {
+            NavigationPanelDestination::Album { id, .. } => vec![AppAction::ViewAlbum(id)],
+            NavigationPanelDestination::Artist { id, .. } => vec![AppAction::ViewArtist(id)],
+            NavigationPanelDestination::Track { id, .. } => {
                 self.view_track_album(id);
                 return;
             }
@@ -276,13 +290,18 @@ impl SidebarModel {
             let mut actions: Vec<AppAction> = vec![PlaybackAction::SetShuffled(false).into()];
             match album_id {
                 Some(album_id) => {
-                    let batch = api.get_album_tracks(&album_id, 0, 50, tag).await?;
+                    let batch = api
+                        .get_album_tracks(&album_id, 0, CONTEXT_PAGE_SIZE, tag)
+                        .await?;
                     let source = SongsSource::Album(album_id);
-                    if batch.items.iter().any(|t| t.rri.id == id) {
-                        actions.push(PlaybackAction::LoadPagedSongs(source, batch).into());
+                    let name = track.album.as_ref().map(|album| album.name.clone());
+                    let load = if batch.items.iter().any(|t| t.rri.id == id) {
+                        PlaybackAction::LoadPagedSongs(source.clone(), batch)
                     } else {
-                        actions.push(PlaybackAction::LoadContextSongs(source, vec![track]).into());
-                    }
+                        PlaybackAction::LoadContextSongs(source.clone(), vec![track])
+                    };
+                    actions.push(PlaybackAction::ReplaceQueue.into());
+                    actions.extend(load_context(source, name, load));
                 }
                 None => {
                     #[allow(deprecated)]
@@ -363,7 +382,7 @@ impl SidebarModel {
             .get_playlists()
             .into_iter()
             .filter_map(|destination| {
-                if let SidebarDestination::Playlist(summary) = destination {
+                if let NavigationPanelDestination::Playlist(summary) = destination {
                     Some(summary.id)
                 } else {
                     None
@@ -381,14 +400,18 @@ impl SidebarModel {
     /// the playlists. `num_fixed_entries` counts the fixed rows only. The
     /// fixed rows are kept rather than rebuilt, as the "New Playlist" row
     /// hosts the create-playlist popover.
-    pub fn apply_sidebar_items(&self, list_store: &gio::ListStore, num_fixed_entries: u32) {
+    pub fn apply_navigation_panel_items(
+        &self,
+        list_store: &gio::ListStore,
+        num_fixed_entries: u32,
+    ) {
         self.prune_stale_pins();
-        let (pinned, playlists) = self.build_sidebar_items();
+        let (pinned, playlists) = self.build_navigation_panel_items();
         let position = |id: &str| {
             (0..list_store.n_items()).find(|&i| {
                 list_store
                     .item(i)
-                    .and_downcast::<SidebarItem>()
+                    .and_downcast::<NavigationPanelItem>()
                     .is_some_and(|item| item.id() == id)
             })
         };
@@ -446,22 +469,24 @@ impl SidebarModel {
         }
     }
 
-    fn to_pinned_item(&self, object: settings::PinnedObject) -> SidebarItem {
+    fn to_pinned_item(&self, object: settings::PinnedObject) -> NavigationPanelItem {
         let title = self.pinned_title_for(&object);
-        SidebarItem::from_destination(match object.kind {
-            settings::PinnedKind::Playlist => SidebarDestination::Playlist(PlaylistSummary {
-                id: object.id,
-                title,
-            }),
-            settings::PinnedKind::Album => SidebarDestination::Album {
+        NavigationPanelItem::from_destination(match object.kind {
+            settings::PinnedKind::Playlist => {
+                NavigationPanelDestination::Playlist(PlaylistSummary {
+                    id: object.id,
+                    title,
+                })
+            }
+            settings::PinnedKind::Album => NavigationPanelDestination::Album {
                 id: object.id,
                 title,
             },
-            settings::PinnedKind::Artist => SidebarDestination::Artist {
+            settings::PinnedKind::Artist => NavigationPanelDestination::Artist {
                 id: object.id,
                 title,
             },
-            settings::PinnedKind::Track => SidebarDestination::Track {
+            settings::PinnedKind::Track => NavigationPanelDestination::Track {
                 id: object.id,
                 title,
             },
@@ -469,7 +494,7 @@ impl SidebarModel {
     }
 
     /// Build the pinned rows (with their section header) and the playlist rows.
-    fn build_sidebar_items(&self) -> (Vec<SidebarItem>, Vec<SidebarItem>) {
+    fn build_navigation_panel_items(&self) -> (Vec<NavigationPanelItem>, Vec<NavigationPanelItem>) {
         let mut pinned_items = Vec::new();
         let mut items = Vec::new();
         let pinned_enabled = is_enabled(FeatureFlag::PinnedObjects);
@@ -486,7 +511,7 @@ impl SidebarModel {
 
         if pinned_enabled {
             if !pinned.is_empty() {
-                pinned_items.push(SidebarItem::pinned_section());
+                pinned_items.push(NavigationPanelItem::pinned_section());
                 for object in pinned {
                     pinned_items.push(self.to_pinned_item(object));
                 }
@@ -494,7 +519,7 @@ impl SidebarModel {
 
             let mut unpinned = Vec::new();
             for p in playlists {
-                if let SidebarDestination::Playlist(ref summary) = p {
+                if let NavigationPanelDestination::Playlist(ref summary) = p {
                     if pinned_playlist_ids.contains(&summary.id) {
                         continue;
                     }
@@ -502,9 +527,17 @@ impl SidebarModel {
                 unpinned.push(p);
             }
 
-            items.extend(unpinned.into_iter().map(SidebarItem::from_destination));
+            items.extend(
+                unpinned
+                    .into_iter()
+                    .map(NavigationPanelItem::from_destination),
+            );
         } else {
-            items.extend(playlists.into_iter().map(SidebarItem::from_destination));
+            items.extend(
+                playlists
+                    .into_iter()
+                    .map(NavigationPanelItem::from_destination),
+            );
         }
 
         (pinned_items, items)

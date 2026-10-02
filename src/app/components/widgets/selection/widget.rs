@@ -18,12 +18,6 @@ mod imp {
         pub action_bar: TemplateChild<gtk::ActionBar>,
 
         #[template_child]
-        pub move_up: TemplateChild<gtk::Button>,
-
-        #[template_child]
-        pub move_down: TemplateChild<gtk::Button>,
-
-        #[template_child]
         pub add: TemplateChild<gtk::MenuButton>,
 
         #[template_child]
@@ -84,20 +78,6 @@ impl SelectionToolState {
 }
 
 impl SelectionToolbarWidget {
-    pub fn connect_move_down<F>(&self, f: F)
-    where
-        F: Fn() + 'static,
-    {
-        self.imp().move_down.connect_clicked(move |_| f());
-    }
-
-    pub fn connect_move_up<F>(&self, f: F)
-    where
-        F: Fn() + 'static,
-    {
-        self.imp().move_up.connect_clicked(move |_| f());
-    }
-
     pub fn connect_queue<F>(&self, f: F)
     where
         F: Fn() + 'static,
@@ -117,13 +97,6 @@ impl SelectionToolbarWidget {
         F: Fn() + 'static,
     {
         self.imp().remove.connect_clicked(move |_| f());
-    }
-
-    pub fn set_move(&self, state: SelectionToolState) {
-        self.imp().move_up.set_sensitive(state.sensitive());
-        self.imp().move_up.set_visible(state.visible());
-        self.imp().move_down.set_sensitive(state.sensitive());
-        self.imp().move_down.set_visible(state.visible());
     }
 
     pub fn set_queue(&self, state: SelectionToolState) {

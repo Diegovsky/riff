@@ -1,14 +1,17 @@
 use gtk::prelude::*;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::{is_playback_event, DetailsHeader, DetailsPage, PinnedPageModel};
 use crate::app::components::{
-    CardLayout, CardList, CardListModel, CardSize, Component, EmbeddedCardList, EventListener,
-    FilterToggle, HeaderBarModel, HeaderRegistrar, SortOrder, TrackList, TrackListModel,
+    labels, CardLayout, CardList, CardListModel, CardSize, Component, EmbeddedCardList,
+    EventListener, FilterToggle, HeaderBarModel, HeaderRegistrar, SortOrder, TrackList,
+    TrackListModel,
 };
 use crate::app::{AppEvent, Dispatcher};
 use crate::feature_flags::{is_enabled, FeatureFlag};
+
+const QUEUE: &str = "queue";
 
 /// A generic details page component that wires all standard behavior
 /// from a `PageModel` implementation automatically.
@@ -21,6 +24,8 @@ pub struct DetailsPageComponent<M> {
     name: String,
     header_title: libadwaita::WindowTitle,
     end_box: gtk::Box,
+    // Header menu entries added by the page
+    page_menu: Rc<RefCell<Vec<(String, String, Rc<dyn Fn()>)>>>,
 }
 
 /// Sync the pin segment of the like+pin control from the model's current state.
@@ -65,6 +70,7 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
             name,
             header_title,
             end_box,
+            page_menu: Default::default(),
         };
         c.wire();
         c
@@ -75,9 +81,14 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
         self.end_box.append(widget);
     }
 
+    /// For content with its own component, like a `QueueList`.
+    pub fn append_content(&self, widget: &impl IsA<gtk::Widget>) {
+        self.content.append(widget);
+    }
+
     /// Create a [`TrackList`] child, appending an optional label and a `ListView`
     /// to the content box. Registers the track list as an event listener.
-    pub fn create_track_list(&mut self, label: Option<&str>)
+    pub fn create_track_list(&mut self, label: Option<&str>) -> gtk::ListView
     where
         M: TrackListModel,
     {
@@ -95,11 +106,12 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
 
         self.content.append(&listview);
 
-        let track_list = TrackList::new(listview, self.model.clone());
+        let track_list = TrackList::new(listview.clone(), self.model.clone());
         // Requires an ancestor ScrolledWindow, provided by DetailsPage; must
         // run after the listview above is appended into the page's content.
         track_list.connect_scrolling();
         self.children.push(Box::new(track_list));
+        listview
     }
 
     /// Create an [`EmbeddedCardList`] with view controls, appending it to the content box
@@ -209,6 +221,50 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
         self.children.push(child);
     }
 
+    /// For entries that need the page's widgets, like a dialog.
+    pub fn add_menu_entry(&self, id: &str, label: &str, on_activate: impl Fn() + 'static) {
+        self.page_menu
+            .borrow_mut()
+            .push((id.to_string(), label.to_string(), Rc::new(on_activate)));
+        self.refresh_menu();
+    }
+
+    fn refresh_menu(&self) {
+        let mut queue = vec![];
+        if self.model.has_queue_menu() {
+            queue.push((QUEUE.to_string(), labels::ADD_TO_QUEUE.clone()));
+        }
+        let mut other = self.model.header_menu_entries();
+        other.extend(
+            self.page_menu
+                .borrow()
+                .iter()
+                .map(|(id, label, _)| (id.clone(), label.clone())),
+        );
+        let page_menu = Rc::downgrade(&self.page_menu);
+        self.page.header().set_menu(
+            &[queue, other],
+            clone!(
+                #[weak(rename_to = m)]
+                self.model,
+                move |id| {
+                    let page_entry = page_menu.upgrade().and_then(|entries| {
+                        entries
+                            .borrow()
+                            .iter()
+                            .find(|(entry, _, _)| entry == id)
+                            .map(|(_, _, f)| f.clone())
+                    });
+                    match (id, page_entry) {
+                        (_, Some(on_activate)) => on_activate(),
+                        (QUEUE, None) => m.queue_all(),
+                        (other, None) => m.on_header_menu(other),
+                    }
+                }
+            ),
+        );
+    }
+
     /// Wire up signal handlers and initial state based on the model's `PageModel` impl.
     /// Called once during construction.
     fn wire(&mut self) {
@@ -224,6 +280,8 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
                 move || m.shuffle_play()
             ));
         }
+
+        self.refresh_menu();
 
         if self.model.has_like_button() {
             self.page.header().connect_liked(clone!(
@@ -249,14 +307,6 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
                     move |_| m.toggle_pin()
                 ));
             }
-        }
-
-        if self.model.has_info_button() {
-            self.page.header().connect_info(clone!(
-                #[weak(rename_to = m)]
-                self.model,
-                move || m.on_info_clicked()
-            ));
         }
 
         if self.model.has_share_button() {
@@ -351,9 +401,10 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
         if self.model.should_refresh_details(event) {
             self.refresh_details();
             if self.model.has_play_button() {
+                // Not when paused or stopped
                 self.page
                     .header()
-                    .set_playing(self.model.source_is_playing());
+                    .set_playing(self.model.source_is_playing() && self.model.is_playing());
             }
             return true;
         }

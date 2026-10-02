@@ -5,8 +5,8 @@ use crate::app::components::{
 };
 use crate::app::models::{ArtistRef, ImageSet};
 use crate::app::state::{BrowserAction, PlaybackEvent};
-use crate::app::AppEvent;
 use crate::app::ProvidesApi;
+use crate::app::{AppEvent, SongsSource};
 use crate::settings;
 
 use super::DetailsPageModel;
@@ -57,10 +57,21 @@ pub trait PageModel: ProvidesApi {
         false
     }
 
+    // The tracks it lists
+
+    /// A page with a source gets play, queue and share buttons (see
+    /// `impl_source_page!` and `impl_source_track_list!`).
+    fn songs_source(&self) -> Option<SongsSource> {
+        None
+    }
+    fn context_name(&self) -> Option<String> {
+        self.get_title()
+    }
+
     // Playback
 
     fn has_play_button(&self) -> bool {
-        false
+        self.songs_source().is_some()
     }
     fn source_is_playing(&self) -> bool {
         false
@@ -68,6 +79,19 @@ pub trait PageModel: ProvidesApi {
     fn start_play(&self, _id: &str) {}
     fn toggle_play(&self) {}
     fn shuffle_play(&self) {}
+
+    fn has_queue_menu(&self) -> bool {
+        self.songs_source().is_some()
+    }
+    fn queue_all(&self) {}
+
+    // Header menu
+
+    /// Entries of the header's "⋮" menu besides "Add to Queue": (id, label).
+    fn header_menu_entries(&self) -> Vec<(String, String)> {
+        vec![]
+    }
+    fn on_header_menu(&self, _id: &str) {}
 
     // Like/Save
 
@@ -85,17 +109,10 @@ pub trait PageModel: ProvidesApi {
         None
     }
 
-    // Info button
-
-    fn has_info_button(&self) -> bool {
-        false
-    }
-    fn on_info_clicked(&self) {}
-
     // Share button
 
     fn has_share_button(&self) -> bool {
-        false
+        self.songs_source().and_then(|s| s.spotify_url()).is_some()
     }
     fn on_share_clicked(&self) {}
 
@@ -178,10 +195,13 @@ pub trait PinnedPageModel: PageModel + std::ops::Deref<Target = DetailsPageModel
 }
 
 /// Check if a playback event means we should update the play button.
-/// Returns `Some(true)` for resumed/track changed, `Some(false)` for paused, `None` otherwise.
+/// Returns `Some(true)` for resumed/track changed, `Some(false)` for paused or
+/// stopped, `None` otherwise.
 pub fn is_playback_event(event: &AppEvent) -> Option<bool> {
     match event {
-        AppEvent::PlaybackEvent(PlaybackEvent::PlaybackPaused) => Some(false),
+        AppEvent::PlaybackEvent(PlaybackEvent::PlaybackPaused | PlaybackEvent::PlaybackStopped) => {
+            Some(false)
+        }
         AppEvent::PlaybackEvent(PlaybackEvent::PlaybackResumed)
         | AppEvent::PlaybackEvent(PlaybackEvent::TrackChanged(_)) => Some(true),
         _ => None,

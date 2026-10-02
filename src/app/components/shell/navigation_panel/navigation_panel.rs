@@ -4,22 +4,24 @@ use std::rc::Rc;
 
 use super::{
     context_menu::build_context_menu, create_playlist::CreatePlaylistPopover,
-    sidebar_row::SidebarRow, SidebarDestination, SidebarItem, SidebarModel, CREATE_PLAYLIST_ITEM,
-    LIBRARY_SECTION, PINNED_SECTION, SAVED_PLAYLISTS_SECTION,
+    navigation_panel_row::NavigationPanelRow, NavigationPanelDestination, NavigationPanelItem,
+    NavigationPanelModel, CREATE_PLAYLIST_ITEM, LIBRARY_SECTION, PINNED_SECTION,
+    SAVED_PLAYLISTS_SECTION,
 };
+use crate::app::state::PlaybackEvent;
 use crate::app::{AppEvent, BrowserEvent, Component, EventListener};
 use crate::feature_flags::{is_enabled, FeatureFlag};
 
-pub struct Sidebar {
+pub struct NavigationPanel {
     listbox: gtk::ListBox,
     list_store: gio::ListStore,
-    model: Rc<SidebarModel>,
+    model: Rc<NavigationPanelModel>,
     _context_menu: gtk::PopoverMenu,
     num_fixed_entries: u32,
 }
 
-impl Sidebar {
-    pub fn new(listbox: gtk::ListBox, model: Rc<SidebarModel>) -> Self {
+impl NavigationPanel {
+    pub fn new(listbox: gtk::ListBox, model: Rc<NavigationPanelModel>) -> Self {
         let create_playlist_enabled = is_enabled(FeatureFlag::CreateNewPlaylist);
 
         let popover = if create_playlist_enabled {
@@ -34,24 +36,26 @@ impl Sidebar {
             None
         };
 
-        let list_store = gio::ListStore::new::<SidebarItem>();
+        let list_store = gio::ListStore::new::<NavigationPanelItem>();
 
-        list_store.append(&SidebarItem::from_destination(
-            SidebarDestination::NowPlaying,
+        list_store.append(&NavigationPanelItem::from_destination(
+            NavigationPanelDestination::NowPlaying,
         ));
-        list_store.append(&SidebarItem::from_destination(
-            SidebarDestination::SavedArtists,
+        list_store.append(&NavigationPanelItem::from_destination(
+            NavigationPanelDestination::SavedArtists,
         ));
-        list_store.append(&SidebarItem::from_destination(SidebarDestination::Library));
-        list_store.append(&SidebarItem::from_destination(
-            SidebarDestination::SavedPlaylists,
+        list_store.append(&NavigationPanelItem::from_destination(
+            NavigationPanelDestination::Library,
         ));
-        list_store.append(&SidebarItem::from_destination(
-            SidebarDestination::SavedTracks,
+        list_store.append(&NavigationPanelItem::from_destination(
+            NavigationPanelDestination::SavedPlaylists,
         ));
-        list_store.append(&SidebarItem::playlists_section());
+        list_store.append(&NavigationPanelItem::from_destination(
+            NavigationPanelDestination::SavedTracks,
+        ));
+        list_store.append(&NavigationPanelItem::playlists_section());
         if create_playlist_enabled {
-            list_store.append(&SidebarItem::create_playlist_item());
+            list_store.append(&NavigationPanelItem::create_playlist_item());
         }
 
         listbox.bind_model(
@@ -60,7 +64,7 @@ impl Sidebar {
                 #[strong]
                 popover,
                 move |obj| {
-                    let item = obj.downcast_ref::<SidebarItem>().unwrap();
+                    let item = obj.downcast_ref::<NavigationPanelItem>().unwrap();
                     if item.navigatable() {
                         Self::make_navigatable(item)
                     } else {
@@ -85,7 +89,7 @@ impl Sidebar {
             #[weak]
             model,
             move |_, row| {
-                if let Some(row) = row.downcast_ref::<SidebarRow>() {
+                if let Some(row) = row.downcast_ref::<NavigationPanelRow>() {
                     if let Some(dest) = row.item().destination() {
                         model.navigate(dest);
                     } else {
@@ -105,15 +109,15 @@ impl Sidebar {
         let context_menu = gtk::PopoverMenu::from_model(None::<&gio::MenuModel>);
         // Parent the popover to the Box above the ScrolledWindow to avoid
         // inheriting any scroll constraints that would add a scrollbar.
-        let sidebar_box = listbox
+        let navigation_panel_box = listbox
             .ancestor(gtk::ScrolledWindow::static_type())
             .and_then(|sw| sw.parent())
             .and_downcast::<gtk::Box>()
             .unwrap();
-        context_menu.set_parent(&sidebar_box);
+        context_menu.set_parent(&navigation_panel_box);
         context_menu.set_has_arrow(false);
 
-        let context_row: Rc<RefCell<Option<SidebarRow>>> = Default::default();
+        let context_row: Rc<RefCell<Option<NavigationPanelRow>>> = Default::default();
 
         context_menu.connect_closed(clone!(
             #[strong]
@@ -138,7 +142,7 @@ impl Sidebar {
                 let Some(row) = listbox.row_at_y(y as i32) else {
                     return;
                 };
-                let Some(row) = row.downcast_ref::<SidebarRow>() else {
+                let Some(row) = row.downcast_ref::<NavigationPanelRow>() else {
                     return;
                 };
                 let Some((prefix, actions, menu)) = row
@@ -155,7 +159,7 @@ impl Sidebar {
                 context_menu.insert_action_group(prefix, Some(&actions));
                 context_menu.set_menu_model(Some(&menu));
 
-                // Translate coordinates from listbox space to the popover parent (sidebar Box) space
+                // Translate coordinates from listbox space to the popover parent (navigation panel Box) space
                 let popover_parent = context_menu.parent().unwrap();
                 let translated = listbox
                     .compute_point(
@@ -207,24 +211,26 @@ impl Sidebar {
 
         let num_fixed_entries = list_store.n_items();
 
-        model.apply_sidebar_items(&list_store, num_fixed_entries);
+        model.apply_navigation_panel_items(&list_store, num_fixed_entries);
 
-        Self {
+        let panel = Self {
             listbox,
             list_store,
             model,
             _context_menu: context_menu,
             num_fixed_entries,
-        }
+        };
+        panel.update_playing();
+        panel
     }
 
-    fn make_navigatable(item: &SidebarItem) -> gtk::Widget {
-        let row = SidebarRow::new(item.clone());
+    fn make_navigatable(item: &NavigationPanelItem) -> gtk::Widget {
+        let row = NavigationPanelRow::new(item.clone());
         row.set_selectable(false);
         row.upcast()
     }
 
-    fn make_section_label(item: &SidebarItem) -> gtk::Widget {
+    fn make_section_label(item: &NavigationPanelItem) -> gtk::Widget {
         let label = gtk::Label::new(Some(item.title().as_str()));
         label.add_css_class("caption-heading");
         let row = gtk::ListBoxRow::builder()
@@ -236,8 +242,11 @@ impl Sidebar {
         row.upcast()
     }
 
-    fn make_create_playlist(item: &SidebarItem, popover: CreatePlaylistPopover) -> gtk::Widget {
-        let row = SidebarRow::new(item.clone());
+    fn make_create_playlist(
+        item: &NavigationPanelItem,
+        popover: CreatePlaylistPopover,
+    ) -> gtk::Widget {
+        let row = NavigationPanelRow::new(item.clone());
         row.set_activatable(true);
         row.set_selectable(false);
         row.set_sensitive(true);
@@ -245,26 +254,40 @@ impl Sidebar {
         row.upcast()
     }
 
-    fn update_playlists_in_sidebar(&self) {
+    // The Now Playing row's icon (see app.css)
+    fn update_playing(&self) {
+        if self.model.is_playing() {
+            self.listbox.remove_css_class("now-playing--idle");
+        } else {
+            self.listbox.add_css_class("now-playing--idle");
+        }
+    }
+
+    fn update_playlists_in_navigation_panel(&self) {
         self.model
-            .apply_sidebar_items(&self.list_store, self.num_fixed_entries);
+            .apply_navigation_panel_items(&self.list_store, self.num_fixed_entries);
     }
 }
 
-impl Component for Sidebar {
+impl Component for NavigationPanel {
     fn get_root_widget(&self) -> &gtk::Widget {
         self.listbox.upcast_ref()
     }
 }
 
-impl EventListener for Sidebar {
+impl EventListener for NavigationPanel {
     fn on_event(&mut self, event: &AppEvent) {
-        if matches!(
-            event,
-            AppEvent::BrowserEvent(BrowserEvent::SavedPlaylistsUpdated)
-                | AppEvent::BrowserEvent(BrowserEvent::PinnedPlaylistsUpdated)
-        ) {
-            self.update_playlists_in_sidebar();
+        match event {
+            AppEvent::BrowserEvent(
+                BrowserEvent::SavedPlaylistsUpdated | BrowserEvent::PinnedPlaylistsUpdated,
+            ) => self.update_playlists_in_navigation_panel(),
+            AppEvent::PlaybackEvent(
+                PlaybackEvent::PlaybackPaused
+                | PlaybackEvent::PlaybackResumed
+                | PlaybackEvent::PlaybackStopped
+                | PlaybackEvent::TrackChanged(_),
+            ) => self.update_playing(),
+            _ => {}
         }
     }
 }

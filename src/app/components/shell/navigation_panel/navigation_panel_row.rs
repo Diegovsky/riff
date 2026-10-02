@@ -2,10 +2,10 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
 
-use super::SidebarItem;
+use super::{NavigationPanelDestination, NavigationPanelItem};
 
-impl SidebarRow {
-    pub fn new(item: SidebarItem) -> Self {
+impl NavigationPanelRow {
+    pub fn new(item: NavigationPanelItem) -> Self {
         glib::Object::builder().property("item", item).build()
     }
 }
@@ -16,32 +16,41 @@ mod imp {
     use std::cell::RefCell;
 
     #[derive(Debug, CompositeTemplate, Properties)]
-    #[template(resource = "/dev/diegovsky/Riff/sidebar/sidebar_row.ui")]
-    #[properties(wrapper_type = super::SidebarRow)]
-    pub struct SidebarRow {
+    #[template(resource = "/dev/diegovsky/Riff/navigation_panel/navigation_panel_row.ui")]
+    #[properties(wrapper_type = super::NavigationPanelRow)]
+    pub struct NavigationPanelRow {
         #[template_child]
         pub icon: TemplateChild<gtk::Image>,
+
+        #[template_child]
+        pub now_playing_icon: TemplateChild<gtk::Overlay>,
 
         #[template_child]
         pub title: TemplateChild<gtk::Label>,
 
         #[property(get, set = Self::set_item)]
-        pub item: RefCell<SidebarItem>,
+        pub item: RefCell<NavigationPanelItem>,
     }
 
-    impl SidebarRow {
-        fn set_item(&self, item: SidebarItem) {
+    impl NavigationPanelRow {
+        fn set_item(&self, item: NavigationPanelItem) {
             self.title.set_text(item.title().as_str());
             self.icon.set_icon_name(item.icon());
+            let now_playing = matches!(
+                item.destination(),
+                Some(NavigationPanelDestination::NowPlaying)
+            );
+            self.icon.set_visible(!now_playing);
+            self.now_playing_icon.set_visible(now_playing);
             self.obj().set_tooltip_text(Some(item.title().as_str()));
             self.item.replace(item);
         }
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for SidebarRow {
-        const NAME: &'static str = "SidebarRow";
-        type Type = super::SidebarRow;
+    impl ObjectSubclass for NavigationPanelRow {
+        const NAME: &'static str = "NavigationPanelRow";
+        type Type = super::NavigationPanelRow;
         type ParentType = gtk::ListBoxRow;
 
         fn class_init(klass: &mut Self::Class) {
@@ -55,6 +64,7 @@ mod imp {
         fn new() -> Self {
             Self {
                 icon: Default::default(),
+                now_playing_icon: Default::default(),
                 title: Default::default(),
                 item: RefCell::new(glib::Object::new()),
             }
@@ -62,12 +72,12 @@ mod imp {
     }
 
     #[glib::derived_properties]
-    impl ObjectImpl for SidebarRow {}
-    impl WidgetImpl for SidebarRow {}
-    impl ListBoxRowImpl for SidebarRow {}
+    impl ObjectImpl for NavigationPanelRow {}
+    impl WidgetImpl for NavigationPanelRow {}
+    impl ListBoxRowImpl for NavigationPanelRow {}
 }
 
 glib::wrapper! {
-    pub struct SidebarRow(ObjectSubclass<imp::SidebarRow>) @extends gtk::Widget, gtk::ListBoxRow,
+    pub struct NavigationPanelRow(ObjectSubclass<imp::NavigationPanelRow>) @extends gtk::Widget, gtk::ListBoxRow,
         @implements gtk::Accessible, gtk::Actionable, gtk::Buildable, gtk::ConstraintTarget;
 }

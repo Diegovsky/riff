@@ -2,29 +2,12 @@ use gio::prelude::SettingsExt;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FeatureFlag {
-    /*
-    Selection mode allows users to select multiple songs to queue, save, or remove.
-    It has visually bugged buttons in the page's header across all pages that use it.
-    */
     SelectMode,
-    /*
-    Creating new playlists workflow needs to be flushed out further before launching. Currently,
-    users can create a new play list with no songs but interacting with the playlist is awkward.
-    Furthermore, it is possible to crash the application by viewing a newly created playlist and
-    then viewing another playlist in the same session.
-    */
     CreateNewPlaylist,
-    /*
-    Device selector allows switching playback between Spotify Connect devices.
-    */
     DeviceSelector,
-    /*
-    Audio normalisation settings allow fine-tuning of loudness normalisation parameters
-    (type, method, pre-gain, threshold, attack, release, knee). The feature is still
-    being validated for usability before exposing to all users.
-    */
     Normalisation,
     PinnedObjects,
+    QueueSidePanel,
 }
 
 impl FeatureFlag {
@@ -34,6 +17,7 @@ impl FeatureFlag {
         FeatureFlag::DeviceSelector,
         FeatureFlag::Normalisation,
         FeatureFlag::PinnedObjects,
+        FeatureFlag::QueueSidePanel,
     ];
 
     pub fn key(&self) -> &'static str {
@@ -43,6 +27,7 @@ impl FeatureFlag {
             FeatureFlag::DeviceSelector => "feature-device-selector",
             FeatureFlag::Normalisation => "feature-normalisation",
             FeatureFlag::PinnedObjects => "feature-pinned-objects",
+            FeatureFlag::QueueSidePanel => "feature-queue-side-panel",
         }
     }
 
@@ -53,6 +38,7 @@ impl FeatureFlag {
             FeatureFlag::DeviceSelector => "Device Selector",
             FeatureFlag::Normalisation => "Audio Normalisation",
             FeatureFlag::PinnedObjects => "Pinned Items",
+            FeatureFlag::QueueSidePanel => "Queue Side Panel",
         }
     }
 
@@ -61,7 +47,7 @@ impl FeatureFlag {
             FeatureFlag::SelectMode => {
                 "Enable selection mode to select multiple tracks for queuing, saving, or removing."
             }
-            FeatureFlag::CreateNewPlaylist => "Enable the New Playlist button in the sidebar.",
+            FeatureFlag::CreateNewPlaylist => "Enable the New Playlist button in the navigation panel.",
             FeatureFlag::DeviceSelector => {
                 "Enable the device selector in the Now Playing headerbar."
             }
@@ -69,7 +55,10 @@ impl FeatureFlag {
                 "Show audio normalisation settings for fine-tuning loudness between tracks."
             }
             FeatureFlag::PinnedObjects => {
-                "Enable pinning saved playlists, albums, artists, and tracks to the sidebar."
+                "Enable pinning saved playlists, albums, artists, and tracks to the navigation panel."
+            }
+            FeatureFlag::QueueSidePanel => {
+                "Show the queue in a panel at the side of the window"
             }
         }
     }

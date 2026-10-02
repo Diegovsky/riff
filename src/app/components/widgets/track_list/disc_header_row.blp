@@ -7,7 +7,7 @@ template $DiscHeaderRow : Box {
     "track-list__disc-header",
   ]
 
-  Grid {
+  Grid header_grid {
     hexpand: true;
     margin-start: 7;
     margin-end: 7;
@@ -15,7 +15,7 @@ template $DiscHeaderRow : Box {
     margin-bottom: 7;
     column-spacing: 6;
 
-    Overlay {
+    Overlay disc_header_slot {
       vexpand: true;
 
       layout {
@@ -52,6 +52,7 @@ template $DiscHeaderRow : Box {
       label: "Disc 1";
       xalign: 0;
       hexpand: true;
+      vexpand: true;
       valign: center;
       ellipsize: end;
 
@@ -62,6 +63,20 @@ template $DiscHeaderRow : Box {
 
       styles [
         "heading",
+      ]
+    }
+
+    Button header_button {
+      visible: false;
+      valign: center;
+
+      layout {
+        column: "2";
+        row: "0";
+      }
+
+      styles [
+        "flat",
       ]
     }
   }

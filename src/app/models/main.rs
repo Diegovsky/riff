@@ -2,6 +2,7 @@
 // catalog entities (`Track`, `Album`, `Playlist`, `Artist`, ...) are
 // re-exported from `riff_api::models` so the rest of the app can refer to them
 // as `crate::app::models::*`.
+pub use crate::play_queue::{PageRequest, SongsSource};
 pub use riff_api::models::{
     Album, AlbumType, Artist, ArtistRef, ContentRating, Device, DeviceKind, ImageSet, Page,
     PlayerState, Playlist, RepeatMode, ResourceId, SearchResults, Track, User,
@@ -69,19 +70,6 @@ impl AlbumExt for Album {
     }
 }
 
-/// A request descriptor for the next page to fetch: the offset to load and the
-/// page size to request. This is the "fetch intent" counterpart to a loaded
-/// `Page<Track>`. It intentionally carries no `total`;
-/// the app paginates until a short/empty page is returned (see
-/// [`crate::app::state::pagination::Pagination`]).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct PageRequest {
-    /// Offset of the first element to load.
-    pub offset: usize,
-    /// Number of elements to request.
-    pub batch_size: usize,
-}
-
 // "Something"Ref models (UserRef, ArtistRef, AlbumRef) are re-exported from
 // the data layer above.
 
@@ -122,47 +110,6 @@ pub struct SongState {
     pub is_liked: bool,
     pub is_pinned: bool,
     pub is_explicit_filtered: bool,
-}
-
-/// Identifies the source of a song list (playlist, album, etc.) for playback
-/// and pagination purposes.
-#[derive(Clone, Debug)]
-pub enum SongsSource {
-    Playlist(String),
-    Album(String),
-    Artist(String),
-    SavedTracks,
-    /// Songs shown on a scoped track search page, keyed by the search query.
-    Search(String),
-}
-
-impl PartialEq for SongsSource {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Playlist(l), Self::Playlist(r)) => l == r,
-            (Self::Album(l), Self::Album(r)) => l == r,
-            (Self::Artist(l), Self::Artist(r)) => l == r,
-            (Self::SavedTracks, Self::SavedTracks) => true,
-            (Self::Search(l), Self::Search(r)) => l == r,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for SongsSource {}
-
-impl SongsSource {
-    pub fn has_spotify_uri(&self) -> bool {
-        matches!(self, Self::Playlist(_) | Self::Album(_))
-    }
-
-    pub fn spotify_uri(&self) -> Option<String> {
-        match self {
-            Self::Playlist(id) => Some(format!("spotify:playlist:{}", id)),
-            Self::Album(id) => Some(format!("spotify:album:{}", id)),
-            _ => None,
-        }
-    }
 }
 
 /// Test-only constructor for a minimal [`Track`]. Shared across the crate's

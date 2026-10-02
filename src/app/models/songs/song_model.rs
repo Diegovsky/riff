@@ -7,6 +7,14 @@ use std::{cell::Ref, ops::Deref};
 use crate::app::components::utils::format_duration;
 use crate::app::models::*;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QueueRole {
+    Queued,
+    Context,
+    Current,
+    Fixed,
+}
+
 // UI model for a song
 glib::wrapper! {
     pub struct SongModel(ObjectSubclass<imp::SongModel>);
@@ -17,6 +25,36 @@ impl SongModel {
         let o: Self = glib::Object::new();
         o.imp().song.replace(Some(song));
         o
+    }
+
+    pub fn new_keyed(song: Track, key: String) -> Self {
+        let o = Self::new(song);
+        o.imp().key.replace(Some(key));
+        o
+    }
+
+    pub fn set_queue_role(&self, role: Option<QueueRole>) {
+        self.imp().queue_role.set(role);
+    }
+
+    pub fn queue_role(&self) -> Option<QueueRole> {
+        self.imp().queue_role.get()
+    }
+
+    pub fn set_group(&self, group: Option<String>) {
+        self.imp().group.replace(group);
+    }
+
+    pub fn group(&self) -> Option<String> {
+        self.imp().group.borrow().clone()
+    }
+
+    pub fn row_key(&self) -> String {
+        self.imp()
+            .key
+            .borrow()
+            .clone()
+            .unwrap_or_else(|| self.get_id())
     }
 
     pub fn set_playing(&self, is_playing: bool) {
@@ -170,6 +208,9 @@ mod imp {
     #[derive(Default)]
     pub struct SongModel {
         pub song: RefCell<Option<Track>>,
+        pub key: RefCell<Option<String>>,
+        pub queue_role: Cell<Option<QueueRole>>,
+        pub group: RefCell<Option<String>>,
         pub state: Cell<SongState>,
         bindings: RefCell<BindingsInner>,
     }

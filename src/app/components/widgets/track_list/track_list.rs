@@ -10,11 +10,12 @@ use riff_api::ApiService;
 
 use crate::app::components::utils::{ancestor, set_css_class, AnimatorDefault};
 use crate::app::components::{
-    labels, Component, DiscHeaderRow, EventListener, RowOptions, TrackRow, ROW_HEIGHT_PX,
+    labels, Component, DiscHeaderRow, EventListener, GroupButton, RowOptions, TrackRow,
+    ROW_HEIGHT_PX,
 };
 use crate::app::models::{SongListModel, SongModel, SongState, Track, TrackExt};
 use crate::app::state::{BrowserEvent, PlaybackEvent, SelectionEvent, SelectionState};
-use crate::app::{AppEvent, ProvidesApi};
+use crate::app::{AppAction, AppEvent, ProvidesApi};
 use crate::feature_flags::{is_enabled, FeatureFlag};
 
 const SKELETON_ROW_COUNT: usize = 10;
@@ -30,7 +31,7 @@ const REANCHOR_EVERY_ROWS: u32 = 50;
 pub enum QueueMenuEntry {
     None,
     Add,
-    Remove,
+    Queued,
 }
 
 pub fn build_song_menu(
@@ -62,17 +63,18 @@ pub fn build_song_menu(
         QueueMenuEntry::Add => {
             queue_section.append(Some(&*labels::ADD_TO_QUEUE), Some("song.queue"));
         }
-        QueueMenuEntry::Remove => {
+        QueueMenuEntry::Queued => {
             queue_section.append(Some(&*labels::REMOVE_FROM_QUEUE), Some("song.dequeue"));
         }
     }
+    let like_section = gio::Menu::new();
     if let Some(liked) = liked {
         let label = if liked {
             &*labels::UNLIKE
         } else {
             &*labels::LIKE
         };
-        queue_section.append(Some(label), Some("song.like"));
+        like_section.append(Some(label), Some("song.like"));
     }
     if let Some(pinned) = pinned {
         let label = if pinned {
@@ -80,7 +82,7 @@ pub fn build_song_menu(
         } else {
             &*labels::PIN_TO_SIDEBAR
         };
-        queue_section.append(Some(label), Some("song.pin"));
+        like_section.append(Some(label), Some("song.pin"));
     }
 
     let link_section = gio::Menu::new();
@@ -92,6 +94,9 @@ pub fn build_song_menu(
     }
     if queue_section.n_items() > 0 {
         menu.append_section(None, &queue_section);
+    }
+    if like_section.n_items() > 0 {
+        menu.append_section(None, &like_section);
     }
     menu.append_section(None, &link_section);
     menu.upcast()
@@ -105,6 +110,10 @@ pub trait TrackListModel: ProvidesApi {
     fn current_song_id(&self) -> Option<String>;
 
     fn play_song_at(&self, pos: usize, id: &str);
+
+    fn context_actions(&self, _pos: usize) -> Option<Vec<AppAction>> {
+        None
+    }
 
     fn autoscroll_to_playing(&self) -> bool {
         true
@@ -126,12 +135,13 @@ pub trait TrackListModel: ProvidesApi {
         true
     }
 
-    fn actions_for(&self, _song: &Track) -> Option<SimpleActionGroup> {
+    fn actions_for(&self, _row: &SongModel, _song: &Track) -> Option<SimpleActionGroup> {
         None
     }
 
     fn menu_for(
         &self,
+        _row: &SongModel,
         _song: &Track,
         _liked: bool,
         _pinned: Option<bool>,
@@ -155,13 +165,15 @@ pub trait TrackListModel: ProvidesApi {
             .unwrap_or(false)
     }
 
-    fn toggle_select(&self, id: &str) {
-        if let Some(selection) = self.selection() {
-            if selection.is_song_selected(id) {
-                self.deselect_song(id);
-            } else {
-                self.select_song(id);
-            }
+    fn toggle_select(&self, key: &str) {
+        let selected = match self.selection() {
+            Some(selection) => selection.is_song_selected(key),
+            None => return,
+        };
+        if selected {
+            self.deselect_song(key);
+        } else {
+            self.select_song(key);
         }
     }
 
@@ -181,22 +193,46 @@ pub trait TrackListModel: ProvidesApi {
         false
     }
 
-    fn song_state(&self, id: &str) -> SongState {
-        let is_explicit_filtered = self.skip_explicit()
-            && self
-                .song_list_model()
-                .get(id)
-                .is_some_and(|m| m.description().is_explicit());
+    fn is_row_playing(&self, key: &str) -> bool {
+        self.current_song_id().is_some_and(|s| s == key)
+    }
+
+    fn song_state(&self, song: &SongModel) -> SongState {
+        let key = song.row_key();
         SongState {
-            is_playing: self.current_song_id().is_some_and(|s| s == id),
-            is_selected: self.selection().is_some_and(|s| s.is_song_selected(id)),
-            is_liked: self.is_song_liked(id),
+            is_playing: self.is_row_playing(&key),
+            is_selected: self.selection().is_some_and(|s| s.is_song_selected(&key)),
+            is_liked: self.is_song_liked(&song.get_id()),
             is_pinned: false,
-            is_explicit_filtered,
+            is_explicit_filtered: self.skip_explicit() && song.description().is_explicit(),
         }
     }
 
     fn load_more(&self) {}
+
+    fn group_button(&self, _group: &str) -> Option<GroupButton> {
+        None
+    }
+
+    fn group_button_clicked(&self, _group: &str, _source: &gtk::Widget) {}
+
+    fn hides_row(&self, _row: &SongModel) -> bool {
+        false
+    }
+
+    fn is_reorderable(&self) -> bool {
+        false
+    }
+
+    fn can_drag_row(&self, _key: &str) -> bool {
+        false
+    }
+
+    fn can_drop_row(&self, _key: &str, _target: &str, _after: bool) -> bool {
+        false
+    }
+
+    fn drop_row(&self, _key: &str, _target: &str, _after: bool) {}
 }
 
 fn row_at_viewport_center(list_top: f64, page_size: f64, n_rows: u32) -> Option<u32> {
@@ -242,7 +278,10 @@ fn disc_header_text(disc: u32) -> String {
 /// them rebinds the row.
 #[derive(Clone, PartialEq)]
 enum ListEntry {
-    DiscHeader(u32),
+    Header {
+        text: String,
+        disc: bool,
+    },
     Track {
         song: SongModel,
         disc_start: bool,
@@ -259,6 +298,8 @@ fn list_entry(item: &glib::Object) -> Option<ListEntry> {
     Some(wrapper.borrow::<ListEntry>().clone())
 }
 
+type RowFilter = Box<dyn Fn(&SongModel) -> bool>;
+
 #[derive(Default)]
 struct Projection {
     show_disc_headers: bool,
@@ -267,6 +308,7 @@ struct Projection {
     /// The wrapper object for each entry, keyed by (entry, occurrence), kept
     /// across rebuilds so unchanged rows keep their widgets.
     wrappers: HashMap<(String, usize), glib::BoxedAnyObject>,
+    hides_row: Option<RowFilter>,
 }
 
 impl Projection {
@@ -277,28 +319,44 @@ impl Projection {
     fn rebuild(&mut self, songs: &SongListModel, store: &gio::ListStore) {
         let tracks: Vec<(usize, SongModel)> = (0..songs.partial_len())
             .filter_map(|i| songs.index_continuous(i).map(|song| (i, song)))
+            .filter(|(_, song)| !self.hides_row.as_ref().is_some_and(|hides| hides(song)))
             .collect();
         let discs: Vec<Option<u32>> = tracks
             .iter()
             .map(|(_, song)| song.description().disc_number)
             .collect();
+        let groups: Vec<Option<String>> = tracks.iter().map(|(_, song)| song.group()).collect();
         let multi_disc = self.show_disc_headers && discs.iter().any(|d| *d != discs[0]);
-        let header_before =
-            |n: usize| multi_disc && discs[n].is_some() && (n == 0 || discs[n] != discs[n - 1]);
+        let headers: Vec<Option<(String, bool)>> = (0..tracks.len())
+            .map(|n| {
+                let new_group = n == 0 || groups[n] != groups[n - 1];
+                let new_disc =
+                    multi_disc && discs[n].is_some() && (n == 0 || discs[n] != discs[n - 1]);
+                match &groups[n] {
+                    Some(group) if new_group => Some((group.clone(), false)),
+                    _ if new_disc => Some((disc_header_text(discs[n].unwrap_or_default()), true)),
+                    _ => None,
+                }
+            })
+            .collect();
+        let has_header = |n: usize| headers.get(n).is_some_and(Option::is_some);
         let last = tracks.len().saturating_sub(1);
 
         let mut entries = Vec::with_capacity(tracks.len());
         for (n, (i, song)) in tracks.into_iter().enumerate() {
-            if header_before(n) {
-                let disc = discs[n].unwrap_or_default();
-                entries.push((format!("disc {disc}"), ListEntry::DiscHeader(disc), None));
+            if let Some((text, disc)) = &headers[n] {
+                let header = ListEntry::Header {
+                    text: text.clone(),
+                    disc: *disc,
+                };
+                entries.push((format!("header {text}"), header, None));
             }
             let entry = ListEntry::Track {
                 song: song.clone(),
-                disc_start: n == 0 || header_before(n),
-                disc_end: n == last || header_before(n + 1),
+                disc_start: n == 0 || has_header(n),
+                disc_end: n == last || has_header(n + 1),
             };
-            entries.push((song.get_id(), entry, Some(i)));
+            entries.push((song.row_key(), entry, Some(i)));
         }
 
         if self.show_skeleton && entries.is_empty() && !songs.is_complete() {
@@ -347,9 +405,13 @@ where
         let songs = model.song_list_model();
 
         let store = gio::ListStore::new::<glib::Object>();
+        let hides_model = Rc::downgrade(&model);
         let projection = Rc::new(RefCell::new(Projection {
             show_disc_headers: model.show_disc_headers(),
             show_skeleton: model.show_loading_skeleton(),
+            hides_row: Some(Box::new(move |row| {
+                hides_model.upgrade().is_some_and(|m| m.hides_row(row))
+            })),
             ..Default::default()
         }));
         projection.borrow_mut().rebuild(&songs, &store);
@@ -365,6 +427,9 @@ where
             }
         ));
 
+        let reorder = model
+            .is_reorderable()
+            .then(|| super::reorder::connect(&listview, &model));
         let api_service = model.api_service();
         let options = RowOptions {
             show_cover: model.show_song_covers(),
@@ -388,15 +453,22 @@ where
                         song,
                         disc_start,
                         disc_end,
-                    }) => bind_track(
-                        item,
-                        &song,
-                        (disc_start, disc_end),
-                        &model,
-                        &api_service,
-                        options,
-                    ),
-                    Some(ListEntry::DiscHeader(disc)) => bind_disc_header(item, disc),
+                    }) => {
+                        let row = bind_track(
+                            item,
+                            &song,
+                            (disc_start, disc_end),
+                            &model,
+                            &api_service,
+                            options,
+                        );
+                        if let Some(reorder) = &reorder {
+                            reorder.attach(&row);
+                        }
+                    }
+                    Some(ListEntry::Header { text, disc }) => {
+                        bind_header(item, &text, disc, &model)
+                    }
                     Some(ListEntry::Placeholder {
                         disc_start,
                         disc_end,
@@ -438,11 +510,10 @@ where
                 let Some(song) = songs.index_continuous(index) else {
                     return;
                 };
-                let id = song.get_id();
                 if model.is_selection_enabled() {
-                    model.toggle_select(&id);
+                    model.toggle_select(&song.row_key());
                 } else {
-                    model.play_song_at(index, &id);
+                    model.play_song_at(index, &song.get_id());
                 }
             }
         ));
@@ -488,10 +559,9 @@ where
             autoscroll && self.model.autoscroll_to_playing() && !self.model.is_selection_enabled();
         let pinned = self.model.pinned_song_ids().unwrap_or_default();
         self.model.song_list_model().for_each(|i, song| {
-            let id = song.get_id();
             let state = SongState {
-                is_pinned: pinned.contains(&id),
-                ..self.model.song_state(&id)
+                is_pinned: pinned.contains(&song.get_id()),
+                ..self.model.song_state(song)
             };
             song.set_state(state);
             if state.is_playing && follow_playing {
@@ -544,7 +614,7 @@ where
     /// - Keeps the list's anchor on the visible rows. A ListView only has
     ///   widgets for GTK_MAX_ROW_WIDGETS rows around its anchor, and only
     ///   moves the anchor itself when it's the ScrolledWindow's direct
-    ///   child, so without this rows past the first ~200 stay blank.
+    ///   child (then it's left to GTK).
     /// - Calls `load_more()` when nearing the bottom.
     pub fn connect_scrolling(&self) {
         let Some(scrolled_window) = ancestor::<_, gtk::ScrolledWindow>(&self.listview) else {
@@ -552,11 +622,16 @@ where
         };
         let adj = scrolled_window.vadjustment();
         let model = Rc::clone(&self.model);
+        let direct_child =
+            scrolled_window.child().as_ref() == Some(self.listview.upcast_ref::<gtk::Widget>());
         let listview = self.listview.downgrade();
         let content = scrolled_content(&scrolled_window).map(|c| c.downgrade());
         // The viewport-center row the anchor was last set for.
         let anchored_center = Cell::new(0u32);
         let follow = Rc::new(move |adj: &gtk::Adjustment, force: bool| {
+            if direct_child {
+                return;
+            }
             let content = content.as_ref().and_then(|c| c.upgrade());
             let (Some(listview), Some(content)) = (listview.upgrade(), content) else {
                 return;
@@ -584,19 +659,21 @@ where
                 glib::idle_add_local_once(move || follow(&adj, true));
             }
         };
-        let press = gtk::GestureClick::builder().button(0).build();
-        press.connect_pressed({
-            let refollow = refollow.clone();
-            move |_, _, _, _| refollow()
-        });
-        self.listview.add_controller(press);
-        let keys = gtk::EventControllerKey::new();
-        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
-        keys.connect_key_pressed(move |_, _, _, _| {
-            refollow();
-            glib::Propagation::Proceed
-        });
-        self.listview.add_controller(keys);
+        if !direct_child {
+            let press = gtk::GestureClick::builder().button(0).build();
+            press.connect_pressed({
+                let refollow = refollow.clone();
+                move |_, _, _, _| refollow()
+            });
+            self.listview.add_controller(press);
+            let keys = gtk::EventControllerKey::new();
+            keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+            keys.connect_key_pressed(move |_, _, _, _| {
+                refollow();
+                glib::Propagation::Proceed
+            });
+            self.listview.add_controller(keys);
+        }
 
         let check = Rc::new(move |adj: &gtk::Adjustment| {
             follow(adj, false);
@@ -663,9 +740,28 @@ fn set_interactive(item: &gtk::ListItem, interactive: bool) {
     item.set_focusable(interactive);
 }
 
-fn bind_disc_header(item: &gtk::ListItem, disc: u32) {
+fn bind_header<Model: TrackListModel + 'static>(
+    item: &gtk::ListItem,
+    text: &str,
+    disc: bool,
+    model: &Rc<Model>,
+) {
     set_interactive(item, false);
-    item_row::<DiscHeaderRow>(item).set_text(&disc_header_text(disc));
+    let row = item_row::<DiscHeaderRow>(item);
+    row.set_text(text);
+    row.set_disc(disc);
+    let button = (!disc).then(|| model.group_button(text)).flatten();
+    let model = Rc::downgrade(model);
+    let group = text.to_string();
+    let source = row.downgrade();
+    row.set_button(
+        button.as_ref(),
+        Box::new(move || {
+            if let (Some(model), Some(source)) = (model.upgrade(), source.upgrade()) {
+                model.group_button_clicked(&group, source.upcast_ref());
+            }
+        }),
+    );
 }
 
 fn bind_placeholder(item: &gtk::ListItem, (disc_start, disc_end): (bool, bool)) {
@@ -682,14 +778,14 @@ fn bind_track<Model: TrackListModel + 'static>(
     model: &Rc<Model>,
     api_service: &Arc<ApiService>,
     options: RowOptions,
-) {
+) -> TrackRow {
     set_interactive(item, true);
     let row = item_row::<TrackRow>(item);
     row.bind(song, Arc::clone(api_service), options);
     row.set_disc_position(disc_start, disc_end);
 
     let track = song.description().clone();
-    let actions = model.actions_for(&track).unwrap_or_default();
+    let actions = model.actions_for(song, &track).unwrap_or_default();
     let like = gio::SimpleAction::new("like", None);
     let id = track.rri.id.clone();
     let like_model = Rc::downgrade(model);
@@ -714,7 +810,7 @@ fn bind_track<Model: TrackListModel + 'static>(
     let menu_for = move |model: &Model, song: &SongModel| {
         let pinned = song.get_pinned();
         let pinned = (pin_enabled && (song.get_liked() || pinned)).then_some(pinned);
-        model.menu_for(&track, song.get_liked(), pinned)
+        model.menu_for(song, &track, song.get_liked(), pinned)
     };
     row.set_menu(menu_for(model, song).as_ref());
     let model = Rc::clone(model);
@@ -736,6 +832,7 @@ fn bind_track<Model: TrackListModel + 'static>(
         );
         song.push_signal(handler);
     }
+    row
 }
 
 impl SongModel {
@@ -890,6 +987,22 @@ mod tests {
     }
 
     #[test]
+    fn test_projection_leaves_out_hidden_rows() {
+        let mut list_model = SongListModel::new(50);
+        list_model
+            .append(vec![make_disc_track("a", None), make_disc_track("b", None)])
+            .commit();
+        let store = gio::ListStore::new::<glib::Object>();
+        let mut projection = Projection {
+            hides_row: Some(Box::new(|row| row.get_id() == "a")),
+            ..Default::default()
+        };
+        projection.rebuild(&list_model, &store);
+        assert_eq!(projection.positions, vec![Some(1)]);
+        assert_eq!(store.n_items(), 1);
+    }
+
+    #[test]
     fn test_rebuild_projection_no_headers_when_disabled() {
         let mut list_model = SongListModel::new(50);
         list_model
@@ -956,8 +1069,20 @@ mod tests {
         assert_eq!(store.n_items(), 6);
         assert_eq!(map, vec![None, Some(0), Some(1), None, Some(2), Some(3)]);
         assert!(matches!(entry_at(&store, 1), ListEntry::Track { .. }));
-        assert!(entry_at(&store, 0) == ListEntry::DiscHeader(1));
-        assert!(entry_at(&store, 3) == ListEntry::DiscHeader(2));
+        assert!(
+            entry_at(&store, 0)
+                == ListEntry::Header {
+                    text: "Disc 1".to_string(),
+                    disc: true
+                }
+        );
+        assert!(
+            entry_at(&store, 3)
+                == ListEntry::Header {
+                    text: "Disc 2".to_string(),
+                    disc: true
+                }
+        );
     }
 
     #[test]
@@ -1000,12 +1125,12 @@ mod tests {
         let map = rebuild_projection(&list_model, &store, false);
 
         assert_eq!(map, vec![Some(0), Some(1), Some(2)]);
-        // Both "a"s are the same SongModel, but must be different items.
         let song = |i| match entry_at(&store, i) {
             ListEntry::Track { song, .. } => song,
             _ => panic!("expected a track"),
         };
-        assert_eq!(song(0), song(2));
+        assert_ne!(song(0), song(2));
+        assert_eq!(song(0).get_id(), song(2).get_id());
         assert_ne!(store.item(0).unwrap(), store.item(2).unwrap());
     }
 
@@ -1021,7 +1146,7 @@ mod tests {
                     disc_start,
                     disc_end,
                 } => Some((disc_start, disc_end)),
-                ListEntry::DiscHeader(_) => None,
+                ListEntry::Header { .. } => None,
             })
             .collect()
     }
@@ -1171,22 +1296,28 @@ mod tests {
     #[test]
     fn test_song_state_playing() {
         let model = MockTrackListModel::new(Some("song1"));
-        let state = model.song_state("song1");
+        let state = model.song_state(&SongModel::new(crate::app::models::make_track("song1")));
         assert!(state.is_playing);
         assert!(!state.is_selected);
+
+        let model = MockTrackListModel::new(Some("key1"));
+        let song =
+            |key: &str| SongModel::new_keyed(crate::app::models::make_track("song1"), key.into());
+        assert!(model.song_state(&song("key1")).is_playing);
+        assert!(!model.song_state(&song("key2")).is_playing);
     }
 
     #[test]
     fn test_song_state_not_playing() {
         let model = MockTrackListModel::new(Some("song1"));
-        let state = model.song_state("song2");
+        let state = model.song_state(&SongModel::new(crate::app::models::make_track("song2")));
         assert!(!state.is_playing);
     }
 
     #[test]
     fn test_song_state_no_current_song() {
         let model = MockTrackListModel::new(None);
-        let state = model.song_state("song1");
+        let state = model.song_state(&SongModel::new(crate::app::models::make_track("song1")));
         assert!(!state.is_playing);
     }
 
@@ -1384,6 +1515,36 @@ mod tests {
         assert_eq!(ids, vec!["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]);
     }
 
+    #[test]
+    fn test_projection_headers_at_group_changes() {
+        let mut list_model = SongListModel::new(50);
+        let songs: Vec<SongModel> = [("a", "Queue"), ("a", "Queue"), ("b", "Album")]
+            .iter()
+            .enumerate()
+            .map(|(i, (id, group))| {
+                let song =
+                    SongModel::new_keyed(crate::app::models::make_track(id), format!("key{i}"));
+                song.set_group(Some(group.to_string()));
+                song
+            })
+            .collect();
+        list_model.replace_models(songs).commit();
+
+        let store = gio::ListStore::new::<glib::Object>();
+        let map = rebuild_projection(&list_model, &store, false);
+
+        assert_eq!(map, vec![None, Some(0), Some(1), None, Some(2)]);
+        assert!(
+            entry_at(&store, 0)
+                == ListEntry::Header {
+                    text: "Queue".to_string(),
+                    disc: false
+                }
+        );
+        assert_eq!(disc_edges(&store)[2], Some((false, true)));
+        assert_eq!(disc_edges(&store)[4], Some((true, true)));
+    }
+
     /// Action names of each section of `menu`, in order.
     fn menu_actions(menu: &gio::MenuModel) -> Vec<Vec<String>> {
         (0..menu.n_items())
@@ -1414,8 +1575,8 @@ mod tests {
             Some(false),
         );
         assert_eq!(
-            menu_actions(&menu)[0],
-            vec!["song.queue", "song.like", "song.pin"]
+            menu_actions(&menu)[..2],
+            [vec!["song.queue"], vec!["song.like", "song.pin"]]
         );
     }
 

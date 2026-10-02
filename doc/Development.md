@@ -158,13 +158,13 @@ Run the static checks before committing:
 
 ### Debug Tools (Dev Menu)
 
-Debug builds include a developer menu in the sidebar header (a wrench/gear icon). It is compiled only in debug builds and lives in `src/app/dev_tools/`. The menu provides:
+Debug builds include a developer menu in the navigation panel header (a wrench/gear icon). It is compiled only in debug builds and lives in `src/app/dev_tools/`. The menu provides:
 
 | Tool | What It Does |
 | --- | --- |
 | Force Skeleton | Adds the `force-skeleton` CSS class to the window so all skeleton/loading states render simultaneously. Useful for testing loading UI without slow network conditions. |
 | Debug CSS | Toggles an overlay stylesheet that highlights alignment and rendering issues. |
-| Panel Sizes | Overlays each major panel (sidebar, header, navigation stack, playback bar) with its current pixel dimensions in a distinct color. |
+| Panel Sizes | Overlays each major panel (navigation panel, header, content stack, playback bar, utility panel) with its current pixel dimensions in a distinct color, and shows the window's size in the center. |
 | Simulate Offline | Blocks all HTTP calls and kills the librespot session. The connection-lost banner appears naturally once requests fail, mirroring how a real network drop is detected. |
 | Kill Player | Sends `DevKillPlayer` to force-terminate the playback session. |
 | Kill Session | Sends `DevKillSession` to destroy the librespot TCP session without stopping local playback state. |

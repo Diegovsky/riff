@@ -82,6 +82,12 @@
       <default>false</default>
       <summary>Skip tracks marked as explicit</summary>
     </key>
+    <key name="shuffle-separation" type="u">
+      <range min="1" max="10"/>
+      <default>2</default>
+      <summary>Songs between two plays of a song when shuffling</summary>
+      <description>With shuffle and repeat on, the minimum number of other songs that play before a song plays again.</description>
+    </key>
     <key name='alsa-device' type='s'>
       <default>'default'</default>
       <summary>Alsa device (if audio backend is 'alsa')</summary>
@@ -217,7 +223,7 @@
     </key>
     <key name="feature-create-new-playlist" type="b">
       <default>false</default>
-      <summary>Enable the New Playlist button in the sidebar</summary>
+      <summary>Enable the New Playlist button in the navigation panel</summary>
     </key>
     <key name="feature-device-selector" type="b">
       <default>false</default>
@@ -229,7 +235,11 @@
     </key>
     <key name="feature-pinned-objects" type="b">
       <default>false</default>
-      <summary>Enable pinning objects to the sidebar</summary>
+      <summary>Enable pinning objects to the navigation panel</summary>
+    </key>
+    <key name="feature-queue-side-panel" type="b">
+      <default>false</default>
+      <summary>Show the queue in the utility panel at the window's end, instead of the bottom sheet</summary>
     </key>
     <key name="pinned-objects-by-user" type="s">
       <default>'{}'</default>

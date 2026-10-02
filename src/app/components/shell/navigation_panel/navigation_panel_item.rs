@@ -20,7 +20,7 @@ pub const LIBRARY_SECTION: &str = "library_section";
 pub const CREATE_PLAYLIST_ITEM: &str = "create_playlist";
 
 #[derive(Debug)]
-pub enum SidebarDestination {
+pub enum NavigationPanelDestination {
     Library,
     SavedTracks,
     NowPlaying,
@@ -32,7 +32,7 @@ pub enum SidebarDestination {
     Track { id: String, title: String },
 }
 
-impl SidebarDestination {
+impl NavigationPanelDestination {
     pub fn id(&self) -> &'static str {
         match self {
             Self::Library => LIBRARY,
@@ -49,15 +49,15 @@ impl SidebarDestination {
 
     pub fn title(&self) -> String {
         match self {
-            // translators: This is a sidebar entry to browse to saved albums.
+            // translators: This is a navigation panel entry to browse to saved albums.
             Self::Library => gettext("Library"),
-            // translators: This is a sidebar entry to browse to saved tracks.
+            // translators: This is a navigation panel entry to browse to saved tracks.
             Self::SavedTracks => gettext("Saved Tracks"),
-            // translators: This is a sidebar entry to browse to saved playlists.
+            // translators: This is a navigation panel entry to browse to saved playlists.
             Self::NowPlaying => gettext("Now Playing"),
-            // translators: This is a sidebar entry that marks that the entries below are playlists.
+            // translators: This is a navigation panel entry that marks that the entries below are playlists.
             Self::SavedPlaylists => gettext("Playlists"),
-            // translators: This is a sidebar entry to browse to followed artists.
+            // translators: This is a navigation panel entry to browse to followed artists.
             Self::SavedArtists => gettext("Artists"),
             Self::Playlist(PlaylistSummary { title, .. })
             | Self::Album { title, .. }
@@ -81,15 +81,15 @@ impl SidebarDestination {
     }
 }
 
-impl SidebarItem {
-    pub fn from_destination(dest: SidebarDestination) -> Self {
+impl NavigationPanelItem {
+    pub fn from_destination(dest: NavigationPanelDestination) -> Self {
         let (id, data, title) = match dest {
-            SidebarDestination::Playlist(PlaylistSummary { id, title }) => {
+            NavigationPanelDestination::Playlist(PlaylistSummary { id, title }) => {
                 (PLAYLIST, Some(id), title)
             }
-            SidebarDestination::Album { id, title } => (ALBUM, Some(id), title),
-            SidebarDestination::Artist { id, title } => (ARTIST, Some(id), title),
-            SidebarDestination::Track { id, title } => (TRACK, Some(id), title),
+            NavigationPanelDestination::Album { id, title } => (ALBUM, Some(id), title),
+            NavigationPanelDestination::Artist { id, title } => (ARTIST, Some(id), title),
+            NavigationPanelDestination::Track { id, title } => (TRACK, Some(id), title),
             _ => (dest.id(), None, dest.title()),
         };
         glib::Object::builder()
@@ -136,25 +136,25 @@ impl SidebarItem {
             .build()
     }
 
-    pub fn destination(&self) -> Option<SidebarDestination> {
+    pub fn destination(&self) -> Option<NavigationPanelDestination> {
         let navigatable = self.property::<bool>("navigatable");
         if navigatable {
             let id = self.id();
             let data = self.property::<String>("data");
             let title = self.title();
             match id.as_str() {
-                LIBRARY => Some(SidebarDestination::Library),
-                SAVED_TRACKS => Some(SidebarDestination::SavedTracks),
-                NOW_PLAYING => Some(SidebarDestination::NowPlaying),
-                SAVED_PLAYLISTS => Some(SidebarDestination::SavedPlaylists),
-                SAVED_ARTISTS => Some(SidebarDestination::SavedArtists),
-                PLAYLIST => Some(SidebarDestination::Playlist(PlaylistSummary {
+                LIBRARY => Some(NavigationPanelDestination::Library),
+                SAVED_TRACKS => Some(NavigationPanelDestination::SavedTracks),
+                NOW_PLAYING => Some(NavigationPanelDestination::NowPlaying),
+                SAVED_PLAYLISTS => Some(NavigationPanelDestination::SavedPlaylists),
+                SAVED_ARTISTS => Some(NavigationPanelDestination::SavedArtists),
+                PLAYLIST => Some(NavigationPanelDestination::Playlist(PlaylistSummary {
                     id: data,
                     title,
                 })),
-                ALBUM => Some(SidebarDestination::Album { id: data, title }),
-                ARTIST => Some(SidebarDestination::Artist { id: data, title }),
-                TRACK => Some(SidebarDestination::Track { id: data, title }),
+                ALBUM => Some(NavigationPanelDestination::Album { id: data, title }),
+                ARTIST => Some(NavigationPanelDestination::Artist { id: data, title }),
+                TRACK => Some(NavigationPanelDestination::Track { id: data, title }),
                 _ => None,
             }
         } else {
@@ -175,8 +175,8 @@ mod imp {
     use std::cell::{Cell, RefCell};
 
     #[derive(Debug, Default, Properties)]
-    #[properties(wrapper_type = super::SidebarItem)]
-    pub struct SidebarItem {
+    #[properties(wrapper_type = super::NavigationPanelItem)]
+    pub struct NavigationPanelItem {
         #[property(get, set)]
         pub id: RefCell<String>,
         #[property(get, set)]
@@ -188,16 +188,16 @@ mod imp {
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for SidebarItem {
-        const NAME: &'static str = "SideBarItem";
-        type Type = super::SidebarItem;
+    impl ObjectSubclass for NavigationPanelItem {
+        const NAME: &'static str = "NavigationPanelItem";
+        type Type = super::NavigationPanelItem;
         type ParentType = glib::Object;
     }
 
     #[glib::derived_properties]
-    impl ObjectImpl for SidebarItem {}
+    impl ObjectImpl for NavigationPanelItem {}
 }
 
 glib::wrapper! {
-    pub struct SidebarItem(ObjectSubclass<imp::SidebarItem>);
+    pub struct NavigationPanelItem(ObjectSubclass<imp::NavigationPanelItem>);
 }

@@ -25,6 +25,9 @@ pub use shell::*;
 mod player_notifier;
 pub use player_notifier::PlayerNotifier;
 
+mod queue_loader;
+pub use queue_loader::{fetch_queue_page, queue_source_tracks, QueueLoader};
+
 mod constants;
 pub use constants::*;
 
@@ -44,6 +47,8 @@ pub fn expose_custom_widgets() {
     widgets::details_page::expose_widgets();
     widgets::segmented_button::expose_widgets();
     shell::window::expose_widgets();
+    shell::utility_panel::expose_widgets();
+    shell::layout::expose_widgets();
 }
 
 /// Run an api call that needs no scheduling tag (a mutation).

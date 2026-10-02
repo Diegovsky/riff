@@ -2,13 +2,13 @@ use gdk::prelude::*;
 use gio::SimpleActionGroup;
 use std::rc::Rc;
 
-use super::{SidebarDestination, SidebarModel};
+use super::{NavigationPanelDestination, NavigationPanelModel};
 use crate::app::components::labels;
 use crate::app::models::PlaylistSummary;
 use crate::feature_flags::{is_enabled, FeatureFlag};
 use crate::settings;
 
-fn make_play_action(id: &str, model: &Rc<SidebarModel>) -> gio::SimpleAction {
+fn make_play_action(id: &str, model: &Rc<NavigationPanelModel>) -> gio::SimpleAction {
     let action = gio::SimpleAction::new("play", None);
     let id = id.to_owned();
     action.connect_activate(clone!(
@@ -21,7 +21,7 @@ fn make_play_action(id: &str, model: &Rc<SidebarModel>) -> gio::SimpleAction {
     action
 }
 
-fn make_shuffle_action(id: &str, model: &Rc<SidebarModel>) -> gio::SimpleAction {
+fn make_shuffle_action(id: &str, model: &Rc<NavigationPanelModel>) -> gio::SimpleAction {
     let action = gio::SimpleAction::new("shuffle", None);
     let id = id.to_owned();
     action.connect_activate(clone!(
@@ -29,6 +29,19 @@ fn make_shuffle_action(id: &str, model: &Rc<SidebarModel>) -> gio::SimpleAction 
         model,
         move |_, _| {
             model.shuffle_playlist(id.clone());
+        }
+    ));
+    action
+}
+
+fn make_queue_action(id: &str, model: &Rc<NavigationPanelModel>) -> gio::SimpleAction {
+    let action = gio::SimpleAction::new("queue", None);
+    let id = id.to_owned();
+    action.connect_activate(clone!(
+        #[weak]
+        model,
+        move |_, _| {
+            model.queue_playlist(id.clone());
         }
     ));
     action
@@ -44,7 +57,7 @@ fn make_copy_link_action(id: &str) -> gio::SimpleAction {
     action
 }
 
-fn make_unfollow_action(id: &str, model: &Rc<SidebarModel>) -> gio::SimpleAction {
+fn make_unfollow_action(id: &str, model: &Rc<NavigationPanelModel>) -> gio::SimpleAction {
     let action = gio::SimpleAction::new("unfollow", None);
     let id = id.to_owned();
     action.connect_activate(clone!(
@@ -57,7 +70,7 @@ fn make_unfollow_action(id: &str, model: &Rc<SidebarModel>) -> gio::SimpleAction
     action
 }
 
-fn make_toggle_pin_action(id: &str, model: &Rc<SidebarModel>) -> gio::SimpleAction {
+fn make_toggle_pin_action(id: &str, model: &Rc<NavigationPanelModel>) -> gio::SimpleAction {
     let action = gio::SimpleAction::new("toggle_pin", None);
     let id = id.to_owned();
     action.connect_activate(clone!(
@@ -70,10 +83,11 @@ fn make_toggle_pin_action(id: &str, model: &Rc<SidebarModel>) -> gio::SimpleActi
     action
 }
 
-pub fn build_playlist_actions(id: &str, model: &Rc<SidebarModel>) -> SimpleActionGroup {
+pub fn build_playlist_actions(id: &str, model: &Rc<NavigationPanelModel>) -> SimpleActionGroup {
     let group = SimpleActionGroup::new();
     group.add_action(&make_play_action(id, model));
     group.add_action(&make_shuffle_action(id, model));
+    group.add_action(&make_queue_action(id, model));
     group.add_action(&make_copy_link_action(id));
     group.add_action(&make_unfollow_action(id, model));
     if is_enabled(FeatureFlag::PinnedObjects) {
@@ -86,6 +100,7 @@ pub fn build_playlist_menu(is_owned: bool, id: &str, user_id: Option<&str>) -> g
     let playback_section = gio::Menu::new();
     playback_section.append(Some(&*labels::PLAY), Some("playlist.play"));
     playback_section.append(Some(&*labels::SHUFFLE), Some("playlist.shuffle"));
+    playback_section.append(Some(&*labels::ADD_TO_QUEUE), Some("playlist.queue"));
 
     let delete_section = gio::Menu::new();
     if is_owned {
@@ -120,23 +135,23 @@ pub fn build_playlist_menu(is_owned: bool, id: &str, user_id: Option<&str>) -> g
     menu
 }
 
-/// The action prefix, actions and menu for a sidebar row's context menu, or
+/// The action prefix, actions and menu for a navigation panel row's context menu, or
 /// `None` for rows without one.
 pub fn build_context_menu(
-    destination: &SidebarDestination,
-    model: &Rc<SidebarModel>,
+    destination: &NavigationPanelDestination,
+    model: &Rc<NavigationPanelModel>,
 ) -> Option<(&'static str, SimpleActionGroup, gio::Menu)> {
     let (kind, id) = match destination {
-        SidebarDestination::Playlist(PlaylistSummary { id, .. }) => {
+        NavigationPanelDestination::Playlist(PlaylistSummary { id, .. }) => {
             let actions = build_playlist_actions(id, model);
             let is_owned = model.is_playlist_owned(id);
             let user_id = model.logged_user_id();
             let menu = build_playlist_menu(is_owned, id, user_id.as_deref());
             return Some(("playlist", actions, menu));
         }
-        SidebarDestination::Album { id, .. } => (settings::PinnedKind::Album, id),
-        SidebarDestination::Artist { id, .. } => (settings::PinnedKind::Artist, id),
-        SidebarDestination::Track { id, .. } => (settings::PinnedKind::Track, id),
+        NavigationPanelDestination::Album { id, .. } => (settings::PinnedKind::Album, id),
+        NavigationPanelDestination::Artist { id, .. } => (settings::PinnedKind::Artist, id),
+        NavigationPanelDestination::Track { id, .. } => (settings::PinnedKind::Track, id),
         _ => return None,
     };
     let actions = build_pinned_actions(kind, id, model);
@@ -154,10 +169,10 @@ fn action(name: &str, activate: impl Fn() + 'static) -> gio::SimpleAction {
 pub fn build_pinned_actions(
     kind: settings::PinnedKind,
     id: &str,
-    model: &Rc<SidebarModel>,
+    model: &Rc<NavigationPanelModel>,
 ) -> SimpleActionGroup {
     let group = SimpleActionGroup::new();
-    let play = move |model: &SidebarModel, id: String, shuffle: bool| match kind {
+    let play = move |model: &NavigationPanelModel, id: String, shuffle: bool| match kind {
         settings::PinnedKind::Album => model.play_album(id, shuffle),
         settings::PinnedKind::Artist => model.play_artist(id, shuffle),
         _ => model.play_track(id),

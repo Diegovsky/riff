@@ -88,11 +88,9 @@ impl SongListModel {
         // AppState's borrow_mut, because the ListView bind callback is now
         // self-contained: it reads only the SongModel handed to it by GTK and
         // never calls back into AppModel::get_state(). See Playlist::new.
-        if cfg!(not(test)) {
-            for ListRangeUpdate(a, b, c) in changes.into_iter() {
-                debug!("pos {}, removed {}, added {}", a, b, c);
-                self.items_changed(a as u32, b as u32, c as u32);
-            }
+        for ListRangeUpdate(a, b, c) in changes.into_iter() {
+            debug!("pos {}, removed {}, added {}", a, b, c);
+            self.items_changed(a as u32, b as u32, c as u32);
         }
     }
 
@@ -155,6 +153,11 @@ impl SongListModel {
 
     pub fn append(&mut self, songs: Vec<Track>) -> SongListModelPending {
         let range = self.inner_mut().append(songs);
+        SongListModelPending::new(Some(range), self)
+    }
+
+    pub fn replace_models(&mut self, songs: Vec<SongModel>) -> SongListModelPending {
+        let range = self.inner_mut().replace_models(songs);
         SongListModelPending::new(Some(range), self)
     }
 

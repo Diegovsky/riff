@@ -58,6 +58,9 @@ mod imp {
         pub shuffle_button: TemplateChild<gtk::Button>,
 
         #[template_child]
+        pub menu_button: TemplateChild<gtk::MenuButton>,
+
+        #[template_child]
         pub like_button: TemplateChild<gtk::Button>,
 
         #[template_child]
@@ -65,9 +68,6 @@ mod imp {
 
         #[template_child]
         pub button_box: TemplateChild<gtk::Box>,
-
-        #[template_child]
-        pub info_button: TemplateChild<gtk::Button>,
 
         #[template_child]
         pub edit_button: TemplateChild<gtk::Button>,
@@ -292,16 +292,37 @@ impl DetailsHeader {
         button.connect_clicked(move |_| f());
     }
 
+    /// Sections of (id, label) entries; `on_activate` gets the id. Hidden when
+    /// empty.
+    pub fn set_menu<F: Fn(&str) + 'static>(
+        &self,
+        sections: &[Vec<(String, String)>],
+        on_activate: F,
+    ) {
+        let button = &self.widget.imp().menu_button;
+        let on_activate = Rc::new(on_activate);
+        let actions = gio::SimpleActionGroup::new();
+        let menu = gio::Menu::new();
+        for entries in sections.iter().filter(|entries| !entries.is_empty()) {
+            let section = gio::Menu::new();
+            for (id, label) in entries {
+                let action = gio::SimpleAction::new(id, None);
+                let on_activate = on_activate.clone();
+                let action_id = id.clone();
+                action.connect_activate(move |_, _| on_activate(&action_id));
+                actions.add_action(&action);
+                section.append(Some(label), Some(&format!("header.{id}")));
+            }
+            menu.append_section(None, &section);
+        }
+        button.insert_action_group("header", Some(&actions));
+        button.set_menu_model(Some(&menu));
+        button.set_visible(menu.n_items() > 0);
+    }
+
     /// Connect a handler to the like/save button. Also makes the button visible.
     pub fn connect_liked<F: Fn() + 'static>(&self, f: F) {
         let button = &self.widget.imp().like_button;
-        button.set_visible(true);
-        button.connect_clicked(move |_| f());
-    }
-
-    /// Connect a handler to the info button. Also makes the button visible.
-    pub fn connect_info<F: Fn() + 'static>(&self, f: F) {
-        let button = &self.widget.imp().info_button;
         button.set_visible(true);
         button.connect_clicked(move |_| f());
     }

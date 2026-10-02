@@ -36,9 +36,6 @@ pub mod load;
 #[cfg(debug_assertions)]
 mod dev_tools;
 
-pub mod rng;
-pub use rng::LazyRandomIndex;
-
 // Where all the app logic happens
 pub struct App {
     settings: RiffSettings,
@@ -99,6 +96,10 @@ impl App {
                 player_command_sender.clone(),
                 connect_command_sender,
             )),
+            Box::new(QueueLoader::new(
+                Rc::clone(&model),
+                Dispatcher::new(sender.clone()),
+            )),
             Box::new(CacheWarmer::new(model.api())),
             Box::new(StateTracker::new_from_gsettings()),
             App::make_dbus(Rc::clone(&model), sender.clone()),
@@ -138,11 +139,20 @@ impl App {
         let header_models: HeaderModelRegistry = Rc::new(RefCell::new(HashMap::new()));
         let registrar = HeaderRegistrar::new(app_header.clone(), Rc::clone(&header_models));
 
+        let layout = WindowLayout::new(builder);
+
         // All components that will be available initially
         let mut components: Vec<Box<dyn EventListener>> = vec![
             App::make_window(&self.settings, builder, Rc::clone(model)),
             App::make_selection_toolbar(builder, Rc::clone(model), dispatcher.clone()),
             App::make_playback(builder, Rc::clone(model), dispatcher.clone()),
+            App::make_utility_panel(
+                builder,
+                layout,
+                app_header.clone(),
+                Rc::clone(model),
+                dispatcher.clone(),
+            ),
             App::make_login(builder, dispatcher.clone()),
             App::make_navigation(builder, Rc::clone(model), dispatcher.clone(), registrar),
             // After navigation, so a pushed screen registers before the header
@@ -206,8 +216,8 @@ impl App {
         dispatcher: Dispatcher,
         registrar: HeaderRegistrar,
     ) -> Box<Navigation> {
-        let split_view: libadwaita::NavigationSplitView = builder.object("split_view").unwrap();
-        let navigation_stack: gtk::Stack = builder.object("navigation_stack").unwrap();
+        let split_view: libadwaita::OverlaySplitView = builder.object("navigation_split").unwrap();
+        let content_stack: gtk::Stack = builder.object("content_stack").unwrap();
         let home_listbox: gtk::ListBox = builder.object("home_listbox").unwrap();
         let window: libadwaita::ApplicationWindow = builder.object("window").unwrap();
 
@@ -218,7 +228,7 @@ impl App {
         Box::new(Navigation::new(
             model,
             split_view,
-            navigation_stack,
+            content_stack,
             home_listbox,
             screen_factory,
             window,
@@ -251,7 +261,28 @@ impl App {
         Box::new(PlaybackControl::new(
             model,
             builder.object("playback").unwrap(),
-            builder.object("mobile_now_playing").unwrap(),
+            builder.object("queue_bar").unwrap(),
+        ))
+    }
+
+    fn make_utility_panel(
+        builder: &gtk::Builder,
+        layout: Rc<WindowLayout>,
+        app_header: AppHeaderBar,
+        app_model: Rc<AppModel>,
+        dispatcher: Dispatcher,
+    ) -> Box<UtilityPanel> {
+        let window: libadwaita::ApplicationWindow = builder.object("window").unwrap();
+        Box::new(UtilityPanel::new(
+            &window,
+            builder.object("utility_split").unwrap(),
+            builder.object("queue_sheet").unwrap(),
+            builder.object("queue_bar").unwrap(),
+            builder.object("utility_panel").unwrap(),
+            layout,
+            app_header,
+            app_model,
+            dispatcher,
         ))
     }
 
