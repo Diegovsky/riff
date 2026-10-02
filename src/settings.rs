@@ -17,7 +17,7 @@ pub const SETTINGS: &str = "dev.diegovsky.Riff";
 /// GSettings key holding the per-user pinned-object map.
 const PINNED_OBJECTS_KEY: &str = "pinned-objects-by-user";
 
-/// The kind of media object a user can pin to the sidebar.
+/// The kind of media object a user can pin to the navigation panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PinnedKind {
@@ -271,6 +271,7 @@ impl SpotifyPlayerSettings {
         let volume = settings.double("volume");
         let shuffle = settings.boolean("shuffle");
         let skip_explicit = settings.boolean("skip-explicit");
+        let shuffle_separation = settings.uint("shuffle-separation");
         let repeat = match settings.string("repeat").as_str() {
             "song" => RepeatMode::Track,
             "playlist" => RepeatMode::Context,
@@ -344,6 +345,7 @@ impl SpotifyPlayerSettings {
             shuffle,
 
             skip_explicit,
+            shuffle_separation,
 
             bitrate,
             backend,
@@ -379,6 +381,7 @@ impl SpotifyPlayerSettings {
             SetShuffled(self.shuffle).into(),
             SetRepeatMode(self.repeat).into(),
             SetSkipExplicit(self.skip_explicit).into(),
+            SetShuffleSeparation(self.shuffle_separation).into(),
         ]
     }
 }

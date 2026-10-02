@@ -1,6 +1,6 @@
 // Widget for the "Now Playing" page.
-// Uses a GtkStack to switch between the queue content and an empty state
-// placeholder when nothing is playing.
+// The current track in the header, then the queue, or a placeholder when
+// nothing plays.
 
 use gettextrs::gettext;
 use gtk::prelude::*;
@@ -9,7 +9,7 @@ use std::rc::Rc;
 use super::NowPlayingModel;
 use crate::app::components::{
     Component, DetailsPageComponent, DeviceSelector, DeviceSelectorWidget, EventListener,
-    HasHeaderBarModel, HeaderRegistrar, TrackListModel,
+    HasHeaderBarModel, HeaderRegistrar, QueueList,
 };
 use crate::app::state::PlaybackEvent;
 use crate::app::AppEvent;
@@ -27,7 +27,11 @@ impl NowPlaying {
     pub fn new(model: Rc<NowPlayingModel>, registrar: HeaderRegistrar, name: String) -> Self {
         let mut component =
             DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), registrar, name);
-        component.create_track_list(Some(&gettext("Queue")));
+        let queue_list = QueueList::new(model.queue_list_model());
+        component.append_content(queue_list.widget());
+        // Once the list is in the page's ScrolledWindow
+        queue_list.connect_scrolling();
+        component.add_child(Box::new(queue_list));
 
         if feature_flags::is_enabled(FeatureFlag::DeviceSelector) {
             let ds_widget: DeviceSelectorWidget = glib::Object::new();
@@ -47,7 +51,7 @@ impl NowPlaying {
         stack.add_named(component.get_root_widget(), Some("content"));
         stack.add_named(&status_page, Some("empty"));
 
-        let visible = if model.current_song_id().is_some() {
+        let visible = if model.has_queue() {
             "content"
         } else {
             "empty"
@@ -62,7 +66,7 @@ impl NowPlaying {
     }
 
     fn update_empty_state(&self) {
-        let name = if self.component.model().current_song_id().is_some() {
+        let name = if self.component.model().has_queue() {
             "content"
         } else {
             "empty"
@@ -83,12 +87,13 @@ impl Component for NowPlaying {
 impl EventListener for NowPlaying {
     fn on_event(&mut self, event: &AppEvent) {
         self.component.handle_event(event);
-        match event {
-            AppEvent::PlaybackEvent(PlaybackEvent::TrackChanged(_))
-            | AppEvent::PlaybackEvent(PlaybackEvent::PlaybackStopped) => {
-                self.update_empty_state();
-            }
-            _ => {}
+        if let AppEvent::PlaybackEvent(
+            PlaybackEvent::TrackChanged(_)
+            | PlaybackEvent::PlaybackStopped
+            | PlaybackEvent::PlaylistChanged,
+        ) = event
+        {
+            self.update_empty_state();
         }
         self.broadcast_event(event);
     }

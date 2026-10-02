@@ -1,7 +1,7 @@
 // Widget for the album detail page.
-// Shows album art, track list, and a release info dialog (triggered by the
-// info button in the header).
+// Album art, tracks, and a release info dialog.
 
+use gettextrs::gettext;
 use gtk::prelude::*;
 use libadwaita::prelude::AdwDialogExt;
 use std::rc::Rc;
@@ -29,18 +29,21 @@ impl Details {
 
         let modal = ReleaseDetailsDialog::new();
 
-        // Wire the info button to open the release details dialog.
-        component.page().header().connect_info(clone!(
-            #[weak]
-            modal,
-            #[weak(rename_to = widget)]
-            component.page().widget(),
-            move || {
-                let modal = modal.upcast_ref::<libadwaita::Dialog>();
-                let parent = widget.root().and_then(|r| r.downcast::<gtk::Window>().ok());
-                modal.present(parent.as_ref());
-            }
-        ));
+        component.add_menu_entry(
+            "details",
+            &gettext("Details"),
+            clone!(
+                #[weak]
+                modal,
+                #[weak(rename_to = widget)]
+                component.page().widget(),
+                move || {
+                    let modal = modal.upcast_ref::<libadwaita::Dialog>();
+                    let parent = widget.root().and_then(|r| r.downcast::<gtk::Window>().ok());
+                    modal.present(parent.as_ref());
+                }
+            ),
+        );
 
         Self { component, modal }
     }

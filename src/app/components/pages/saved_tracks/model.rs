@@ -3,22 +3,19 @@
 // track listing, pagination, playback, and selection.
 
 use gettextrs::gettext;
-use gio::prelude::*;
-use gio::SimpleActionGroup;
 use std::ops::Deref;
 use std::rc::Rc;
 
-use crate::{impl_toggle_play, impl_track_list_model_base};
+use crate::{impl_source_page, impl_source_track_list, impl_track_list_model_base};
 
 use crate::app::components::DetailsPageModel;
-use crate::app::components::SongActions;
 use crate::app::components::{
-    build_song_menu, dispatch_api_read, HasHeaderBarModel, HeaderImageShape, PageModel,
-    PinnedPageModel, QueueMenuEntry, SimpleHeaderBarModel, TrackListModel,
+    dispatch_api_read, HasHeaderBarModel, HeaderImageShape, PageModel, PinnedPageModel,
+    SimpleHeaderBarModel, TrackListModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
-use crate::app::state::{PlaybackAction, SelectionAction, SelectionState};
+use crate::app::state::{SelectionAction, SelectionState};
 use crate::app::{
     AppEvent, AppModel, BrowserAction, BrowserEvent, Dispatcher, PaginationTarget, SongsSource,
 };
@@ -84,6 +81,14 @@ impl PageModel for SavedTracksModel {
         HeaderImageShape::Square
     }
 
+    fn songs_source(&self) -> Option<SongsSource> {
+        Some(SongsSource::SavedTracks)
+    }
+
+    fn context_name(&self) -> Option<String> {
+        Some(crate::app::components::labels::SAVED_TRACKS.clone())
+    }
+
     fn default_icon(&self) -> Option<&str> {
         Some("emote-love-symbolic")
     }
@@ -119,18 +124,7 @@ impl PageModel for SavedTracksModel {
         true
     }
 
-    fn has_play_button(&self) -> bool {
-        true
-    }
-
-    fn source_is_playing(&self) -> bool {
-        matches!(
-            self.app_model.get_state().playback.current_source(),
-            Some(SongsSource::SavedTracks)
-        )
-    }
-
-    impl_toggle_play!();
+    impl_source_page!();
 
     fn should_refresh_details(&self, event: &AppEvent) -> bool {
         matches!(
@@ -159,45 +153,11 @@ impl TrackListModel for SavedTracksModel {
         true
     }
 
-    fn load_more(&self) {
-        PageModel::load_more(self);
-    }
-
     impl_track_list_model_base!();
+    impl_source_track_list!();
 
     fn enable_selection(&self) -> bool {
         self.enable_selection_with_context(SelectionContext::SavedTracks)
-    }
-
-    fn play_song_at(&self, pos: usize, id: &str) {
-        let batch = TrackListModel::song_list_model(self).song_batch_for(pos);
-        if let Some(batch) = batch {
-            self.dispatcher
-                .dispatch(PlaybackAction::LoadPagedSongs(SongsSource::SavedTracks, batch).into());
-            self.dispatcher
-                .dispatch(PlaybackAction::Load(id.to_string()).into());
-        }
-    }
-
-    fn actions_for(&self, song: &Track) -> Option<SimpleActionGroup> {
-        let group = SimpleActionGroup::new();
-        for a in song.make_artist_actions(self.dispatcher.clone()) {
-            group.add_action(&a);
-        }
-        group.add_action(&song.make_album_action(self.dispatcher.clone()));
-        group.add_action(&song.make_link_action());
-        Some(group)
-    }
-
-    fn menu_for(&self, song: &Track, liked: bool, pinned: Option<bool>) -> Option<gio::MenuModel> {
-        Some(build_song_menu(
-            song,
-            true,
-            None,
-            QueueMenuEntry::None,
-            Some(liked),
-            pinned,
-        ))
     }
 }
 

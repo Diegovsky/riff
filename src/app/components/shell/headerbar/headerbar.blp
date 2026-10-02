@@ -14,15 +14,15 @@ template $AppHeaderBar : Adw.Bin {
         "flat",
       ]
 
-      ToggleButton sidebar_toggle {
+      ToggleButton navigation_panel_toggle {
         halign: start;
         valign: center;
         icon-name: "sidebar-show-symbolic";
-        action-name: "win.show-sidebar";
+        action-name: "win.show-navigation-panel";
         focus-on-click: false;
         can-focus: false;
 
-        /* Translators: Tooltip for the button that shows/hides the sidebar. */
+        /* Translators: Tooltip for the button that shows/hides the navigation panel. */
 
         tooltip-text: _("Toggle Sidebar");
       }
@@ -46,6 +46,17 @@ template $AppHeaderBar : Adw.Bin {
       Stack title_stack {
         hexpand: true;
         hhomogeneous: false;
+      }
+
+      // Hidden while the utility panel shows: its header has the same button
+      [end]
+      ToggleButton utility_panel_button {
+        icon-name: "music-queue-symbolic";
+        /* Translators: Tooltip of the header bar button that shows or hides the utility panel with the queue. */
+        tooltip-text: _("Queue");
+        action-name: "win.utility-panel";
+        focus-on-click: false;
+        can-focus: false;
       }
 
       [end]

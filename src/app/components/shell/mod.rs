@@ -20,7 +20,13 @@ pub use window::*;
 pub mod clipboard_import;
 pub use clipboard_import::*;
 
+pub mod layout;
+pub use layout::WindowLayout;
+
 pub mod headerbar;
 pub use headerbar::*;
 
-pub mod sidebar;
+pub mod navigation_panel;
+
+pub mod utility_panel;
+pub use utility_panel::*;

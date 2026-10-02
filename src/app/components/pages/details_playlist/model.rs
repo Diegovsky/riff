@@ -4,27 +4,22 @@
 // back (the playlist may have been deleted or is inaccessible).
 
 use gettextrs::gettext;
-use gio::prelude::*;
-use gio::SimpleActionGroup;
 use std::ops::Deref;
 use std::rc::Rc;
 
 use crate::app::components::DetailsPageModel;
-use crate::app::components::SongActions;
 use crate::app::components::{
-    build_song_menu, dispatch_api_call, dispatch_api_read, dispatch_api_read_with_fallback, labels,
-    HasHeaderBarModel, HeaderImageShape, PageModel, PinnedPageModel, QueueMenuEntry,
-    SimpleHeaderBarModel, TrackListModel,
+    dispatch_api_call, dispatch_api_read, dispatch_api_read_with_fallback, labels,
+    HasHeaderBarModel, HeaderImageShape, PageModel, PinnedPageModel, SimpleHeaderBarModel,
+    TrackListModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
-use crate::app::state::{
-    BrowserAction, BrowserEvent, PlaybackAction, SelectionAction, SelectionState,
-};
+use crate::app::state::{BrowserAction, BrowserEvent, SelectionAction, SelectionState};
 use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, PaginationTarget, SongsSource};
 use crate::feature_flags::{is_enabled, FeatureFlag};
 use crate::settings;
-use crate::{impl_toggle_play, impl_track_list_model_base};
+use crate::{impl_source_page, impl_source_track_list, impl_track_list_model_base};
 use riff_api::DomainError;
 
 /// Data model for the playlist detail page. Composes `DetailsPageModel` via Deref.
@@ -110,6 +105,10 @@ impl PageModel for PlaylistDetailsModel {
         HeaderImageShape::Square
     }
 
+    fn songs_source(&self) -> Option<SongsSource> {
+        Some(SongsSource::Playlist(self.id.clone()))
+    }
+
     fn load_page_info(&self) {
         let api = self.app_model.api();
         let id = self.id.clone();
@@ -175,15 +174,7 @@ impl PageModel for PlaylistDetailsModel {
         self.get_playlist_info().is_some()
     }
 
-    fn has_play_button(&self) -> bool {
-        true
-    }
-
-    fn source_is_playing(&self) -> bool {
-        matches!(self.app_model.get_state().playback.current_source(), Some(SongsSource::Playlist(ref id)) if id == &self.id)
-    }
-
-    impl_toggle_play!();
+    impl_source_page!();
 
     fn has_like_button(&self) -> bool {
         true
@@ -265,14 +256,6 @@ impl PageModel for PlaylistDetailsModel {
             .dispatch(AppAction::ViewUser(id.to_string()));
     }
 
-    fn has_share_button(&self) -> bool {
-        true
-    }
-
-    fn on_share_clicked(&self) {
-        self.share_link(&format!("https://open.spotify.com/playlist/{}", self.id));
-    }
-
     fn should_refresh_details(&self, event: &AppEvent) -> bool {
         matches!(event, AppEvent::BrowserEvent(BrowserEvent::PlaylistDetailsLoaded(id)) if id == &self.id)
     }
@@ -301,15 +284,12 @@ impl TrackListModel for PlaylistDetailsModel {
             .clone()
     }
 
-    fn load_more(&self) {
-        PageModel::load_more(self);
-    }
-
     fn show_album_column(&self) -> bool {
         true
     }
 
     impl_track_list_model_base!();
+    impl_source_track_list!();
 
     fn enable_selection(&self) -> bool {
         if !is_enabled(FeatureFlag::SelectMode) {
@@ -321,40 +301,6 @@ impl TrackListModel for PlaylistDetailsModel {
             SelectionContext::Playlist
         };
         self.enable_selection_with_context(context)
-    }
-
-    fn play_song_at(&self, pos: usize, id: &str) {
-        let batch = TrackListModel::song_list_model(self).song_batch_for(pos);
-        if let Some(batch) = batch {
-            self.dispatcher.dispatch(
-                PlaybackAction::LoadPagedSongs(SongsSource::Playlist(self.id.clone()), batch)
-                    .into(),
-            );
-            self.dispatcher
-                .dispatch(PlaybackAction::Load(id.to_string()).into());
-        }
-    }
-
-    fn actions_for(&self, song: &Track) -> Option<SimpleActionGroup> {
-        let group = SimpleActionGroup::new();
-        for a in song.make_artist_actions(self.dispatcher.clone()) {
-            group.add_action(&a);
-        }
-        group.add_action(&song.make_album_action(self.dispatcher.clone()));
-        group.add_action(&song.make_link_action());
-        group.add_action(&song.make_queue_action(self.dispatcher.clone()));
-        Some(group)
-    }
-
-    fn menu_for(&self, song: &Track, liked: bool, pinned: Option<bool>) -> Option<gio::MenuModel> {
-        Some(build_song_menu(
-            song,
-            true,
-            None,
-            QueueMenuEntry::Add,
-            Some(liked),
-            pinned,
-        ))
     }
 }
 

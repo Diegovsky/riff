@@ -1,4 +1,4 @@
-use crate::app::components::EventListener;
+use crate::app::components::{labels, EventListener};
 use crate::app::AppEvent;
 use crate::feature_flags::{self, FeatureFlag};
 use crate::settings::RiffSettings;
@@ -54,6 +54,9 @@ mod imp {
 
         #[template_child]
         pub skip_explicit_switch: TemplateChild<libadwaita::SwitchRow>,
+
+        #[template_child]
+        pub shuffle_separation: TemplateChild<libadwaita::SpinRow>,
 
         #[template_child]
         pub volume_curve: TemplateChild<libadwaita::ComboRow>,
@@ -625,6 +628,23 @@ impl SettingsDialog {
         settings
             .bind("skip-explicit", skip_explicit_switch, "active")
             .build();
+
+        let separation_row = widget.shuffle_separation.get();
+        let separation_adjustment = separation_row.adjustment();
+        let separation = settings.uint("shuffle-separation");
+        separation_adjustment.set_value(separation as f64);
+        separation_row.set_subtitle(&labels::shuffle_separation_label(separation));
+        {
+            let settings = settings.clone();
+            let separation_row = separation_row.downgrade();
+            separation_adjustment.connect_value_changed(move |adj| {
+                let separation = adj.value() as u32;
+                if let Some(row) = separation_row.upgrade() {
+                    row.set_subtitle(&labels::shuffle_separation_label(separation));
+                }
+                let _ = settings.set_uint("shuffle-separation", separation);
+            });
+        }
 
         // Memory cache size (MB). Bound manually rather than via `Settings::bind`
         // for the same spin-row feedback-loop reason noted above, and because the

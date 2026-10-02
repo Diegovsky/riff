@@ -16,5 +16,8 @@ pub use segmented_button::*;
 pub mod track_list;
 pub use track_list::*;
 
+pub mod queue_list;
+pub use queue_list::*;
+
 pub mod selection;
 pub use selection::*;

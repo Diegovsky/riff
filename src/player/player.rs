@@ -112,6 +112,9 @@ pub struct SpotifyPlayerSettings {
     // playback state, not librespot, so it never requires a player reload.
     pub skip_explicit: bool,
 
+    // Songs between two plays of a song, with shuffle and repeat all
+    pub shuffle_separation: u32,
+
     // Volume curve
     pub volume_curve: VolumeCurveType,
 
@@ -150,6 +153,7 @@ impl Default for SpotifyPlayerSettings {
             shuffle: false,
 
             skip_explicit: false,
+            shuffle_separation: 2,
 
             bitrate: Bitrate::Bitrate160,
             gapless: true,
@@ -878,7 +882,7 @@ impl SpotifyPlayer {
             self.delegate.stop_playback();
             return;
         }
-        self.delegate.end_of_track_reached();
+        self.delegate.skip_track();
         // The account's explicit filter may have changed; re-query it.
         let _ = self
             .command_sender

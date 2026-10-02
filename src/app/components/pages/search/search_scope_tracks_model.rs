@@ -1,7 +1,6 @@
 // Playlist adapter for the search page's scoped track view (Songs filter).
 // Reads the single `SearchState`: the query and scoped track results.
 
-use gio::prelude::*;
 use gio::SimpleActionGroup;
 use std::cell::Ref;
 use std::ops::Deref;
@@ -10,12 +9,11 @@ use std::rc::Rc;
 use crate::impl_track_list_model_base;
 
 use crate::app::components::DetailsPageModel;
-use crate::app::components::SongActions;
-use crate::app::components::{build_song_menu, QueueMenuEntry, TrackListModel};
+use crate::app::components::{source_context_actions, track_menu, TrackListModel};
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
-use crate::app::state::{PlaybackAction, SearchState, SelectionState, CARD_BATCH_SIZE};
-use crate::app::{AppModel, Dispatcher, SongsSource};
+use crate::app::state::{SearchState, SelectionState, CARD_BATCH_SIZE};
+use crate::app::{AppAction, AppModel, Dispatcher, SongsSource};
 
 use super::load_more_scope;
 
@@ -75,34 +73,28 @@ impl TrackListModel for SearchScopeTracksModel {
         self.enable_selection_with_context(SelectionContext::Default)
     }
 
-    fn play_song_at(&self, _pos: usize, id: &str) {
-        let tracks: Vec<Track> = TrackListModel::song_list_model(self).collect();
+    fn play_song_at(&self, pos: usize, id: &str) {
+        self.play_in_context(TrackListModel::context_actions(self, pos), id);
+    }
+
+    fn context_actions(&self, pos: usize) -> Option<Vec<AppAction>> {
         let query = self.get_query().unwrap_or_default();
-        self.dispatcher
-            .dispatch(PlaybackAction::LoadContextSongs(SongsSource::Search(query), tracks).into());
-        self.dispatcher
-            .dispatch(PlaybackAction::Load(id.to_string()).into());
+        let songs = TrackListModel::song_list_model(self);
+        source_context_actions(SongsSource::Search(query.clone()), Some(query), &songs, pos)
     }
 
-    fn actions_for(&self, song: &Track) -> Option<SimpleActionGroup> {
-        let group = SimpleActionGroup::new();
-        for a in song.make_artist_actions(self.dispatcher.clone()) {
-            group.add_action(&a);
-        }
-        group.add_action(&song.make_album_action(self.dispatcher.clone()));
-        group.add_action(&song.make_link_action());
-        Some(group)
+    fn actions_for(&self, _row: &SongModel, song: &Track) -> Option<SimpleActionGroup> {
+        Some(self.base.track_actions(song, None))
     }
 
-    fn menu_for(&self, song: &Track, liked: bool, pinned: Option<bool>) -> Option<gio::MenuModel> {
-        Some(build_song_menu(
-            song,
-            true,
-            None,
-            QueueMenuEntry::None,
-            Some(liked),
-            pinned,
-        ))
+    fn menu_for(
+        &self,
+        _row: &SongModel,
+        song: &Track,
+        liked: bool,
+        pinned: Option<bool>,
+    ) -> Option<gio::MenuModel> {
+        Some(track_menu(song, None, liked, pinned))
     }
 }
 

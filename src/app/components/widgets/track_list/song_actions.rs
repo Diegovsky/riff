@@ -1,12 +1,12 @@
 use gio::SimpleAction;
 
 use crate::app::models::Track;
-use crate::app::state::{AppAction, PlaybackAction};
+use crate::app::state::{AppAction, EntryKey, PlaybackAction};
 use crate::app::Dispatcher;
 
 pub trait SongActions {
-    fn make_queue_action(&self, dispatcher: Dispatcher) -> SimpleAction;
-    fn make_dequeue_action(&self, dispatcher: Dispatcher) -> SimpleAction;
+    fn make_queue_actions(&self, dispatcher: Dispatcher) -> Vec<SimpleAction>;
+    fn make_queue_entry_actions(&self, key: EntryKey, dispatcher: Dispatcher) -> Vec<SimpleAction>;
     fn make_link_action(&self) -> SimpleAction;
     fn make_album_action(&self, dispatcher: Dispatcher) -> SimpleAction;
     fn make_artist_actions(&self, dispatcher: Dispatcher) -> Vec<SimpleAction>;
@@ -19,18 +19,19 @@ fn action(name: &str, activate: impl Fn() + 'static) -> SimpleAction {
 }
 
 impl SongActions for Track {
-    fn make_queue_action(&self, dispatcher: Dispatcher) -> SimpleAction {
+    fn make_queue_actions(&self, dispatcher: Dispatcher) -> Vec<SimpleAction> {
         let song = self.clone();
-        action("queue", move || {
-            dispatcher.dispatch(PlaybackAction::Queue(vec![song.clone()]).into());
-        })
+        vec![action("queue", move || {
+            dispatcher.dispatch(AppAction::QueueTracks {
+                tracks: vec![song.clone()],
+            });
+        })]
     }
 
-    fn make_dequeue_action(&self, dispatcher: Dispatcher) -> SimpleAction {
-        let id = self.rri.id.clone();
-        action("dequeue", move || {
-            dispatcher.dispatch(PlaybackAction::Dequeue(id.clone()).into());
-        })
+    fn make_queue_entry_actions(&self, key: EntryKey, dispatcher: Dispatcher) -> Vec<SimpleAction> {
+        vec![action("dequeue", move || {
+            dispatcher.dispatch(PlaybackAction::RemoveEntries(vec![key]).into())
+        })]
     }
 
     fn make_link_action(&self) -> SimpleAction {

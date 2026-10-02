@@ -1,6 +1,6 @@
 //! Panel size overlay (debug builds only).
 //!
-//! Floats a colored box over each major panel, labelled with its pixel size.
+//! A colored box over each panel with its size, and the window's in the center.
 
 use gtk::cairo::{FontSlant, FontWeight};
 use gtk::prelude::*;
@@ -10,11 +10,12 @@ use std::rc::Rc;
 
 /// Panels to annotate, each a distinct RGB color. Names are widget ids from
 /// `window.blp`.
-const PANELS: [(&str, (f64, f64, f64)); 4] = [
-    ("sidebar_panel", (0.15, 0.70, 0.25)), // green: sidebar column
-    ("app_header", (0.90, 0.75, 0.10)),    // yellow: content header bar
-    ("navigation_stack", (0.60, 0.25, 0.85)), // purple: page stack
-    ("playback", (0.95, 0.20, 0.20)),      // red: playback bar
+const PANELS: [(&str, (f64, f64, f64)); 5] = [
+    ("navigation_panel", (0.15, 0.70, 0.25)), // green: navigation panel column
+    ("app_header", (0.90, 0.75, 0.10)),       // yellow: content header bar
+    ("content_stack", (0.60, 0.25, 0.85)),    // purple: page stack
+    ("playback", (0.95, 0.20, 0.20)),         // red: playback bar
+    ("utility_panel", (0.20, 0.55, 0.95)),    // blue: utility panel
 ];
 
 /// Set up the overlay and bind it to the "Panel Sizes" `switch`.
@@ -52,7 +53,7 @@ pub fn wire(builder: &gtk::Builder, switch: &gtk::Switch) {
             let Some(widget) = builder_for_draw.object::<gtk::Widget>(*name) else {
                 continue;
             };
-            // Skip panels not on screen, e.g. the sidebar when collapsed.
+            // Skip panels not on screen, e.g. the navigation panel when collapsed.
             if !widget.is_mapped() {
                 continue;
             }
@@ -96,10 +97,12 @@ pub fn wire(builder: &gtk::Builder, switch: &gtk::Switch) {
             cr.move_to(x + pad, y + pad + fe.ascent());
             let _ = cr.show_text(&text);
         }
+
+        draw_window_size(area, cr);
     });
 
     // Repaint only when a panel size changes: hash all dimensions each frame
-    // and redraw when the hash moves.
+    // and redraw when the hash moves
     let builder_for_tick = builder.clone();
     let enabled_for_tick = Rc::clone(&enabled);
     let last_signature: Cell<u64> = Cell::new(u64::MAX);
@@ -130,4 +133,26 @@ pub fn wire(builder: &gtk::Builder, switch: &gtk::Switch) {
         area.queue_draw();
         glib::Propagation::Proceed
     });
+}
+
+fn draw_window_size(area: &gtk::DrawingArea, cr: &gtk::cairo::Context) {
+    let text = format!("Window  W: {}px   H: {}px", area.width(), area.height());
+    cr.select_font_face("monospace", FontSlant::Normal, FontWeight::Bold);
+    cr.set_font_size(18.0);
+    let (Ok(fe), Ok(te)) = (cr.font_extents(), cr.text_extents(&text)) else {
+        return;
+    };
+    let pad = 8.0;
+    let box_w = te.width() + pad * 2.0;
+    let box_h = fe.height() + pad * 2.0;
+    let x = (area.width() as f64 - box_w) / 2.0;
+    let y = (area.height() as f64 - box_h) / 2.0;
+
+    cr.set_source_rgba(0.0, 0.0, 0.0, 0.75);
+    cr.rectangle(x, y, box_w, box_h);
+    let _ = cr.fill();
+
+    cr.set_source_rgb(1.0, 1.0, 1.0);
+    cr.move_to(x + pad - te.x_bearing(), y + pad + fe.ascent());
+    let _ = cr.show_text(&text);
 }

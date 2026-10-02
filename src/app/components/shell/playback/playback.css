@@ -45,13 +45,6 @@
   min-width: 9px;
 }
 
-.mobile-now-playing {
-  border-radius: 0;
-  background-color: alpha(currentColor, 0.05);
-  padding: 8px 24px 8px 24px;
-  margin: 0 -8px 0px -8px;
-}
-
 .seek-time-label {
   background-color: @card_bg_color;
   color: @window_fg_color;
@@ -60,4 +53,13 @@
   padding: 4px 8px;
   font-size: 1em;
   margin-top: -28px;
+}
+
+/* Like the open bottom sheet's drag handle */
+.queue-bar__handle {
+  background-color: color-mix(in srgb, currentColor 25%, transparent);
+  min-width: 54px;
+  min-height: 6px;
+  margin: 15px;
+  border-radius: 99px;
 }

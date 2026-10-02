@@ -2,28 +2,23 @@
 // Handles album metadata, track pagination, save/unsave (like), playback,
 // and artist navigation. On 400/404 from the API, navigates back.
 
-use gio::prelude::*;
-use gio::SimpleActionGroup;
 use std::ops::Deref;
 use std::rc::Rc;
 
 use crate::app::components::DetailsPageModel;
-use crate::app::components::SongActions;
 use crate::app::components::{
-    build_song_menu, dispatch_api_call, dispatch_api_read, dispatch_api_read_with_fallback, labels,
-    HasHeaderBarModel, HeaderImageShape, PageModel, PinnedPageModel, QueueMenuEntry,
-    SimpleHeaderBarModel, TrackListModel,
+    dispatch_api_call, dispatch_api_read, dispatch_api_read_with_fallback, labels,
+    HasHeaderBarModel, HeaderImageShape, PageModel, PinnedPageModel, SimpleHeaderBarModel,
+    TrackListModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
 use crate::app::state::CARD_BATCH_SIZE;
-use crate::app::state::{
-    BrowserAction, BrowserEvent, PlaybackAction, SelectionAction, SelectionState,
-};
+use crate::app::state::{BrowserAction, BrowserEvent, SelectionAction, SelectionState};
 use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, PaginationTarget, SongsSource};
 use crate::feature_flags::{self, FeatureFlag};
 use crate::settings;
-use crate::{impl_toggle_play, impl_track_list_model_base};
+use crate::{impl_source_page, impl_source_track_list, impl_track_list_model_base};
 use riff_api::DomainError;
 
 /// Data model for the album detail page. Composes `DetailsPageModel` via Deref.
@@ -78,6 +73,10 @@ impl PageModel for DetailsModel {
 
     fn header_image_shape(&self) -> HeaderImageShape {
         HeaderImageShape::Square
+    }
+
+    fn songs_source(&self) -> Option<SongsSource> {
+        Some(SongsSource::Album(self.id.clone()))
     }
 
     fn load_page_info(&self) {
@@ -159,15 +158,7 @@ impl PageModel for DetailsModel {
         self.get_album_info().is_some()
     }
 
-    fn has_play_button(&self) -> bool {
-        true
-    }
-
-    fn source_is_playing(&self) -> bool {
-        matches!(self.app_model.get_state().playback.current_source(), Some(SongsSource::Album(ref id)) if id == &self.id)
-    }
-
-    impl_toggle_play!();
+    impl_source_page!();
 
     fn has_like_button(&self) -> bool {
         true
@@ -211,18 +202,6 @@ impl PageModel for DetailsModel {
                     .map(|_| BrowserAction::UnsaveAlbum(id).into())
             }
         });
-    }
-
-    fn has_info_button(&self) -> bool {
-        true
-    }
-
-    fn has_share_button(&self) -> bool {
-        true
-    }
-
-    fn on_share_clicked(&self) {
-        self.share_link(&format!("https://open.spotify.com/album/{}", self.id));
     }
 
     fn get_subtitle_links(&self) -> Vec<ArtistRef> {
@@ -277,47 +256,11 @@ impl TrackListModel for DetailsModel {
         true
     }
 
-    fn load_more(&self) {
-        PageModel::load_more(self);
-    }
-
     impl_track_list_model_base!();
+    impl_source_track_list!();
 
     fn enable_selection(&self) -> bool {
         self.enable_selection_with_context(SelectionContext::Default)
-    }
-
-    fn play_song_at(&self, pos: usize, id: &str) {
-        let batch = TrackListModel::song_list_model(self).song_batch_for(pos);
-        if let Some(batch) = batch {
-            self.dispatcher.dispatch(
-                PlaybackAction::LoadPagedSongs(SongsSource::Album(self.id.clone()), batch).into(),
-            );
-            self.dispatcher
-                .dispatch(PlaybackAction::Load(id.to_string()).into());
-        }
-    }
-
-    fn actions_for(&self, song: &Track) -> Option<SimpleActionGroup> {
-        let group = SimpleActionGroup::new();
-        for a in song.make_artist_actions(self.dispatcher.clone()) {
-            group.add_action(&a);
-        }
-
-        group.add_action(&song.make_link_action());
-        group.add_action(&song.make_queue_action(self.dispatcher.clone()));
-        Some(group)
-    }
-
-    fn menu_for(&self, song: &Track, liked: bool, pinned: Option<bool>) -> Option<gio::MenuModel> {
-        Some(build_song_menu(
-            song,
-            false,
-            None,
-            QueueMenuEntry::Add,
-            Some(liked),
-            pinned,
-        ))
     }
 }
 

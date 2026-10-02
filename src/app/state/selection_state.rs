@@ -7,6 +7,7 @@ use crate::app::state::{AppAction, AppEvent, UpdatableState};
 #[derive(Clone, Debug)]
 pub enum SelectionAction {
     Select(Vec<Track>),
+    SelectKeyed(Vec<(String, Track)>),
     Deselect(Vec<String>),
     Clear,
 }
@@ -41,8 +42,8 @@ pub enum SelectionContext {
 }
 
 pub struct SelectionState {
-    selected_songs: Vec<Track>,
-    selected_songs_ids: HashSet<String>,
+    selected_songs: Vec<(String, Track)>,
+    selected_keys: HashSet<String>,
     selection_active: bool,
     pub context: SelectionContext,
 }
@@ -51,7 +52,7 @@ impl Default for SelectionState {
     fn default() -> Self {
         Self {
             selected_songs: Default::default(),
-            selected_songs_ids: Default::default(),
+            selected_keys: Default::default(),
             selection_active: false,
             context: SelectionContext::Default,
         }
@@ -59,22 +60,18 @@ impl Default for SelectionState {
 }
 
 impl SelectionState {
-    fn select(&mut self, song: Track) -> bool {
-        let selected = self.selected_songs_ids.contains(&song.rri.id);
+    fn select(&mut self, key: String, song: Track) -> bool {
+        let selected = self.selected_keys.contains(&key);
         if !selected {
-            self.selected_songs_ids.insert(song.rri.id.clone());
-            self.selected_songs.push(song);
+            self.selected_keys.insert(key.clone());
+            self.selected_songs.push((key, song));
         }
         !selected
     }
 
-    fn deselect(&mut self, id: &str) -> bool {
-        let songs: Vec<Track> = std::mem::take(&mut self.selected_songs)
-            .into_iter()
-            .filter(|s| s.rri.id != id)
-            .collect();
-        self.selected_songs = songs;
-        self.selected_songs_ids.remove(id)
+    fn deselect(&mut self, key: &str) -> bool {
+        self.selected_songs.retain(|(k, _)| k != key);
+        self.selected_keys.remove(key)
     }
 
     pub fn set_mode(&mut self, context: Option<SelectionContext>) -> Option<bool> {
@@ -99,22 +96,43 @@ impl SelectionState {
         self.selection_active
     }
 
-    pub fn is_song_selected(&self, id: &str) -> bool {
-        self.selected_songs_ids.contains(id)
+    pub fn is_song_selected(&self, key: &str) -> bool {
+        self.selected_keys.contains(key)
     }
 
     pub fn count(&self) -> usize {
-        self.selected_songs_ids.len()
+        self.selected_keys.len()
     }
 
     // Clears (!) the selection, returns associated memory
     pub fn take_selection(&mut self) -> Vec<Track> {
+        self.take_keyed_selection()
+            .into_iter()
+            .map(|(_, track)| track)
+            .collect()
+    }
+
+    pub fn take_keyed_selection(&mut self) -> Vec<(String, Track)> {
         std::mem::take(self).selected_songs
+    }
+
+    fn select_rows(
+        &mut self,
+        rows: impl IntoIterator<Item = (String, Track)>,
+    ) -> Vec<SelectionEvent> {
+        let changed = rows.into_iter().fold(false, |result, (key, track)| {
+            self.select(key, track) || result
+        });
+        if changed {
+            vec![SelectionEvent::SelectionChanged]
+        } else {
+            vec![]
+        }
     }
 
     // Just have a look at the selection without changing it
     pub fn peek_selection(&self) -> impl Iterator<Item = &'_ Track> {
-        self.selected_songs.iter()
+        self.selected_songs.iter().map(|(_, track)| track)
     }
 }
 
@@ -125,15 +143,9 @@ impl UpdatableState for SelectionState {
     fn update_with(&mut self, action: Cow<Self::Action>) -> Vec<Self::Event> {
         match action.into_owned() {
             SelectionAction::Select(tracks) => {
-                let changed = tracks
-                    .into_iter()
-                    .fold(false, |result, track| self.select(track) || result);
-                if changed {
-                    vec![SelectionEvent::SelectionChanged]
-                } else {
-                    vec![]
-                }
+                self.select_rows(tracks.into_iter().map(|t| (t.rri.id.clone(), t)))
             }
+            SelectionAction::SelectKeyed(rows) => self.select_rows(rows),
             SelectionAction::Deselect(ids) => {
                 let changed = ids
                     .iter()
@@ -149,5 +161,52 @@ impl UpdatableState for SelectionState {
                 vec![SelectionEvent::SelectionModeChanged(false)]
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::models::make_track;
+
+    fn update(state: &mut SelectionState, action: SelectionAction) -> Vec<SelectionEvent> {
+        state.update_with(Cow::Owned(action))
+    }
+
+    #[test]
+    fn test_selection_by_id_and_by_key() {
+        let mut state = SelectionState::default();
+        state.set_mode(Some(SelectionContext::Default));
+        let events = update(
+            &mut state,
+            SelectionAction::Select(vec![make_track("a"), make_track("b"), make_track("a")]),
+        );
+        assert_eq!(events.len(), 1);
+        assert_eq!(state.count(), 2);
+        assert!(state.is_song_selected("a"));
+        assert_eq!(state.take_selection().len(), 2);
+        assert!(!state.is_selection_enabled());
+
+        state.set_mode(Some(SelectionContext::Queue));
+        update(
+            &mut state,
+            SelectionAction::SelectKeyed(vec![
+                ("k1".to_string(), make_track("a")),
+                ("k2".to_string(), make_track("a")),
+            ]),
+        );
+        assert_eq!(state.count(), 2);
+        assert!(state.is_song_selected("k1"));
+        assert!(!state.is_song_selected("a"));
+        update(
+            &mut state,
+            SelectionAction::Deselect(vec!["k1".to_string()]),
+        );
+        let taken = state.take_keyed_selection();
+        assert_eq!(taken.len(), 1);
+        assert_eq!(
+            (taken[0].0.as_str(), taken[0].1.rri.id.as_str()),
+            ("k2", "a")
+        );
     }
 }

@@ -5,6 +5,9 @@ use gtk::{glib, CompositeTemplate};
 use crate::app::components::display_add_css_provider;
 use crate::app::components::utils::{decode_px, format_duration, Clock, Debouncer};
 use crate::app::models::RepeatMode;
+use crate::feature_flags::FeatureFlag;
+use crate::settings::SETTINGS;
+use gio::prelude::SettingsExtManual;
 
 use riff_api::ApiService;
 
@@ -48,6 +51,9 @@ mod imp {
         #[template_child]
         pub volume_slider: TemplateChild<gtk::Scale>,
 
+        #[template_child]
+        pub queue_button: TemplateChild<gtk::ToggleButton>,
+
         pub clock: Clock,
     }
 
@@ -72,6 +78,15 @@ mod imp {
             self.now_playing.set_info_visible(true);
             display_add_css_provider(resource!("/components/playback.css"));
 
+            gio::Settings::new(SETTINGS)
+                .bind(
+                    FeatureFlag::QueueSidePanel.key(),
+                    &*self.queue_button,
+                    "visible",
+                )
+                .get()
+                .invert_boolean()
+                .build();
             let track_position = self.track_position.clone();
             let track_duration = self.track_duration.clone();
             let motion = gtk::EventControllerMotion::new();

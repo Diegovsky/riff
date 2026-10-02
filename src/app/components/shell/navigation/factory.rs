@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use crate::app::components::sidebar::{Sidebar, SidebarModel};
+use crate::app::components::navigation_panel::{NavigationPanel, NavigationPanelModel};
 use crate::app::components::*;
 use crate::app::{AppModel, Dispatcher};
 use crate::settings::StateTracker;
@@ -54,9 +54,9 @@ impl ScreenFactory {
         self.register_card_page("library", &gettext("Library"), page)
     }
 
-    pub fn make_sidebar(&self, listbox: gtk::ListBox) -> impl ListenerComponent {
-        let model = SidebarModel::new(Rc::clone(&self.app_model), self.dispatcher.clone());
-        Sidebar::new(listbox, Rc::new(model))
+    pub fn make_navigation_panel(&self, listbox: gtk::ListBox) -> impl ListenerComponent {
+        let model = NavigationPanelModel::new(Rc::clone(&self.app_model), self.dispatcher.clone());
+        NavigationPanel::new(listbox, Rc::new(model))
     }
 
     pub fn make_saved_playlists(&self) -> impl ListenerComponent {

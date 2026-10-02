@@ -13,7 +13,13 @@ mod imp {
     #[template(resource = "/dev/diegovsky/Riff/components/headerbar.ui")]
     pub struct AppHeaderBar {
         #[template_child]
-        pub sidebar_toggle: TemplateChild<gtk::ToggleButton>,
+        pub main_header: TemplateChild<libadwaita::HeaderBar>,
+
+        #[template_child]
+        pub utility_panel_button: TemplateChild<gtk::ToggleButton>,
+
+        #[template_child]
+        pub navigation_panel_toggle: TemplateChild<gtk::ToggleButton>,
 
         #[template_child]
         pub go_back: TemplateChild<gtk::Button>,
@@ -137,6 +143,15 @@ impl AppHeaderBar {
     }
 
     // --- Fixed control state ---
+
+    pub fn set_utility_panel_state(&self, open_beside: bool, side_panel: bool) {
+        self.imp()
+            .main_header
+            .set_show_end_title_buttons(!open_beside);
+        self.imp()
+            .utility_panel_button
+            .set_visible(side_panel && !open_beside);
+    }
 
     pub fn set_can_go_back(&self, can_go_back: bool) {
         self.imp().go_back.set_visible(can_go_back);

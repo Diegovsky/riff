@@ -56,6 +56,7 @@ impl PlayerNotifier {
     ) -> Self {
         let dsp_settings = Self::watch_dsp_settings(command_sender.clone());
         Self::watch_skip_explicit_setting(&dsp_settings, &dispatcher);
+        Self::watch_shuffle_separation_setting(&dsp_settings, &dispatcher);
         Self {
             app_model,
             dispatcher,
@@ -73,6 +74,14 @@ impl PlayerNotifier {
         settings.connect_changed(Some("skip-explicit"), move |settings, _| {
             let skip = settings.boolean("skip-explicit");
             d.dispatch(PlaybackAction::SetSkipExplicit(skip).into());
+        });
+    }
+
+    fn watch_shuffle_separation_setting(settings: &gio::Settings, dispatcher: &Dispatcher) {
+        let d = dispatcher.clone();
+        settings.connect_changed(Some("shuffle-separation"), move |settings, _| {
+            let separation = settings.uint("shuffle-separation");
+            d.dispatch(PlaybackAction::SetShuffleSeparation(separation).into());
         });
     }
 
@@ -144,17 +153,19 @@ impl PlayerNotifier {
     fn currently_playing(&self) -> Option<CurrentlyPlaying> {
         let state = self.app_model.get_state();
         let song = state.playback.current_song_id()?;
-        let offset = state.playback.current_song_index()?;
         let source = state.playback.current_source().cloned();
-        let result = match source {
-            Some(source) if source.has_spotify_uri() => CurrentlyPlaying::WithSource {
-                source,
-                offset,
-                song,
-            },
+        let context_offset = state.playback.current_context_index();
+        let result = match (source, context_offset) {
+            (Some(source), Some(offset)) if source.has_spotify_uri() => {
+                CurrentlyPlaying::WithSource {
+                    source,
+                    offset,
+                    song,
+                }
+            }
             _ => CurrentlyPlaying::Songs {
-                songs: state.playback.songs().map_collect(|s| s.rri.id),
-                offset,
+                songs: state.playback.upcoming_ids(),
+                offset: 0,
             },
         };
         Some(result)

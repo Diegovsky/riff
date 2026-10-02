@@ -20,12 +20,11 @@ src/app/components/shell/device_selector/widget.rs
 src/app/components/shell/navigation/factory.rs
 src/app/components/shell/notification/mod.rs
 src/app/components/shell/playback/playback_controls.rs
-src/app/components/shell/playback/playback_info_mobile.rs
 src/app/components/shell/playback/playback_info.rs
-src/app/components/shell/sidebar/context_menu.rs
-src/app/components/shell/sidebar/model.rs
-src/app/components/shell/sidebar/sidebar_item.rs
-src/app/components/shell/sidebar/sidebar.rs
+src/app/components/shell/navigation_panel/context_menu.rs
+src/app/components/shell/navigation_panel/model.rs
+src/app/components/shell/navigation_panel/navigation_panel_item.rs
+src/app/components/shell/navigation_panel/navigation_panel.rs
 src/app/components/shell/user_menu/user_menu.rs
 src/app/components/shell/window/mod.rs
 src/app/components/widgets/card_list/component.rs
@@ -34,6 +33,7 @@ src/app/components/widgets/details_page/header.rs
 src/app/components/widgets/details_page/model.rs
 src/app/components/widgets/track_list/track_row.rs
 src/app/components/widgets/selection/component.rs
+src/app/components/widgets/queue_list/model.rs
 src/app/components/widgets/track_list/track_list.rs
 src/app/models/card_enums.rs
 src/app/models/card_model.rs
@@ -54,10 +54,9 @@ src/app/components/shell/device_selector/device_selector.blp
 src/app/components/shell/headerbar/headerbar.blp
 src/app/components/shell/playback/playback_controls.blp
 src/app/components/shell/playback/playback_info.blp
-src/app/components/shell/playback/playback_info_mobile.blp
 src/app/components/shell/playback/playback_widget.blp
-src/app/components/shell/sidebar/create_playlist.blp
-src/app/components/shell/sidebar/sidebar_row.blp
+src/app/components/shell/navigation_panel/create_playlist.blp
+src/app/components/shell/navigation_panel/navigation_panel_row.blp
 src/app/components/widgets/card/card.blp
 src/app/components/widgets/card_list/card_list.blp
 src/app/components/widgets/card_list/card_view_menu.blp

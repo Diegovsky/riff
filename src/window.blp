@@ -5,24 +5,8 @@ Adw.ApplicationWindow window {
   default-width: 1080;
   default-height: 720;
 
-  Adw.Breakpoint {
-    condition("max-width:764sp")
-
-    setters {
-      mobile_now_playing_container.visible: true;
-    }
-  }
-
-  Adw.Breakpoint {
-    condition("max-width:550sp")
-
-    setters {
-      mobile_now_playing_container.visible: true;
-      split_view.collapsed: true;
-    }
-  }
-
   $ShellBox {
+    // Keep in sync with shortcuts_dialog
     ShortcutController {
       scope: local;
 
@@ -60,101 +44,122 @@ Adw.ApplicationWindow window {
     Adw.ToastOverlay toast_overlay {
       vexpand: true;
 
-      Adw.NavigationSplitView split_view {
-        vexpand: true;
+      // Queue sheet
+      Adw.BottomSheet queue_sheet {
+        reveal-bottom-bar: false;
+        // Narrow windows only. Beside the content, the queue isn't in the
+        // sheet: the bar shows the current track and doesn't open
+        bottom-bar: $QueueBarWidget queue_bar {
+          height-request: 36;
+        };
+        full-width: false;
 
-        sidebar: Adw.NavigationPage {
-          title: "Sidebar";
+        content: Adw.OverlaySplitView utility_split {
+          sidebar-position: end;
+          show-sidebar: false;
+          pin-sidebar: true;
+          sidebar-width-unit: px;
+          // The queue sheet's bottom bar is over the content: the content
+          // ends above it
+          margin-bottom: bind queue_sheet.bottom-bar-height;
 
-          child: Box sidebar_panel {
-            orientation: vertical;
+          // An OverlaySplitView collapses without reparenting its children,
+          // which would rebuild every page
+          content: Adw.OverlaySplitView navigation_split {
+            vexpand: true;
+            pin-sidebar: true;
+            sidebar-width-unit: px;
 
-            Adw.HeaderBar sidebar_header {
-              styles ["flat"]
+            // Navigation panel
+            sidebar: Box navigation_panel {
+              Box {
+                orientation: vertical;
+                hexpand: true;
 
-              Button search_button {
-                icon-name: "system-search-symbolic";
-                tooltip-text: _("Search");
-                focus-on-click: false;
-                can-focus: false;
+                Adw.HeaderBar navigation_panel_header {
+                  styles [
+                    "flat",
+                  ]
+
+                  Button search_button {
+                    icon-name: "system-search-symbolic";
+                    tooltip-text: _("Search");
+                    focus-on-click: false;
+                    can-focus: false;
+                  }
+
+                  [title]
+                  Adw.WindowTitle {
+                    title: "Riff";
+                  }
+
+                  [end]
+                  MenuButton user {
+                    icon-name: "open-menu-symbolic";
+                    tooltip-text: _("Main Menu");
+                    focus-on-click: false;
+                    can-focus: false;
+                  }
+                }
+
+                ScrolledWindow {
+                  hscrollbar-policy: never;
+
+                  ListBox home_listbox {
+                    vexpand: true;
+
+                    styles [
+                      "navigation-sidebar",
+                    ]
+                  }
+                }
               }
 
-              [title]
-              Adw.WindowTitle {
-                title: "Riff";
-              }
-
-              [end]
-              MenuButton user {
-                icon-name: "open-menu-symbolic";
-                tooltip-text: _("Main Menu");
-                focus-on-click: false;
-                can-focus: false;
-              }
-            }
-
-            ScrolledWindow {
-              hscrollbar-policy: never;
-              ListBox home_listbox {
-                width-request: 200;
-                vexpand: true;
+              // The drag itself is on the split view (see shell/layout)
+              Box navigation_resize_handle {
+                width-request: 6;
 
                 styles [
-                  "navigation-sidebar",
+                  "navigation-panel__resize-handle",
                 ]
               }
-            }
+            };
+
+            // Content panel. In a ClipBin, so the panels are never squeezed
+            // for it while they slide (see shell/layout/clip_bin.rs)
+            content: $ClipBin {
+              child: Box content_panel {
+                orientation: vertical;
+
+                $AppHeaderBar app_header {}
+
+                Stack content_stack {
+                  hexpand: true;
+                  vexpand: true;
+                  transition-type: slide_left_right;
+                }
+              };
+            };
           };
-        };
 
-        content: Adw.NavigationPage {
-          tag: "content";
-          title: "Home";
-
-          child: Box {
-            orientation: vertical;
-
-            $AppHeaderBar app_header {
-            }
-
-            Stack navigation_stack {
-              hexpand: true;
-              vexpand: true;
-              transition-type: slide_left_right;
-            }
-          };
+          // Utility panel
+          sidebar: $UtilityPanelWidget utility_panel {};
         };
       }
     }
 
-    // Trailing children of ShellBox, pinned to the bottom at fixed height.
-    // See shell/window/shell_box.rs.
-    Box mobile_now_playing_container {
-      visible: false;
-      hexpand: true;
-
-      $PlaybackInfoMobileWidget mobile_now_playing {
-        visible: false;
-        hexpand: true;
-        height-request: 36;
-
-        styles [
-          "mobile-now-playing",
-        ]
-      }
-    }
-
+    // Playback bar, with the selection toolbar over it
     Overlay {
       hexpand: true;
 
       $PlaybackWidget playback {
-        hexpand: "1";
+        hexpand: true;
         vexpand: false;
       }
 
       [overlay]
       $SelectionToolbarWidget selection_toolbar {
-        hexpand: "1";
+        hexpand: true;
       }
     }
   }

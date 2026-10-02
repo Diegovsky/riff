@@ -104,6 +104,10 @@ impl AppPlayerDelegate {
     }
 
     fn end_of_track_reached(&self) {
+        self.send(PlaybackAction::TrackEnded.into())
+    }
+
+    fn skip_track(&self) {
         self.send(PlaybackAction::Next.into())
     }
 

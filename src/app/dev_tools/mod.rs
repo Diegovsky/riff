@@ -17,7 +17,7 @@ use crate::player::Command;
 /// Wire up the dev tools menu and all of its controls.
 ///
 /// Loads the dev menu from its own blueprint (`dev_tools.blp`), packs it into
-/// the sidebar header, and connects every dev widget to the app and player
+/// the navigation panel header, and connects every dev widget to the app and player
 /// senders. Called once during UI setup in debug builds.
 pub fn wire_dev_tools(
     builder: &gtk::Builder,
@@ -27,11 +27,12 @@ pub fn wire_dev_tools(
 ) {
     // The dev menu lives in its own blueprint (src/app/dev_tools.blp) so the
     // dev-only markup stays out of window.blp. Load it here and pack it into
-    // the sidebar header, right after the search button.
+    // the navigation panel header, right after the search button.
     let dev_builder = gtk::Builder::from_resource("/dev/diegovsky/Riff/dev_tools.ui");
     let dev_menu: gtk::MenuButton = dev_builder.object("dev_menu").unwrap();
-    let sidebar_header: libadwaita::HeaderBar = builder.object("sidebar_header").unwrap();
-    sidebar_header.pack_start(&dev_menu);
+    let navigation_panel_header: libadwaita::HeaderBar =
+        builder.object("navigation_panel_header").unwrap();
+    navigation_panel_header.pack_start(&dev_menu);
     dev_menu.set_visible(true);
 
     let display = gdk::Display::default().unwrap();
@@ -243,7 +244,7 @@ pub fn wire_dev_tools(
             playback.is_shuffled(),
             playback.repeat_mode(),
             playback.current_song_id(),
-            playback.songs().len()
+            playback.upcoming_keys().len()
         );
         info!("==== END STATE DUMP ====");
     });

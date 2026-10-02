@@ -25,14 +25,6 @@ impl SelectionToolbarModel {
         }
     }
 
-    pub fn move_up_selection(&self) {
-        self.dispatcher.dispatch(AppAction::MoveUpSelection);
-    }
-
-    pub fn move_down_selection(&self) {
-        self.dispatcher.dispatch(AppAction::MoveDownSelection);
-    }
-
     pub fn queue_selection(&self) {
         self.dispatcher.dispatch(AppAction::QueueSelection);
     }
@@ -131,16 +123,6 @@ pub struct SelectionToolbar {
 impl SelectionToolbar {
     pub fn new(model: SelectionToolbarModel, widget: SelectionToolbarWidget) -> Self {
         let model = Rc::new(model);
-        widget.connect_move_up(clone!(
-            #[weak]
-            model,
-            move || model.move_up_selection()
-        ));
-        widget.connect_move_down(clone!(
-            #[weak]
-            model,
-            move || model.move_down_selection()
-        ));
         widget.connect_queue(clone!(
             #[weak]
             model,
@@ -163,7 +145,6 @@ impl SelectionToolbar {
         let count = self.model.selected_count();
         match self.model.selection().context {
             SelectionContext::Default => {
-                self.widget.set_move(SelectionToolState::Hidden);
                 self.widget
                     .set_queue(SelectionToolState::Visible(count > 0));
                 self.widget.set_add(SelectionToolState::Visible(count > 0));
@@ -171,7 +152,6 @@ impl SelectionToolbar {
                 self.widget.set_save(SelectionToolState::Visible(count > 0));
             }
             SelectionContext::SavedTracks => {
-                self.widget.set_move(SelectionToolState::Hidden);
                 self.widget
                     .set_queue(SelectionToolState::Visible(count > 0));
                 self.widget.set_add(SelectionToolState::Visible(count > 0));
@@ -180,15 +160,12 @@ impl SelectionToolbar {
                 self.widget.set_save(SelectionToolState::Hidden);
             }
             SelectionContext::ReadOnlyQueue => {
-                self.widget.set_move(SelectionToolState::Hidden);
                 self.widget.set_queue(SelectionToolState::Hidden);
                 self.widget.set_add(SelectionToolState::Hidden);
                 self.widget.set_remove(SelectionToolState::Hidden);
                 self.widget.set_save(SelectionToolState::Visible(count > 0));
             }
             SelectionContext::Queue => {
-                self.widget
-                    .set_move(SelectionToolState::Visible(count == 1));
                 self.widget.set_queue(SelectionToolState::Hidden);
                 self.widget.set_add(SelectionToolState::Hidden);
                 self.widget
@@ -196,7 +173,6 @@ impl SelectionToolbar {
                 self.widget.set_save(SelectionToolState::Visible(count > 0));
             }
             SelectionContext::Playlist => {
-                self.widget.set_move(SelectionToolState::Hidden);
                 self.widget
                     .set_queue(SelectionToolState::Visible(count > 0));
                 self.widget.set_add(SelectionToolState::Hidden);
@@ -204,7 +180,6 @@ impl SelectionToolbar {
                 self.widget.set_save(SelectionToolState::Hidden);
             }
             SelectionContext::EditablePlaylist(_) => {
-                self.widget.set_move(SelectionToolState::Hidden);
                 self.widget
                     .set_queue(SelectionToolState::Visible(count > 0));
                 self.widget.set_add(SelectionToolState::Hidden);

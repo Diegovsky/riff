@@ -8,5 +8,7 @@ pub use track_row::*;
 mod disc_header_row;
 pub use disc_header_row::*;
 
+mod reorder;
+
 mod song_actions;
 pub use song_actions::SongActions;
