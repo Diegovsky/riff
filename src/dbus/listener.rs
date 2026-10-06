@@ -49,7 +49,11 @@ impl AppPlaybackStateListener {
                 .map(|a| a.name.clone())
                 .unwrap_or_default(),
             artist: song.artists.iter().map(|a| a.name.clone()).collect(),
-            art: song.art.largest().map(str::to_owned),
+            art: song
+                .art
+                .largest()
+                .filter(|url| !riff_api::models::is_resource_url(url))
+                .map(str::to_owned),
         })
     }
 

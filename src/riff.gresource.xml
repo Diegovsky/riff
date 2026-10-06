@@ -61,15 +61,10 @@
     <!-- navigation panel -->
     <file alias="navigation_panel/navigation_panel_row.ui">app/components/shell/navigation_panel/navigation_panel_row.ui</file>
     <file alias="components/create_playlist.ui">app/components/shell/navigation_panel/create_playlist.ui</file>
-    <!-- default placeholders for missing artwork -->
-    <file compressed="true" preprocess="xml-stripblanks" alias="defaults/album-default.svg">app/icons/album-default.svg</file>
-    <file compressed="true" preprocess="xml-stripblanks" alias="defaults/artist-default.svg">app/icons/artist-default.svg</file>
-    <file compressed="true" preprocess="xml-stripblanks" alias="defaults/playlist-default.svg">app/icons/playlist-default.svg</file>
-    <file compressed="true" preprocess="xml-stripblanks" alias="defaults/track-default.svg">app/icons/track-default.svg</file>
-    <file compressed="true" preprocess="xml-stripblanks" alias="defaults/user-default.svg">app/icons/user-default.svg</file>
   </gresource>
   <gresource prefix="/dev/diegovsky/Riff/icons/scalable/actions/">
-    <file compressed="true" preprocess="xml-stripblanks" alias="music-queue-symbolic.svg">app/icons/music-queue-symbolic.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="now-playing-symbolic.svg">app/icons/now-playing-symbolic.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="queue-symbolic.svg">app/icons/queue-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="playlist2-symbolic.svg">app/icons/playlist2-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="library-music-symbolic.svg">app/icons/library-music-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="nautilus-search-filters-symbolic.svg">app/icons/nautilus-search-filters-symbolic.svg</file>

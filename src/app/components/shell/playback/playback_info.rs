@@ -3,6 +3,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{glib, CompositeTemplate};
 
+use crate::app::components::utils::set_missing_art;
+
 mod imp {
 
     use super::*;
@@ -74,6 +76,7 @@ impl PlaybackInfoWidget {
         widget
             .playing_image
             .set_paintable(None::<gdk::Paintable>.as_ref());
+        set_missing_art(&*widget.playing_image, false);
     }
 
     pub fn set_info_visible(&self, visible: bool) {
@@ -81,6 +84,16 @@ impl PlaybackInfoWidget {
     }
 
     pub fn set_artwork(&self, texture: &gdk::Texture) {
-        self.imp().playing_image.set_paintable(Some(texture));
+        let widget = self.imp();
+        widget.playing_image.set_paintable(Some(texture));
+        set_missing_art(&*widget.playing_image, false);
+    }
+
+    pub fn set_missing_artwork(&self) {
+        let widget = self.imp();
+        widget
+            .playing_image
+            .set_paintable(None::<gdk::Paintable>.as_ref());
+        set_missing_art(&*widget.playing_image, true);
     }
 }

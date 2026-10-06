@@ -8,9 +8,10 @@ use gtk::CompositeTemplate;
 use libadwaita::subclass::prelude::*;
 
 use crate::app::components::display_add_css_provider;
-use crate::app::components::utils::decode_px;
+use crate::app::components::utils::{decode_px, set_missing_art};
 use crate::app::load;
 use crate::app::models::ImageSet;
+use riff_api::models::is_resource_url;
 
 use super::{DetailsHeader, DetailsHeaderWidget, HeaderImageShape, HEADER_IMAGE_SIZE};
 
@@ -111,7 +112,17 @@ impl DetailsPage {
         art: Option<&ImageSet>,
         api_service: Arc<riff_api::ApiService>,
     ) {
-        if let Some(url) = art.and_then(|s| s.best_for_width(HEADER_IMAGE_SIZE as u32)) {
+        let url = art.and_then(|s| s.best_for_width(HEADER_IMAGE_SIZE as u32));
+        if url.is_some_and(is_resource_url) {
+            if let Some(header) = self.header.widget_weak().upgrade() {
+                let imp = header.imp();
+                imp.image.set_paintable(None::<&gdk::Paintable>);
+                set_missing_art(&*imp.image_box, true);
+                imp.image_box
+                    .remove_css_class("details-header__image-placeholder");
+            }
+            self.set_loaded();
+        } else if let Some(url) = url {
             let url = url.to_string();
             let weak_header = self.header.widget_weak();
             let weak = self.widget.imp().scroll_child.downgrade();
@@ -125,6 +136,7 @@ impl DetailsPage {
                     if let Some(header) = weak_header.upgrade() {
                         let imp = header.imp();
                         imp.image.set_paintable(Some(texture));
+                        set_missing_art(&*imp.image_box, false);
                         imp.image_box
                             .remove_css_class("details-header__image-placeholder");
                     }

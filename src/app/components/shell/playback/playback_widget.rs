@@ -9,6 +9,7 @@ use crate::feature_flags::FeatureFlag;
 use crate::settings::SETTINGS;
 use gio::prelude::SettingsExtManual;
 
+use riff_api::models::is_resource_url;
 use riff_api::ApiService;
 
 use crate::app::load;
@@ -145,6 +146,10 @@ impl PlaybackWidget {
     }
 
     pub fn set_artwork_from_url(&self, url: String, api_service: Arc<ApiService>) {
+        if is_resource_url(&url) {
+            self.imp().now_playing.set_missing_artwork();
+            return;
+        }
         let weak_self = self.downgrade();
         // Not part of any page, so it rides the current epoch.
         let tag = load::transport();
