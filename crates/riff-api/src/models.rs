@@ -83,10 +83,12 @@ impl ImageSet {
     }
 
     pub fn is_resource(&self) -> bool {
-        self.images
-            .first()
-            .is_some_and(|i| i.url.starts_with("resource://"))
+        self.images.first().is_some_and(|i| is_resource_url(&i.url))
     }
+}
+
+pub fn is_resource_url(url: &str) -> bool {
+    url.starts_with("resource://")
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

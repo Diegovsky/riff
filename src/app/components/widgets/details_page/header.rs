@@ -412,7 +412,6 @@ impl DetailsHeader {
         (like, pin)
     }
 
-
     pub fn set_subtitle_links<F: Fn(&str) + 'static>(
         &self,
         artists: &[(String, String)],
@@ -441,7 +440,6 @@ impl DetailsHeader {
                 separator.add_css_class("body");
                 links_box.append_link(&separator);
             }
-
 
             let label = gtk::Label::builder()
                 .label(name)

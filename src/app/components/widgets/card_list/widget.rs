@@ -375,7 +375,6 @@ impl CardList {
         self.flowbox.insert(&child, -1);
     }
 
-
     fn for_each_card(&self, f: impl Fn(&CardWidget)) {
         let mut child = self.flowbox.first_child();
         while let Some(c) = child {

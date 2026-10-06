@@ -34,6 +34,11 @@ overlay-split-view .card--round .card {
   background-color: transparent;
 }
 
+/* Missing art keeps its backdrop (see .missing-art in app.css) */
+.container--loaded .card.missing-art {
+  background-color: color-mix(in srgb, currentColor 10%, transparent);
+}
+
 .container--loaded .title-4,
 .container--loaded .body {
   animation: none;

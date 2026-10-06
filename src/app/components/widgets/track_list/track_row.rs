@@ -9,9 +9,10 @@ use gtk::graphene::Point;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
 use libadwaita::prelude::*;
+use riff_api::models::is_resource_url;
 use riff_api::ApiService;
 
-use crate::app::components::utils::{add_hover_class, decode_px, set_css_class};
+use crate::app::components::utils::{add_hover_class, decode_px, set_css_class, set_missing_art};
 use crate::app::components::{display_add_css_provider, labels, SubtitleLinksBox};
 use crate::app::load;
 use crate::app::models::{SongModel, Track};
@@ -420,6 +421,7 @@ impl TrackRow {
         self.set_tooltip_text(None);
         imp.song_checkbox.set_active(false);
         imp.song_cover.set_paintable(None::<&gdk::Paintable>);
+        set_missing_art(&*imp.song_cover, false);
         // Placeholder text sizes the blocks; it's never visible.
         imp.song_title.set_label("Loading track title");
         imp.song_artist.clear_links();
@@ -449,7 +451,14 @@ impl TrackRow {
     }
 
     fn load_cover(&self, song: &Track, api_service: Arc<ApiService>) {
-        let Some(url) = song.art.best_for_width((COVER_SIZE * 2) as u32) else {
+        let imp = self.imp();
+        let url = song
+            .art
+            .best_for_width((COVER_SIZE * 2) as u32)
+            .filter(|url| !is_resource_url(url));
+        set_missing_art(&*imp.song_cover, url.is_none());
+        let Some(url) = url else {
+            imp.song_cover.set_paintable(None::<&gdk::Paintable>);
             return;
         };
         let url = url.to_owned();

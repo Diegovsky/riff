@@ -8,8 +8,9 @@
 //! `CardModel` from the app state.
 
 use crate::app::components::display_add_css_provider;
-use crate::app::components::utils::{decode_px, set_css_class};
+use crate::app::components::utils::{decode_px, set_css_class, set_missing_art};
 use crate::app::models::{CardLayout, CardModel, CardSize};
+use riff_api::models::is_resource_url;
 use riff_api::ApiService;
 
 use crate::app::load;
@@ -310,8 +311,13 @@ impl CardWidget {
     ) -> impl std::future::Future<Output = ()> + 'static {
         let decode_size = decode_px(self.imp().icon_size.get());
         self.imp().decoded_px.set(decode_size);
+        let missing = is_resource_url(&url);
+        set_missing_art(&*self.imp().cover_image, missing);
         let weak = self.downgrade();
         async move {
+            if missing {
+                return;
+            }
             let texture = api_service
                 .load_image(&url, decode_size, decode_size, tag)
                 .await;

@@ -17,6 +17,15 @@
   transition: background-color 0.3s ease;
 }
 
+.missing-art {
+  box-shadow: none;
+  background-color: color-mix(in srgb, currentColor 10%, transparent);
+  background-image: -gtk-icontheme("audio-x-generic-symbolic");
+  background-size: 45%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
 .playlist__title-entry--ro {
   background: none;
 }

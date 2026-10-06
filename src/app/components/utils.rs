@@ -183,6 +183,10 @@ pub fn set_css_class(widget: &impl IsA<gtk::Widget>, class: &str, on: bool) {
     }
 }
 
+pub fn set_missing_art(widget: &impl IsA<gtk::Widget>, missing: bool) {
+    set_css_class(widget, "missing-art", missing);
+}
+
 pub fn format_duration(duration: f64) -> String {
     let seconds = (duration / 1000.0) as i32;
     let hours = seconds.div_euclid(3600);

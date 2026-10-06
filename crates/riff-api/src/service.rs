@@ -1032,9 +1032,9 @@ impl ApiService {
         height: i32,
         load: Load,
     ) -> Option<gdk::Texture> {
-        // Bundled placeholder: load from GResource, bypass caches.
+        // Missing-artwork marker: the frontend draws its own stand-in.
         if is_resource_url(url) {
-            return load_resource_texture(url, width, height);
+            return None;
         }
 
         let disk_key = Self::image_key(url);
@@ -1229,10 +1229,6 @@ fn backfill_album_tracks(tracks: &mut [Track], album: &Album) {
     }
 }
 
-fn is_resource_url(url: &str) -> bool {
-    url.starts_with("resource://")
-}
-
 /// Log a network fetch that failed.
 fn log_fetch_failure(key: &str, err: &DomainError, serving_stale: bool) {
     if matches!(
@@ -1255,12 +1251,6 @@ fn log_fetch_failure(key: &str, err: &DomainError, serving_stale: bool) {
     } else {
         error!("api: {key} fetch failed with no cached copy to fall back on: {err}");
     }
-}
-
-fn load_resource_texture(url: &str, width: i32, height: i32) -> Option<gdk::Texture> {
-    let path = url.strip_prefix("resource://")?;
-    let pixbuf = gdk_pixbuf::Pixbuf::from_resource_at_scale(path, width, height, true).ok()?;
-    Some(gdk::Texture::for_pixbuf(&pixbuf))
 }
 
 #[cfg(test)]
