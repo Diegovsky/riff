@@ -67,6 +67,8 @@ pub enum BrowserAction {
     AppendSavedTracks(Box<Page<Track>>),
     SaveTracks(Vec<Track>),
     RemoveSavedTracks(Vec<String>),
+    SetTracksLikedStatus(Vec<(String, bool)>),
+    ClearTracksLikedStatus,
     SetSavedArtists(Vec<Artist>, Option<String>),
     AppendSavedArtists(Vec<Artist>, Option<String>),
     FollowArtist(Artist),

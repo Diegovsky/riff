@@ -4,34 +4,68 @@ use std::sync::Arc;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use libadwaita::prelude::*;
+use gtk::CompositeTemplate;
+use libadwaita::subclass::prelude::*;
 
+use crate::app::components::display_add_css_provider;
 use crate::app::components::utils::decode_px;
-use crate::app::components::{display_add_css_provider, CLAMP_MAX_SIZE};
 use crate::app::load;
 use crate::app::models::ImageSet;
 
-use super::{DetailsHeader, HeaderImageShape, HEADER_IMAGE_SIZE};
+use super::{DetailsHeader, DetailsHeaderWidget, HeaderImageShape, HEADER_IMAGE_SIZE};
 
-// DetailsPage
+mod imp {
+    use super::*;
 
-/// A reusable details page layout used by album, artist, and playlist views.
+    #[derive(Debug, Default, CompositeTemplate)]
+    #[template(resource = "/dev/diegovsky/Riff/components/details_page.ui")]
+    pub struct DetailsPageWidget {
+        #[template_child]
+        pub scrolled_window: TemplateChild<gtk::ScrolledWindow>,
+        #[template_child]
+        pub scroll_child: TemplateChild<gtk::Box>,
+        #[template_child]
+        pub header_area: TemplateChild<gtk::WindowHandle>,
+        #[template_child]
+        pub header: TemplateChild<DetailsHeaderWidget>,
+        #[template_child]
+        pub content: TemplateChild<gtk::Box>,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for DetailsPageWidget {
+        const NAME: &'static str = "DetailsPageWidget";
+        type Type = super::DetailsPageWidget;
+        type ParentType = libadwaita::Bin;
+
+        fn class_init(klass: &mut Self::Class) {
+            klass.bind_template();
+        }
+
+        fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
+            obj.init_template();
+        }
+    }
+
+    impl ObjectImpl for DetailsPageWidget {}
+    impl WidgetImpl for DetailsPageWidget {}
+    impl BinImpl for DetailsPageWidget {}
+}
+
+glib::wrapper! {
+    pub struct DetailsPageWidget(ObjectSubclass<imp::DetailsPageWidget>)
+        @extends gtk::Widget, libadwaita::Bin,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
+}
+
+/// A reusable details page layout used by album, artist, and playlist views:
+/// the header (artwork, title, actions) above the content, scrolling together
+/// (see `details_page.blp`).
 ///
 /// The title is shown by the shared [`AppHeaderBar`](crate::app::components::AppHeaderBar),
 /// revealed once the artwork scrolls away via [`Self::connect_title_reveal`].
-///
-/// Structure (top to bottom):
-///   ┌─────────────────────────────┐
-///   │ ScrolledWindow              │
-///   │  └─ Box (vertical)          │
-///   │      ├─ Header (artwork)    │  ← scrolls naturally with content
-///   │      └─ Content (tracks)    │
-///   └─────────────────────────────┘
 pub struct DetailsPage {
-    widget: libadwaita::Bin,
-    scrolled_window: gtk::ScrolledWindow,
-    scroll_child: gtk::Box,
-    header_area: gtk::Widget,
+    widget: DetailsPageWidget,
     header: DetailsHeader,
 }
 
@@ -40,73 +74,23 @@ impl DetailsPage {
         display_add_css_provider(resource!("/components/details_page/style.css"));
     }
 
-    /// Build a new details page.
-    ///
-    /// - `shape`: controls whether the header artwork is square (albums) or circular (artists).
-    /// - `content`: the main body widget (e.g. a track list) placed below the header.
-    pub fn new(shape: HeaderImageShape, content: &impl IsA<gtk::Widget>) -> Self {
+    /// `shape` makes the header artwork square (albums) or circular (artists).
+    pub fn new(shape: HeaderImageShape) -> Self {
         Self::load_css();
-
-        // --- Header (artwork + title + action buttons) ---
-        let header = DetailsHeader::new(shape);
-        header.widget().add_css_class("details-header");
-        header.widget().set_hexpand(true);
-        // The header widget reports its own natural height (see
-        // DetailsHeaderWidget::measure), so no height request is needed.
-
-        let header_clamp = libadwaita::Clamp::new();
-        header_clamp.set_maximum_size(CLAMP_MAX_SIZE);
-        header_clamp.set_tightening_threshold(CLAMP_MAX_SIZE);
-        header_clamp.set_child(Some(header.widget()));
-        header_clamp.add_css_class("details-header-clamp");
-
-        // WindowHandle allows dragging the window from the header area.
-        let window_handle = gtk::WindowHandle::new();
-        window_handle.set_child(Some(&header_clamp));
-
-        // --- Content (caller-provided body, e.g. track list) ---
-        content.upcast_ref::<gtk::Widget>().set_hexpand(true);
-
-        let content_clamp = libadwaita::Clamp::new();
-        content_clamp.set_maximum_size(CLAMP_MAX_SIZE);
-        content_clamp.set_tightening_threshold(CLAMP_MAX_SIZE);
-        content_clamp.set_child(Some(content));
-        content_clamp.add_css_class("details-content-clamp");
-
-        // --- Scroll child: vertical box with header + content ---
-        let scroll_child = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        scroll_child.append(&window_handle);
-        scroll_child.append(&content_clamp);
-        scroll_child.add_css_class("details-page");
-        scroll_child.add_css_class("details-page-content");
-
-        // --- ScrolledWindow encompassing both header and content ---
-        let scrolled_window = gtk::ScrolledWindow::new();
-        scrolled_window.set_hscrollbar_policy(gtk::PolicyType::Never);
-        scrolled_window.set_hexpand(true);
-        scrolled_window.set_vexpand(true);
-        scrolled_window.set_child(Some(&scroll_child));
-        scrolled_window.add_css_class("details-page-scroll");
-
-        // --- Assemble the page ---
-        let bin = libadwaita::Bin::new();
-        bin.set_child(Some(&scrolled_window));
-
-        let header_area: gtk::Widget = window_handle.upcast();
-
-        Self {
-            widget: bin,
-            scrolled_window,
-            scroll_child,
-            header_area,
-            header,
-        }
+        let widget: DetailsPageWidget = glib::Object::new();
+        let header = DetailsHeader::for_widget(widget.imp().header.get(), shape);
+        Self { widget, header }
     }
 
     // Accessors
 
-    pub fn widget(&self) -> &libadwaita::Bin {
+    pub fn widget(&self) -> &DetailsPageWidget {
         &self.widget
+    }
+
+    /// Where the page's sections go, top to bottom.
+    pub fn content(&self) -> &gtk::Box {
+        &self.widget.imp().content
     }
 
     pub fn header(&self) -> &DetailsHeader {
@@ -130,7 +114,7 @@ impl DetailsPage {
         if let Some(url) = art.and_then(|s| s.best_for_width(HEADER_IMAGE_SIZE as u32)) {
             let url = url.to_string();
             let weak_header = self.header.widget_weak();
-            let weak = self.scroll_child.downgrade();
+            let weak = self.widget.imp().scroll_child.downgrade();
             // Captured before spawning, so it describes the view that opened
             // this page.
             let tag = load::hero();
@@ -154,18 +138,24 @@ impl DetailsPage {
 
     /// Mark the page as loaded (triggers CSS transition out of skeleton/loading state).
     pub fn set_loaded(&self) {
-        self.scroll_child.add_css_class("details-page--loaded");
+        self.widget
+            .imp()
+            .scroll_child
+            .add_css_class("details-page--loaded");
     }
 
     // Scroll callbacks
 
     /// Connect a callback for when the user scrolls to the bottom (used for pagination).
     pub fn connect_bottom_edge<F: Fn() + 'static>(&self, f: F) {
-        self.scrolled_window.connect_edge_reached(move |_, pos| {
-            if let gtk::PositionType::Bottom = pos {
-                f()
-            }
-        });
+        self.widget
+            .imp()
+            .scrolled_window
+            .connect_edge_reached(move |_, pos| {
+                if let gtk::PositionType::Bottom = pos {
+                    f()
+                }
+            });
     }
 
     // Internal wiring
@@ -179,8 +169,8 @@ impl DetailsPage {
         title.set_opacity(0.0);
 
         let title_shown = Rc::new(Cell::new(false));
-        let adj = self.scrolled_window.vadjustment();
-        let header_area = self.header_area.clone();
+        let adj = self.widget.imp().scrolled_window.vadjustment();
+        let header_area = self.widget.imp().header_area.get();
 
         adj.connect_value_changed(clone!(
             #[weak]
@@ -195,5 +185,37 @@ impl DetailsPage {
                 }
             }
         ));
+    }
+
+    pub fn connect_scrolled_past<F: Fn(bool) + 'static>(&self, widget: &gtk::Widget, f: F) {
+        let past = Rc::new(Cell::new(false));
+        let scroll_child = self.widget.imp().scroll_child.get();
+        let update = Rc::new(clone!(
+            #[weak]
+            widget,
+            move |adj: &gtk::Adjustment| {
+                if widget.height() == 0 {
+                    return;
+                }
+                let bottom = gtk::graphene::Point::new(0.0, widget.height() as f32);
+                let Some(point) = widget.compute_point(&scroll_child, &bottom) else {
+                    return;
+                };
+                let scrolled_past = adj.value() >= point.y() as f64;
+                if scrolled_past != past.get() {
+                    past.set(scrolled_past);
+                    f(scrolled_past);
+                }
+            }
+        ));
+
+        let adj = self.widget.imp().scrolled_window.vadjustment();
+        let on_value = Rc::clone(&update);
+        adj.connect_value_changed(move |adj| on_value(adj));
+        adj.connect_changed(move |adj| {
+            let update = Rc::clone(&update);
+            let adj = adj.clone();
+            glib::idle_add_local_once(move || update(&adj));
+        });
     }
 }

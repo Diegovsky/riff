@@ -93,6 +93,11 @@ impl PageModel for PlaylistDetailsModel {
         )
     }
 
+    fn get_subtitle_detail(&self) -> Option<String> {
+        let count = self.get_playlist_info()?.total_tracks?;
+        Some(gettextrs::ngettext!("{} Track", "{} Tracks", count, count))
+    }
+
     fn get_artwork(&self) -> Option<ImageSet> {
         Some(self.get_playlist_info()?.art.clone())
     }
@@ -257,7 +262,10 @@ impl PageModel for PlaylistDetailsModel {
     }
 
     fn should_refresh_details(&self, event: &AppEvent) -> bool {
-        matches!(event, AppEvent::BrowserEvent(BrowserEvent::PlaylistDetailsLoaded(id)) if id == &self.id)
+        matches!(event,
+            AppEvent::BrowserEvent(BrowserEvent::PlaylistDetailsLoaded(id))
+            | AppEvent::BrowserEvent(BrowserEvent::PlaylistTracksRemoved(id))
+            if id == &self.id)
     }
 
     fn should_refresh_liked(&self, event: &AppEvent) -> bool {

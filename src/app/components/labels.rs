@@ -76,6 +76,12 @@ lazy_static! {
     // translators: This is the caption shown in the header of an album's detail page when the release is a single.
     pub static ref SINGLE_CAPTION: String = gettext("Single");
 
+    // translators: This is the caption shown in the header of an album's detail page when the release is an EP (extended play).
+    pub static ref EP_CAPTION: String = gettext("EP");
+
+    // translators: Shown in place of a card list when the selected filter (e.g. "EPs") matches nothing.
+    pub static ref NO_FILTER_RESULTS: String = gettext("No items found for this filter");
+
     // translators: This is the caption shown in the header of an album's detail page when the release is a compilation.
     pub static ref COMPILATION_CAPTION: String = gettext("Compilation");
 }
@@ -155,7 +161,7 @@ pub fn more_from_label(artist: &str) -> String {
         // translators: This is part of a contextual menu attached to a single track; the full text is "More from <artist>".
         gettext("More from {}");
     }
-    gettext!("More from {}", glib::markup_escape_text(artist))
+    gettext!("More from {}", artist)
 }
 
 pub fn album_by_artist_label(album: &str, artist: &str) -> String {
@@ -164,11 +170,7 @@ pub fn album_by_artist_label(album: &str, artist: &str) -> String {
         // translators: This is part of a larger label that reads "<Album> by <Artist>"
         gettext("{} by {}");
     }
-    gettext!(
-        "{} by {}",
-        glib::markup_escape_text(album),
-        glib::markup_escape_text(artist)
-    )
+    gettext!("{} by {}", album, artist)
 }
 
 #[cfg(test)]
@@ -188,6 +190,11 @@ mod tests {
             assert!(text.contains("Rock & Roll") && text.contains("<Band>"));
         }
         assert_eq!(queue_context_label("{} & Co"), "Next from: {} & Co");
+        assert_eq!(more_from_label("Guns N' Roses"), "More from Guns N' Roses");
+        assert_eq!(
+            album_by_artist_label("Don't Look Back", "Guns N' Roses"),
+            "Don't Look Back by Guns N' Roses"
+        );
         assert_eq!(
             now_playing_markup("{}", "<b>"),
             "<span size=\"small\" weight=\"light\">Now Playing</span> <b>{}</b> <span size=\"small\" weight=\"light\">by</span> &lt;b&gt;"

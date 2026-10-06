@@ -115,6 +115,18 @@
   background-color: transparent;
 }
 
+.details-page-content .details-header__image-box--icon {
+  background-image: linear-gradient(
+    to bottom right,
+    mix(@accent_bg_color, white, 0.35),
+    @accent_bg_color
+  );
+}
+
+.details-header__image-box--icon .details-header__image {
+  color: @accent_fg_color;
+}
+
 /* Header title */
 .details-header__title {
   font-weight: bold;
@@ -125,21 +137,14 @@
   min-height: 24px;
 }
 
-.details-header .body:hover {
-  border-radius: 6px;
-  background-image: image(alpha(currentColor, 0.16));
+.subtitle-link.subtitle-link--hover {
+  text-decoration-line: underline;
 }
 
-/* Subtitle link buttons - individual artist/owner buttons */
-.subtitle-link-button {
-  padding: 0 4px;
-  min-height: 24px;
-  font-weight: normal;
-}
-
-.subtitle-link-button:hover {
-  border-radius: 6px;
-  background-image: image(alpha(currentColor, 0.16));
+.subtitle-link:focus-visible {
+  outline: 2px solid alpha(@accent_color, 0.5);
+  outline-offset: 1px;
+  border-radius: 4px;
 }
 
 /* Caption label in headers - matches subtitle height for centering */
@@ -170,4 +175,17 @@ headerbar.details__headerbar windowtitle {
   background-color: transparent;
   color: inherit;
   animation: none;
+}
+
+.details-section__header {
+  margin-bottom: 10px;
+}
+
+.details-section--tracks .details-section__header {
+  margin-bottom: 16px;
+}
+
+.artist-releases {
+  margin-left: -9px;
+  margin-right: -9px;
 }

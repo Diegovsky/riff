@@ -6,9 +6,8 @@ use std::rc::Rc;
 
 use super::widget::CardList;
 use crate::app::components::{CardLayout, CardSize, SortOrder};
+use crate::app::models::FilterOption;
 use crate::app::{BrowserAction, Dispatcher};
-
-// GObject subclass for the popover template
 
 mod imp {
     use super::*;
@@ -24,6 +23,10 @@ mod imp {
         pub sort_section: TemplateChild<gtk::Box>,
         #[template_child]
         pub sort_box: TemplateChild<gtk::Box>,
+        #[template_child]
+        pub filter_section: TemplateChild<gtk::Box>,
+        #[template_child]
+        pub filter_box: TemplateChild<gtk::Box>,
     }
 
     #[glib::object_subclass]
@@ -82,7 +85,8 @@ fn icon_for_layout(layout: CardLayout) -> &'static str {
 }
 
 /// A Nautilus-style split button: clicking cycles the card layout,
-/// the dropdown arrow opens a popover with icon size controls and sort options.
+/// the dropdown arrow opens a popover with icon size controls, sort options
+/// and (optionally) filter options.
 pub struct CardViewMenu {
     pub split_button: libadwaita::SplitButton,
 }
@@ -94,6 +98,8 @@ impl CardViewMenu {
         layout: Rc<Cell<CardLayout>>,
         size: Rc<Cell<CardSize>>,
         current_sort: Rc<Cell<SortOrder>>,
+        filters: &[FilterOption],
+        on_filter_changed: impl Fn(&str, usize) + 'static,
         card_list: Rc<CardList>,
         dispatcher: Dispatcher,
     ) -> Self {
@@ -123,6 +129,14 @@ impl CardViewMenu {
 
         // Hide the entire sort section if no sort options are available.
         imp.sort_section.set_visible(!available_sorts.is_empty());
+
+        Self::populate_filter_section(
+            &imp.filter_box,
+            filters,
+            on_filter_changed,
+            Rc::clone(&card_list),
+        );
+        imp.filter_section.set_visible(!filters.is_empty());
 
         // Sync button sensitivity when popover opens
         let size_ref = Rc::clone(&size);
@@ -213,33 +227,69 @@ impl CardViewMenu {
             SortOrder::DateReleased,
             SortOrder::Popularity,
         ];
+        let orders: Vec<SortOrder> = all_sort_options
+            .iter()
+            .copied()
+            .filter(|order| available_sorts.contains(order))
+            .collect();
 
-        let mut first_btn: Option<gtk::CheckButton> = None;
-        for order in all_sort_options {
-            if !available_sorts.contains(&order) {
-                continue;
+        let page = page_id.to_string();
+        append_radio_group(
+            sort_box,
+            orders
+                .iter()
+                .map(|order| (order.label(), *order == current_sort))
+                .collect(),
+            move |i| {
+                let order = orders[i];
+                sort.set(order);
+                card_list.set_sort(order);
+                dispatcher.dispatch(BrowserAction::ChangeSortOrder(page.clone(), order).into());
+            },
+        );
+    }
+
+    fn populate_filter_section(
+        filter_box: &gtk::Box,
+        filters: &[FilterOption],
+        on_filter_changed: impl Fn(&str, usize) + 'static,
+        card_list: Rc<CardList>,
+    ) {
+        let categories: Vec<String> = filters.iter().map(|f| f.category.clone()).collect();
+        append_radio_group(
+            filter_box,
+            filters
+                .iter()
+                .enumerate()
+                .map(|(i, option)| (option.label.clone(), i == 0))
+                .collect(),
+            move |i| {
+                card_list.set_filter(&categories[i]);
+                on_filter_changed(&categories[i], card_list.visible_count());
+            },
+        );
+    }
+}
+
+fn append_radio_group(
+    container: &gtk::Box,
+    options: Vec<(String, bool)>,
+    on_select: impl Fn(usize) + 'static,
+) {
+    let on_select = Rc::new(on_select);
+    let mut group: Option<gtk::CheckButton> = None;
+    for (i, (label, active)) in options.into_iter().enumerate() {
+        let btn = gtk::CheckButton::with_label(&label);
+        btn.set_group(group.as_ref());
+        group.get_or_insert_with(|| btn.clone());
+        btn.set_active(active);
+
+        let on_select = Rc::clone(&on_select);
+        btn.connect_toggled(move |b| {
+            if b.is_active() {
+                on_select(i);
             }
-            let btn = gtk::CheckButton::with_label(&order.label());
-            if let Some(ref group) = first_btn {
-                btn.set_group(Some(group));
-            } else {
-                first_btn = Some(btn.clone());
-            }
-            btn.set_active(order == current_sort);
-
-            let page = page_id.to_string();
-            let card_list_ref = Rc::clone(&card_list);
-            let sort_ref = Rc::clone(&sort);
-            let dispatch = dispatcher.clone();
-            btn.connect_toggled(move |b| {
-                if b.is_active() {
-                    sort_ref.set(order);
-                    card_list_ref.set_sort(order);
-                    dispatch.dispatch(BrowserAction::ChangeSortOrder(page.clone(), order).into());
-                }
-            });
-
-            sort_box.append(&btn);
-        }
+        });
+        container.append(&btn);
     }
 }

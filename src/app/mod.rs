@@ -28,9 +28,6 @@ pub use state::{
     ProvidesApi,
 };
 
-mod cache_warmer;
-use cache_warmer::CacheWarmer;
-
 pub mod load;
 
 #[cfg(debug_assertions)]
@@ -100,7 +97,6 @@ impl App {
                 Rc::clone(&model),
                 Dispatcher::new(sender.clone()),
             )),
-            Box::new(CacheWarmer::new(model.api())),
             Box::new(StateTracker::new_from_gsettings()),
             App::make_dbus(Rc::clone(&model), sender.clone()),
             App::make_inhibitor(&builder, Rc::clone(&model)),
@@ -146,7 +142,7 @@ impl App {
             App::make_window(&self.settings, builder, Rc::clone(model)),
             App::make_selection_toolbar(builder, Rc::clone(model), dispatcher.clone()),
             App::make_playback(builder, Rc::clone(model), dispatcher.clone()),
-            App::make_utility_panel(
+            App::make_panel_manager(
                 builder,
                 layout,
                 app_header.clone(),
@@ -265,24 +261,27 @@ impl App {
         ))
     }
 
-    fn make_utility_panel(
+    fn make_panel_manager(
         builder: &gtk::Builder,
         layout: Rc<WindowLayout>,
         app_header: AppHeaderBar,
         app_model: Rc<AppModel>,
         dispatcher: Dispatcher,
-    ) -> Box<UtilityPanel> {
+    ) -> Box<PanelManager> {
         let window: libadwaita::ApplicationWindow = builder.object("window").unwrap();
-        Box::new(UtilityPanel::new(
-            &window,
-            builder.object("utility_split").unwrap(),
-            builder.object("queue_sheet").unwrap(),
-            builder.object("queue_bar").unwrap(),
+        let panel = UtilityPanel::new(
             builder.object("utility_panel").unwrap(),
+            builder.object("utility_split").unwrap(),
             layout,
-            app_header,
-            app_model,
-            dispatcher,
+        );
+        let has_track = app_model.get_state().playback.current_song().is_some();
+        let sheet = BottomSheet::new(
+            builder.object("bottom_sheet").unwrap(),
+            builder.object("queue_bar").unwrap(),
+            has_track,
+        );
+        Box::new(PanelManager::new(
+            &window, panel, sheet, app_header, app_model, dispatcher,
         ))
     }
 

@@ -8,7 +8,7 @@
 //! `CardModel` from the app state.
 
 use crate::app::components::display_add_css_provider;
-use crate::app::components::utils::decode_px;
+use crate::app::components::utils::{decode_px, set_css_class};
 use crate::app::models::{CardLayout, CardModel, CardSize};
 use riff_api::ApiService;
 
@@ -34,6 +34,17 @@ const HORIZONTAL_GAP: i32 = 12;
 /// Width multiplier for the label area in horizontal layout (relative to image size).
 const HORIZONTAL_LABEL_WIDTH_SCALE: f32 = 1.8;
 
+/// Narrowest the label area may shrink to in horizontal layout (the labels
+/// ellipsize).
+const HORIZONTAL_LABEL_MIN_WIDTH: i32 = 48;
+
+/// In horizontal layout, once the labels are at their minimum the image
+/// shrinks too, down to the small card size, so the card fits narrow pages.
+fn horizontal_image_px(px: i32, width: i32) -> i32 {
+    let min_px = CardSize::Small.pixel_size().min(px);
+    (width - HORIZONTAL_GAP - HORIZONTAL_LABEL_MIN_WIDTH).clamp(min_px, px)
+}
+
 /// Cards at or below this position load immediately; the rest yield to the
 /// main loop first. An upper bound on one screenful at the default card size.
 const VISIBLE_THRESHOLD: u32 = 24;
@@ -54,7 +65,7 @@ mod imp {
     use std::cell::Cell;
     use std::cell::RefCell;
 
-    #[derive(Debug, CompositeTemplate)]
+    #[derive(CompositeTemplate)]
     #[template(file = "src/app/components/widgets/card/card.blp")]
     pub struct CardWidget {
         #[template_child]
@@ -67,7 +78,13 @@ mod imp {
         pub subtitle_label: TemplateChild<gtk::Label>,
 
         #[template_child]
+        pub cover: TemplateChild<gtk::Overlay>,
+
+        #[template_child]
         pub cover_image: TemplateChild<gtk::Picture>,
+
+        #[template_child]
+        pub playing_indicator: TemplateChild<gtk::Spinner>,
 
         /// Current pixel size of the card image.
         pub icon_size: Cell<i32>,
@@ -75,6 +92,8 @@ mod imp {
         pub layout: Cell<CardLayout>,
         /// Spotify ID for the item this card represents (needed for click handling).
         pub card_id: RefCell<String>,
+        pub artwork: RefCell<Option<(String, Arc<ApiService>, bool)>>,
+        pub decoded_px: Cell<i32>,
     }
 
     impl Default for CardWidget {
@@ -83,10 +102,14 @@ mod imp {
                 label_box: Default::default(),
                 title_label: Default::default(),
                 subtitle_label: Default::default(),
+                cover: Default::default(),
                 cover_image: Default::default(),
+                playing_indicator: Default::default(),
                 icon_size: Cell::new(CardSize::Large.pixel_size()),
                 layout: Cell::new(CardLayout::Vertical),
                 card_id: Default::default(),
+                artwork: Default::default(),
+                decoded_px: Cell::new(0),
             }
         }
     }
@@ -118,28 +141,41 @@ mod imp {
     }
 
     impl WidgetImpl for CardWidget {
-        fn measure(&self, orientation: gtk::Orientation, _for_size: i32) -> (i32, i32, i32, i32) {
+        fn request_mode(&self) -> gtk::SizeRequestMode {
+            gtk::SizeRequestMode::HeightForWidth
+        }
+
+        fn measure(&self, orientation: gtk::Orientation, for_size: i32) -> (i32, i32, i32, i32) {
             let px = self.icon_size.get();
             let layout = self.layout.get();
 
             if orientation == gtk::Orientation::Horizontal {
-                let w = match layout {
+                return match layout {
                     CardLayout::Horizontal => {
-                        px + HORIZONTAL_GAP + (HORIZONTAL_LABEL_WIDTH_SCALE * px as f32) as i32
+                        let min = horizontal_image_px(px, 0)
+                            + HORIZONTAL_GAP
+                            + HORIZONTAL_LABEL_MIN_WIDTH;
+                        let nat =
+                            px + HORIZONTAL_GAP + (HORIZONTAL_LABEL_WIDTH_SCALE * px as f32) as i32;
+                        (min, nat, -1, -1)
                     }
-                    _ => px,
+                    _ => (px, px, -1, -1),
                 };
-                return (w, w, -1, -1);
             }
 
             // Vertical measurement.
             match layout {
                 CardLayout::Horizontal => {
-                    let (label_min, _, _, _) = self.label_box.measure(
-                        gtk::Orientation::Vertical,
-                        (HORIZONTAL_LABEL_WIDTH_SCALE * px as f32) as i32,
-                    );
-                    let h = px.max(label_min);
+                    let (img, label_w) = if for_size >= 0 {
+                        let img = horizontal_image_px(px, for_size);
+                        (img, for_size - img - HORIZONTAL_GAP)
+                    } else {
+                        (px, (HORIZONTAL_LABEL_WIDTH_SCALE * px as f32) as i32)
+                    };
+                    let (label_min, _, _, _) = self
+                        .label_box
+                        .measure(gtk::Orientation::Vertical, label_w.max(0));
+                    let h = img.max(label_min);
                     (h, h, -1, -1)
                 }
                 CardLayout::ImageOnly => (px, px, -1, -1),
@@ -156,13 +192,19 @@ mod imp {
             let px = self.icon_size.get();
             let layout = self.layout.get();
 
+            let (img_x, img_y, img_px) = match layout {
+                CardLayout::Vertical | CardLayout::ImageOnly => ((width - px) / 2, 0, px),
+                CardLayout::Horizontal => {
+                    let px = horizontal_image_px(px, width);
+                    (0, (height - px) / 2, px)
+                }
+            };
+            let transform = gtk::gsk::Transform::new()
+                .translate(&gtk::graphene::Point::new(img_x as f32, img_y as f32));
+            self.cover.allocate(img_px, img_px, -1, Some(transform));
+
             match layout {
                 CardLayout::Vertical => {
-                    let img_x = (width - px) / 2;
-                    let transform = gtk::gsk::Transform::new()
-                        .translate(&gtk::graphene::Point::new(img_x as f32, 0.0));
-                    self.cover_image.allocate(px, px, -1, Some(transform));
-
                     let label_h = height - px - LABEL_GAP;
                     if label_h > 0 {
                         let transform = gtk::gsk::Transform::new().translate(
@@ -171,18 +213,9 @@ mod imp {
                         self.label_box.allocate(px, label_h, -1, Some(transform));
                     }
                 }
-                CardLayout::ImageOnly => {
-                    let img_x = (width - px) / 2;
-                    let transform = gtk::gsk::Transform::new()
-                        .translate(&gtk::graphene::Point::new(img_x as f32, 0.0));
-                    self.cover_image.allocate(px, px, -1, Some(transform));
-                }
+                CardLayout::ImageOnly => {}
                 CardLayout::Horizontal => {
-                    let img_y = (height - px) / 2;
-                    let img_transform = gtk::gsk::Transform::new()
-                        .translate(&gtk::graphene::Point::new(0.0, img_y as f32));
-                    self.cover_image.allocate(px, px, -1, Some(img_transform));
-
+                    let px = img_px;
                     let label_w = width - px - HORIZONTAL_GAP;
                     if label_w > 0 {
                         let (label_min, _, _, _) =
@@ -252,6 +285,47 @@ impl CardWidget {
         self.add_css_class(size.css_class());
         self.imp().icon_size.set(size.pixel_size());
         self.queue_resize();
+
+        let imp = self.imp();
+        if decode_px(size.pixel_size()) > imp.decoded_px.get() {
+            let artwork = imp.artwork.borrow().clone();
+            if let Some((url, api_service, is_visible)) = artwork {
+                let tag = if is_visible {
+                    load::visible()
+                } else {
+                    load::offscreen()
+                };
+                let load = self.load_artwork(url, api_service, tag);
+                glib::MainContext::default()
+                    .spawn_local_with_priority(glib::Priority::DEFAULT_IDLE, load);
+            }
+        }
+    }
+
+    fn load_artwork(
+        &self,
+        url: String,
+        api_service: Arc<ApiService>,
+        tag: riff_api::Load,
+    ) -> impl std::future::Future<Output = ()> + 'static {
+        let decode_size = decode_px(self.imp().icon_size.get());
+        self.imp().decoded_px.set(decode_size);
+        let weak = self.downgrade();
+        async move {
+            let texture = api_service
+                .load_image(&url, decode_size, decode_size, tag)
+                .await;
+            if let (Some(this), Some(texture)) = (weak.upgrade(), texture) {
+                if this.imp().decoded_px.get() == decode_size {
+                    this.imp().cover_image.set_paintable(Some(&texture));
+                }
+            }
+        }
+    }
+
+    pub fn set_playing(&self, playing: Option<bool>) {
+        self.imp().playing_indicator.set_visible(playing.is_some());
+        set_css_class(self, "card--paused", playing == Some(false));
     }
 
     /// Update the layout orientation, adjusting label visibility and alignment.
@@ -303,7 +377,6 @@ impl CardWidget {
         }
 
         if let Some(url) = model.image() {
-            let weak = self.downgrade();
             let title = model.title();
             let subtitle = model.subtitle();
             let position = model.insertion_position();
@@ -316,16 +389,12 @@ impl CardWidget {
                 load::offscreen()
             };
 
-            let decode_size = decode_px(imp.icon_size.get());
-
+            *imp.artwork.borrow_mut() = Some((url.clone(), api_service.clone(), is_visible));
+            let artwork = self.load_artwork(url, api_service, tag);
+            let weak = self.downgrade();
             let load = async move {
+                artwork.await;
                 if let Some(this) = weak.upgrade() {
-                    let texture = api_service
-                        .load_image(&url, decode_size, decode_size, tag)
-                        .await;
-                    if let Some(ref texture) = texture {
-                        this.imp().cover_image.set_paintable(Some(texture));
-                    }
                     this.imp().title_label.set_label(&title);
                     this.imp().subtitle_label.set_label(&subtitle);
                     this.imp().subtitle_label.set_visible(!subtitle.is_empty());

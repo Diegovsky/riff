@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::cmp::PartialEq;
+use std::collections::HashMap;
 
 use super::{
     pagination::Pagination, BrowserAction, BrowserEvent, PaginationTarget, UpdatableState,
@@ -182,6 +183,9 @@ impl UpdatableState for PlaylistDetailsState {
             }
             BrowserAction::RemoveTracksFromPlaylist(id, uris) if id == &self.id => {
                 self.songs.remove(&uris[..]).commit();
+                if let Some(total) = self.playlist.as_mut().and_then(|p| p.total_tracks.as_mut()) {
+                    *total = total.saturating_sub(uris.len() as u32);
+                }
                 vec![BrowserEvent::PlaylistTracksRemoved(self.id.clone())]
             }
             BrowserAction::SavePlaylist(playlist) if playlist.rri.id == self.id => {
@@ -284,6 +288,7 @@ pub struct HomeState {
     /// Total number of saved tracks reported by the API, known from the first
     /// page onwards. Display only - pagination still stops on a short page.
     pub saved_tracks_total: Option<usize>,
+    pub liked_status: HashMap<String, bool>,
     pub artists: ListStore<CardModel>,
     pub artists_cursor: Option<String>,
 }
@@ -300,9 +305,39 @@ impl Default for HomeState {
             next_saved_tracks_page: Pagination::new((), 50),
             saved_tracks: SongListModel::new(50),
             saved_tracks_total: None,
+            liked_status: HashMap::new(),
             artists: ListStore::new(),
             artists_cursor: Some(String::new()),
         }
+    }
+}
+
+impl HomeState {
+    pub fn is_track_liked(&self, id: &str) -> bool {
+        self.liked_status
+            .get(id)
+            .copied()
+            .unwrap_or_else(|| self.saved_tracks.get(id).is_some())
+    }
+
+    fn record_liked_statuses(&mut self, statuses: impl Iterator<Item = (String, bool)>) -> bool {
+        let mut changed = false;
+        for (id, liked) in statuses {
+            if self.liked_status.contains_key(&id) {
+                continue;
+            }
+            changed |= self.is_track_liked(&id) != liked;
+            self.liked_status.insert(id, liked);
+        }
+        changed
+    }
+
+    fn mark_liked(&mut self, tracks: &[Track]) -> bool {
+        let mut changed = false;
+        for track in tracks {
+            changed |= self.liked_status.insert(track.rri.id.clone(), true) == Some(false);
+        }
+        changed
     }
 }
 
@@ -311,7 +346,9 @@ impl UpdatableState for HomeState {
     type Event = BrowserEvent;
 
     fn update_with(&mut self, action: Cow<Self::Action>) -> Vec<Self::Event> {
-        match action.as_ref() {
+        let status_changed =
+            self.record_liked_statuses(liked_statuses(delivered_tracks(action.as_ref())));
+        let mut events = match action.as_ref() {
             BrowserAction::SetHomeVisiblePage(page) => {
                 self.visible_page = *page;
                 vec![BrowserEvent::HomeVisiblePageChanged(page)]
@@ -401,7 +438,8 @@ impl UpdatableState for HomeState {
                 if let Some(total) = song_batch.total {
                     self.saved_tracks_total = Some(total);
                 }
-                if self.saved_tracks.add(*song_batch.clone()).commit() {
+                let status_changed = self.mark_liked(&song_batch.items);
+                if self.saved_tracks.add(*song_batch.clone()).commit() || status_changed {
                     vec![BrowserEvent::SavedTracksUpdated]
                 } else {
                     vec![]
@@ -411,20 +449,37 @@ impl UpdatableState for HomeState {
                 let song_batch = *song_batch.clone();
                 let len = song_batch.items.len();
                 let total = song_batch.total;
-                if self
+                let status_changed = self.mark_liked(&song_batch.items);
+                let list_changed = self
                     .saved_tracks
                     .clear()
                     .and(|s| s.add(song_batch))
-                    .commit()
-                {
+                    .commit();
+                if list_changed {
                     self.next_saved_tracks_page.reset_count(len);
                     self.saved_tracks_total = total;
+                }
+                if list_changed || status_changed {
                     vec![BrowserEvent::SavedTracksUpdated]
                 } else {
                     vec![]
                 }
             }
+            BrowserAction::SetTracksLikedStatus(statuses) => {
+                if self.record_liked_statuses(statuses.iter().cloned()) {
+                    vec![BrowserEvent::SavedTracksUpdated]
+                } else {
+                    vec![]
+                }
+            }
+            BrowserAction::ClearTracksLikedStatus => {
+                self.liked_status.clear();
+                vec![BrowserEvent::SavedTracksUpdated]
+            }
             BrowserAction::SaveTracks(tracks) => {
+                for track in tracks {
+                    self.liked_status.insert(track.rri.id.clone(), true);
+                }
                 self.saved_tracks.prepend(tracks.clone()).commit();
                 if let Some(total) = self.saved_tracks_total.as_mut() {
                     *total = total.saturating_add(tracks.len());
@@ -432,6 +487,9 @@ impl UpdatableState for HomeState {
                 vec![BrowserEvent::SavedTracksUpdated]
             }
             BrowserAction::RemoveSavedTracks(tracks) => {
+                for id in tracks {
+                    self.liked_status.insert(id.clone(), false);
+                }
                 self.saved_tracks.remove(&tracks[..]).commit();
                 if let Some(total) = self.saved_tracks_total.as_mut() {
                     *total = total.saturating_sub(tracks.len());
@@ -483,8 +541,32 @@ impl UpdatableState for HomeState {
                 }
             }
             _ => vec![],
+        };
+        if status_changed && !events.contains(&BrowserEvent::SavedTracksUpdated) {
+            events.push(BrowserEvent::SavedTracksUpdated);
         }
+        events
     }
+}
+
+fn delivered_tracks(action: &BrowserAction) -> &[Track] {
+    match action {
+        BrowserAction::SetAlbumTracks(_, page)
+        | BrowserAction::AppendAlbumTracks(_, page)
+        | BrowserAction::SetPlaylistDetails(_, page)
+        | BrowserAction::AppendPlaylistTracks(_, page) => &page.items,
+        BrowserAction::SetSearchResults(results)
+        | BrowserAction::SetSearchScopeResults(_, _, results)
+        | BrowserAction::AppendSearchScopeResults(_, _, results) => &results.tracks.items,
+        BrowserAction::SetArtistTopTracks(_, tracks) => tracks,
+        _ => &[],
+    }
+}
+
+pub fn liked_statuses(tracks: &[Track]) -> impl Iterator<Item = (String, bool)> + '_ {
+    tracks
+        .iter()
+        .filter_map(|track| Some((track.rri.id.clone(), track.saved?)))
 }
 
 pub struct SearchState {
@@ -869,6 +951,102 @@ mod tests {
         // Only the first page is loaded, but the total is already known.
         assert_eq!(home.saved_tracks.partial_len(), 50);
         assert_eq!(home.saved_tracks_total, Some(1234));
+    }
+
+    #[test]
+    fn test_liked_status_covers_tracks_outside_loaded_pages() {
+        let mut home = HomeState::default();
+        home.update_with(Cow::Owned(BrowserAction::SetSavedTracks(Box::new(
+            saved_tracks_page(50, 0, 1234),
+        ))));
+        assert!(!home.is_track_liked("old-like"));
+
+        let events = home.update_with(Cow::Owned(BrowserAction::SetTracksLikedStatus(vec![
+            ("old-like".to_string(), true),
+            ("not-liked".to_string(), false),
+        ])));
+
+        assert!(home.is_track_liked("old-like"));
+        assert!(!home.is_track_liked("not-liked"));
+        assert!(matches!(events[..], [BrowserEvent::SavedTracksUpdated]));
+    }
+
+    #[test]
+    fn test_liked_status_follows_likes_and_unlikes() {
+        let mut home = HomeState::default();
+        home.update_with(Cow::Owned(BrowserAction::SetTracksLikedStatus(vec![(
+            "a".to_string(),
+            true,
+        )])));
+
+        home.update_with(Cow::Owned(BrowserAction::RemoveSavedTracks(vec![
+            "a".to_string()
+        ])));
+        assert!(!home.is_track_liked("a"));
+
+        home.update_with(Cow::Owned(BrowserAction::SaveTracks(vec![make_track("a")])));
+        assert!(home.is_track_liked("a"));
+    }
+
+    #[test]
+    fn test_liked_status_comes_with_fetched_tracks() {
+        let mut home = HomeState::default();
+        let mut liked = make_track("liked");
+        liked.saved = Some(true);
+        let mut not_liked = make_track("not-liked");
+        not_liked.saved = Some(false);
+        let unchecked = make_track("unchecked");
+
+        let events = home.update_with(Cow::Owned(BrowserAction::SetArtistTopTracks(
+            "artist".to_string(),
+            vec![liked, not_liked, unchecked],
+        )));
+
+        assert!(home.is_track_liked("liked"));
+        assert!(!home.is_track_liked("not-liked"));
+        assert!(home.liked_status.contains_key("not-liked"));
+        assert!(!home.liked_status.contains_key("unchecked"));
+        assert!(matches!(events[..], [BrowserEvent::SavedTracksUpdated]));
+    }
+
+    #[test]
+    fn test_late_liked_status_check_does_not_undo_a_like() {
+        let mut home = HomeState::default();
+        // The check for "a" went out, then the user liked it and unliked "b".
+        home.update_with(Cow::Owned(BrowserAction::SaveTracks(vec![make_track("a")])));
+        home.update_with(Cow::Owned(BrowserAction::RemoveSavedTracks(vec![
+            "b".to_string()
+        ])));
+
+        let events = home.update_with(Cow::Owned(BrowserAction::SetTracksLikedStatus(vec![
+            ("a".to_string(), false),
+            ("b".to_string(), true),
+        ])));
+
+        assert!(home.is_track_liked("a"));
+        assert!(!home.is_track_liked("b"));
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn test_saved_tracks_page_overrides_an_earlier_check() {
+        let mut home = HomeState::default();
+        home.update_with(Cow::Owned(BrowserAction::SetTracksLikedStatus(vec![
+            ("track0".to_string(), false),
+            ("track60".to_string(), false),
+        ])));
+
+        // Both were liked elsewhere since, and now show up in the saved list.
+        let events = home.update_with(Cow::Owned(BrowserAction::SetSavedTracks(Box::new(
+            saved_tracks_page(50, 0, 100),
+        ))));
+        assert!(home.is_track_liked("track0"));
+        assert!(matches!(events[..], [BrowserEvent::SavedTracksUpdated]));
+
+        home.update_with(Cow::Owned(BrowserAction::AppendSavedTracks(Box::new(
+            saved_tracks_page(50, 50, 100),
+        ))));
+        assert!(home.is_track_liked("track60"));
     }
 
     #[test]

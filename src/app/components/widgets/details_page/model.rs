@@ -345,7 +345,7 @@ impl DetailsPageModel {
     pub fn is_song_liked(&self, id: &str) -> bool {
         let state = self.app_model.get_state();
         if let Some(home) = state.browser.home_state() {
-            return home.saved_tracks.get(id).is_some();
+            return home.is_track_liked(id);
         }
         false
     }

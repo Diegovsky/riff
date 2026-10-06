@@ -27,6 +27,7 @@ pub enum CacheKey {
     PlaylistTracks(String),
     ArtistAlbums(String),
     UserPlaylists(String),
+    TrackSaved(String),
 }
 
 impl CacheKey {
@@ -44,6 +45,7 @@ impl CacheKey {
             Self::PlaylistTracks(id) => format!("pg_playlist_tracks_{id}"),
             Self::ArtistAlbums(id) => format!("pg_artist_albums_{id}"),
             Self::UserPlaylists(id) => format!("pg_user_playlists_{id}"),
+            Self::TrackSaved(id) => format!("track_saved_{id}"),
         }
     }
 }

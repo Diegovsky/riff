@@ -9,12 +9,10 @@ use crate::app::state::{AppAction, AppEvent, UpdatableState};
 pub enum TryLoginAction {
     Restore,
     InitLogin,
-    CompleteLogin,
 }
 
 #[derive(Clone, Debug)]
 pub enum LoginAction {
-    ShowLogin,
     OpenLoginUrl(Url),
     TryLogin(TryLoginAction),
     SetLoginSuccess(String),
@@ -24,7 +22,6 @@ pub enum LoginAction {
     RemoveUserPlaylist(String),
     SetLoginFailure,
     SetNotPremium,
-    RefreshToken,
     TokenRefreshed,
     Logout,
 }
@@ -39,19 +36,16 @@ impl From<LoginAction> for AppAction {
 pub enum LoginStartedEvent {
     Restore,
     InitLogin,
-    CompleteLogin,
     OpenUrl(Url),
 }
 
 #[derive(Clone, Debug)]
 pub enum LoginEvent {
-    LoginShown,
     LoginStarted(LoginStartedEvent),
     LoginCompleted,
     UserPlaylistsLoaded,
     LoginFailed,
     NotPremium,
-    FreshTokenRequested,
     RefreshTokenCompleted,
     LogoutCompleted,
 }
@@ -80,15 +74,11 @@ impl UpdatableState for LoginState {
     fn update_with(&mut self, action: Cow<Self::Action>) -> Vec<Self::Event> {
         info!("update_with({:?})", action);
         match action.into_owned() {
-            LoginAction::ShowLogin => vec![LoginEvent::LoginShown.into()],
             LoginAction::OpenLoginUrl(url) => {
                 vec![LoginEvent::LoginStarted(LoginStartedEvent::OpenUrl(url)).into()]
             }
             LoginAction::TryLogin(TryLoginAction::Restore) => {
                 vec![LoginEvent::LoginStarted(LoginStartedEvent::Restore).into()]
-            }
-            LoginAction::TryLogin(TryLoginAction::CompleteLogin) => {
-                vec![LoginEvent::LoginStarted(LoginStartedEvent::CompleteLogin).into()]
             }
             LoginAction::SetLoginSuccess(username) => {
                 self.user = Some(username);
@@ -96,7 +86,6 @@ impl UpdatableState for LoginState {
             }
             LoginAction::SetLoginFailure => vec![LoginEvent::LoginFailed.into()],
             LoginAction::SetNotPremium => vec![LoginEvent::NotPremium.into()],
-            LoginAction::RefreshToken => vec![LoginEvent::FreshTokenRequested.into()],
             LoginAction::TokenRefreshed => {
                 vec![LoginEvent::RefreshTokenCompleted.into()]
             }

@@ -11,7 +11,7 @@ use gtk::CompositeTemplate;
 use libadwaita::prelude::*;
 use riff_api::ApiService;
 
-use crate::app::components::utils::{decode_px, set_css_class};
+use crate::app::components::utils::{add_hover_class, decode_px, set_css_class};
 use crate::app::components::{display_add_css_provider, labels, SubtitleLinksBox};
 use crate::app::load;
 use crate::app::models::{SongModel, Track};
@@ -81,18 +81,7 @@ fn wire_link_label(label: &gtk::Label, action_name: String) {
     });
     label.add_controller(click);
 
-    let motion = gtk::EventControllerMotion::new();
-    motion.connect_enter(|motion, _, _| {
-        if let Some(label) = motion.widget() {
-            label.add_css_class(LINK_HOVER_CLASS);
-        }
-    });
-    motion.connect_leave(|motion| {
-        if let Some(label) = motion.widget() {
-            label.remove_css_class(LINK_HOVER_CLASS);
-        }
-    });
-    label.add_controller(motion);
+    add_hover_class(label, LINK_HOVER_CLASS);
 }
 
 mod imp {

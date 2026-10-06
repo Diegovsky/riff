@@ -21,46 +21,17 @@ template $UtilityPanelWidget : Adw.Bin {
       Adw.HeaderBar header {
         show-start-title-buttons: false;
 
-        title-widget: Adw.WindowTitle {
-          /* Translators: Title of the utility panel, listing what plays next. */
-          title: _("Queue");
-        };
+        // Set with the content (see UtilityPanel::set_content)
+        title-widget: Adw.WindowTitle title {};
 
         [start]
         ToggleButton utility_panel_button {
           icon-name: "music-queue-symbolic";
-          /* Translators: Tooltip of the header bar button that shows or hides the utility panel with the queue. */
-          tooltip-text: _("Queue");
           action-name: "win.utility-panel";
           focus-on-click: false;
           can-focus: false;
         }
       }
-
-      content: Stack queue_stack {
-        StackPage {
-          name: "list";
-
-          child: ScrolledWindow queue_scroller {
-            hscrollbar-policy: never;
-            vexpand: true;
-          };
-        }
-
-        StackPage {
-          name: "empty";
-
-          child: Adw.StatusPage {
-            icon-name: "music-queue-symbolic";
-            /* Translators: Shown in the utility panel when nothing plays or is queued. */
-            title: _("Nothing Queued");
-
-            styles [
-              "compact",
-            ]
-          };
-        }
-      };
     }
   };
 }

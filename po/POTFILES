@@ -9,6 +9,7 @@ src/app/components/pages/details_user/model.rs
 src/app/components/pages/details_user/widget.rs
 src/app/components/pages/now_playing/model.rs
 src/app/components/pages/now_playing/widget.rs
+src/app/components/pages/queue/component.rs
 src/app/components/pages/saved_albums/model.rs
 src/app/components/pages/saved_artists/model.rs
 src/app/components/pages/saved_playlists/model.rs
@@ -45,6 +46,7 @@ src/player/mod.rs
 # find src -name "*.blp" -print
 src/app/components/pages/details_album/release_details.blp
 src/app/components/pages/login/login.blp
+src/app/components/pages/queue/queue_page.blp
 src/app/components/pages/search/search.blp
 src/app/components/pages/settings/equalizer.blp
 src/app/components/pages/settings/pan.blp
@@ -60,8 +62,8 @@ src/app/components/shell/navigation_panel/navigation_panel_row.blp
 src/app/components/widgets/card/card.blp
 src/app/components/widgets/card_list/card_list.blp
 src/app/components/widgets/card_list/card_view_menu.blp
-src/app/components/widgets/card_list/filter_toggle.blp
 src/app/components/widgets/details_page/header.blp
+src/app/components/widgets/details_page/details_section.blp
 src/app/components/widgets/track_list/track_row.blp
 src/app/components/widgets/selection/selection_toolbar.blp
 src/app/dev_tools/dev_tools.blp

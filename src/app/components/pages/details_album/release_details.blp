@@ -67,7 +67,11 @@ template $ReleaseDetailsDialog : Adw.Dialog {
         [suffix]
         Label copyright {
           label: "Copyright";
-          ellipsize: middle;
+          hexpand: true;
+          xalign: 1;
+          justify: right;
+          wrap: true;
+          wrap-mode: word_char;
         }
       }
     }

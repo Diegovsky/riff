@@ -30,3 +30,9 @@ pub mod navigation_panel;
 
 pub mod utility_panel;
 pub use utility_panel::*;
+
+pub mod bottom_sheet;
+pub use bottom_sheet::*;
+
+pub mod panel_manager;
+pub use panel_manager::*;

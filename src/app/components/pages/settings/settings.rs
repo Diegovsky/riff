@@ -694,10 +694,11 @@ impl SettingsDialog {
     fn bind_feature_flags(&self) {
         let settings = gio::Settings::new(SETTINGS);
         let group = libadwaita::PreferencesGroup::new();
-        group.set_title("Experimental Features");
-        group.set_description(Some(
-            "These settings require restarting the application to take effect.",
-        ));
+        group.set_title(&gettextrs::gettext("Experimental Features"));
+        group.set_description(Some(&gettextrs::gettext(
+            "These features are still in development and may be unstable or incomplete. \
+             Changes take effect after restarting the application.",
+        )));
 
         for flag in FeatureFlag::ALL.iter() {
             let row = libadwaita::SwitchRow::new();

@@ -66,6 +66,7 @@ impl PageModel for DetailsModel {
         let album = self.get_album_info()?;
         Some(match album.album_type {
             AlbumType::Single => labels::SINGLE_CAPTION.clone(),
+            AlbumType::Ep => labels::EP_CAPTION.clone(),
             AlbumType::Compilation => labels::COMPILATION_CAPTION.clone(),
             _ => labels::ALBUM_CAPTION.clone(),
         })

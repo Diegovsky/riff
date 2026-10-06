@@ -1,0 +1,55 @@
+using Gtk 4.0;
+using Adw 1;
+
+// The header scrolls away with the content. maximum-size and
+// tightening-threshold match CLAMP_MAX_SIZE.
+template $DetailsPageWidget : Adw.Bin {
+  child: ScrolledWindow scrolled_window {
+    hscrollbar-policy: never;
+    hexpand: true;
+    vexpand: true;
+
+    styles [
+      "details-page-scroll",
+    ]
+
+    child: Box scroll_child {
+      orientation: vertical;
+
+      styles [
+        "details-page",
+        "details-page-content",
+      ]
+
+      // Drags the window from the header
+      WindowHandle header_area {
+        child: Adw.Clamp {
+          maximum-size: 1600;
+          tightening-threshold: 1600;
+
+          styles [
+            "details-header-clamp",
+          ]
+
+          child: $DetailsHeaderWidget header {
+            hexpand: true;
+          };
+        };
+      }
+
+      Adw.Clamp {
+        maximum-size: 1600;
+        tightening-threshold: 1600;
+
+        styles [
+          "details-content-clamp",
+        ]
+
+        child: Box content {
+          orientation: vertical;
+          hexpand: true;
+        };
+      }
+    };
+  };
+}

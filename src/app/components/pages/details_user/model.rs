@@ -8,8 +8,8 @@ use std::rc::Rc;
 
 use crate::app::components::DetailsPageModel;
 use crate::app::components::{
-    dispatch_api_read, CardListModel, HasHeaderBarModel, HeaderImageShape, ImageShape, PageModel,
-    PinnedPageModel, SimpleHeaderBarModel,
+    dispatch_api_read, playing_card, CardListModel, HasHeaderBarModel, HeaderImageShape,
+    ImageShape, PageModel, PinnedPageModel, PlayingCard, SimpleHeaderBarModel,
 };
 use crate::app::models::*;
 use crate::app::state::{BrowserAction, BrowserEvent, SelectionContext, CARD_BATCH_SIZE};
@@ -132,6 +132,10 @@ impl PageModel for UserDetailsModel {
 }
 
 impl CardListModel for UserDetailsModel {
+    fn playing_card(&self) -> PlayingCard {
+        playing_card(&self.state().playback)
+    }
+
     fn get_store(&self) -> Option<impl Deref<Target = ListStore<CardModel>> + '_> {
         self.app_model
             .map_state_opt(|s| Some(&s.browser.user_state(&self.id)?.playlists))

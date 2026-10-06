@@ -12,7 +12,6 @@ pub(crate) mod http;
 pub(crate) mod providers;
 mod scheduler;
 pub(crate) mod service;
-mod warm;
 
 #[cfg(debug_assertions)]
 pub(crate) mod dev;
@@ -22,7 +21,6 @@ pub use providers::spotify::domain::{check_user_profile, UserProfileCheck};
 pub use providers::spotify::spotify_service;
 pub use scheduler::{Load, LoadPriority, BACKGROUND_EPOCH};
 pub use service::ApiService;
-pub use warm::{WarmRequest, WarmSource};
 
 #[cfg(debug_assertions)]
 pub use dev::{is_simulate_offline, set_injected_error, set_simulate_offline};

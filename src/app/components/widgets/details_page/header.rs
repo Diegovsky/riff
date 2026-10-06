@@ -7,7 +7,14 @@ use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
 
 use super::{SubtitleLinksBox, HEADER_IMAGE_SIZE};
+use crate::app::components::utils::add_hover_class;
 use crate::app::components::{labels, ExpandBehavior, SegmentedButton};
+
+/// Between a subtitle and its detail (see `PageModel::get_subtitle_detail`).
+pub(super) const DETAIL_SEPARATOR: &str = " · ";
+
+const SUBTITLE_LINK_CLASS: &str = "subtitle-link";
+const SUBTITLE_LINK_HOVER_CLASS: &str = "subtitle-link--hover";
 
 /// Controls the shape of the artwork in the details header.
 /// - `Square`: used for albums/playlists (rendered with rounded card corners).
@@ -37,7 +44,7 @@ mod imp {
         pub image_box: TemplateChild<gtk::Box>,
 
         #[template_child]
-        pub image: TemplateChild<gtk::Picture>,
+        pub image: TemplateChild<gtk::Image>,
 
         #[template_child]
         pub caption_label: TemplateChild<gtk::Label>,
@@ -149,16 +156,8 @@ struct LikePinState {
 }
 
 impl DetailsHeader {
-    pub fn new(shape: HeaderImageShape) -> Self {
-        let widget: DetailsHeaderWidget = glib::Object::new();
-
+    pub fn for_widget(widget: DetailsHeaderWidget, shape: HeaderImageShape) -> Self {
         let imp = widget.imp();
-        imp.image.set_halign(gtk::Align::Center);
-        imp.image.set_valign(gtk::Align::Center);
-        imp.image_box
-            .add_css_class("details-header__image-placeholder");
-        imp.image_box.add_css_class("card");
-
         if shape == HeaderImageShape::Circle {
             imp.image.add_css_class("details-header__image--circular");
             imp.image_box
@@ -222,7 +221,8 @@ impl DetailsHeader {
         );
         let imp = self.widget.imp();
         imp.image.set_paintable(Some(&icon));
-        imp.image.set_content_fit(gtk::ContentFit::Fill);
+        imp.image_box
+            .add_css_class("details-header__image-box--icon");
     }
 
     // Action button state
@@ -412,13 +412,11 @@ impl DetailsHeader {
         (like, pin)
     }
 
-    /// Set multiple artist link buttons in the subtitle area.
-    /// Each artist is rendered as a clickable button. Buttons are separated by
-    /// comma labels: "Artist 1, Artist 2, Artist 3".
-    /// The callback receives the artist ID when a button is clicked.
+
     pub fn set_subtitle_links<F: Fn(&str) + 'static>(
         &self,
         artists: &[(String, String)],
+        detail: Option<&str>,
         on_clicked: F,
     ) {
         let imp = self.widget.imp();
@@ -444,18 +442,44 @@ impl DetailsHeader {
                 links_box.append_link(&separator);
             }
 
-            let button = gtk::Button::builder()
+
+            let label = gtk::Label::builder()
                 .label(name)
-                .css_classes(["flat", "subtitle-link-button"])
+                .focusable(true)
+                .accessible_role(gtk::AccessibleRole::Link)
+                .css_classes(["body", SUBTITLE_LINK_CLASS])
                 .build();
 
+            let click = gtk::GestureClick::new();
+            let click_id = id.clone();
+            let cb = Rc::clone(&on_clicked);
+            click.connect_released(move |gesture, _, _, _| {
+                gesture.set_state(gtk::EventSequenceState::Claimed);
+                cb(&click_id);
+            });
+            label.add_controller(click);
+
+            let keys = gtk::EventControllerKey::new();
             let id = id.clone();
             let cb = Rc::clone(&on_clicked);
-            button.connect_clicked(move |_| {
-                cb(&id);
+            keys.connect_key_pressed(move |_, key, _, _| match key {
+                gtk::gdk::Key::Return | gtk::gdk::Key::KP_Enter | gtk::gdk::Key::space => {
+                    cb(&id);
+                    gtk::glib::Propagation::Stop
+                }
+                _ => gtk::glib::Propagation::Proceed,
             });
+            label.add_controller(keys);
 
-            links_box.append_link(&button);
+            add_hover_class(&label, SUBTITLE_LINK_HOVER_CLASS);
+
+            links_box.append_link(&label);
+        }
+
+        if let Some(detail) = detail {
+            let detail_label = gtk::Label::new(Some(&format!("{DETAIL_SEPARATOR}{detail}")));
+            detail_label.add_css_class("body");
+            links_box.append_link(&detail_label);
         }
     }
 

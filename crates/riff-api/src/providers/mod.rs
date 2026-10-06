@@ -62,3 +62,12 @@ pub(crate) fn album_type_from<T: serde::Serialize>(value: &T) -> Option<AlbumTyp
         other => AlbumType::Other(other.to_string()),
     })
 }
+
+const EP_MIN_TRACKS: u32 = 4;
+
+pub(crate) fn release_type_from<T: serde::Serialize>(value: &T, total_tracks: u32) -> AlbumType {
+    match album_type_from(value).unwrap_or(AlbumType::Album) {
+        AlbumType::Single if total_tracks >= EP_MIN_TRACKS => AlbumType::Ep,
+        other => other,
+    }
+}

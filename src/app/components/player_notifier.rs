@@ -180,10 +180,6 @@ impl PlayerNotifier {
         let command = match event {
             LoginEvent::LoginStarted(LoginStartedEvent::Restore) => Some(Command::Restore),
             LoginEvent::LoginStarted(LoginStartedEvent::InitLogin) => Some(Command::InitLogin),
-            LoginEvent::LoginStarted(LoginStartedEvent::CompleteLogin) => {
-                Some(Command::CompleteLogin)
-            }
-            LoginEvent::FreshTokenRequested => Some(Command::RefreshToken),
             LoginEvent::LogoutCompleted => Some(Command::Logout),
             _ => None,
         };

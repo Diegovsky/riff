@@ -38,6 +38,9 @@ pub trait PageModel: ProvidesApi {
     fn get_subtitle(&self) -> Option<String> {
         None
     }
+    fn get_subtitle_detail(&self) -> Option<String> {
+        None
+    }
     fn get_artwork(&self) -> Option<ImageSet> {
         None
     }

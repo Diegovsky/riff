@@ -2,10 +2,11 @@ use gtk::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use super::{is_playback_event, DetailsHeader, DetailsPage, PinnedPageModel};
+use super::header::DETAIL_SEPARATOR;
+use super::{is_playback_event, DetailsHeader, DetailsPage, DetailsSectionWidget, PinnedPageModel};
 use crate::app::components::{
-    labels, CardLayout, CardList, CardListModel, CardSize, Component, EmbeddedCardList,
-    EventListener, FilterToggle, HeaderBarModel, HeaderRegistrar, SortOrder, TrackList,
+    filter_matches_nothing, labels, CardLayout, CardList, CardListModel, CardSize, Component,
+    EmbeddedCardList, EventListener, HeaderBarModel, HeaderRegistrar, SortOrder, TrackList,
     TrackListModel,
 };
 use crate::app::{AppEvent, Dispatcher};
@@ -50,8 +51,8 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
         registrar: HeaderRegistrar,
         name: String,
     ) -> Self {
-        let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        let page = DetailsPage::new(model.header_image_shape(), &content);
+        let page = DetailsPage::new(model.header_image_shape());
+        let content = page.content().clone();
 
         // Register this screen's header contribution: a scroll-revealed title,
         // an end-button container, and the selection/back model.
@@ -92,19 +93,10 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
     where
         M: TrackListModel,
     {
-        if let Some(text) = label {
-            let lbl = gtk::Label::builder()
-                .label(text)
-                .halign(gtk::Align::Start)
-                .css_classes(["title-4", "skeleton"])
-                .margin_bottom(16)
-                .build();
-            self.content.append(&lbl);
-        }
         let listview = gtk::ListView::new(None::<gtk::NoSelection>, None::<gtk::ListItemFactory>);
-        listview.set_margin_bottom(16);
-
-        self.content.append(&listview);
+        let section = DetailsSectionWidget::new(label, &listview);
+        section.add_css_class("details-section--tracks");
+        self.content.append(&section);
 
         let track_list = TrackList::new(listview.clone(), self.model.clone());
         // Requires an ancestor ScrolledWindow, provided by DetailsPage; must
@@ -115,8 +107,10 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
     }
 
     /// Create an [`EmbeddedCardList`] with view controls, appending it to the content box
-    /// and registering it as an event listener. Packs the view button into the headerbar.
-    /// If the model provides filter options, a filter toggle bar is shown inline with the label.
+    /// and registering it as an event listener.
+    ///
+    /// The view button sits inline beside the label, and moves into the headerbar
+    /// once the label row scrolls out of view. Returns the card grid.
     pub fn create_embedded_card_list(
         &mut self,
         label: Option<&str>,
@@ -125,74 +119,22 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
         shared_layout: Rc<Cell<CardLayout>>,
         shared_size: Rc<Cell<CardSize>>,
         dispatcher: Dispatcher,
-    ) where
+    ) -> gtk::FlowBox
+    where
         M: CardListModel,
     {
-        let filter_options = self.model.filter_options();
-        let has_filters = !filter_options.is_empty();
-
         let card_list = Rc::new(CardList::new());
-        card_list.widget().set_margin_bottom(16);
+        let grid = card_list.widget().clone();
+        let section = DetailsSectionWidget::new(label, card_list.widget());
+        self.content.append(&section);
 
-        if has_filters {
-            // Header row: label (left, hexpand) + filter toggle (right, shrinkable)
-            let header_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-            header_row.set_margin_bottom(10);
-
-            if let Some(text) = label {
-                let lbl = gtk::Label::builder()
-                    .label(text)
-                    .halign(gtk::Align::Start)
-                    .hexpand(true)
-                    .css_classes(["title-4", "skeleton"])
-                    .build();
-                header_row.append(&lbl);
+        let on_filter_changed = clone!(
+            #[weak]
+            section,
+            move |category: &str, visible_count: usize| {
+                section.set_empty(filter_matches_nothing(category, visible_count));
             }
-
-            // Empty state label shown when a filter matches nothing
-            let empty_label = gtk::Label::builder()
-                .label("")
-                .halign(gtk::Align::Center)
-                .valign(gtk::Align::Center)
-                .margin_top(24)
-                .margin_bottom(24)
-                .css_classes(["dim-label"])
-                .visible(false)
-                .build();
-
-            let empty_label_ref = empty_label.clone();
-            let filter_widget = FilterToggle::new(
-                &filter_options,
-                Rc::clone(&card_list),
-                move |category, visible_count| {
-                    if category.is_empty() {
-                        empty_label_ref.set_visible(false);
-                    } else if visible_count == 0 {
-                        let msg = gettextrs::gettext("No items found for this filter");
-                        empty_label_ref.set_label(&msg);
-                        empty_label_ref.set_visible(true);
-                    } else {
-                        empty_label_ref.set_visible(false);
-                    }
-                },
-            );
-
-            header_row.append(&filter_widget);
-            self.content.append(&header_row);
-            self.content.append(&empty_label);
-        } else if let Some(text) = label {
-            // No filters - just append a plain label
-            let lbl = gtk::Label::builder()
-                .label(text)
-                .halign(gtk::Align::Start)
-                .hexpand(true)
-                .css_classes(["title-4", "skeleton"])
-                .margin_bottom(10)
-                .build();
-            self.content.append(&lbl);
-        }
-
-        self.content.append(card_list.widget());
+        );
 
         card_list.bind(&self.model, CardLayout::Vertical, CardSize::Large);
         card_list.show_placeholders();
@@ -203,10 +145,49 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
             available_sorts,
             shared_layout,
             shared_size,
+            &self.model.filter_options(),
+            on_filter_changed,
+            {
+                let model = Rc::downgrade(&self.model);
+                move || model.upgrade().and_then(|m| m.playing_card())
+            },
             dispatcher,
         );
-        self.add_header_end(embedded.view_button());
+
+        let button = embedded.view_button().clone();
+        section.set_button(&button);
+        let button_slot = section.button_slot().clone();
+
+        // Weak, so the handler on the page's scroll adjustment doesn't keep
+        // the button and its slots alive.
+        self.page.connect_scrolled_past(
+            section.header_row().upcast_ref(),
+            clone!(
+                #[weak]
+                button,
+                #[weak]
+                button_slot,
+                #[weak(rename_to = end_box)]
+                self.end_box,
+                move |past| {
+                    let target = if past {
+                        // Keep the row's height once the button leaves it, so
+                        // the content below doesn't shift.
+                        button_slot.set_height_request(button_slot.height());
+                        &end_box
+                    } else {
+                        &button_slot
+                    };
+                    if let Some(parent) = button.parent().and_downcast::<gtk::Box>() {
+                        parent.remove(&button);
+                    }
+                    target.append(&button);
+                }
+            ),
+        );
+
         self.children.push(Box::new(embedded));
+        grid
     }
 
     pub fn page(&self) -> &DetailsPage {
@@ -340,9 +321,17 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
 
     /// Refresh the page header from the model's current state.
     pub fn refresh_details(&self) {
+        let detail = self.model.get_subtitle_detail();
         if let Some(title) = self.model.get_title() {
             let subtitle = self.model.get_subtitle().unwrap_or_default();
-            self.page.set_details(&title, &subtitle);
+            let full_subtitle = match &detail {
+                Some(detail) if !subtitle.is_empty() => {
+                    format!("{subtitle}{DETAIL_SEPARATOR}{detail}")
+                }
+                Some(detail) => detail.clone(),
+                None => subtitle.clone(),
+            };
+            self.page.set_details(&title, &full_subtitle);
             self.header_title.set_title(&title);
             self.header_title.set_subtitle(&subtitle);
         }
@@ -356,6 +345,7 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
                 .collect();
             self.page.header().set_subtitle_links(
                 &artists,
+                detail.as_deref(),
                 clone!(
                     #[weak(rename_to = m)]
                     self.model,

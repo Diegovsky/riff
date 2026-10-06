@@ -67,5 +67,31 @@ template $CardViewMenuPopover : Popover {
         spacing: 6;
       }
     }
+
+    Box filter_section {
+      orientation: vertical;
+      spacing: 6;
+      visible: false;
+
+      Separator {
+        orientation: horizontal;
+        margin-top: 6;
+        margin-bottom: 6;
+      }
+
+      Label filter_label {
+        label: _("Filters");
+        halign: start;
+
+        styles [
+          "heading",
+        ]
+      }
+
+      Box filter_box {
+        orientation: vertical;
+        spacing: 6;
+      }
+    }
   }
 }

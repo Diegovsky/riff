@@ -1,14 +1,29 @@
 using Gtk 4.0;
 
 template $CardWidget : Widget {
-  Picture cover_image {
-    content-fit: cover;
-    can-shrink: true;
-    overflow: hidden;
+  Overlay cover {
+    child: Picture cover_image {
+      content-fit: cover;
+      can-shrink: true;
+      overflow: hidden;
 
-    styles [
-      "card",
-    ]
+      styles [
+        "card",
+      ]
+    };
+
+    [overlay]
+    Spinner playing_indicator {
+      visible: false;
+      can-target: false;
+      halign: start;
+      valign: end;
+
+      styles [
+        "playback-indicator",
+        "card__playing",
+      ]
+    }
   }
 
   Box label_box {

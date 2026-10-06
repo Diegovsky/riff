@@ -5,10 +5,11 @@ use std::cmp::Ordering;
 use std::ops::Deref;
 use std::rc::Rc;
 
+use crate::app::components::details_page::is_playback_event;
 use crate::app::components::{CardLayout, CardSize, CardWidget, ImageShape, SortOrder};
 use crate::app::models::{CardModel, FilterOption};
-use crate::app::ListStore;
-use crate::app::ProvidesApi;
+use crate::app::state::{EntryKey, PlaybackEvent, PlaybackState};
+use crate::app::{AppEvent, ListStore, ProvidesApi, SongsSource};
 use riff_api::ApiService;
 use std::sync::Arc;
 
@@ -29,6 +30,34 @@ const HORIZONTAL_LABEL_WIDTH_SCALE: f32 = 1.8;
 /// Key used to attach a CardModel to a FlowBoxChild via GObject unsafe data.
 const MODEL_DATA_KEY: &str = "card-model";
 
+pub type PlayingCard = Option<(String, bool)>;
+
+pub fn playing_card(playback: &PlaybackState) -> PlayingCard {
+    let queued = matches!(playback.current_key(), Some(EntryKey::Queued(_)));
+    let id = match playback.current_source() {
+        Some(SongsSource::Album(id) | SongsSource::Playlist(id) | SongsSource::Artist(id))
+            if !queued =>
+        {
+            id.clone()
+        }
+        Some(_) if !queued => return None,
+        _ => playback.current_song()?.album?.rri.id,
+    };
+    Some((id, playback.is_playing()))
+}
+
+pub fn changes_playing_card(event: &AppEvent) -> bool {
+    is_playback_event(event).is_some()
+        || matches!(event, AppEvent::PlaybackEvent(PlaybackEvent::SourceChanged))
+}
+
+fn playing_state(card_id: &str, playing: &PlayingCard) -> Option<bool> {
+    playing
+        .as_ref()
+        .filter(|(id, _)| id == card_id)
+        .map(|(_, is_playing)| *is_playing)
+}
+
 /// Trait that abstracts the data/API layer for a card list.
 pub trait CardListModel {
     fn get_store(&self) -> Option<impl Deref<Target = ListStore<CardModel>> + '_>;
@@ -40,10 +69,11 @@ pub trait CardListModel {
     }
     fn open_item(&self, id: String);
     fn image_shape(&self) -> ImageShape;
-
-    /// Returns filter options for this card list. Empty = no filter UI.
     fn filter_options(&self) -> Vec<FilterOption> {
         vec![]
+    }
+    fn playing_card(&self) -> PlayingCard {
+        None
     }
 }
 
@@ -57,6 +87,7 @@ pub struct CardList {
     current_size: Rc<Cell<CardSize>>,
     current_sort: Rc<Cell<SortOrder>>,
     current_filter: Rc<RefCell<String>>,
+    playing: Rc<RefCell<PlayingCard>>,
     next_position: Rc<Cell<i64>>,
     /// Lowest insertion position assigned so far. Freshly added (prepended)
     /// items are given positions below this so they rank as the most recently
@@ -119,6 +150,7 @@ impl CardList {
             current_size,
             current_sort: Rc::new(Cell::new(SortOrder::RecentlyAdded)),
             current_filter,
+            playing: Default::default(),
             next_position: Rc::new(Cell::new(0)),
             min_position: Rc::new(Cell::new(0)),
             max_rows,
@@ -198,6 +230,7 @@ impl CardList {
             let placeholder_count = Rc::clone(&self.placeholder_count);
             let constraint = Rc::clone(&self.max_rows);
             let current_filter = Rc::clone(&self.current_filter);
+            let playing = Rc::clone(&self.playing);
             let api_service_clone = api_service.clone();
             let handler_id =
                 inner.connect_items_changed(move |source, position, removed, added| {
@@ -260,6 +293,7 @@ impl CardList {
                                             shape,
                                             layout,
                                             size,
+                                            &playing.borrow(),
                                         );
                                         flowbox.insert(&child, -1);
                                     }
@@ -281,6 +315,7 @@ impl CardList {
                                             shape,
                                             layout,
                                             size,
+                                            &playing.borrow(),
                                         );
                                         flowbox.insert(&child, -1);
                                     }
@@ -329,42 +364,50 @@ impl CardList {
         layout: CardLayout,
         size: CardSize,
     ) {
-        let child = create_child(card, api_service, shape, layout, size);
+        let child = create_child(
+            card,
+            api_service,
+            shape,
+            layout,
+            size,
+            &self.playing.borrow(),
+        );
         self.flowbox.insert(&child, -1);
+    }
+
+
+    fn for_each_card(&self, f: impl Fn(&CardWidget)) {
+        let mut child = self.flowbox.first_child();
+        while let Some(c) = child {
+            if let Some(card) = c
+                .downcast_ref::<gtk::FlowBoxChild>()
+                .and_then(|fb_child| fb_child.child())
+                .and_downcast::<CardWidget>()
+            {
+                f(&card);
+            }
+            child = c.next_sibling();
+        }
     }
 
     pub fn update_size(&self, size: CardSize) {
         self.current_size.set(size);
-        let mut child = self.flowbox.first_child();
-        while let Some(c) = child {
-            if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
-                if let Some(card) = fb_child
-                    .child()
-                    .and_then(|w| w.downcast::<CardWidget>().ok())
-                {
-                    card.set_image_size(size);
-                }
-            }
-            child = c.next_sibling();
-        }
+        self.for_each_card(|card| card.set_image_size(size));
         self.apply_constraint();
     }
 
     pub fn update_layout(&self, layout: CardLayout) {
         self.current_layout.set(layout);
-        let mut child = self.flowbox.first_child();
-        while let Some(c) = child {
-            if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
-                if let Some(card) = fb_child
-                    .child()
-                    .and_then(|w| w.downcast::<CardWidget>().ok())
-                {
-                    card.set_layout(layout);
-                }
-            }
-            child = c.next_sibling();
-        }
+        self.for_each_card(|card| card.set_layout(layout));
         self.apply_constraint();
+    }
+
+    pub fn set_playing(&self, playing: PlayingCard) {
+        if *self.playing.borrow() == playing {
+            return; // e.g. the next track of the same album
+        }
+        self.for_each_card(|card| card.set_playing(playing_state(&card.card_id(), &playing)));
+        *self.playing.borrow_mut() = playing;
     }
 
     /// Change the sort order. Reorders existing children in-place (no flash).
@@ -402,6 +445,14 @@ impl CardList {
         }
         *self.current_filter.borrow_mut() = category.to_string();
         self.flowbox.invalidate_filter();
+    }
+
+    pub fn is_filtered(&self) -> bool {
+        !self.current_filter.borrow().is_empty()
+    }
+
+    pub fn has_placeholders(&self) -> bool {
+        self.placeholder_count.get() > 0
     }
 
     /// Count the number of visible (non-placeholder) children after filtering.
@@ -527,8 +578,10 @@ fn create_child(
     shape: ImageShape,
     layout: CardLayout,
     size: CardSize,
+    playing: &PlayingCard,
 ) -> gtk::FlowBoxChild {
     let widget = CardWidget::for_model(card, api_service.clone(), shape, layout, size);
+    widget.set_playing(playing_state(&card.id(), playing));
     let child = gtk::FlowBoxChild::new();
     child.set_halign(gtk::Align::Fill);
     child.set_hexpand(true);

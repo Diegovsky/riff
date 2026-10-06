@@ -200,9 +200,7 @@ impl EventListener for MainWindow {
             AppEvent::Raised => self.raise(),
             AppEvent::DrmBlockedDialogShown => self.show_drm_blocked_dialog(),
             AppEvent::LoginEvent(LoginEvent::LoginCompleted) => self.show(),
-            AppEvent::LoginEvent(LoginEvent::LoginShown | LoginEvent::LogoutCompleted) => {
-                self.hide()
-            }
+            AppEvent::LoginEvent(LoginEvent::LogoutCompleted) => self.hide(),
             _ => {}
         }
     }

@@ -9,6 +9,7 @@ use spotify_api::apis::{self, configuration::Configuration};
 use spotify_api::models as sp;
 
 use async_trait::async_trait;
+use futures::future::try_join_all;
 
 use super::converter::*;
 use crate::defaults::{self, EntityKind};
@@ -16,6 +17,14 @@ use crate::error::DomainError;
 use crate::models::*;
 use crate::providers::{content_rating_from_explicit, MusicProvider};
 use crate::token::TokenProvider;
+
+/// Most URIs `GET /me/library/contains` accepts per request.
+const MAX_LIBRARY_CHECK_ITEMS: usize = 40;
+
+const USER_MARKET: &str = "from_token";
+
+const PLAYLIST_FIELDS: &str = "id,name,owner(id,display_name),images,\
+    tracks(href,limit,next,offset,previous,total,items(is_local))";
 
 pub struct UserProfileCheck {
     pub user_id: String,
@@ -218,7 +227,7 @@ impl MusicProvider for SpotifyDomain {
             &config,
             Some(limit as i32),
             Some(offset as i32),
-            None,
+            Some(USER_MARKET),
         )
         .await?;
         let items = page.items.iter().filter_map(album_from_saved).collect();
@@ -275,6 +284,29 @@ impl MusicProvider for SpotifyDomain {
         ))
     }
 
+    async fn check_saved_tracks(&self, ids: Vec<String>) -> Result<Vec<bool>, DomainError> {
+        let config = self.config_or_err()?;
+        let config = &config;
+        let pages = try_join_all(ids.chunks(MAX_LIBRARY_CHECK_ITEMS).map(|chunk| async move {
+            let uris = chunk
+                .iter()
+                .map(|id| format!("spotify:track:{id}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            let page = apis::library_api::check_library_contains(config, &uris).await?;
+            if page.len() != chunk.len() {
+                return Err(DomainError::Parse(format!(
+                    "library check returned {} results for {} tracks",
+                    page.len(),
+                    chunk.len()
+                )));
+            }
+            Ok(page)
+        }))
+        .await?;
+        Ok(pages.into_iter().flatten().collect())
+    }
+
     async fn save_tracks(&self, ids: Vec<String>) -> Result<(), DomainError> {
         let config = self.config_or_err()?;
         // Save via PUT /me/tracks with the IDs in the request body. This mirrors
@@ -316,7 +348,14 @@ impl MusicProvider for SpotifyDomain {
 
     async fn get_playlist(&self, id: &str) -> Result<Playlist, DomainError> {
         let config = self.config_or_err()?;
-        let raw = apis::playlists_api::get_playlist(&config, id, None, None, None).await?;
+        let raw = apis::playlists_api::get_playlist(
+            &config,
+            id,
+            Some(USER_MARKET),
+            Some(PLAYLIST_FIELDS),
+            None,
+        )
+        .await?;
         Ok(playlist_from_object(&raw))
     }
 
@@ -453,7 +492,7 @@ impl MusicProvider for SpotifyDomain {
             &config,
             id,
             Some("album,single,compilation"),
-            None,
+            Some(USER_MARKET),
             Some(limit as i32),
             Some(offset as i32),
         )
@@ -576,11 +615,12 @@ impl MusicProvider for SpotifyDomain {
     ) -> Result<SearchResults, DomainError> {
         let config = self.config_or_err()?;
         let types = vec![search_type_str(kind).to_string()];
+        let market = matches!(kind, SearchType::Album).then_some(USER_MARKET);
         let resp = apis::search_api::search(
             &config,
             query,
             types,
-            None,
+            market,
             Some(limit as i32),
             Some(offset as i32),
             None,

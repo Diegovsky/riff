@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use riff_api::{Load, LoadPriority, BACKGROUND_EPOCH};
 
-/// Starts above `BACKGROUND_EPOCH` so the first view already outranks warming.
+/// Starts above `BACKGROUND_EPOCH` so the first view already outranks background work.
 static NAV_EPOCH: AtomicU64 = AtomicU64::new(BACKGROUND_EPOCH + 1);
 
 /// Mark a navigation, returning the new epoch. Called for any change of what the
@@ -48,10 +48,6 @@ pub fn transport() -> Load {
     at(LoadPriority::Transport)
 }
 
-pub fn background() -> Load {
-    Load::background()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,8 +62,8 @@ mod tests {
 
     #[test]
     fn background_is_below_every_view() {
-        assert!(background().epoch < visible().epoch);
-        assert_eq!(background().priority, LoadPriority::Background);
+        assert!(Load::background().epoch < visible().epoch);
+        assert_eq!(Load::background().priority, LoadPriority::Background);
     }
 
     #[test]
@@ -82,6 +78,6 @@ mod tests {
     fn view_priorities_are_ordered() {
         assert!(hero().priority > visible().priority);
         assert!(visible().priority > offscreen().priority);
-        assert!(offscreen().priority > background().priority);
+        assert!(offscreen().priority > Load::background().priority);
     }
 }

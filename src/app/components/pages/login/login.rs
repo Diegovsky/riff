@@ -187,7 +187,7 @@ impl EventListener for Login {
             AppEvent::Started => {
                 self.model.try_autologin();
             }
-            AppEvent::LoginEvent(LoginEvent::LogoutCompleted | LoginEvent::LoginShown) => {
+            AppEvent::LoginEvent(LoginEvent::LogoutCompleted) => {
                 self.show_self();
             }
             _ => {}
