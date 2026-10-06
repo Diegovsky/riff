@@ -16,11 +16,9 @@ template $PlaybackInfoWidget : Button {
     halign: start;
     spacing: 0;
 
-    Picture playing_image {
-      width-request: 56;
-      height-request: 56;
-      can-shrink: true;
-      content-fit: cover;
+
+    Image playing_image {
+      pixel-size: 56;
       overflow: hidden;
 
       styles [

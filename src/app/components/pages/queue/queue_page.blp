@@ -1,0 +1,29 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $QueuePageWidget : Adw.Bin {
+  child: Stack queue_stack {
+    StackPage {
+      name: "list";
+
+      child: ScrolledWindow queue_scroller {
+        hscrollbar-policy: never;
+        vexpand: true;
+      };
+    }
+
+    StackPage {
+      name: "empty";
+
+      child: Adw.StatusPage {
+        icon-name: "music-queue-symbolic";
+        /* Translators: Shown in place of the queue when nothing plays or is queued. */
+        title: _("Nothing Queued");
+
+        styles [
+          "compact",
+        ]
+      };
+    }
+  };
+}

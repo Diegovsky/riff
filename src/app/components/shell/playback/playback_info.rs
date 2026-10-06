@@ -11,7 +11,7 @@ mod imp {
     #[template(resource = "/dev/diegovsky/Riff/components/playback_info.ui")]
     pub struct PlaybackInfoWidget {
         #[template_child]
-        pub playing_image: TemplateChild<gtk::Picture>,
+        pub playing_image: TemplateChild<gtk::Image>,
 
         #[template_child]
         pub song_info_box: TemplateChild<gtk::Box>,

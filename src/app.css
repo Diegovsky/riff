@@ -77,3 +77,8 @@ stack.transitioning scrollbar {
   96% { -gtk-icon-source: -gtk-icontheme("playback-16-symbolic"); }
   100% { -gtk-icon-source: -gtk-icontheme("playback-0-symbolic"); }
 }
+
+bottom-sheet.bottom-sheet--padded > sheet {
+  margin-left: 32px;
+  margin-right: 32px;
+}

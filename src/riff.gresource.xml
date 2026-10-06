@@ -25,6 +25,8 @@
     <!-- details_page -->
     <file alias="components/details_page/style.css">app/components/widgets/details_page/style.css</file>
     <file alias="components/details_header.ui">app/components/widgets/details_page/header.ui</file>
+    <file alias="components/details_page.ui">app/components/widgets/details_page/details_page.ui</file>
+    <file alias="components/details_section.ui">app/components/widgets/details_page/details_section.ui</file>
     <!-- details_album -->
     <file alias="components/release_details.ui">app/components/pages/details_album/release_details.ui</file>
     <!-- details_artist -->
@@ -33,6 +35,10 @@
     <!-- now playing -->
     <file alias="components/device_selector.ui">app/components/shell/device_selector/device_selector.ui</file>
     <file alias="components/utility_panel.ui">app/components/shell/utility_panel/utility_panel.ui</file>
+    <!-- bottom sheet -->
+    <file alias="components/bottom_sheet.ui">app/components/shell/bottom_sheet/bottom_sheet.ui</file>
+    <!-- queue -->
+    <file alias="components/queue_page.ui">app/components/pages/queue/queue_page.ui</file>
     <!-- liked songs -->
     <!-- track_list / track_row -->
     <file alias="components/track_row.css">app/components/widgets/track_list/track_row.css</file>

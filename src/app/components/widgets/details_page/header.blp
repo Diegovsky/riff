@@ -40,11 +40,16 @@ template $DetailsHeaderWidget : Widget {
 
         styles [
           "details-header__image-box",
+          "details-header__image-placeholder",
+          "card",
         ]
 
         Overlay {
-          Picture image {
-            content-fit: cover;
+
+          Image image {
+            pixel-size: 200;
+            halign: center;
+            valign: center;
 
             styles [
               "details-header__image",

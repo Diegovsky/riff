@@ -3,52 +3,74 @@ use crate::app::AppEvent;
 use gdk::prelude::ToVariant;
 use gettextrs::*;
 use gtk::prelude::*;
+use libadwaita::prelude::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+const CONNECTION_LOST_KEY: &str = "connection-lost";
+
+type ActiveToasts = Rc<RefCell<HashMap<String, libadwaita::Toast>>>;
+
+#[derive(Clone)]
 pub struct Notification {
     toast_overlay: libadwaita::ToastOverlay,
-    // Toasts that are currently showing (or queued), keyed by a dedup key.
-    // Every toast goes through this map so we never stack a duplicate while one
-    // with the same key is up, and so a specific toast can be dismissed later
-    // (e.g. the connection banner on reconnect). Entries clear themselves when
-    // the toast is dismissed, however it goes away.
-    active: Rc<RefCell<HashMap<String, libadwaita::Toast>>>,
+    active: ActiveToasts,
 }
 
 impl Notification {
     pub fn new(toast_overlay: libadwaita::ToastOverlay) -> Self {
-        Self {
+        let notification = Self {
             toast_overlay,
             active: Rc::new(RefCell::new(HashMap::new())),
+        };
+        if let Some(window) = notification.window() {
+            let notification = notification.clone();
+            window.connect_visible_dialog_notify(move |_| notification.dialog_changed());
+        }
+        notification
+    }
+
+    fn window(&self) -> Option<libadwaita::ApplicationWindow> {
+        self.toast_overlay.root()?.downcast().ok()
+    }
+
+    fn current_overlay(&self) -> (libadwaita::ToastOverlay, Option<libadwaita::Dialog>) {
+        self.window()
+            .and_then(|window| window.visible_dialog())
+            .and_then(|dialog| Some((find_toast_overlay(dialog.upcast_ref())?, Some(dialog))))
+            .unwrap_or_else(|| (self.toast_overlay.clone(), None))
+    }
+
+    fn dialog_changed(&self) {
+        let connection_lost = self.active.borrow().contains_key(CONNECTION_LOST_KEY);
+        if connection_lost {
+            self.set_connection_lost(false);
+            self.set_connection_lost(true);
         }
     }
 
-    // Adds a toast, deduplicated by `key`. If a toast with the same key is
-    // already present this is a no-op, so repeated events never stack toasts.
     fn add(&self, key: String, toast: libadwaita::Toast) {
         if self.active.borrow().contains_key(&key) {
             return;
         }
 
-        // Drop the entry once the toast disappears (timeout, manual close, or a
-        // programmatic dismiss), so the same key can be shown again afterwards.
         let active = self.active.clone();
         let dismiss_key = key.clone();
         toast.connect_dismissed(move |_| {
             active.borrow_mut().remove(&dismiss_key);
         });
 
+        let (overlay, dialog) = self.current_overlay();
+        if let Some(dialog) = dialog.filter(|_| key != CONNECTION_LOST_KEY) {
+            let toast = toast.clone();
+            dialog.connect_closed(move |_| toast.dismiss());
+        }
         self.active.borrow_mut().insert(key, toast.clone());
-        self.toast_overlay.add_toast(toast);
+        overlay.add_toast(toast);
     }
 
-    // Dismisses the toast with `key`, if one is showing. The dismissed handler
-    // removes the map entry.
     fn dismiss(&self, key: &str) {
-        // Clone the handle out and drop the borrow before dismissing, so the
-        // dismissed handler can borrow the map mutably without a conflict.
         let toast = self.active.borrow().get(key).cloned();
         if let Some(toast) = toast {
             toast.dismiss();
@@ -79,9 +101,6 @@ impl Notification {
         self.add(format!("playlist-created:{id}"), toast);
     }
 
-    // Shows or hides the persistent "connection lost" toast. It has no timeout
-    // so it stays up until we reconnect, and it keeps its standard close button
-    // so the user can dismiss it manually.
     fn set_connection_lost(&self, lost: bool) {
         if lost {
             let content = gtk::Box::builder().spacing(8).build();
@@ -100,15 +119,12 @@ impl Notification {
 
             let toast = libadwaita::Toast::builder()
                 .custom_title(&content)
-                // 0 means the toast stays until it is dismissed.
                 .timeout(0)
-                // Show it ahead of any queued transient toasts.
                 .priority(libadwaita::ToastPriority::High)
                 .build();
-            // add() dedups, so repeated "lost" events keep a single banner.
-            self.add("connection-lost".to_string(), toast);
+            self.add(CONNECTION_LOST_KEY.to_string(), toast);
         } else {
-            self.dismiss("connection-lost");
+            self.dismiss(CONNECTION_LOST_KEY);
         }
     }
 }
@@ -122,4 +138,19 @@ impl EventListener for Notification {
             _ => {}
         }
     }
+}
+
+fn find_toast_overlay(root: &gtk::Widget) -> Option<libadwaita::ToastOverlay> {
+    let mut queue = std::collections::VecDeque::from([root.clone()]);
+    while let Some(widget) = queue.pop_front() {
+        if let Some(overlay) = widget.downcast_ref::<libadwaita::ToastOverlay>() {
+            return Some(overlay.clone());
+        }
+        let mut child = widget.first_child();
+        while let Some(widget) = child {
+            child = widget.next_sibling();
+            queue.push_back(widget);
+        }
+    }
+    None
 }

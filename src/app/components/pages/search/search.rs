@@ -508,6 +508,8 @@ impl SearchResults {
             Rc::clone(&layout),
             Rc::clone(&size),
             current_sort,
+            &[],
+            |_, _| {},
             Rc::clone(&track_card_list),
             dispatcher.clone(),
         );

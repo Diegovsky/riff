@@ -5,8 +5,8 @@ use std::rc::Rc;
 use gettextrs::gettext;
 
 use crate::app::components::{
-    dispatch_api_read, CardLayout, CardListComponent, CardListModel, CardListPageModel, CardSize,
-    ImageShape, SortOrder,
+    dispatch_api_read, playing_card, CardLayout, CardListComponent, CardListModel,
+    CardListPageModel, CardSize, ImageShape, PlayingCard, SortOrder,
 };
 use crate::app::models::*;
 use crate::app::state::HomeState;
@@ -34,6 +34,10 @@ impl SavedArtistsModel {
 }
 
 impl CardListModel for SavedArtistsModel {
+    fn playing_card(&self) -> PlayingCard {
+        playing_card(&self.app_model.get_state().playback)
+    }
+
     fn get_store(&self) -> Option<impl Deref<Target = ListStore<CardModel>> + '_> {
         Some(Ref::map(self.state()?, |s| &s.artists))
     }

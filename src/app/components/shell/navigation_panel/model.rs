@@ -206,7 +206,7 @@ impl NavigationPanelModel {
             settings::PinnedKind::Playlist => home.playlists.iter().any(|c| c.id() == id),
             settings::PinnedKind::Album => home.albums.iter().any(|c| c.id() == id),
             settings::PinnedKind::Artist => home.artists.iter().any(|c| c.id() == id),
-            settings::PinnedKind::Track => home.saved_tracks.get(id).is_some(),
+            settings::PinnedKind::Track => home.is_track_liked(id),
         }
     }
 

@@ -44,8 +44,8 @@ Adw.ApplicationWindow window {
     Adw.ToastOverlay toast_overlay {
       vexpand: true;
 
-      // Queue sheet
-      Adw.BottomSheet queue_sheet {
+      // Bottom sheet
+      Adw.BottomSheet bottom_sheet {
         reveal-bottom-bar: false;
         // Narrow windows only. Beside the content, the queue isn't in the
         // sheet: the bar shows the current track and doesn't open
@@ -54,14 +54,19 @@ Adw.ApplicationWindow window {
         };
         full-width: false;
 
+        // Dropped by the narrow breakpoints (see shell/layout)
+        styles [
+          "bottom-sheet--padded",
+        ]
+
         content: Adw.OverlaySplitView utility_split {
           sidebar-position: end;
           show-sidebar: false;
           pin-sidebar: true;
           sidebar-width-unit: px;
-          // The queue sheet's bottom bar is over the content: the content
+          // The bottom sheet's bottom bar is over the content: the content
           // ends above it
-          margin-bottom: bind queue_sheet.bottom-bar-height;
+          margin-bottom: bind bottom_sheet.bottom-bar-height;
 
           // An OverlaySplitView collapses without reparenting its children,
           // which would rebuild every page

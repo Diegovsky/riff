@@ -455,16 +455,6 @@ impl SpotifyPlayer {
                 self.get_player_mut()?.preload(track);
                 Ok(())
             }
-            Command::RefreshToken => {
-                self.session.as_ref().ok_or(SpotifyError::PlayerNotReady)?;
-                self.oauth_client
-                    .get_valid_token()
-                    .await
-                    .map_err(|_| SpotifyError::LoginFailed)?;
-                self.ensure_session_alive().await?;
-                self.delegate.refresh_successful();
-                Ok(())
-            }
             Command::ReconnectSession => self.try_background_reconnect().await,
             Command::TrackUnavailable => {
                 if self.session_needs_rebuild() {

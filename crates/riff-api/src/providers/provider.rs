@@ -32,6 +32,7 @@ pub trait MusicProvider: Send + Sync + 'static {
         offset: usize,
         limit: usize,
     ) -> Result<Page<Track>, DomainError>;
+    async fn check_saved_tracks(&self, ids: Vec<String>) -> Result<Vec<bool>, DomainError>;
     async fn save_tracks(&self, ids: Vec<String>) -> Result<(), DomainError>;
     async fn remove_tracks(&self, ids: Vec<String>) -> Result<(), DomainError>;
 

@@ -3,6 +3,7 @@
 // releases as a card grid.
 
 use gettextrs::gettext;
+use gtk::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
 
@@ -31,7 +32,7 @@ impl ArtistDetails {
         let mut component =
             DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), registrar, name);
         component.create_track_list(Some(&gettext("Top Tracks")));
-        component.create_embedded_card_list(
+        let releases = component.create_embedded_card_list(
             Some(&gettext("Releases")),
             "artist_releases",
             &[SortOrder::DateReleased, SortOrder::Alphabetic],
@@ -39,9 +40,39 @@ impl ArtistDetails {
             shared_size,
             dispatcher,
         );
+        align_to_edges(&releases);
 
         Self { component }
     }
+}
+
+const MIN_COLUMN_SPACING: i32 = 6;
+
+fn align_to_edges(grid: &gtk::FlowBox) {
+    grid.add_css_class("artist-releases");
+    grid.add_tick_callback(|grid, _| {
+        let spacing = edge_to_edge_spacing(grid).unwrap_or(MIN_COLUMN_SPACING);
+        if grid.column_spacing() as i32 != spacing {
+            grid.set_column_spacing(spacing as u32);
+        }
+        gtk::glib::ControlFlow::Continue
+    });
+}
+
+fn edge_to_edge_spacing(grid: &gtk::FlowBox) -> Option<i32> {
+    let width = grid.width();
+    let (cell_min, cell_nat, _, _) = grid
+        .child_at_index(0)?
+        .measure(gtk::Orientation::Horizontal, -1);
+    if width <= 0 || cell_min != cell_nat || cell_nat <= 0 {
+        return None;
+    }
+    let columns = ((width + MIN_COLUMN_SPACING) / (cell_nat + MIN_COLUMN_SPACING))
+        .min(grid.max_children_per_line() as i32);
+    if columns < 2 {
+        return None;
+    }
+    Some((width - columns * cell_nat) / (columns - 1))
 }
 
 impl Component for ArtistDetails {

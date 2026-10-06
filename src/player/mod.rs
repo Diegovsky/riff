@@ -18,7 +18,6 @@ pub enum Command {
     InitLogin,
     CompleteLogin,
     CompleteSessionLogin,
-    RefreshToken,
     Logout,
     PlayerLoad {
         track: SpotifyUri,

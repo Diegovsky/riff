@@ -12,6 +12,7 @@ use riff_config::api::{
     IMAGE_QUEUE_CAP, IMAGE_TTL, STALE_IF_ERROR_TTL,
 };
 
+use futures::future::join_all;
 use gdk::prelude::TextureExt;
 
 use crate::cache::{CacheKey, DiskCache, Store, TextureCache};
@@ -421,6 +422,8 @@ impl ApiService {
                 backfill_album_tracks(&mut result.items, &album);
             }
         }
+        self.annotate_saved(result.items.iter_mut().collect(), load)
+            .await;
         Ok(result)
     }
 
@@ -444,10 +447,15 @@ impl ApiService {
         load: Load,
     ) -> Result<Page<Track>, DomainError> {
         let d = Arc::clone(&self.provider);
-        self.cached_paginated(CacheKey::SavedTracks, offset, limit, load, async move {
-            d.get_saved_tracks(offset, limit).await
-        })
-        .await
+        let mut page = self
+            .cached_paginated(CacheKey::SavedTracks, offset, limit, load, async move {
+                d.get_saved_tracks(offset, limit).await
+            })
+            .await?;
+        for track in &mut page.items {
+            track.saved = Some(true);
+        }
+        Ok(page)
     }
 
     pub async fn get_saved_playlists(
@@ -481,14 +489,18 @@ impl ApiService {
     ) -> Result<Page<Track>, DomainError> {
         let d = Arc::clone(&self.provider);
         let id = id.to_string();
-        self.cached_paginated(
-            CacheKey::PlaylistTracks(id.clone()),
-            offset,
-            limit,
-            load,
-            async move { d.get_playlist_tracks(&id, offset, limit).await },
-        )
-        .await
+        let mut page = self
+            .cached_paginated(
+                CacheKey::PlaylistTracks(id.clone()),
+                offset,
+                limit,
+                load,
+                async move { d.get_playlist_tracks(&id, offset, limit).await },
+            )
+            .await?;
+        self.annotate_saved(page.items.iter_mut().collect(), load)
+            .await;
+        Ok(page)
     }
 
     pub async fn get_artist(&self, id: &str, load: Load) -> Result<Artist, DomainError> {
@@ -526,10 +538,13 @@ impl ApiService {
     ) -> Result<Vec<Track>, DomainError> {
         let d = Arc::clone(&self.provider);
         let id = id.to_string();
-        self.cached_or_fetch(CacheKey::ArtistTopTracks(id.clone()), load, async move {
-            d.get_artist_top_tracks(&id).await
-        })
-        .await
+        let mut tracks: Vec<Track> = self
+            .cached_or_fetch(CacheKey::ArtistTopTracks(id.clone()), load, async move {
+                d.get_artist_top_tracks(&id).await
+            })
+            .await?;
+        self.annotate_saved(tracks.iter_mut().collect(), load).await;
+        Ok(tracks)
     }
 
     pub async fn search(
@@ -543,8 +558,13 @@ impl ApiService {
         if query.is_empty() {
             return Ok(SearchResults::default());
         }
-        let _slot = self.admit_read(load).await?;
-        self.provider.search(query, offset, limit).await
+        let mut results = {
+            let _slot = self.admit_read(load).await?;
+            self.provider.search(query, offset, limit).await?
+        };
+        self.annotate_saved(results.tracks.items.iter_mut().collect(), load)
+            .await;
+        Ok(results)
     }
 
     pub async fn search_scoped(
@@ -559,10 +579,15 @@ impl ApiService {
         if query.is_empty() {
             return Ok(SearchResults::default());
         }
-        let _slot = self.admit_read(load).await?;
-        self.provider
-            .search_scoped(query, kind, offset, limit)
-            .await
+        let mut results = {
+            let _slot = self.admit_read(load).await?;
+            self.provider
+                .search_scoped(query, kind, offset, limit)
+                .await?
+        };
+        self.annotate_saved(results.tracks.items.iter_mut().collect(), load)
+            .await;
+        Ok(results)
     }
 
     pub async fn get_user(&self, id: &str, load: Load) -> Result<User, DomainError> {
@@ -580,8 +605,12 @@ impl ApiService {
     }
 
     pub async fn get_track(&self, id: &str, load: Load) -> Result<Track, DomainError> {
-        let _slot = self.admit_read(load).await?;
-        self.provider.get_track(id).await
+        let mut track = {
+            let _slot = self.admit_read(load).await?;
+            self.provider.get_track(id).await?
+        };
+        self.annotate_saved(vec![&mut track], load).await;
+        Ok(track)
     }
 
     pub async fn get_user_playlists(
@@ -632,13 +661,118 @@ impl ApiService {
         self.provider.remove_albums(ids).await
     }
 
+    async fn cached_saved(&self, id: &str) -> Option<bool> {
+        let key = CacheKey::TrackSaved(id.to_string());
+        if let Some(saved) = self.json_cache.get_single::<bool>(&key) {
+            return Some(saved);
+        }
+        let entry = self.api_disk.read(&key.disk_key()).await?;
+        if !matches!(entry.state, crate::cache::disk::EntryState::Fresh) {
+            return None;
+        }
+        let saved = serde_json::from_slice::<bool>(&entry.data).ok()?;
+        self.json_cache.insert_single(&key, saved);
+        Some(saved)
+    }
+
+    async fn store_saved(&self, id: &str, saved: bool) {
+        let key = CacheKey::TrackSaved(id.to_string());
+        self.json_cache.insert_single(&key, saved);
+        if let Ok(bytes) = serde_json::to_vec(&saved) {
+            self.api_disk
+                .write_default(&key.disk_key(), &bytes, None)
+                .await;
+        }
+    }
+
+    async fn set_saved(&self, ids: &[String], saved: bool) {
+        join_all(ids.iter().map(|id| self.store_saved(id, saved))).await;
+    }
+
+    async fn forget_saved(&self, ids: &[String]) {
+        join_all(ids.iter().map(|id| async move {
+            let key = CacheKey::TrackSaved(id.clone());
+            self.json_cache.remove(&key);
+            self.api_disk.invalidate(&key.disk_key()).await;
+        }))
+        .await;
+    }
+
+    async fn annotate_saved(&self, mut tracks: Vec<&mut Track>, load: Load) {
+        let mut ids: Vec<String> = tracks
+            .iter()
+            .map(|t| t.rri.id.clone())
+            .filter(|id| !id.is_empty())
+            .collect();
+        ids.sort_unstable();
+        ids.dedup();
+        if ids.is_empty() {
+            return;
+        }
+
+        let cached = join_all(ids.iter().map(|id| self.cached_saved(id))).await;
+        let unknown: Vec<String> = ids
+            .iter()
+            .zip(&cached)
+            .filter(|(_, cached)| cached.is_none())
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        let mut checked: HashMap<String, bool> = HashMap::new();
+        if !unknown.is_empty() {
+            match self.check_saved_tracks(unknown.clone(), load).await {
+                Ok(saved) => checked = unknown.into_iter().zip(saved).collect(),
+                Err(DomainError::Shed) => {}
+                Err(err) => {
+                    self.handle_auth_error(&err);
+                    warn!("api: checking saved tracks failed: {err}");
+                }
+            }
+        }
+
+        let mut known: HashMap<String, bool> = HashMap::new();
+        let mut fresh: Vec<(String, bool)> = Vec::new();
+        for id in ids {
+            let key = CacheKey::TrackSaved(id.clone());
+            if let Some(saved) = self.json_cache.get_single::<bool>(&key) {
+                known.insert(id, saved);
+            } else if let Some(saved) = checked.get(&id) {
+                fresh.push((id, *saved));
+            }
+        }
+        join_all(fresh.iter().map(|(id, saved)| self.store_saved(id, *saved))).await;
+        known.extend(fresh);
+
+        for track in tracks.iter_mut() {
+            if let Some(saved) = known.get(&track.rri.id) {
+                track.saved = Some(*saved);
+            }
+        }
+    }
+
+    async fn check_saved_tracks(
+        &self,
+        ids: Vec<String>,
+        load: Load,
+    ) -> Result<Vec<bool>, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.check_saved_tracks(ids).await
+    }
+
     pub async fn save_tracks(&self, ids: Vec<String>) -> Result<(), DomainError> {
         self.json_cache.remove(&CacheKey::SavedTracks);
         self.api_disk
             .invalidate(&CacheKey::SavedTracks.disk_key())
             .await;
-        let _lane = self.write_lane.enter().await;
-        self.provider.save_tracks(ids).await
+        self.set_saved(&ids, true).await;
+        let result = {
+            let _lane = self.write_lane.enter().await;
+            self.provider.save_tracks(ids.clone()).await
+        };
+        if result.is_err() {
+            self.forget_saved(&ids).await;
+        }
+        result
     }
 
     pub async fn remove_tracks(&self, ids: Vec<String>) -> Result<(), DomainError> {
@@ -646,8 +780,15 @@ impl ApiService {
         self.api_disk
             .invalidate(&CacheKey::SavedTracks.disk_key())
             .await;
-        let _lane = self.write_lane.enter().await;
-        self.provider.remove_tracks(ids).await
+        self.set_saved(&ids, false).await;
+        let result = {
+            let _lane = self.write_lane.enter().await;
+            self.provider.remove_tracks(ids.clone()).await
+        };
+        if result.is_err() {
+            self.forget_saved(&ids).await;
+        }
+        result
     }
 
     pub async fn add_to_playlist(&self, id: &str, uris: Vec<String>) -> Result<(), DomainError> {
@@ -742,8 +883,13 @@ impl ApiService {
     }
 
     pub async fn get_player_queue(&self, load: Load) -> Result<Queue, DomainError> {
-        let _slot = self.admit_read(load).await?;
-        self.provider.get_player_queue().await
+        let mut queue = {
+            let _slot = self.admit_read(load).await?;
+            self.provider.get_player_queue().await?
+        };
+        let tracks = queue.currently_playing.iter_mut().chain(&mut queue.items);
+        self.annotate_saved(tracks.collect(), load).await;
+        Ok(queue)
     }
 
     pub async fn get_player_state(&self, load: Load) -> Result<PlayerState, DomainError> {
@@ -873,7 +1019,8 @@ impl ApiService {
         format!("{url}.{IMAGE_EXT}")
     }
 
-    /// Load an image: memory LRU -> disk -> CDN.
+    /// Load an image: memory LRU -> disk -> CDN, with single-flight per image
+    /// so concurrent callers share one download.
     ///
     /// `load` carries the epoch from when the caller decided it needed this
     /// image, since reading it later would stamp a deferred off-screen cover
@@ -898,66 +1045,146 @@ impl ApiService {
             return Some(texture);
         }
 
-        // Tier 2: Disk
-        let bytes = if let Some(entry) = self.image_disk.read(&disk_key).await {
-            entry.data
-        } else {
-            // Tier 3: Network, gated so interactive loads preempt background ones.
-            let _slot = match self.image_queue.admit(load).await {
-                Admission::Granted(slot) => Some(slot),
-                Admission::Unslotted => None,
-                Admission::Denied => {
-                    debug!("cdn: image queue is full, skipping {url}");
-                    return None;
-                }
-            };
+        let flight = self.inflight_lock(&disk_key);
+        let texture = self
+            .load_image_flight(url, &disk_key, &tex_key, width, height, load, &flight)
+            .await;
+        self.release_inflight(&disk_key, flight);
+        texture
+    }
 
-            let request = match isahc::http::Request::builder()
-                .method("GET")
-                .uri(url)
-                .body(Vec::new())
+    #[allow(clippy::too_many_arguments)]
+    async fn load_image_flight(
+        &self,
+        url: &str,
+        disk_key: &str,
+        tex_key: &str,
+        width: i32,
+        height: i32,
+        load: Load,
+        flight: &tokio::sync::Mutex<()>,
+    ) -> Option<gdk::Texture> {
+        // Tier 2: Disk, one caller at a time per image.
+        {
+            let _guard = flight.lock().await;
+            if let Some(texture) = self
+                .cached_image(url, disk_key, tex_key, width, height)
+                .await
             {
-                Ok(request) => request,
-                Err(e) => {
-                    warn!("cdn: failed to build request for {url}: {e}");
-                    return None;
-                }
-            };
-            let response = match self.cdn_client.execute(request).await {
-                Ok(response) => response,
-                Err(e) => {
-                    warn!("cdn: request for {url} failed: {e}");
-                    return None;
-                }
-            };
-            if !response.status.is_success() {
-                warn!(
-                    "cdn: {url} returned non-success status {} ({} bytes); no image",
-                    response.status,
-                    response.body.len()
-                );
-                return None;
+                return Some(texture);
             }
-            let buf = response.body;
-            // Empty body is a no-image, not retried.
-            if buf.is_empty() {
-                warn!(
-                    "cdn: {url} returned success status {} but an EMPTY body; \
-                     no image will be produced",
-                    response.status
-                );
-                return None;
-            }
-            // Deferred: write to disk.
-            let disk = self.image_disk.clone();
-            let disk_key = disk_key.clone();
-            let disk_buf = buf.clone();
-            tokio::spawn(async move {
-                disk.write(&disk_key, &disk_buf, IMAGE_TTL, None).await;
-            });
-            buf.into_boxed_slice()
-        };
+        }
 
+        // Tier 3: Network, gated so interactive loads preempt background ones.
+        let mut slot = self.admit_image(url, load).await?;
+        let _guard = match flight.try_lock() {
+            Ok(guard) => guard,
+            Err(_) => {
+                drop(slot);
+                let guard = flight.lock().await;
+                // Whoever held the flight has most likely fetched this image.
+                if let Some(texture) = self
+                    .cached_image(url, disk_key, tex_key, width, height)
+                    .await
+                {
+                    return Some(texture);
+                }
+                slot = self.admit_image(url, load).await?;
+                guard
+            }
+        };
+        let _slot = slot;
+
+        // Another caller may have fetched this while we waited.
+        if let Some(texture) = self.texture_cache.get(tex_key) {
+            return Some(texture);
+        }
+
+        let request = match isahc::http::Request::builder()
+            .method("GET")
+            .uri(url)
+            .body(Vec::new())
+        {
+            Ok(request) => request,
+            Err(e) => {
+                warn!("cdn: failed to build request for {url}: {e}");
+                return None;
+            }
+        };
+        let response = match self.cdn_client.execute(request).await {
+            Ok(response) => response,
+            Err(e) => {
+                warn!("cdn: request for {url} failed: {e}");
+                return None;
+            }
+        };
+        if !response.status.is_success() {
+            warn!(
+                "cdn: {url} returned non-success status {} ({} bytes); no image",
+                response.status,
+                response.body.len()
+            );
+            return None;
+        }
+        let buf = response.body;
+        if buf.is_empty() {
+            warn!(
+                "cdn: {url} returned success status {} but an EMPTY body; \
+                 no image will be produced",
+                response.status
+            );
+            return None;
+        }
+
+        let disk = self.image_disk.clone();
+        let write_key = disk_key.to_string();
+        let disk_buf = buf.clone();
+        let write = tokio::spawn(async move {
+            disk.write(&write_key, &disk_buf, IMAGE_TTL, None).await;
+        });
+
+        let (texture, _) = tokio::join!(
+            self.decode_image(url, tex_key, buf.into_boxed_slice(), width, height),
+            write
+        );
+        texture
+    }
+
+    async fn admit_image(&self, url: &str, load: Load) -> Option<Option<Slot>> {
+        match self.image_queue.admit(load).await {
+            Admission::Granted(slot) => Some(Some(slot)),
+            Admission::Unslotted => Some(None),
+            Admission::Denied => {
+                debug!("cdn: image queue is full, skipping {url}");
+                None
+            }
+        }
+    }
+
+    async fn cached_image(
+        &self,
+        url: &str,
+        disk_key: &str,
+        tex_key: &str,
+        width: i32,
+        height: i32,
+    ) -> Option<gdk::Texture> {
+        if let Some(texture) = self.texture_cache.get(tex_key) {
+            return Some(texture);
+        }
+        let entry = self.image_disk.read(disk_key).await?;
+        self.decode_image(url, tex_key, entry.data, width, height)
+            .await
+    }
+
+    async fn decode_image(
+        &self,
+        url: &str,
+        tex_key: &str,
+        bytes: Box<[u8]>,
+        width: i32,
+        height: i32,
+    ) -> Option<gdk::Texture> {
         // Decode on a blocking thread so it does not stall the frame clock.
         let byte_len = bytes.len();
         let decoded = tokio::task::spawn_blocking(move || {
@@ -984,7 +1211,7 @@ impl ApiService {
         let tex_h = texture.height().max(0) as usize;
         let byte_size = tex_w * tex_h * 4;
         self.texture_cache
-            .insert(tex_key, texture.clone(), byte_size);
+            .insert(tex_key.to_string(), texture.clone(), byte_size);
         Some(texture)
     }
 }

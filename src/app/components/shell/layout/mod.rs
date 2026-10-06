@@ -317,16 +317,27 @@ fn add_window_breakpoints(builder: &gtk::Builder) {
     let window: libadwaita::ApplicationWindow = builder.object("window").unwrap();
     let utility_split: gtk::Widget = builder.object("utility_split").unwrap();
     let navigation_split: gtk::Widget = builder.object("navigation_split").unwrap();
-    let queue_sheet: gtk::Widget = builder.object("queue_sheet").unwrap();
+    let bottom_sheet: gtk::Widget = builder.object("bottom_sheet").unwrap();
+
+    // Full width, so without the side margins of its style class
+    let no_classes = bottom_sheet
+        .css_classes()
+        .iter()
+        .filter(|class| class.as_str() != "bottom-sheet--padded")
+        .map(|class| class.to_string())
+        .collect::<Vec<String>>()
+        .to_value();
 
     let narrow = max_width_breakpoint(NARROW_WIDTH_SP);
-    narrow.add_setter(&queue_sheet, "reveal-bottom-bar", Some(&true.to_value()));
-    narrow.add_setter(&queue_sheet, "full-width", Some(&true.to_value()));
+    narrow.add_setter(&bottom_sheet, "reveal-bottom-bar", Some(&true.to_value()));
+    narrow.add_setter(&bottom_sheet, "full-width", Some(&true.to_value()));
+    narrow.add_setter(&bottom_sheet, "css-classes", Some(&no_classes));
     window.add_breakpoint(narrow);
 
     let mobile = max_width_breakpoint(MOBILE_WIDTH_SP);
-    mobile.add_setter(&queue_sheet, "reveal-bottom-bar", Some(&true.to_value()));
-    mobile.add_setter(&queue_sheet, "full-width", Some(&true.to_value()));
+    mobile.add_setter(&bottom_sheet, "reveal-bottom-bar", Some(&true.to_value()));
+    mobile.add_setter(&bottom_sheet, "full-width", Some(&true.to_value()));
+    mobile.add_setter(&bottom_sheet, "css-classes", Some(&no_classes));
     mobile.add_setter(&utility_split, "collapsed", Some(&true.to_value()));
     mobile.add_setter(&navigation_split, "collapsed", Some(&true.to_value()));
     window.add_breakpoint(mobile);

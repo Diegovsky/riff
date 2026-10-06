@@ -19,7 +19,7 @@ pub const BACKGROUND_EPOCH: u64 = 0;
 /// Ordered low to high so the derived `Ord` matches scheduling priority.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LoadPriority {
-    /// Warming, speculative prefetch.
+    /// Speculative prefetch.
     Background = 0,
     /// Images not yet on screen.
     Offscreen = 1,

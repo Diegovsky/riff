@@ -160,6 +160,21 @@ where
     })
 }
 
+pub fn add_hover_class(widget: &impl IsA<gtk::Widget>, class: &'static str) {
+    let motion = gtk::EventControllerMotion::new();
+    motion.connect_enter(move |motion, _, _| {
+        if let Some(widget) = motion.widget() {
+            widget.add_css_class(class);
+        }
+    });
+    motion.connect_leave(move |motion| {
+        if let Some(widget) = motion.widget() {
+            widget.remove_css_class(class);
+        }
+    });
+    widget.add_controller(motion);
+}
+
 pub fn set_css_class(widget: &impl IsA<gtk::Widget>, class: &str, on: bool) {
     if on {
         widget.add_css_class(class);
@@ -181,7 +196,7 @@ pub fn format_duration(duration: f64) -> String {
 }
 
 /// Device pixels for `logical` px of artwork. Read from the display rather than
-/// a widget, so the cache warmer lands under the same texture cache keys.
+/// a widget, so every caller lands under the same texture cache keys.
 pub fn decode_px(logical: i32) -> i32 {
     let scale = gdk::Display::default()
         .and_then(|display| display.monitors().item(0))

@@ -3,15 +3,14 @@
 // list), follow/unfollow, and playback. On 400/404 from the API, navigates
 // back (the artist may not exist or be inaccessible).
 
-use gettextrs::gettext;
 use std::ops::Deref;
 use std::rc::Rc;
 
 use crate::app::components::DetailsPageModel;
 use crate::app::components::SimpleHeaderBarModel;
 use crate::app::components::{
-    dispatch_api_call, dispatch_api_read, labels, CardListModel, HasHeaderBarModel,
-    HeaderImageShape, ImageShape, PageModel, PinnedPageModel, TrackListModel,
+    dispatch_api_call, dispatch_api_read, labels, playing_card, CardListModel, HasHeaderBarModel,
+    HeaderImageShape, ImageShape, PageModel, PinnedPageModel, PlayingCard, TrackListModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
@@ -221,6 +220,10 @@ impl PinnedPageModel for ArtistDetailsModel {
 }
 
 impl CardListModel for ArtistDetailsModel {
+    fn playing_card(&self) -> PlayingCard {
+        playing_card(&self.state().playback)
+    }
+
     fn get_store(&self) -> Option<impl Deref<Target = ListStore<CardModel>> + '_> {
         self.app_model
             .map_state_opt(|s| Some(&s.browser.artist_state(&self.id)?.albums))
@@ -247,12 +250,7 @@ impl CardListModel for ArtistDetailsModel {
     }
 
     fn filter_options(&self) -> Vec<FilterOption> {
-        vec![
-            FilterOption::all(gettext("All")),
-            FilterOption::new(gettext("Albums"), "album"),
-            FilterOption::new(gettext("Singles"), "single"),
-            FilterOption::new(gettext("Compilations"), "compilation"),
-        ]
+        FilterOption::release_types()
     }
 }
 

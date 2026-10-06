@@ -2,9 +2,6 @@
 //!
 //! Grouped by what you would be tuning: caching, how requests reach the
 //! network, and how competing requests are ordered.
-//!
-//! Cache warming has nothing here on purpose. Every value it needs has to match
-//! what the UI will later ask for, so the UI passes them in.
 
 use std::time::Duration;
 
@@ -68,8 +65,8 @@ pub const CONFIG_CACHE_TTL: Duration = Duration::from_secs(120);
 
 // Scheduling
 //
-// All image work shares one cap, so warming cannot crowd out a card the user is
-// looking at: priority decides who gets a slot, not a separate budget.
+// All image work shares one cap, so background loads cannot crowd out a card the
+// user is looking at: priority decides who gets a slot, not a separate budget.
 
 /// Cap on concurrent image fetches, interactive and background alike. Below
 /// `CDN_MAX_CONNECTIONS_PER_HOST` so the pool is never the binding constraint.
@@ -86,8 +83,3 @@ pub const API_READ_CONCURRENCY: usize = 8;
 /// Backlog cap for queued API reads, mirroring `IMAGE_QUEUE_CAP`. Smaller
 /// because a screen queues a handful of reads, not hundreds of images.
 pub const API_QUEUE_CAP: usize = 64;
-
-/// How many warm image loads run at once. Not a second budget: these still
-/// compete for `IMAGE_LOAD_CONCURRENCY`. It just bounds how many park in the
-/// queue at once.
-pub const WARM_IMAGE_BUFFER: usize = 8;

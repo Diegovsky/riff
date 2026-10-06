@@ -1,0 +1,50 @@
+using Gtk 4.0;
+
+// A track list or card grid on a details page, appended after these
+template $DetailsSectionWidget : Box {
+  orientation: vertical;
+  margin-bottom: 16;
+
+  styles [
+    "details-section",
+  ]
+
+  Box header_row {
+    spacing: 12;
+    visible: false;
+
+    styles [
+      "details-section__header",
+    ]
+
+    Label title_label {
+      visible: false;
+      halign: start;
+      hexpand: true;
+
+      styles [
+        "title-4",
+        "skeleton",
+      ]
+    }
+
+    Box button_slot {
+      halign: end;
+      hexpand: true;
+    }
+  }
+
+  Label empty_label {
+    /* Translators: Shown in place of a card list when the selected filter (e.g. "EPs") matches nothing. */
+    label: _("No items found for this filter");
+    halign: center;
+    valign: center;
+    margin-top: 24;
+    margin-bottom: 24;
+    visible: false;
+
+    styles [
+      "dim-label",
+    ]
+  }
+}

@@ -4,7 +4,7 @@ use spotify_api::models as sp;
 
 use crate::defaults::{self, EntityKind};
 use crate::models::*;
-use crate::providers::{album_type_from, content_rating_from_explicit, parse_release_date};
+use crate::providers::{content_rating_from_explicit, parse_release_date, release_type_from};
 
 pub(super) fn rid(id: impl Into<String>) -> ResourceId {
     ResourceId {
@@ -46,19 +46,46 @@ pub(super) fn to_artist_ref(a: &sp::SimplifiedArtistObject) -> ArtistRef {
     }
 }
 
+fn copyright_text(copyrights: &[sp::CopyrightObject]) -> String {
+    const PREFIXES: [(&str, &str); 6] = [
+        ("©", "©"),
+        ("℗", "℗"),
+        ("(C)", "©"),
+        ("(c)", "©"),
+        ("(P)", "℗"),
+        ("(p)", "℗"),
+    ];
+
+    let mut lines: Vec<String> = Vec::new();
+    for c in copyrights {
+        let text = c.text.as_deref().unwrap_or_default().trim();
+        let (symbol, text) = PREFIXES
+            .iter()
+            .find_map(|(prefix, symbol)| Some((*symbol, text.strip_prefix(prefix)?.trim_start())))
+            .unwrap_or_else(|| match c.r#type.as_deref() {
+                Some("P") => ("℗", text),
+                Some("C") => ("©", text),
+                _ => ("", text),
+            });
+        if text.is_empty() {
+            continue;
+        }
+        let line = format!("{symbol} {text}").trim_start().to_string();
+        if !lines.contains(&line) {
+            lines.push(line);
+        }
+    }
+    lines.join("\n")
+}
+
 pub(super) fn album_from_object(a: &sp::AlbumObject) -> Album {
-    let copyright = a
-        .copyrights
-        .iter()
-        .map(|c| c.text.clone().unwrap_or_default())
-        .collect::<Vec<_>>()
-        .join("; ");
+    let copyright = copyright_text(&a.copyrights);
     Album {
         rri: rid(a.id.clone()),
         title: text_or(a.name.clone(), defaults::album_title),
         artists: ensure_artists(a.artists.iter().map(to_artist_ref).collect()),
         art: images_to_set(&a.images).unwrap_or_else(|| defaults::image_set_for(EntityKind::Album)),
-        album_type: album_type_from(&a.album_type).unwrap_or(AlbumType::Album),
+        album_type: release_type_from(&a.album_type, a.total_tracks as u32),
         release_date: parse_release_date(&a.release_date),
         total_tracks: Some(a.total_tracks as u32),
         label: Some(a.label.clone()),
@@ -79,9 +106,9 @@ pub(super) fn album_from_discography(a: &sp::ArtistDiscographyAlbumObject) -> Al
         title: text_or(a.name.clone(), defaults::album_title),
         artists: ensure_artists(a.artists.iter().map(to_artist_ref).collect()),
         art: images_to_set(&a.images).unwrap_or_else(|| defaults::image_set_for(EntityKind::Album)),
-        album_type: album_type_from(&a.album_type).unwrap_or(AlbumType::Album),
+        album_type: release_type_from(&a.album_type, a.total_tracks as u32),
         release_date: parse_release_date(&a.release_date),
-        total_tracks: None,
+        total_tracks: Some(a.total_tracks as u32),
         label: None,
         copyright: None,
         upc: None,
@@ -100,9 +127,9 @@ pub(super) fn album_from_simplified(a: &sp::SimplifiedAlbumObject) -> Album {
         title: text_or(a.name.clone(), defaults::album_title),
         artists: ensure_artists(a.artists.iter().map(to_artist_ref).collect()),
         art: images_to_set(&a.images).unwrap_or_else(|| defaults::image_set_for(EntityKind::Album)),
-        album_type: album_type_from(&a.album_type).unwrap_or(AlbumType::Album),
+        album_type: release_type_from(&a.album_type, a.total_tracks as u32),
         release_date: parse_release_date(&a.release_date),
-        total_tracks: None,
+        total_tracks: Some(a.total_tracks as u32),
         label: None,
         copyright: None,
         upc: None,
@@ -428,5 +455,60 @@ mod tests {
         );
         assert_eq!(album.artists.len(), 1);
         assert_eq!(album.artists[0].name, "Unknown Artist");
+    }
+
+    #[test]
+    fn copyrights_are_one_line_each_with_their_symbol() {
+        let copyright = |text: &str, kind: &str| sp::CopyrightObject {
+            text: Some(text.to_string()),
+            r#type: Some(kind.to_string()),
+        };
+
+        assert_eq!(
+            copyright_text(&[
+                copyright("2020 Some Label", "C"),
+                copyright("2020 Some Label", "P"),
+            ]),
+            "© 2020 Some Label\n℗ 2020 Some Label"
+        );
+        assert_eq!(
+            copyright_text(&[
+                copyright("(C) 2020 Some Label", "C"),
+                copyright("© 2020 Some Label", "C"),
+                copyright("(P) 2019 Other Label", "P"),
+                copyright("", "P"),
+            ]),
+            "© 2020 Some Label\n℗ 2019 Other Label"
+        );
+        assert_eq!(copyright_text(&[]), "");
+    }
+
+    fn discography_album(
+        album_type: sp::artist_discography_album_object::AlbumType,
+        total_tracks: i32,
+    ) -> Album {
+        album_from_discography(&sp::ArtistDiscographyAlbumObject {
+            album_type,
+            total_tracks,
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn singles_with_four_or_more_tracks_are_eps() {
+        use sp::artist_discography_album_object::AlbumType as SpType;
+
+        assert_eq!(
+            discography_album(SpType::Single, 3).album_type,
+            AlbumType::Single
+        );
+        assert_eq!(
+            discography_album(SpType::Single, 4).album_type,
+            AlbumType::Ep
+        );
+        assert_eq!(
+            discography_album(SpType::Album, 4).album_type,
+            AlbumType::Album
+        );
     }
 }

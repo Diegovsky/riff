@@ -3,11 +3,11 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use super::card_view_menu::{effective_sort, CardViewMenu};
-use super::filter_toggle::FilterToggle;
 use super::page_widget::CardListWidget;
 use super::traits::CardListPageModel;
-use super::widget::CardList;
-use crate::app::components::{CardLayout, CardSize, Component, EventListener, SortOrder};
+use super::widget::{changes_playing_card, CardList, PlayingCard};
+use crate::app::components::{labels, CardLayout, CardSize, Component, EventListener, SortOrder};
+use crate::app::models::FilterOption;
 use crate::app::state::LoginEvent;
 use crate::app::{AppEvent, BrowserEvent, Dispatcher};
 use crate::settings::StateTracker;
@@ -16,6 +16,33 @@ use crate::settings::StateTracker;
 
 /// Margin (in pixels) around the card list inside the scrolled window.
 const CARD_LIST_MARGIN: i32 = 12;
+
+pub fn filter_matches_nothing(category: &str, visible_count: usize) -> bool {
+    !category.is_empty() && visible_count == 0
+}
+
+fn update_status<M: CardListPageModel>(
+    status_page: &libadwaita::StatusPage,
+    model: &M,
+    card_list: &CardList,
+) {
+    let loading = card_list.has_placeholders() || (card_list.is_filtered() && model.has_more());
+    let filter_empty =
+        model.has_items() && card_list.is_filtered() && card_list.visible_count() == 0;
+    status_page.set_title(&if filter_empty {
+        labels::NO_FILTER_RESULTS.clone()
+    } else {
+        model.empty_title()
+    });
+    status_page.set_visible(!loading && (filter_empty || !model.has_items()));
+}
+
+fn load_more_for_filter<M: CardListPageModel>(model: &M, card_list: &CardList) {
+    if card_list.is_filtered() && model.has_more() {
+        card_list.append_placeholders();
+        model.load_more();
+    }
+}
 
 /// A unified card list component that handles events and wiring automatically.
 ///
@@ -72,6 +99,7 @@ impl<M: CardListPageModel + 'static> CardListComponent<M> {
         ));
 
         card_list.bind(&model, layout.get(), size.get());
+        card_list.set_playing(model.playing_card());
         card_list.show_placeholders();
 
         let page_id = model.page_id().to_string();
@@ -84,40 +112,29 @@ impl<M: CardListPageModel + 'static> CardListComponent<M> {
             card_list.set_sort(current_sort.get());
         }
 
+        let on_filter_changed = {
+            let status_page = page_widget.status_page().clone();
+            let model = Rc::downgrade(&model);
+            let card_list = Rc::downgrade(&card_list);
+            move |_: &str, _: usize| {
+                if let (Some(model), Some(card_list)) = (model.upgrade(), card_list.upgrade()) {
+                    load_more_for_filter(&*model, &card_list);
+                    update_status(&status_page, &*model, &card_list);
+                }
+            }
+        };
+
         let view_menu = CardViewMenu::new(
             page_id,
             model.available_sort_orders(),
             Rc::clone(&layout),
             Rc::clone(&size),
             Rc::clone(&current_sort),
+            &model.filter_options(),
+            on_filter_changed,
             Rc::clone(&card_list),
             dispatcher,
         );
-
-        // Create filter toggle if the model provides filter options
-        let filter_options = model.filter_options();
-        if !filter_options.is_empty() {
-            let status_page_ref = page_widget.status_page().clone();
-            let filter_widget = FilterToggle::new(
-                &filter_options,
-                Rc::clone(&card_list),
-                move |category, visible_count| {
-                    if category.is_empty() {
-                        status_page_ref.set_visible(false);
-                    } else if visible_count == 0 {
-                        status_page_ref
-                            .set_title(&gettextrs::gettext("No items found for this filter"));
-                        status_page_ref.set_visible(true);
-                    } else {
-                        status_page_ref.set_visible(false);
-                    }
-                },
-            );
-            filter_widget.set_margin_start(CARD_LIST_MARGIN);
-            filter_widget.set_margin_end(CARD_LIST_MARGIN);
-            filter_widget.set_margin_top(CARD_LIST_MARGIN);
-            page_widget.prepend(&filter_widget);
-        }
 
         Self {
             model,
@@ -152,22 +169,29 @@ impl<M: CardListPageModel + 'static> EventListener for CardListComponent<M> {
             _ => {}
         }
 
+        if changes_playing_card(event) {
+            self.card_list.set_playing(self.model.playing_card());
+        }
+
         if self.model.should_refresh(event) {
             self.card_list.remove_placeholders();
-            self.page_widget
-                .status_page()
-                .set_visible(!self.model.has_items());
             if self.model.has_items() {
                 let adj = self.page_widget.scrolled_window().vadjustment();
                 if adj.upper() <= adj.page_size() && self.model.has_more() {
                     self.card_list.append_placeholders();
                     self.model.load_more();
                 }
+                load_more_for_filter(&*self.model, &self.card_list);
                 let sort = self.current_sort.get();
                 if sort != SortOrder::RecentlyAdded {
                     self.card_list.set_sort(sort);
                 }
             }
+            update_status(
+                self.page_widget.status_page(),
+                &*self.model,
+                &self.card_list,
+            );
         }
     }
 }
@@ -185,6 +209,7 @@ impl<M: CardListPageModel + 'static> Component for CardListComponent<M> {
 /// `CardViewMenu` + style event handling. Sort is handled locally by the menu.
 pub struct EmbeddedCardList {
     card_list: Rc<CardList>,
+    playing_card: Box<dyn Fn() -> PlayingCard>,
     view_menu: CardViewMenu,
     layout: Rc<Cell<CardLayout>>,
     size: Rc<Cell<CardSize>>,
@@ -197,11 +222,15 @@ impl EmbeddedCardList {
         available_sorts: &[SortOrder],
         layout: Rc<Cell<CardLayout>>,
         size: Rc<Cell<CardSize>>,
+        filters: &[FilterOption],
+        on_filter_changed: impl Fn(&str, usize) + 'static,
+        playing_card: impl Fn() -> PlayingCard + 'static,
         dispatcher: Dispatcher,
     ) -> Self {
         // Apply shared style/size (card list may have been created with defaults)
         card_list.update_layout(layout.get());
         card_list.update_size(size.get());
+        card_list.set_playing(playing_card());
 
         let tracker = StateTracker::new_from_gsettings();
         let preferred_sort = tracker.load_sort_order(page_id);
@@ -218,12 +247,15 @@ impl EmbeddedCardList {
             Rc::clone(&layout),
             Rc::clone(&size),
             current_sort,
+            filters,
+            on_filter_changed,
             Rc::clone(&card_list),
             dispatcher,
         );
 
         Self {
             card_list,
+            playing_card: Box::new(playing_card),
             view_menu,
             layout,
             size,
@@ -244,6 +276,9 @@ impl EventListener for EmbeddedCardList {
             self.card_list.update_layout(self.layout.get());
             self.card_list.update_size(self.size.get());
             self.view_menu.sync(self.layout.get());
+        }
+        if changes_playing_card(event) {
+            self.card_list.set_playing((self.playing_card)());
         }
     }
 }

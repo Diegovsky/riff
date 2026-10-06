@@ -21,7 +21,8 @@ async-trait = "0.1"
 log = "0.4.17"
 httpdate = "1.0.3"
 http = "1.3"
-reqwest = "0.12"
+
+reqwest = { version = "0.12", features = ["gzip"] }
 reqwest-middleware = "0.4"
 glib = "0.22.9"
 gdk-pixbuf = "0.22.0"
