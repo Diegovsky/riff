@@ -52,6 +52,7 @@ src/app/components/pages/settings/equalizer.blp
 src/app/components/pages/settings/pan.blp
 src/app/components/pages/settings/pitch.blp
 src/app/components/pages/settings/settings.blp
+src/app/components/pages/shortcuts/shortcuts.blp
 src/app/components/shell/device_selector/device_selector.blp
 src/app/components/shell/headerbar/headerbar.blp
 src/app/components/shell/playback/playback_controls.blp

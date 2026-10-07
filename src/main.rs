@@ -27,8 +27,13 @@ mod player;
 mod settings;
 
 use crate::app::components::expose_custom_widgets;
+use crate::app::components::navigation_panel::NavigationPanelDestination;
 use crate::app::dispatch::DispatchLoop;
 use crate::app::{state::PlaybackAction, App, AppAction, BrowserAction};
+
+// Steps of the seek and volume shortcuts
+const SEEK_STEP_MS: i32 = 5_000;
+const VOLUME_STEP: f64 = 0.05;
 
 fn main() {
     let settings = settings::RiffSettings::new_from_gsettings().unwrap_or_default();
@@ -60,6 +65,7 @@ fn main() {
     // Displayed as the accelerator hint next to "Keyboard Shortcuts" in the main menu.
     gtk_app.set_accels_for_action("win.show-shortcuts", &["<Ctrl>question"]);
     app::components::setup_about(builder.object::<libadwaita::AboutDialog>("about").unwrap());
+    setup_arrow_shortcuts(&window, builder.object("arrow_shortcuts").unwrap());
 
     // Main app logic is hooked up here
     let app = App::new(settings, builder, sender.clone());
@@ -127,6 +133,21 @@ fn setup_gtk(settings: &settings::RiffSettings) {
     );
 }
 
+fn setup_arrow_shortcuts(
+    window: &libadwaita::ApplicationWindow,
+    shortcuts: gtk::ShortcutController,
+) {
+    window.connect_focus_widget_notify(move |window| {
+        let typing = GtkWindowExt::focus(window)
+            .is_some_and(|focus| focus.is::<gtk::Text>() || focus.is::<gtk::TextView>());
+        shortcuts.set_propagation_phase(if typing {
+            gtk::PropagationPhase::None
+        } else {
+            gtk::PropagationPhase::Capture
+        });
+    });
+}
+
 fn register_actions(app: &gtk::Application, sender: UnboundedSender<AppAction>) {
     let quit = SimpleAction::new("quit", None);
     quit.connect_activate(clone!(
@@ -158,6 +179,69 @@ fn register_actions(app: &gtk::Application, sender: UnboundedSender<AppAction>) 
         PlaybackAction::Next.into(),
         sender.clone(),
     ));
+
+    app.add_action(&make_action(
+        "toggle_shuffle",
+        PlaybackAction::ToggleShuffle.into(),
+        sender.clone(),
+    ));
+
+    app.add_action(&make_action(
+        "toggle_repeat",
+        PlaybackAction::ToggleRepeat.into(),
+        sender.clone(),
+    ));
+
+    app.add_action(&make_action(
+        "seek_backward",
+        PlaybackAction::SeekBy(-SEEK_STEP_MS).into(),
+        sender.clone(),
+    ));
+
+    app.add_action(&make_action(
+        "seek_forward",
+        PlaybackAction::SeekBy(SEEK_STEP_MS).into(),
+        sender.clone(),
+    ));
+
+    app.add_action(&make_action(
+        "volume_down",
+        PlaybackAction::AdjustVolume(-VOLUME_STEP).into(),
+        sender.clone(),
+    ));
+
+    app.add_action(&make_action(
+        "volume_up",
+        PlaybackAction::AdjustVolume(VOLUME_STEP).into(),
+        sender.clone(),
+    ));
+
+    app.add_action(&make_action(
+        "toggle_mute",
+        PlaybackAction::ToggleMute.into(),
+        sender.clone(),
+    ));
+
+    for (name, dest) in [
+        ("nav_now_playing", NavigationPanelDestination::NowPlaying),
+        ("nav_artists", NavigationPanelDestination::SavedArtists),
+        ("nav_albums", NavigationPanelDestination::Library),
+        ("nav_playlists", NavigationPanelDestination::SavedPlaylists),
+        ("nav_tracks", NavigationPanelDestination::SavedTracks),
+    ] {
+        let action = SimpleAction::new(name, None);
+        let sender = sender.clone();
+        // Same as picking the page in the navigation panel
+        action.connect_activate(move |_, _| {
+            for app_action in [
+                BrowserAction::NavigationPopTo(ScreenName::Home).into(),
+                BrowserAction::SetHomeVisiblePage(dest.id()).into(),
+            ] {
+                sender.unbounded_send(app_action).unwrap();
+            }
+        });
+        app.add_action(&action);
+    }
 
     app.add_action(&make_action(
         "nav_pop",

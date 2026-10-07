@@ -6,7 +6,7 @@ Adw.ApplicationWindow window {
   default-height: 720;
 
   $ShellBox {
-    // Keep in sync with shortcuts_dialog
+    // Keep in sync with pages/shortcuts/shortcuts.blp
     ShortcutController {
       scope: local;
 
@@ -21,13 +21,58 @@ Adw.ApplicationWindow window {
       }
 
       Shortcut {
-        trigger: "P";
+        trigger: "<Ctrl>bracketleft";
         action: "action(app.player_prev)";
       }
 
       Shortcut {
-        trigger: "N";
+        trigger: "<Ctrl>bracketright";
         action: "action(app.player_next)";
+      }
+
+      Shortcut {
+        trigger: "<Ctrl>S";
+        action: "action(app.toggle_shuffle)";
+      }
+
+      Shortcut {
+        trigger: "<Ctrl>R";
+        action: "action(app.toggle_repeat)";
+      }
+
+      Shortcut {
+        trigger: "<Ctrl>M";
+        action: "action(app.toggle_mute)";
+      }
+
+      Shortcut {
+        trigger: "<Alt>1";
+        action: "action(app.nav_now_playing)";
+      }
+
+      Shortcut {
+        trigger: "<Alt>2";
+        action: "action(app.nav_artists)";
+      }
+
+      Shortcut {
+        trigger: "<Alt>3";
+        action: "action(app.nav_albums)";
+      }
+
+      Shortcut {
+        trigger: "<Alt>4";
+        action: "action(app.nav_playlists)";
+      }
+
+      Shortcut {
+        trigger: "<Alt>5";
+        action: "action(app.nav_tracks)";
+      }
+
+      Shortcut {
+        trigger: "F9";
+        action: "action(win.show-navigation-panel)";
       }
 
       Shortcut {
@@ -38,6 +83,41 @@ Adw.ApplicationWindow window {
       Shortcut {
         trigger: "<Ctrl>F";
         action: "action(app.search)";
+      }
+    }
+
+    ShortcutController arrow_shortcuts {
+      scope: local;
+      propagation-phase: capture;
+
+      Shortcut {
+        trigger: "<Ctrl>Left";
+        action: "action(app.seek_backward)";
+      }
+
+      Shortcut {
+        trigger: "<Ctrl>Right";
+        action: "action(app.seek_forward)";
+      }
+
+      Shortcut {
+        trigger: "<Ctrl>Down";
+        action: "action(app.volume_down)";
+      }
+
+      Shortcut {
+        trigger: "<Ctrl>Up";
+        action: "action(app.volume_up)";
+      }
+
+      Shortcut {
+        trigger: "<Ctrl><Shift>Left";
+        action: "action(app.player_prev)";
+      }
+
+      Shortcut {
+        trigger: "<Ctrl><Shift>Right";
+        action: "action(app.player_next)";
       }
     }
 
@@ -102,6 +182,8 @@ Adw.ApplicationWindow window {
                   MenuButton user {
                     icon-name: "open-menu-symbolic";
                     tooltip-text: _("Main Menu");
+                    // Opens with F10
+                    primary: true;
                     focus-on-click: false;
                     can-focus: false;
                   }
@@ -178,60 +260,6 @@ Adw.AboutDialog about {
   support-url: "https://discord.gg/rAAvFSC7VQ";
   issue-url: "https://github.com/Diegovsky/riff/issues";
   license-type: mit_x11;
-}
-
-Adw.ShortcutsDialog shortcuts_dialog {
-  Adw.ShortcutsSection {
-    title: _("Playback");
-
-    Adw.ShortcutsItem {
-      title: _("Play/Pause");
-      accelerator: "space";
-    }
-
-    Adw.ShortcutsItem {
-      title: _("Previous Track");
-      accelerator: "P";
-    }
-
-    Adw.ShortcutsItem {
-      title: _("Next Track");
-      accelerator: "N";
-    }
-  }
-
-  Adw.ShortcutsSection {
-    title: _("Navigation");
-
-    Adw.ShortcutsItem {
-      title: _("Search");
-      accelerator: "<Ctrl>F";
-    }
-
-    Adw.ShortcutsItem {
-      title: _("Go Back");
-      accelerator: "<Alt>Left";
-    }
-  }
-
-  Adw.ShortcutsSection {
-    title: _("General");
-
-    Adw.ShortcutsItem {
-      title: _("Preferences");
-      accelerator: "<Ctrl>comma";
-    }
-
-    Adw.ShortcutsItem {
-      title: _("Keyboard Shortcuts");
-      accelerator: "<Ctrl>question";
-    }
-
-    Adw.ShortcutsItem {
-      title: _("Quit");
-      accelerator: "<Ctrl>Q";
-    }
-  }
 }
 
 menu main_menu {

@@ -1,0 +1,127 @@
+using Gtk 4.0;
+using Adw 1;
+
+// Keep in sync with the shortcut controllers in window.blp
+Adw.ShortcutsDialog shortcuts_dialog {
+  Adw.ShortcutsSection {
+    title: _("Playback");
+
+    Adw.ShortcutsItem {
+      title: _("Play/Pause");
+      accelerator: "space";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Previous Track");
+      accelerator: "<Ctrl>bracketleft <Ctrl><Shift>Left";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Next Track");
+      accelerator: "<Ctrl>bracketright <Ctrl><Shift>Right";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Seek Backward");
+      accelerator: "<Ctrl>Left";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Seek Forward");
+      accelerator: "<Ctrl>Right";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Volume Down");
+      accelerator: "<Ctrl>Down";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Volume Up");
+      accelerator: "<Ctrl>Up";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Mute");
+      accelerator: "<Ctrl>M";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Shuffle");
+      accelerator: "<Ctrl>S";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Repeat");
+      accelerator: "<Ctrl>R";
+    }
+  }
+
+  Adw.ShortcutsSection {
+    title: _("Navigation");
+
+    Adw.ShortcutsItem {
+      title: _("Search");
+      accelerator: "<Ctrl>F";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Go Back");
+      accelerator: "<Alt>Left";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Now Playing");
+      accelerator: "<Alt>1";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Artists");
+      accelerator: "<Alt>2";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Albums");
+      accelerator: "<Alt>3";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Playlists");
+      accelerator: "<Alt>4";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Tracks");
+      accelerator: "<Alt>5";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Toggle Sidebar");
+      accelerator: "F9";
+    }
+  }
+
+  Adw.ShortcutsSection {
+    title: _("General");
+
+    Adw.ShortcutsItem {
+      title: _("Main Menu");
+      accelerator: "F10";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Preferences");
+      accelerator: "<Ctrl>comma";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Keyboard Shortcuts");
+      accelerator: "<Ctrl>question";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Quit");
+      accelerator: "<Ctrl>Q";
+    }
+  }
+}

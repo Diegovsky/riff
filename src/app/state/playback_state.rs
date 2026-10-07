@@ -12,6 +12,9 @@ use crate::app::components::labels;
 use crate::app::state::{AppAction, AppEvent, UpdatableState};
 use crate::play_queue::{EntryKey, PlayQueue, CONTEXT_PAGE_SIZE};
 
+// Volume restored by `ToggleMute` when there is no pre-mute volume to go back to
+const UNMUTE_FALLBACK_VOLUME: f64 = 0.5;
+
 #[derive(Debug)]
 pub struct PlaybackState {
     available_devices: Vec<ConnectDevice>,
@@ -32,6 +35,8 @@ pub struct PlaybackState {
     // Last volume that was applied (0.0..=1.0). Initialised to a sentinel
     // outside the valid range so the first `SetVolume` always propagates.
     volume: f64,
+    // Volume to restore when unmuting, set while muted by `ToggleMute`.
+    muted_volume: Option<f64>,
 }
 
 // Most mutatings methods shouldn't be pub
@@ -321,6 +326,20 @@ impl PlaybackState {
         vec![PlaybackEvent::TrackSeeked(0)]
     }
 
+    fn seek_to(&mut self, pos: u32) -> Vec<PlaybackEvent> {
+        self.seek_position.set(pos as u64, true);
+        vec![PlaybackEvent::TrackSeeked(pos)]
+    }
+
+    fn set_volume(&mut self, volume: f64) -> Vec<PlaybackEvent> {
+        if self.volume == volume {
+            vec![]
+        } else {
+            self.volume = volume;
+            vec![PlaybackEvent::VolumeSet(volume)]
+        }
+    }
+
     fn toggle_play(&mut self) -> Option<bool> {
         if self.queue.current().is_some() {
             self.is_playing = !self.is_playing;
@@ -378,6 +397,7 @@ impl Default for PlaybackState {
             skip_explicit: false,
             explicit_filter_locked: false,
             volume: -1.0,
+            muted_volume: None,
         }
     }
 }
@@ -399,6 +419,8 @@ pub enum PlaybackAction {
     ToggleRepeat,
     ToggleShuffle,
     Seek(u32),
+    // Seek relative to the current position (in milliseconds)
+    SeekBy(i32),
     SyncSeek(u32),
     Load(String),
     #[deprecated]
@@ -406,6 +428,9 @@ pub enum PlaybackAction {
     LoadPagedSongs(SongsSource, Page<Track>),
     LoadContextSongs(SongsSource, Vec<Track>),
     SetVolume(f64),
+    // Change the volume by a delta, clamped to 0.0..=1.0
+    AdjustVolume(f64),
+    ToggleMute,
     Next,
     TrackEnded,
     Previous,
@@ -628,25 +653,34 @@ impl UpdatableState for PlaybackState {
             }
             PlaybackAction::RemoveEntries(keys) => changed_events(self.dequeue(&keys)),
             PlaybackAction::MoveQueued { key, to } => changed_events(self.move_queued(key, to)),
-            PlaybackAction::Seek(pos) => {
-                self.seek_position.set(pos as u64 * 1000, true);
-                vec![PlaybackEvent::TrackSeeked(pos)]
+            PlaybackAction::Seek(pos) => self.seek_to(pos),
+            PlaybackAction::SeekBy(delta) => {
+                let Some(duration) = self.queue.current().map(|song| song.duration_ms) else {
+                    return vec![];
+                };
+                let target = (self.seek_position.current() as i64 + delta as i64).max(0);
+                // Like MPRIS, seeking past the end skips to the next track
+                if target >= duration as i64 {
+                    self.play_next_events(false)
+                } else {
+                    self.seek_to(target as u32)
+                }
             }
             PlaybackAction::SyncSeek(pos) => {
-                self.seek_position.set(pos as u64 * 1000, true);
+                self.seek_position.set(pos as u64, true);
                 vec![PlaybackEvent::SeekSynced(pos)]
             }
-            PlaybackAction::SetVolume(volume) => {
-                // Idempotency guard: only emit (and thus touch dconf, the
-                // mixer, the Web API and MPRIS/D-Bus) when the volume actually
-                // changes. Rapid volume input (e.g. mouse-wheel scrolling the
-                // slider) would otherwise fan out a storm of `VolumeSet` events
-                // and MPRIS `PropertiesChanged` signals.
-                if self.volume == volume {
-                    vec![]
+            PlaybackAction::SetVolume(volume) => self.set_volume(volume),
+            PlaybackAction::AdjustVolume(delta) => {
+                self.set_volume((self.volume.max(0.0) + delta).clamp(0.0, 1.0))
+            }
+            PlaybackAction::ToggleMute => {
+                if self.volume > 0.0 {
+                    self.muted_volume = Some(self.volume);
+                    self.set_volume(0.0)
                 } else {
-                    self.volume = volume;
-                    vec![PlaybackEvent::VolumeSet(volume)]
+                    let volume = self.muted_volume.take().unwrap_or(UNMUTE_FALLBACK_VOLUME);
+                    self.set_volume(volume)
                 }
             }
 
@@ -1365,6 +1399,46 @@ mod tests {
         assert!(events
             .iter()
             .any(|e| matches!(e, PlaybackEvent::PlaybackStopped)));
+    }
+
+    #[test]
+    fn test_seek_by_is_relative_and_clamped() {
+        let mut state = PlaybackState::default();
+        let mut track = song("1");
+        track.duration_ms = 60_000;
+        load(&mut state, vec![track, song("2")]);
+        state.play("1");
+
+        state.act(PlaybackAction::Seek(10_000));
+        let events = state.act(PlaybackAction::SeekBy(5_000));
+        assert!(matches!(
+            events[..],
+            [PlaybackEvent::TrackSeeked(pos)] if (15_000..15_100).contains(&pos)
+        ));
+
+        let events = state.act(PlaybackAction::SeekBy(-30_000));
+        assert!(matches!(events[..], [PlaybackEvent::TrackSeeked(0)]));
+
+        // Past the end: skip to the next track
+        state.act(PlaybackAction::Seek(58_000));
+        state.act(PlaybackAction::SeekBy(5_000));
+        assert_eq!(state.current_song_id(), Some("2".to_string()));
+    }
+
+    #[test]
+    fn test_adjust_volume_and_mute() {
+        let mut state = PlaybackState::default();
+        state.act(PlaybackAction::SetVolume(0.98));
+
+        let events = state.act(PlaybackAction::AdjustVolume(0.05));
+        assert!(matches!(events[..], [PlaybackEvent::VolumeSet(v)] if v == 1.0));
+        assert!(state.act(PlaybackAction::AdjustVolume(0.05)).is_empty());
+
+        state.act(PlaybackAction::SetVolume(0.4));
+        let events = state.act(PlaybackAction::ToggleMute);
+        assert!(matches!(events[..], [PlaybackEvent::VolumeSet(v)] if v == 0.0));
+        let events = state.act(PlaybackAction::ToggleMute);
+        assert!(matches!(events[..], [PlaybackEvent::VolumeSet(v)] if v == 0.4));
     }
 
     #[test]

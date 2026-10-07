@@ -48,7 +48,8 @@ impl UserMenu {
         parent.add_action(&{
             let show_shortcuts_action = SimpleAction::new("show-shortcuts", None);
             show_shortcuts_action.connect_activate(clone!(
-                #[weak]
+                // Nothing else keeps the dialog alive
+                #[strong]
                 shortcuts_dialog,
                 #[weak]
                 parent,
