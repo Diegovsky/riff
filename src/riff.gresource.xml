@@ -13,6 +13,8 @@
     <file alias="components/equalizer.ui">app/components/pages/settings/equalizer.ui</file>
     <file alias="components/pan.ui">app/components/pages/settings/pan.ui</file>
     <file alias="components/pitch.ui">app/components/pages/settings/pitch.ui</file>
+    <!-- shortcuts -->
+    <file alias="components/shortcuts.ui">app/components/pages/shortcuts/shortcuts.ui</file>
     <!-- search -->
     <file alias="components/search.ui">app/components/pages/search/search.ui</file>
     <file alias="components/search.css">app/components/pages/search/search.css</file>

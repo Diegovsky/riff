@@ -39,3 +39,6 @@ pub use search::*;
 
 mod settings;
 pub use settings::*;
+
+mod shortcuts;
+pub use shortcuts::*;

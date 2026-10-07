@@ -303,8 +303,7 @@ impl App {
         let button: gtk::MenuButton = builder.object("user").unwrap();
         let main_menu: gio::Menu = builder.object("main_menu").unwrap();
         let about: libadwaita::AboutDialog = builder.object("about").unwrap();
-        let shortcuts_dialog: libadwaita::ShortcutsDialog =
-            builder.object("shortcuts_dialog").unwrap();
+        let shortcuts_dialog = make_shortcuts_dialog();
         let model = UserMenuModel::new(app_model, dispatcher);
         let user_menu = UserMenu::new(
             button,
