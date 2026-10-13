@@ -404,7 +404,7 @@ impl SearchResults {
         let track_section_clone = Rc::clone(&track_section);
         let model_weak = Rc::downgrade(&model);
         track_card_list
-            .widget()
+            .flowbox()
             .connect_child_activated(move |_, child| {
                 let Some(card_widget) = child.child().and_then(|w| w.downcast::<CardWidget>().ok())
                 else {

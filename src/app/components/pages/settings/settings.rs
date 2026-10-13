@@ -38,7 +38,7 @@ mod imp {
         pub audio_backend: TemplateChild<libadwaita::ComboRow>,
 
         #[template_child]
-        pub gapless_playback: TemplateChild<libadwaita::ActionRow>,
+        pub gapless_playback: TemplateChild<libadwaita::SwitchRow>,
 
         #[template_child]
         pub ap_port: TemplateChild<gtk::Entry>,
@@ -350,14 +350,10 @@ impl SettingsDialog {
 
         let gapless_playback = widget
             .gapless_playback
-            .downcast_ref::<libadwaita::ActionRow>()
+            .downcast_ref::<libadwaita::SwitchRow>()
             .unwrap();
         settings
-            .bind(
-                "gapless-playback",
-                &gapless_playback.activatable_widget().unwrap(),
-                "active",
-            )
+            .bind("gapless-playback", gapless_playback, "active")
             .build();
 
         let ap_port = widget.ap_port.downcast_ref::<gtk::Entry>().unwrap();

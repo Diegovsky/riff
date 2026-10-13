@@ -137,19 +137,11 @@ template $SettingsWindow : Adw.PreferencesDialog {
         };
       }
 
-      Adw.ActionRow gapless_playback {
+      Adw.SwitchRow gapless_playback {
         /* Translators: Title for an item in preferences */
 
         title: _("Gapless Playback");
         subtitle: _("Eliminates silence between consecutive tracks");
-        name: "gapless_playback_row";
-        activatable-widget: gapless_playback_switch;
-        visible: true;
-
-        Switch gapless_playback_switch {
-          margin-top: 12;
-          margin-bottom: 12;
-        }
       }
 
       Adw.ComboRow volume_curve {

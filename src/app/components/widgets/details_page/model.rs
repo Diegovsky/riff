@@ -8,8 +8,8 @@ use gio::prelude::*;
 use gio::SimpleActionGroup;
 
 use crate::app::components::{
-    add_tracks_to_playlist, build_song_menu, dispatch_api_call, queue_source_tracks,
-    PlaylistPicker, QueueMenuEntry, SongActions, REMOVE_FROM_PLAYLIST_ACTION,
+    add_tracks_to_playlist, build_song_menu, dispatch_api_call, dispatch_api_call_many,
+    queue_source_tracks, PlaylistPicker, QueueMenuEntry, SongActions, REMOVE_FROM_PLAYLIST_ACTION,
 };
 use crate::app::dispatch::Dispatcher;
 use crate::app::models::{SongListModel, Track};
@@ -485,7 +485,18 @@ impl DetailsPageModel {
         let changed = if settings::is_object_pinned(&user_id, id, kind) {
             settings::unpin_object(&user_id, kind, id)
         } else if !self.is_song_liked(id) {
-            // Only saved tracks can be pinned.
+            let api = self.app_model.api();
+            let song = song.clone();
+            dispatch_api_call_many(&self.dispatcher, move || async move {
+                let id = song.rri.id.clone();
+                api.save_tracks(vec![id.clone()]).await?;
+                let pinned = settings::pin_object(&user_id, kind, &id, Some(song.title.clone()));
+                let mut actions = vec![BrowserAction::SaveTracks(vec![song]).into()];
+                if pinned {
+                    actions.push(BrowserAction::NotifyPinnedPlaylistsUpdated.into());
+                }
+                Ok(actions)
+            });
             return;
         } else {
             settings::pin_object(&user_id, kind, id, Some(song.title.clone()))

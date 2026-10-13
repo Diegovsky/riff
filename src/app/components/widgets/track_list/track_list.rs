@@ -881,8 +881,7 @@ fn bind_track<Model: TrackListModel + 'static>(
     let pin_enabled = is_enabled(FeatureFlag::PinnedObjects);
     let picker_track = track.clone();
     let menu_for = move |model: &Model, song: &SongModel| {
-        let pinned = song.get_pinned();
-        let pinned = (pin_enabled && (song.get_liked() || pinned)).then_some(pinned);
+        let pinned = pin_enabled.then_some(song.get_pinned());
         model.menu_for(song, &track, song.get_liked(), pinned)
     };
     let hooks = MenuHooks {

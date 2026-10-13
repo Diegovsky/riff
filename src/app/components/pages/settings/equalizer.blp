@@ -18,7 +18,7 @@ template $EqualizerWidget : Adw.PreferencesGroup {
   Gtk.Box eq_bands_box {
     orientation: horizontal;
     homogeneous: true;
-    spacing: 2;
+    spacing: 0;
     margin-top: 12;
     margin-bottom: 12;
     height-request: 220;
@@ -34,9 +34,7 @@ template $EqualizerWidget : Adw.PreferencesGroup {
       Scale eq_band_0 {
         orientation: vertical;
         inverted: true;
-        draw-value: true;
-        value-pos: bottom;
-        digits: 1;
+        draw-value: false;
         round-digits: 1;
         vexpand: true;
         adjustment: Adjustment {
@@ -49,6 +47,13 @@ template $EqualizerWidget : Adw.PreferencesGroup {
         marks [
           mark (0, right, ""),
         ]
+      }
+
+      Inscription {
+        min-chars: 1;
+        nat-chars: 5;
+        xalign: 0.5;
+        styles [ "caption", "numeric" ]
       }
 
       Label {
@@ -64,9 +69,7 @@ template $EqualizerWidget : Adw.PreferencesGroup {
       Scale eq_band_1 {
         orientation: vertical;
         inverted: true;
-        draw-value: true;
-        value-pos: bottom;
-        digits: 1;
+        draw-value: false;
         round-digits: 1;
         vexpand: true;
         adjustment: Adjustment {
@@ -79,6 +82,13 @@ template $EqualizerWidget : Adw.PreferencesGroup {
         marks [
           mark (0, right, ""),
         ]
+      }
+
+      Inscription {
+        min-chars: 1;
+        nat-chars: 5;
+        xalign: 0.5;
+        styles [ "caption", "numeric" ]
       }
 
       Label {
@@ -94,9 +104,7 @@ template $EqualizerWidget : Adw.PreferencesGroup {
       Scale eq_band_2 {
         orientation: vertical;
         inverted: true;
-        draw-value: true;
-        value-pos: bottom;
-        digits: 1;
+        draw-value: false;
         round-digits: 1;
         vexpand: true;
         adjustment: Adjustment {
@@ -109,6 +117,13 @@ template $EqualizerWidget : Adw.PreferencesGroup {
         marks [
           mark (0, right, ""),
         ]
+      }
+
+      Inscription {
+        min-chars: 1;
+        nat-chars: 5;
+        xalign: 0.5;
+        styles [ "caption", "numeric" ]
       }
 
       Label {
@@ -124,9 +139,7 @@ template $EqualizerWidget : Adw.PreferencesGroup {
       Scale eq_band_3 {
         orientation: vertical;
         inverted: true;
-        draw-value: true;
-        value-pos: bottom;
-        digits: 1;
+        draw-value: false;
         round-digits: 1;
         vexpand: true;
         adjustment: Adjustment {
@@ -139,6 +152,13 @@ template $EqualizerWidget : Adw.PreferencesGroup {
         marks [
           mark (0, right, ""),
         ]
+      }
+
+      Inscription {
+        min-chars: 1;
+        nat-chars: 5;
+        xalign: 0.5;
+        styles [ "caption", "numeric" ]
       }
 
       Label {
@@ -154,9 +174,7 @@ template $EqualizerWidget : Adw.PreferencesGroup {
       Scale eq_band_4 {
         orientation: vertical;
         inverted: true;
-        draw-value: true;
-        value-pos: bottom;
-        digits: 1;
+        draw-value: false;
         round-digits: 1;
         vexpand: true;
         adjustment: Adjustment {
@@ -169,6 +187,13 @@ template $EqualizerWidget : Adw.PreferencesGroup {
         marks [
           mark (0, right, ""),
         ]
+      }
+
+      Inscription {
+        min-chars: 1;
+        nat-chars: 5;
+        xalign: 0.5;
+        styles [ "caption", "numeric" ]
       }
 
       Label {
@@ -184,9 +209,7 @@ template $EqualizerWidget : Adw.PreferencesGroup {
       Scale eq_band_5 {
         orientation: vertical;
         inverted: true;
-        draw-value: true;
-        value-pos: bottom;
-        digits: 1;
+        draw-value: false;
         round-digits: 1;
         vexpand: true;
         adjustment: Adjustment {
@@ -199,6 +222,13 @@ template $EqualizerWidget : Adw.PreferencesGroup {
         marks [
           mark (0, right, ""),
         ]
+      }
+
+      Inscription {
+        min-chars: 1;
+        nat-chars: 5;
+        xalign: 0.5;
+        styles [ "caption", "numeric" ]
       }
 
       Label {
@@ -214,9 +244,7 @@ template $EqualizerWidget : Adw.PreferencesGroup {
       Scale eq_band_6 {
         orientation: vertical;
         inverted: true;
-        draw-value: true;
-        value-pos: bottom;
-        digits: 1;
+        draw-value: false;
         round-digits: 1;
         vexpand: true;
         adjustment: Adjustment {
@@ -229,6 +257,13 @@ template $EqualizerWidget : Adw.PreferencesGroup {
         marks [
           mark (0, right, ""),
         ]
+      }
+
+      Inscription {
+        min-chars: 1;
+        nat-chars: 5;
+        xalign: 0.5;
+        styles [ "caption", "numeric" ]
       }
 
       Label {
@@ -244,9 +279,7 @@ template $EqualizerWidget : Adw.PreferencesGroup {
       Scale eq_band_7 {
         orientation: vertical;
         inverted: true;
-        draw-value: true;
-        value-pos: bottom;
-        digits: 1;
+        draw-value: false;
         round-digits: 1;
         vexpand: true;
         adjustment: Adjustment {
@@ -259,6 +292,13 @@ template $EqualizerWidget : Adw.PreferencesGroup {
         marks [
           mark (0, right, ""),
         ]
+      }
+
+      Inscription {
+        min-chars: 1;
+        nat-chars: 5;
+        xalign: 0.5;
+        styles [ "caption", "numeric" ]
       }
 
       Label {
@@ -274,9 +314,7 @@ template $EqualizerWidget : Adw.PreferencesGroup {
       Scale eq_band_8 {
         orientation: vertical;
         inverted: true;
-        draw-value: true;
-        value-pos: bottom;
-        digits: 1;
+        draw-value: false;
         round-digits: 1;
         vexpand: true;
         adjustment: Adjustment {
@@ -289,6 +327,13 @@ template $EqualizerWidget : Adw.PreferencesGroup {
         marks [
           mark (0, right, ""),
         ]
+      }
+
+      Inscription {
+        min-chars: 1;
+        nat-chars: 5;
+        xalign: 0.5;
+        styles [ "caption", "numeric" ]
       }
 
       Label {
@@ -304,9 +349,7 @@ template $EqualizerWidget : Adw.PreferencesGroup {
       Scale eq_band_9 {
         orientation: vertical;
         inverted: true;
-        draw-value: true;
-        value-pos: bottom;
-        digits: 1;
+        draw-value: false;
         round-digits: 1;
         vexpand: true;
         adjustment: Adjustment {
@@ -319,6 +362,13 @@ template $EqualizerWidget : Adw.PreferencesGroup {
         marks [
           mark (0, right, ""),
         ]
+      }
+
+      Inscription {
+        min-chars: 1;
+        nat-chars: 5;
+        xalign: 0.5;
+        styles [ "caption", "numeric" ]
       }
 
       Label {
