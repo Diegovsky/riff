@@ -119,7 +119,7 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
         shared_layout: Rc<Cell<CardLayout>>,
         shared_size: Rc<Cell<CardSize>>,
         dispatcher: Dispatcher,
-    ) -> gtk::FlowBox
+    ) -> gtk::Widget
     where
         M: CardListModel,
     {

@@ -5,6 +5,7 @@ use std::cmp::Ordering;
 use std::ops::Deref;
 use std::rc::Rc;
 
+use super::card_grid::CardGrid;
 use crate::app::components::details_page::is_playback_event;
 use crate::app::components::{CardLayout, CardSize, CardWidget, ImageShape, SortOrder};
 use crate::app::models::{CardModel, FilterOption};
@@ -113,6 +114,7 @@ impl CardFilter {
 /// Manually manages FlowBox children and uses `set_sort_func` + `invalidate_sort`
 /// for flash-free reordering (no widget destruction/recreation on sort changes).
 pub struct CardList {
+    grid: CardGrid,
     flowbox: gtk::FlowBox,
     current_layout: Rc<Cell<CardLayout>>,
     current_size: Rc<Cell<CardSize>>,
@@ -136,14 +138,15 @@ pub struct CardList {
 
 impl CardList {
     pub fn new() -> Self {
-        let flowbox = gtk::FlowBox::new();
+        let grid = CardGrid::new();
+        grid.set_valign(gtk::Align::Start);
+        let flowbox = grid.flowbox().clone();
         flowbox.set_min_children_per_line(MIN_CHILDREN_PER_LINE);
         flowbox.set_max_children_per_line(MAX_CHILDREN_PER_LINE);
         flowbox.set_row_spacing(ROW_SPACING);
         flowbox.set_column_spacing(COLUMN_SPACING);
         flowbox.set_selection_mode(gtk::SelectionMode::None);
         flowbox.set_activate_on_single_click(true);
-        flowbox.set_valign(gtk::Align::Start);
 
         let max_rows = Rc::new(Cell::new(None));
         let current_size = Rc::new(Cell::new(CardSize::Large));
@@ -176,6 +179,7 @@ impl CardList {
         });
 
         Self {
+            grid,
             flowbox,
             current_layout,
             current_size,
@@ -191,7 +195,11 @@ impl CardList {
         }
     }
 
-    pub fn widget(&self) -> &gtk::FlowBox {
+    pub fn widget(&self) -> &gtk::Widget {
+        self.grid.upcast_ref()
+    }
+
+    pub fn flowbox(&self) -> &gtk::FlowBox {
         &self.flowbox
     }
 

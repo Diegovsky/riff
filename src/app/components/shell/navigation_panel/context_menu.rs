@@ -110,41 +110,39 @@ pub fn build_playlist_actions(id: &str, model: &Rc<NavigationPanelModel>) -> Sim
     group
 }
 
+/// Laid out like the track list's menu: the library, pin and queue entries
+/// share a section, in that order, and the link comes last.
 pub fn build_playlist_menu(is_owned: bool, id: &str, user_id: Option<&str>) -> gio::Menu {
     let playback_section = gio::Menu::new();
     playback_section.append(Some(&*labels::PLAY), Some("playlist.play"));
     playback_section.append(Some(&*labels::SHUFFLE), Some("playlist.shuffle"));
-    playback_section.append(Some(&*labels::ADD_TO_QUEUE), Some("playlist.queue"));
 
-    let delete_section = gio::Menu::new();
-    if is_owned {
-        delete_section.append(Some(&*labels::DELETE_PLAYLIST), Some("playlist.unfollow"));
+    let playlist_section = gio::Menu::new();
+    let remove_label = if is_owned {
+        &*labels::DELETE_PLAYLIST
     } else {
-        delete_section.append(Some(&*labels::UNFOLLOW_PLAYLIST), Some("playlist.unfollow"));
-    }
-
-    let pin_section = gio::Menu::new();
+        &*labels::UNFOLLOW_PLAYLIST
+    };
+    playlist_section.append(Some(remove_label), Some("playlist.unfollow"));
     if is_enabled(FeatureFlag::PinnedObjects) {
         let is_pinned = user_id.is_some_and(|user_id| {
             settings::is_object_pinned(user_id, id, settings::PinnedKind::Playlist)
         });
         let pin_label = if is_pinned {
-            gettextrs::gettext("Unpin Playlist")
+            &*labels::UNPIN_FROM_SIDEBAR
         } else {
-            gettextrs::gettext("Pin Playlist")
+            &*labels::PIN_TO_SIDEBAR
         };
-        pin_section.append(Some(&pin_label), Some("playlist.toggle_pin"));
+        playlist_section.append(Some(pin_label), Some("playlist.toggle_pin"));
     }
+    playlist_section.append(Some(&*labels::ADD_TO_QUEUE), Some("playlist.queue"));
 
     let link_section = gio::Menu::new();
     link_section.append(Some(&*labels::COPY_LINK), Some("playlist.copy_link"));
 
     let menu = gio::Menu::new();
     menu.append_section(None, &playback_section);
-    menu.append_section(None, &delete_section);
-    if is_enabled(FeatureFlag::PinnedObjects) {
-        menu.append_section(None, &pin_section);
-    }
+    menu.append_section(None, &playlist_section);
     menu.append_section(None, &link_section);
     menu
 }
@@ -252,33 +250,23 @@ pub fn build_pinned_menu(kind: settings::PinnedKind, in_library: bool) -> gio::M
         playback_section.append(Some(&*labels::SHUFFLE), Some("pinned.shuffle"));
     }
 
-    let remove_section = gio::Menu::new();
+    let item_section = gio::Menu::new();
     if in_library {
         let label = match kind {
             settings::PinnedKind::Album => &*labels::UNLIKE_ALBUM,
             settings::PinnedKind::Artist => &*labels::UNLIKE_ARTIST,
             _ => &*labels::UNLIKE,
         };
-        remove_section.append(Some(label), Some("pinned.remove"));
+        item_section.append(Some(label), Some("pinned.remove"));
     }
-
-    let pin_section = gio::Menu::new();
-    let unpin_label = match kind {
-        settings::PinnedKind::Album => gettextrs::gettext("Unpin Album"),
-        settings::PinnedKind::Artist => gettextrs::gettext("Unpin Artist"),
-        _ => gettextrs::gettext("Unpin Track"),
-    };
-    pin_section.append(Some(&unpin_label), Some("pinned.unpin"));
+    item_section.append(Some(&*labels::UNPIN_FROM_SIDEBAR), Some("pinned.unpin"));
 
     let link_section = gio::Menu::new();
     link_section.append(Some(&*labels::COPY_LINK), Some("pinned.copy_link"));
 
     let menu = gio::Menu::new();
     menu.append_section(None, &playback_section);
-    if remove_section.n_items() > 0 {
-        menu.append_section(None, &remove_section);
-    }
-    menu.append_section(None, &pin_section);
+    menu.append_section(None, &item_section);
     menu.append_section(None, &link_section);
     menu
 }
@@ -312,8 +300,7 @@ mod tests {
             menu_actions(&menu),
             vec![
                 vec!["pinned.play", "pinned.shuffle"],
-                vec!["pinned.remove"],
-                vec!["pinned.unpin"],
+                vec!["pinned.remove", "pinned.unpin"],
                 vec!["pinned.copy_link"],
             ]
         );

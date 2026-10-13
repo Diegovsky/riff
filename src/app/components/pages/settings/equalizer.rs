@@ -134,6 +134,17 @@ impl EqualizerWidget {
         for (key, scale) in EQ_BAND_KEYS.iter().zip(self.band_scales()) {
             let adjustment = scale.adjustment();
             adjustment.set_value(settings.double(key));
+            // The scale's own value label is too wide for ten bands to fit a
+            // narrow window, so the value is shown in the label below it.
+            if let Some(value) = scale.next_sibling().and_downcast::<gtk::Inscription>() {
+                let show = move |adj: &gtk::Adjustment| {
+                    // `+ 0.0` turns a rounded "-0.0" into "0.0".
+                    let gain = (adj.value() * 10.0).round() / 10.0 + 0.0;
+                    value.set_text(Some(&format!("{gain:.1}")));
+                };
+                show(&adjustment);
+                adjustment.connect_value_changed(show);
+            }
             let settings = settings.clone();
             let key = key.to_string();
             adjustment.connect_value_changed(move |adj| {
