@@ -221,7 +221,7 @@ pub fn wire_dev_tools(
         let state = model_for_dump.get_state();
         info!("==== APP STATE DUMP ====");
         info!("logged-in user: {:?}", state.logged_user.user);
-        info!("owned playlists: {}", state.logged_user.playlists.len());
+        info!("saved playlists: {}", state.logged_user.playlists.len());
         info!(
             "browser screen: {:?} (nav depth {})",
             state.browser.current_screen(),

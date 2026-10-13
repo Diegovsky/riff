@@ -11,15 +11,14 @@ use crate::{impl_source_page, impl_source_track_list, impl_track_list_model_base
 use crate::app::components::DetailsPageModel;
 use crate::app::components::{
     dispatch_api_read, HasHeaderBarModel, HeaderImageShape, PageModel, PinnedPageModel,
-    SimpleHeaderBarModel, TrackListModel,
+    TrackListModel,
 };
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
-use crate::app::state::{SelectionAction, SelectionState};
+use crate::app::state::SelectionState;
 use crate::app::{
     AppEvent, AppModel, BrowserAction, BrowserEvent, Dispatcher, PaginationTarget, SongsSource,
 };
-use crate::feature_flags::{self, FeatureFlag};
 
 /// Data model for the saved tracks page. Composes `DetailsPageModel` via Deref.
 pub struct SavedTracksModel {
@@ -161,20 +160,7 @@ impl TrackListModel for SavedTracksModel {
     }
 }
 
-impl SimpleHeaderBarModel for SavedTracksModel {
-    fn selection_context(&self) -> Option<SelectionContext> {
-        if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
-            return None;
-        }
-        Some(SelectionContext::SavedTracks)
-    }
-
-    fn select_all(&self) {
-        let songs: Vec<Track> = TrackListModel::song_list_model(self).collect();
-        self.dispatcher
-            .dispatch(SelectionAction::Select(songs).into());
-    }
-}
+crate::impl_track_list_header_bar!(SavedTracksModel);
 
 impl crate::app::ProvidesApi for SavedTracksModel {
     fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {

@@ -12,7 +12,7 @@ use crate::app::components::{
     ImageShape, PageModel, PinnedPageModel, PlayingCard, SimpleHeaderBarModel,
 };
 use crate::app::models::*;
-use crate::app::state::{BrowserAction, BrowserEvent, SelectionContext, CARD_BATCH_SIZE};
+use crate::app::state::{BrowserAction, BrowserEvent, CARD_BATCH_SIZE};
 use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, ListStore, PaginationTarget};
 
 /// Data model for the user profile page. Composes `DetailsPageModel` via Deref.
@@ -164,10 +164,6 @@ impl CardListModel for UserDetailsModel {
 }
 
 impl SimpleHeaderBarModel for UserDetailsModel {
-    fn selection_context(&self) -> Option<SelectionContext> {
-        None
-    }
-
     fn select_all(&self) {}
 }
 

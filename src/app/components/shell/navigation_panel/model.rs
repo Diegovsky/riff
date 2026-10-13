@@ -1,15 +1,17 @@
 use gettextrs::gettext;
 use gtk::prelude::*;
 use std::rc::Rc;
+use tokio::sync::oneshot;
 
 use super::{
     NavigationPanelDestination, NavigationPanelItem, PINNED_SECTION, SAVED_PLAYLISTS_SECTION,
 };
 use crate::app::components::{
     dispatch_api_call, dispatch_api_call_many, dispatch_api_read, dispatch_api_read_many,
-    queue_source_tracks,
+    queue_source_tracks, upload_playlist_cover, PlaylistForm, Saved,
 };
 use crate::app::models::{CardModel, PlaylistSummary};
+use crate::app::playlist_actions::unfollow_and_unpin_playlist;
 use crate::app::state::{load_context, start_actions, PlaybackAction, ScreenName};
 use crate::app::{AppAction, AppModel, BrowserAction, Dispatcher, PaginationTarget, SongsSource};
 use crate::feature_flags::{is_enabled, FeatureFlag};
@@ -87,21 +89,33 @@ impl NavigationPanelModel {
         NavigationPanelDestination::Playlist(PlaylistSummary { id, title })
     }
 
-    pub(super) fn create_new_playlist(&self, name: String) {
+    pub(super) fn create_new_playlist(&self, new: PlaylistForm) -> oneshot::Receiver<()> {
+        let (created, created_rx) = Saved::channel();
         let user_id = self.app_model.get_state().logged_user.user.clone().unwrap();
         let api = self.app_model.api();
-        dispatch_api_call(&self.dispatcher, move || async move {
-            api.create_playlist(user_id.as_str(), name.as_str())
-                .await
-                .map(AppAction::CreatePlaylist)
-        })
+        let dispatcher = self.dispatcher.clone();
+        dispatch_api_call_many(&self.dispatcher, move || async move {
+            let playlist = api
+                .create_playlist(&user_id, &new.name, new.description.as_deref(), new.public)
+                .await?;
+            created.tell();
+            let id = playlist.rri.id.clone();
+            if let Some(cover) = new.cover {
+                upload_playlist_cover(&dispatcher, api, id.clone(), cover);
+            }
+            Ok(vec![
+                AppAction::CreatePlaylist(playlist),
+                AppAction::ViewPlaylist(id),
+            ])
+        });
+        created_rx
     }
 
     pub(super) fn is_playlist_owned(&self, id: &str) -> bool {
         self.app_model
             .get_state()
             .logged_user
-            .playlist_ids
+            .owned_playlist_ids
             .contains(id)
     }
 
@@ -110,17 +124,10 @@ impl NavigationPanelModel {
     }
 
     pub(super) fn unfollow_playlist(&self, id: String) {
-        let pin_enabled = is_enabled(FeatureFlag::PinnedObjects);
         let user_id = self.logged_user_id();
         let api = self.app_model.api();
         dispatch_api_call(&self.dispatcher, move || async move {
-            api.unfollow_playlist(&id).await?;
-            if pin_enabled {
-                if let Some(user_id) = user_id {
-                    settings::unpin_object(&user_id, settings::PinnedKind::Playlist, &id);
-                }
-            }
-            Ok(AppAction::RemovePlaylist(id))
+            unfollow_and_unpin_playlist(&api, id, user_id).await
         })
     }
 
@@ -396,10 +403,9 @@ impl NavigationPanelModel {
     /// Rebuild the pinned and playlist rows of `list_store`.
     ///
     /// The store holds, in order: the fixed library entries, the pinned rows,
-    /// the fixed "Playlists" header (and optional "New Playlist" entry), then
-    /// the playlists. `num_fixed_entries` counts the fixed rows only. The
-    /// fixed rows are kept rather than rebuilt, as the "New Playlist" row
-    /// hosts the create-playlist popover.
+    /// the fixed "Playlists" header, then the playlists. `num_fixed_entries`
+    /// counts the fixed rows only. The fixed rows are kept rather than
+    /// rebuilt.
     pub fn apply_navigation_panel_items(
         &self,
         list_store: &gio::ListStore,

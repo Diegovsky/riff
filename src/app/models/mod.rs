@@ -49,7 +49,7 @@ impl From<&Playlist> for CardModel {
             .as_ref()
             .map(|o| o.display_name.as_str())
             .unwrap_or("");
-        CardModel::new(
+        let card = CardModel::new(
             &playlist.rri.id,
             art.as_ref(),
             &playlist.title,
@@ -58,7 +58,11 @@ impl From<&Playlist> for CardModel {
             None,
             None,
             None,
-        )
+        );
+        if let Some(owner) = playlist.owner.as_ref() {
+            card.set_owner(owner.rri.id.clone());
+        }
+        card
     }
 }
 

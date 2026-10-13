@@ -9,5 +9,4 @@ mod context_menu;
 mod model;
 pub use model::*;
 
-mod create_playlist;
 mod navigation_panel_row;

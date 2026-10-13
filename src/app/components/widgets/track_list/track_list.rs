@@ -10,8 +10,8 @@ use riff_api::ApiService;
 
 use crate::app::components::utils::{ancestor, set_css_class, AnimatorDefault};
 use crate::app::components::{
-    labels, Component, DiscHeaderRow, EventListener, GroupButton, RowOptions, TrackRow,
-    ROW_HEIGHT_PX,
+    labels, Component, DiscHeaderRow, EventListener, GroupButton, MenuHooks, RowOptions, TrackRow,
+    PLAYLIST_PICKER_MENU_ID, ROW_HEIGHT_PX, SELECTABLE_LIST_CLASS,
 };
 use crate::app::models::{SongListModel, SongModel, SongState, Track, TrackExt};
 use crate::app::state::{BrowserEvent, PlaybackEvent, SelectionEvent, SelectionState};
@@ -28,10 +28,40 @@ const GTK_MAX_ROW_WIDGETS: u32 = 200;
 /// Must stay under GTK_MAX_ROW_WIDGETS / 2.
 const REANCHOR_EVERY_ROWS: u32 = 50;
 
+pub const REMOVE_FROM_PLAYLIST_ACTION: &str = "remove_from_playlist";
+
 pub enum QueueMenuEntry {
     None,
     Add,
     Queued,
+}
+
+fn shift_held(list: &gtk::ListView) -> bool {
+    list.display()
+        .default_seat()
+        .and_then(|seat| seat.keyboard())
+        .is_some_and(|keyboard| {
+            keyboard
+                .modifier_state()
+                .contains(gdk::ModifierType::SHIFT_MASK)
+        })
+}
+
+fn selection_anchor<Model: TrackListModel + ?Sized>(
+    model: &Model,
+    songs: &SongListModel,
+    clicked: Option<&str>,
+) -> Option<usize> {
+    let selection = model.selection()?;
+    let selected: Vec<(usize, String)> = (0..songs.partial_len())
+        .filter_map(|i| Some((i, songs.index_continuous(i)?.row_key())))
+        .filter(|(_, key)| selection.is_song_selected(key))
+        .collect();
+    selected
+        .iter()
+        .find(|(_, key)| Some(key.as_str()) == clicked)
+        .or(selected.first())
+        .map(|(i, _)| *i)
 }
 
 pub fn build_song_menu(
@@ -41,40 +71,31 @@ pub fn build_song_menu(
     queue_entry: QueueMenuEntry,
     liked: Option<bool>,
     pinned: Option<bool>,
+    removable_from_playlist: bool,
 ) -> gio::MenuModel {
-    let info_section = gio::Menu::new();
-    if show_view_album {
-        info_section.append(Some(&*labels::VIEW_ALBUM), Some("song.view_album"));
+    let track_section = gio::Menu::new();
+    if song.rri.uri.is_some() {
+        let picker = gio::Menu::new();
+        let item = gio::MenuItem::new(None, None);
+        item.set_attribute_value("custom", Some(&PLAYLIST_PICKER_MENU_ID.to_variant()));
+        picker.append_item(&item);
+        track_section.append_submenu(Some(&*labels::ADD_TO_PLAYLIST), &picker);
     }
-    for artist in song
-        .artists
-        .iter()
-        .filter(|a| exclude_artist_id != Some(a.rri.id.as_str()))
-    {
-        info_section.append(
-            Some(&labels::more_from_label(&artist.name)),
-            Some(&format!("song.view_artist_{}", artist.rri.id)),
+    if removable_from_playlist {
+        let item = gio::MenuItem::new(
+            Some(&*labels::REMOVE_FROM_PLAYLIST),
+            Some(&format!("song.{REMOVE_FROM_PLAYLIST_ACTION}")),
         );
+        item.set_attribute_value("hidden-when", Some(&"action-disabled".to_variant()));
+        track_section.append_item(&item);
     }
-
-    let queue_section = gio::Menu::new();
-    match queue_entry {
-        QueueMenuEntry::None => {}
-        QueueMenuEntry::Add => {
-            queue_section.append(Some(&*labels::ADD_TO_QUEUE), Some("song.queue"));
-        }
-        QueueMenuEntry::Queued => {
-            queue_section.append(Some(&*labels::REMOVE_FROM_QUEUE), Some("song.dequeue"));
-        }
-    }
-    let like_section = gio::Menu::new();
     if let Some(liked) = liked {
         let label = if liked {
             &*labels::UNLIKE
         } else {
             &*labels::LIKE
         };
-        like_section.append(Some(label), Some("song.like"));
+        track_section.append(Some(label), Some("song.like"));
     }
     if let Some(pinned) = pinned {
         let label = if pinned {
@@ -82,23 +103,38 @@ pub fn build_song_menu(
         } else {
             &*labels::PIN_TO_SIDEBAR
         };
-        like_section.append(Some(label), Some("song.pin"));
+        track_section.append(Some(label), Some("song.pin"));
     }
+    match queue_entry {
+        QueueMenuEntry::None => {}
+        QueueMenuEntry::Add => {
+            track_section.append(Some(&*labels::ADD_TO_QUEUE), Some("song.queue"));
+        }
+        QueueMenuEntry::Queued => {
+            track_section.append(Some(&*labels::REMOVE_FROM_QUEUE), Some("song.dequeue"));
+        }
+    }
+    track_section.append(Some(&*labels::SELECT), Some("song.select"));
 
-    let link_section = gio::Menu::new();
-    link_section.append(Some(&*labels::COPY_LINK), Some("song.copy_link"));
+    let go_to_section = gio::Menu::new();
+    for artist in song
+        .artists
+        .iter()
+        .filter(|a| exclude_artist_id != Some(a.rri.id.as_str()))
+    {
+        go_to_section.append(
+            Some(&labels::more_from_label(&artist.name)),
+            Some(&format!("song.view_artist_{}", artist.rri.id)),
+        );
+    }
+    if show_view_album {
+        go_to_section.append(Some(&*labels::VIEW_ALBUM), Some("song.view_album"));
+    }
+    go_to_section.append(Some(&*labels::COPY_LINK), Some("song.copy_link"));
 
     let menu = gio::Menu::new();
-    if info_section.n_items() > 0 {
-        menu.append_section(None, &info_section);
-    }
-    if queue_section.n_items() > 0 {
-        menu.append_section(None, &queue_section);
-    }
-    if like_section.n_items() > 0 {
-        menu.append_section(None, &like_section);
-    }
-    menu.append_section(None, &link_section);
+    menu.append_section(None, &track_section);
+    menu.append_section(None, &go_to_section);
     menu.upcast()
 }
 
@@ -149,7 +185,18 @@ pub trait TrackListModel: ProvidesApi {
         None
     }
 
+    fn playlist_picker(&self, _song: &Track) -> Option<gtk::Widget> {
+        None
+    }
+
+    fn menu_opening(&self, _actions: &SimpleActionGroup) {}
+
     fn select_song(&self, _id: &str) {}
+    fn select_songs(&self, keys: &[String]) {
+        for key in keys {
+            self.select_song(key);
+        }
+    }
     fn deselect_song(&self, _id: &str) {}
     fn enable_selection(&self) -> bool {
         false
@@ -491,6 +538,7 @@ where
         listview.set_factory(Some(&factory));
         listview.set_model(Some(&gtk::NoSelection::new(Some(store.clone()))));
 
+        let anchor: Rc<RefCell<Option<String>>> = Rc::default();
         listview.connect_activate(clone!(
             #[weak]
             songs,
@@ -498,7 +546,7 @@ where
             model,
             #[weak]
             projection,
-            move |_, position| {
+            move |listview, position| {
                 let Some(Some(index)) = projection
                     .borrow()
                     .positions
@@ -510,11 +558,25 @@ where
                 let Some(song) = songs.index_continuous(index) else {
                     return;
                 };
-                if model.is_selection_enabled() {
-                    model.toggle_select(&song.row_key());
-                } else {
+                if !model.is_selection_enabled() {
                     model.play_song_at(index, &song.get_id());
+                    return;
                 }
+                let key = song.row_key();
+                let range_start = shift_held(listview)
+                    .then(|| selection_anchor(&*model, &songs, anchor.borrow().as_deref()))
+                    .flatten();
+                match range_start {
+                    Some(start) => {
+                        let keys: Vec<String> = (start.min(index)..=start.max(index))
+                            .filter_map(|i| songs.index_continuous(i))
+                            .map(|song| song.row_key())
+                            .collect();
+                        model.select_songs(&keys);
+                    }
+                    None => model.toggle_select(&key),
+                }
+                anchor.replace(Some(key));
             }
         ));
 
@@ -549,7 +611,7 @@ where
     fn update_selection_mode(&self) {
         set_css_class(
             &self.listview,
-            "playlist--selectable",
+            SELECTABLE_LIST_CLASS,
             self.model.is_selection_enabled(),
         );
     }
@@ -804,15 +866,41 @@ fn bind_track<Model: TrackListModel + 'static>(
         }
     });
     actions.add_action(&pin);
+    let select = gio::SimpleAction::new("select", None);
+    let select_key = song.row_key();
+    let select_model = Rc::downgrade(model);
+    select.connect_activate(move |_, _| {
+        if let Some(model) = select_model.upgrade() {
+            model.enable_selection();
+            model.select_song(&select_key);
+        }
+    });
+    actions.add_action(&select);
     row.set_actions(Some(actions.upcast_ref()));
 
     let pin_enabled = is_enabled(FeatureFlag::PinnedObjects);
+    let picker_track = track.clone();
     let menu_for = move |model: &Model, song: &SongModel| {
         let pinned = song.get_pinned();
         let pinned = (pin_enabled && (song.get_liked() || pinned)).then_some(pinned);
         model.menu_for(song, &track, song.get_liked(), pinned)
     };
-    row.set_menu(menu_for(model, song).as_ref());
+    let hooks = MenuHooks {
+        opening: Rc::new(clone!(
+            #[weak]
+            model,
+            #[strong]
+            actions,
+            move || model.menu_opening(&actions)
+        )),
+        picker: Rc::new(clone!(
+            #[weak]
+            model,
+            #[upgrade_or_default]
+            move || model.playlist_picker(&picker_track)
+        )),
+    };
+    row.set_menu(menu_for(model, song).as_ref(), Some(&hooks));
     let model = Rc::clone(model);
     let menu_for = Rc::new(menu_for);
     for property in ["liked", "pinned"] {
@@ -825,8 +913,10 @@ fn bind_track<Model: TrackListModel + 'static>(
                 row,
                 #[strong]
                 menu_for,
+                #[strong]
+                hooks,
                 move |song, _| {
-                    row.set_menu(menu_for(&model, song).as_ref());
+                    row.set_menu(menu_for(&model, song).as_ref(), Some(&hooks));
                 }
             ),
         );
@@ -1573,19 +1663,55 @@ mod tests {
             QueueMenuEntry::Add,
             Some(false),
             Some(false),
+            false,
         );
         assert_eq!(
-            menu_actions(&menu)[..2],
-            [vec!["song.queue"], vec!["song.like", "song.pin"]]
+            menu_actions(&menu)[0],
+            ["song.like", "song.pin", "song.queue", "song.select"]
         );
     }
 
     #[test]
     fn song_menu_has_no_pin_entry_when_pinning_unavailable() {
         let track = crate::app::models::make_track("a");
-        let menu = build_song_menu(&track, false, None, QueueMenuEntry::Add, Some(true), None);
+        let menu = build_song_menu(
+            &track,
+            false,
+            None,
+            QueueMenuEntry::Add,
+            Some(true),
+            None,
+            false,
+        );
         assert!(!menu_actions(&menu)
             .concat()
             .contains(&"song.pin".to_string()));
+    }
+
+    #[test]
+    fn song_menu_offers_removal_only_from_a_removable_playlist() {
+        let track = crate::app::models::make_track("a");
+        let menu = |removable| {
+            let menu = build_song_menu(
+                &track,
+                false,
+                None,
+                QueueMenuEntry::Add,
+                None,
+                None,
+                removable,
+            );
+            menu_actions(&menu).concat()
+        };
+        assert_eq!(
+            menu(true),
+            [
+                "song.remove_from_playlist",
+                "song.queue",
+                "song.select",
+                "song.copy_link"
+            ]
+        );
+        assert_eq!(menu(false), ["song.queue", "song.select", "song.copy_link"]);
     }
 }

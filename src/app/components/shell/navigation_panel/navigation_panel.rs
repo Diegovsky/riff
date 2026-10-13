@@ -1,16 +1,17 @@
+use gettextrs::gettext;
 use gtk::prelude::*;
+use libadwaita::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::{
-    context_menu::build_context_menu, create_playlist::CreatePlaylistPopover,
-    navigation_panel_row::NavigationPanelRow, NavigationPanelDestination, NavigationPanelItem,
-    NavigationPanelModel, CREATE_PLAYLIST_ITEM, LIBRARY_SECTION, PINNED_SECTION,
-    SAVED_PLAYLISTS_SECTION,
+    context_menu::build_context_menu, navigation_panel_row::NavigationPanelRow,
+    NavigationPanelDestination, NavigationPanelItem, NavigationPanelModel, LIBRARY_SECTION,
+    PINNED_SECTION, SAVED_PLAYLISTS_SECTION,
 };
+use crate::app::components::PlaylistDialog;
 use crate::app::state::PlaybackEvent;
 use crate::app::{AppEvent, BrowserEvent, Component, EventListener};
-use crate::feature_flags::{is_enabled, FeatureFlag};
 
 pub struct NavigationPanel {
     listbox: gtk::ListBox,
@@ -22,20 +23,6 @@ pub struct NavigationPanel {
 
 impl NavigationPanel {
     pub fn new(listbox: gtk::ListBox, model: Rc<NavigationPanelModel>) -> Self {
-        let create_playlist_enabled = is_enabled(FeatureFlag::CreateNewPlaylist);
-
-        let popover = if create_playlist_enabled {
-            let p = CreatePlaylistPopover::new();
-            p.connect_create(clone!(
-                #[weak]
-                model,
-                move |t| model.create_new_playlist(t)
-            ));
-            Some(p)
-        } else {
-            None
-        };
-
         let list_store = gio::ListStore::new::<NavigationPanelItem>();
 
         list_store.append(&NavigationPanelItem::from_destination(
@@ -54,53 +41,30 @@ impl NavigationPanel {
             NavigationPanelDestination::SavedTracks,
         ));
         list_store.append(&NavigationPanelItem::playlists_section());
-        if create_playlist_enabled {
-            list_store.append(&NavigationPanelItem::create_playlist_item());
-        }
 
-        listbox.bind_model(
-            Some(&list_store),
-            clone!(
-                #[strong]
-                popover,
-                move |obj| {
-                    let item = obj.downcast_ref::<NavigationPanelItem>().unwrap();
-                    if item.navigatable() {
-                        Self::make_navigatable(item)
-                    } else {
-                        match item.id().as_str() {
-                            SAVED_PLAYLISTS_SECTION | PINNED_SECTION | LIBRARY_SECTION => {
-                                Self::make_section_label(item)
-                            }
-                            CREATE_PLAYLIST_ITEM => Self::make_create_playlist(
-                                item,
-                                popover.clone().expect("popover should exist"),
-                            ),
-                            _ => unimplemented!(),
-                        }
+        let weak_model = Rc::downgrade(&model);
+        listbox.bind_model(Some(&list_store), move |obj| {
+            let item = obj.downcast_ref::<NavigationPanelItem>().unwrap();
+            if item.navigatable() {
+                Self::make_navigatable(item)
+            } else {
+                match item.id().as_str() {
+                    SAVED_PLAYLISTS_SECTION => {
+                        Self::make_section_label(item, weak_model.upgrade().as_ref())
                     }
+                    PINNED_SECTION | LIBRARY_SECTION => Self::make_section_label(item, None),
+                    _ => unimplemented!(),
                 }
-            ),
-        );
+            }
+        });
 
         listbox.connect_row_activated(clone!(
-            #[strong]
-            popover,
             #[weak]
             model,
             move |_, row| {
                 if let Some(row) = row.downcast_ref::<NavigationPanelRow>() {
                     if let Some(dest) = row.item().destination() {
                         model.navigate(dest);
-                    } else {
-                        match row.item().id().as_str() {
-                            CREATE_PLAYLIST_ITEM => {
-                                if let Some(ref popover) = popover {
-                                    popover.popup();
-                                }
-                            }
-                            _ => unimplemented!(),
-                        }
                     }
                 }
             }
@@ -230,27 +194,54 @@ impl NavigationPanel {
         row.upcast()
     }
 
-    fn make_section_label(item: &NavigationPanelItem) -> gtk::Widget {
-        let label = gtk::Label::new(Some(item.title().as_str()));
-        label.add_css_class("caption-heading");
+    fn make_section_label(
+        item: &NavigationPanelItem,
+        create_playlist: Option<&Rc<NavigationPanelModel>>,
+    ) -> gtk::Widget {
+        let label = gtk::Label::builder()
+            .label(item.title())
+            .xalign(0.0)
+            .hexpand(true)
+            .valign(gtk::Align::Center)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .build();
+        let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        content.append(&label);
+
+        if let Some(model) = create_playlist {
+            let button = gtk::Button::builder()
+                .icon_name("list-add-symbolic")
+                .tooltip_text(gettext("New Playlist"))
+                .valign(gtk::Align::Center)
+                .build();
+            button.add_css_class("flat");
+            button.add_css_class("dim-label");
+            button.connect_clicked(clone!(
+                #[weak]
+                model,
+                move |button| {
+                    let dialog = PlaylistDialog::new();
+                    dialog.connect_save(clone!(
+                        #[weak]
+                        model,
+                        #[upgrade_or_else]
+                        || tokio::sync::oneshot::channel().1,
+                        move |playlist| model.create_new_playlist(playlist)
+                    ));
+                    dialog.present(Some(button));
+                }
+            ));
+            content.append(&button);
+        }
+
         let row = gtk::ListBoxRow::builder()
             .activatable(false)
             .selectable(false)
-            .sensitive(false)
-            .child(&label)
+            .focusable(false)
+            .sensitive(create_playlist.is_some())
+            .child(&content)
             .build();
-        row.upcast()
-    }
-
-    fn make_create_playlist(
-        item: &NavigationPanelItem,
-        popover: CreatePlaylistPopover,
-    ) -> gtk::Widget {
-        let row = NavigationPanelRow::new(item.clone());
-        row.set_activatable(true);
-        row.set_selectable(false);
-        row.set_sensitive(true);
-        popover.set_parent(&row);
+        row.add_css_class("navigation-section");
         row.upcast()
     }
 

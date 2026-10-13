@@ -16,7 +16,6 @@ use crate::app::state::{
     SelectionState,
 };
 use crate::app::{AppModel, Dispatcher};
-use crate::feature_flags::{self, FeatureFlag};
 
 pub struct QueueListModel {
     base: DetailsPageModel,
@@ -54,6 +53,15 @@ impl QueueListModel {
         } else {
             queue.upcoming_keys().to_vec()
         }
+    }
+
+    pub fn selectable_keys(&self) -> Vec<String> {
+        let queue = self.queue();
+        self.listed_keys()
+            .into_iter()
+            .filter(|&key| queue.view_track(key).is_some())
+            .map(|key| key.to_string())
+            .collect()
     }
 
     pub fn select_all(&self) {
@@ -180,21 +188,27 @@ impl TrackListModel for QueueListModel {
     }
 
     fn select_song(&self, key: &str) {
-        let track = key
-            .parse::<EntryKey>()
-            .ok()
-            .and_then(|k| self.queue().view_track(k));
-        if let Some(track) = track {
+        self.select_songs(&[key.to_string()]);
+    }
+
+    fn select_songs(&self, keys: &[String]) {
+        let rows: Vec<(String, Track)> = {
+            let queue = self.queue();
+            keys.iter()
+                .filter_map(|key| {
+                    let track = queue.view_track(key.parse::<EntryKey>().ok()?)?;
+                    Some((key.clone(), track))
+                })
+                .collect()
+        };
+        if !rows.is_empty() {
             self.base
                 .dispatcher
-                .dispatch(SelectionAction::SelectKeyed(vec![(key.to_string(), track)]).into());
+                .dispatch(SelectionAction::SelectKeyed(rows).into());
         }
     }
 
     fn enable_selection(&self) -> bool {
-        if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
-            return false;
-        }
         self.base
             .enable_selection_with_context(self.selection_context())
     }
@@ -299,6 +313,10 @@ impl TrackListModel for QueueListModel {
         Some(group)
     }
 
+    fn playlist_picker(&self, song: &Track) -> Option<gtk::Widget> {
+        self.base.playlist_picker(song)
+    }
+
     fn menu_for(
         &self,
         row: &SongModel,
@@ -318,6 +336,7 @@ impl TrackListModel for QueueListModel {
             queue_entry,
             Some(liked),
             pinned,
+            false,
         ))
     }
 }
@@ -340,6 +359,7 @@ mod tests {
     fn test_api_service() -> Arc<riff_api::ApiService> {
         let token_provider: Arc<dyn riff_api::TokenProvider> = Arc::new(|| None::<String>);
         Arc::new(riff_api::spotify_service(
+            Arc::clone(&token_provider),
             token_provider,
             1024 * 1024,
             1024 * 1024,

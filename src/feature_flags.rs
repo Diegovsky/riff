@@ -2,8 +2,6 @@ use gio::prelude::SettingsExt;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FeatureFlag {
-    SelectMode,
-    CreateNewPlaylist,
     DeviceSelector,
     Normalisation,
     PinnedObjects,
@@ -12,8 +10,6 @@ pub enum FeatureFlag {
 
 impl FeatureFlag {
     pub const ALL: &[FeatureFlag] = &[
-        FeatureFlag::SelectMode,
-        FeatureFlag::CreateNewPlaylist,
         FeatureFlag::DeviceSelector,
         FeatureFlag::Normalisation,
         FeatureFlag::PinnedObjects,
@@ -22,8 +18,6 @@ impl FeatureFlag {
 
     pub fn key(&self) -> &'static str {
         match self {
-            FeatureFlag::SelectMode => "feature-select-mode",
-            FeatureFlag::CreateNewPlaylist => "feature-create-new-playlist",
             FeatureFlag::DeviceSelector => "feature-device-selector",
             FeatureFlag::Normalisation => "feature-normalisation",
             FeatureFlag::PinnedObjects => "feature-pinned-objects",
@@ -33,8 +27,6 @@ impl FeatureFlag {
 
     pub fn title(&self) -> &'static str {
         match self {
-            FeatureFlag::SelectMode => "Select Mode",
-            FeatureFlag::CreateNewPlaylist => "Create New Playlist",
             FeatureFlag::DeviceSelector => "Device Selector",
             FeatureFlag::Normalisation => "Audio Normalisation",
             FeatureFlag::PinnedObjects => "Pinned Items",
@@ -44,10 +36,6 @@ impl FeatureFlag {
 
     pub fn description(&self) -> &'static str {
         match self {
-            FeatureFlag::SelectMode => {
-                "Enable selection mode to select multiple tracks for queuing, saving, or removing."
-            }
-            FeatureFlag::CreateNewPlaylist => "Enable the New Playlist button in the navigation panel.",
             FeatureFlag::DeviceSelector => {
                 "Enable the device selector in the Now Playing headerbar."
             }

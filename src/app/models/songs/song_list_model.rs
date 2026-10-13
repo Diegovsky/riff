@@ -103,6 +103,10 @@ impl SongListModel {
         }
     }
 
+    pub fn ids(&self) -> Vec<String> {
+        self.inner().iter().map(|s| s.get_id()).collect()
+    }
+
     pub fn collect(&self) -> Vec<Track> {
         self.inner().iter().map(|s| s.into_description()).collect()
     }

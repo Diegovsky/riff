@@ -72,8 +72,39 @@ pub trait CardListModel {
     fn filter_options(&self) -> Vec<FilterOption> {
         vec![]
     }
+    fn resolve_filter(&self, _category: &str) -> Option<CardFilter> {
+        None
+    }
     fn playing_card(&self) -> PlayingCard {
         None
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum CardFilter {
+    #[default]
+    All,
+    Category(String),
+    OwnedBy(String),
+    NotOwnedBy(String),
+}
+
+impl CardFilter {
+    fn for_category(category: &str) -> Self {
+        if category.is_empty() {
+            Self::All
+        } else {
+            Self::Category(category.to_string())
+        }
+    }
+
+    fn matches(&self, card: &CardModel) -> bool {
+        match self {
+            Self::All => true,
+            Self::Category(category) => card.category() == *category,
+            Self::OwnedBy(user) => card.owner() == *user,
+            Self::NotOwnedBy(user) => card.owner() != *user,
+        }
     }
 }
 
@@ -86,7 +117,7 @@ pub struct CardList {
     current_layout: Rc<Cell<CardLayout>>,
     current_size: Rc<Cell<CardSize>>,
     current_sort: Rc<Cell<SortOrder>>,
-    current_filter: Rc<RefCell<String>>,
+    current_filter: Rc<RefCell<CardFilter>>,
     playing: Rc<RefCell<PlayingCard>>,
     next_position: Rc<Cell<i64>>,
     /// Lowest insertion position assigned so far. Freshly added (prepended)
@@ -117,7 +148,7 @@ impl CardList {
         let max_rows = Rc::new(Cell::new(None));
         let current_size = Rc::new(Cell::new(CardSize::Large));
         let current_layout = Rc::new(Cell::new(CardLayout::Vertical));
-        let current_filter = Rc::new(RefCell::new(String::new()));
+        let current_filter = Rc::new(RefCell::new(CardFilter::All));
 
         // Re-apply the row limit every frame using the FlowBox's actual
         // laid-out geometry. GTK4 FlowBox doesn't emit a resize signal, and the
@@ -198,12 +229,8 @@ impl CardList {
             // Install filter function
             let filter_ref = Rc::clone(&self.current_filter);
             self.flowbox.set_filter_func(move |child| {
-                let filter = filter_ref.borrow();
-                if filter.is_empty() {
-                    return true; // "All" - show everything
-                }
                 match get_model(child) {
-                    Some(card) => card.category() == *filter,
+                    Some(card) => filter_ref.borrow().matches(&card),
                     None => true, // Show placeholders
                 }
             });
@@ -247,16 +274,18 @@ impl CardList {
 
                     // Handle removals: find children that no longer exist in the source store.
                     if removed > 0 {
-                        let source_ids: std::collections::HashSet<String> = (0..source.n_items())
+                        let source_cards: std::collections::HashSet<glib::Object> = (0..source
+                            .n_items())
                             .filter_map(|i| source.item(i))
-                            .filter_map(|o| o.downcast_ref::<CardModel>().map(|c| c.id()))
                             .collect();
                         let mut child = flowbox.first_child();
                         while let Some(c) = child {
                             let next = c.next_sibling();
                             if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
                                 if let Some(card_model) = get_model(fb_child) {
-                                    if !source_ids.contains(&card_model.id()) {
+                                    if !source_cards
+                                        .contains(card_model.upcast_ref::<glib::Object>())
+                                    {
                                         flowbox.remove(fb_child);
                                     }
                                 }
@@ -423,7 +452,11 @@ impl CardList {
     /// what's on screen. The constraint is released when the filter is cleared
     /// (showing all items).
     pub fn set_filter(&self, category: &str) {
-        if category.is_empty() {
+        self.set_card_filter(CardFilter::for_category(category));
+    }
+
+    pub fn set_card_filter(&self, filter: CardFilter) {
+        if filter == CardFilter::All {
             // Showing all - remove height constraint
             self.flowbox.set_height_request(-1);
         } else {
@@ -442,12 +475,12 @@ impl CardList {
                     .set_height_request(self.flowbox.height_request().max(locked));
             }
         }
-        *self.current_filter.borrow_mut() = category.to_string();
+        *self.current_filter.borrow_mut() = filter;
         self.flowbox.invalidate_filter();
     }
 
     pub fn is_filtered(&self) -> bool {
-        !self.current_filter.borrow().is_empty()
+        *self.current_filter.borrow() != CardFilter::All
     }
 
     pub fn has_placeholders(&self) -> bool {
@@ -770,7 +803,7 @@ fn apply_grid_constraint(
     max_rows: u32,
     size: CardSize,
     layout: CardLayout,
-    filter: &str,
+    filter: &CardFilter,
 ) {
     let cols =
         measured_columns(flowbox).unwrap_or_else(|| estimated_columns(flowbox, size, layout));
@@ -783,7 +816,7 @@ fn apply_grid_constraint(
         if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
             match get_model(fb_child) {
                 Some(card) => {
-                    let passes_filter = filter.is_empty() || card.category() == *filter;
+                    let passes_filter = filter.matches(&card);
                     if passes_filter {
                         fb_child.set_visible(visible_index < max_visible);
                         visible_index += 1;
@@ -799,5 +832,24 @@ fn apply_grid_constraint(
             }
         }
         child = c.next_sibling();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn filter_shows_a_category_or_an_owner() {
+        let card = CardModel::new("id", None, "T", "S", None, None, None, Some("album"));
+        card.set_owner("me".to_string());
+
+        assert!(CardFilter::for_category("").matches(&card));
+        assert!(CardFilter::for_category("album").matches(&card));
+        assert!(!CardFilter::for_category("single").matches(&card));
+        assert!(CardFilter::OwnedBy("me".to_string()).matches(&card));
+        assert!(!CardFilter::OwnedBy("you".to_string()).matches(&card));
+        assert!(CardFilter::NotOwnedBy("you".to_string()).matches(&card));
+        assert!(!CardFilter::NotOwnedBy("me".to_string()).matches(&card));
     }
 }

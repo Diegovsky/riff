@@ -12,6 +12,7 @@ use async_trait::async_trait;
 use futures::future::try_join_all;
 
 use super::converter::*;
+use super::internal_api::SpotifyInternalApi;
 use crate::defaults::{self, EntityKind};
 use crate::error::DomainError;
 use crate::models::*;
@@ -21,9 +22,16 @@ use crate::token::TokenProvider;
 /// Most URIs `GET /me/library/contains` accepts per request.
 const MAX_LIBRARY_CHECK_ITEMS: usize = 40;
 
+/// Most ids `PUT` and `DELETE /me/tracks` accept per request.
+const MAX_SAVED_TRACKS_ITEMS: usize = 50;
+
+/// Most items a request adding to or removing from a playlist accepts.
+const MAX_PLAYLIST_WRITE_ITEMS: usize = 100;
+
 const USER_MARKET: &str = "from_token";
 
-const PLAYLIST_FIELDS: &str = "id,name,owner(id,display_name),images,\
+const PLAYLIST_FIELDS: &str =
+    "id,name,description,public,snapshot_id,owner(id,display_name),images,\
     tracks(href,limit,next,offset,previous,total,items(is_local))";
 
 pub struct UserProfileCheck {
@@ -99,15 +107,20 @@ struct CachedConfig {
 pub struct SpotifyDomain {
     token_provider: Arc<dyn TokenProvider>,
     cached_config: RwLock<Option<CachedConfig>>,
+    internal_api: SpotifyInternalApi,
 }
 
 use riff_config::api::CONFIG_CACHE_TTL;
 
 impl SpotifyDomain {
-    pub fn new(token_provider: Arc<dyn TokenProvider>) -> Self {
+    pub fn new(
+        token_provider: Arc<dyn TokenProvider>,
+        session_token_provider: Arc<dyn TokenProvider>,
+    ) -> Self {
         Self {
             token_provider,
             cached_config: RwLock::new(None),
+            internal_api: SpotifyInternalApi::new(session_token_provider),
         }
     }
 
@@ -313,17 +326,22 @@ impl MusicProvider for SpotifyDomain {
         // remove_tracks (DELETE /me/tracks) and takes bare Spotify track IDs.
         // The generic save_library_items endpoint expects full Spotify URIs, not
         // the bare IDs the app passes, so it silently rejects likes.
-        let body = sp::SaveTracksUserRequest {
-            ids: Some(ids),
-            timestamped_ids: None,
-        };
-        Ok(apis::library_api::save_tracks_user(&config, Some(body)).await?)
+        for ids in ids.chunks(MAX_SAVED_TRACKS_ITEMS) {
+            let body = sp::SaveTracksUserRequest {
+                ids: Some(ids.to_vec()),
+                timestamped_ids: None,
+            };
+            apis::library_api::save_tracks_user(&config, Some(body)).await?;
+        }
+        Ok(())
     }
 
     async fn remove_tracks(&self, ids: Vec<String>) -> Result<(), DomainError> {
         let config = self.config_or_err()?;
-        let ids = ids.join(",");
-        Ok(apis::library_api::remove_tracks_user(&config, &ids, None).await?)
+        for ids in ids.chunks(MAX_SAVED_TRACKS_ITEMS) {
+            apis::library_api::remove_tracks_user(&config, &ids.join(","), None).await?;
+        }
+        Ok(())
     }
 
     async fn get_saved_playlists(
@@ -393,6 +411,39 @@ impl MusicProvider for SpotifyDomain {
         ))
     }
 
+    async fn get_playlist_item_uris(
+        &self,
+        id: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<(Vec<Option<String>>, usize), DomainError> {
+        let config = self.config_or_err()?;
+        let page = apis::playlists_api::get_playlists_tracks(
+            &config,
+            id,
+            None,
+            None,
+            Some(limit as i32),
+            Some(offset as i32),
+            None,
+        )
+        .await?;
+        let uris = page
+            .items
+            .iter()
+            .map(|item| {
+                if item.is_local == Some(true) {
+                    return None;
+                }
+                match item.track.as_deref()? {
+                    sp::PlaylistTrackObjectTrack::Track(track) => track.uri.clone(),
+                    sp::PlaylistTrackObjectTrack::Episode(episode) => Some(episode.uri.clone()),
+                }
+            })
+            .collect();
+        Ok((uris, page.total as usize))
+    }
+
     async fn add_to_playlist(
         &self,
         id: &str,
@@ -400,11 +451,14 @@ impl MusicProvider for SpotifyDomain {
         position: Option<i32>,
     ) -> Result<(), DomainError> {
         let config = self.config_or_err()?;
-        let body = sp::AddTracksToPlaylistRequest {
-            uris: Some(uris),
-            position,
-        };
-        apis::playlists_api::add_tracks_to_playlist(&config, id, None, None, Some(body)).await?;
+        for (i, uris) in uris.chunks(MAX_PLAYLIST_WRITE_ITEMS).enumerate() {
+            let body = sp::AddTracksToPlaylistRequest {
+                uris: Some(uris.to_vec()),
+                position: position.map(|p| p + (i * MAX_PLAYLIST_WRITE_ITEMS) as i32),
+            };
+            apis::playlists_api::add_tracks_to_playlist(&config, id, None, None, Some(body))
+                .await?;
+        }
         Ok(())
     }
 
@@ -415,15 +469,19 @@ impl MusicProvider for SpotifyDomain {
         snapshot_id: Option<&str>,
     ) -> Result<(), DomainError> {
         let config = self.config_or_err()?;
-        let tracks: Vec<sp::RemoveTracksPlaylistRequestTracksInner> = uris
-            .into_iter()
-            .map(|uri| sp::RemoveTracksPlaylistRequestTracksInner { uri: Some(uri) })
-            .collect();
-        let body = sp::RemoveTracksPlaylistRequest {
-            tracks,
-            snapshot_id: snapshot_id.map(|s| s.to_string()),
-        };
-        apis::playlists_api::remove_tracks_playlist(&config, id, Some(body)).await?;
+        for (i, uris) in uris.chunks(MAX_PLAYLIST_WRITE_ITEMS).enumerate() {
+            let tracks = uris
+                .iter()
+                .map(|uri| sp::RemoveTracksPlaylistRequestTracksInner {
+                    uri: Some(uri.clone()),
+                })
+                .collect();
+            let body = sp::RemoveTracksPlaylistRequest {
+                tracks,
+                snapshot_id: snapshot_id.filter(|_| i == 0).map(|s| s.to_string()),
+            };
+            apis::playlists_api::remove_tracks_playlist(&config, id, Some(body)).await?;
+        }
         Ok(())
     }
 
@@ -445,6 +503,21 @@ impl MusicProvider for SpotifyDomain {
         let raw =
             apis::playlists_api::create_playlist_for_user(&config, user_id, Some(body)).await?;
         Ok(playlist_from_object(&raw))
+    }
+
+    async fn upload_playlist_cover(
+        &self,
+        id: &str,
+        jpeg_base64: String,
+    ) -> Result<(), DomainError> {
+        let config = self.config_or_err()?;
+        Ok(apis::playlists_api::upload_custom_playlist_cover(
+            &config,
+            id,
+            "image/jpeg",
+            jpeg_base64,
+        )
+        .await?)
     }
 
     async fn follow_playlist(&self, id: &str) -> Result<(), DomainError> {
@@ -473,6 +546,16 @@ impl MusicProvider for SpotifyDomain {
             description: description.map(|s| s.to_string()),
         };
         Ok(apis::playlists_api::change_playlist_details(&config, id, Some(body)).await?)
+    }
+
+    async fn set_playlist_public(&self, id: &str, public: bool) -> Result<(), DomainError> {
+        let now_public = self.internal_api.set_playlist_public(id, public).await?;
+        if now_public != public {
+            return Err(DomainError::Conflict(format!(
+                "playlist {id}: asked for public = {public}, got {now_public}"
+            )));
+        }
+        Ok(())
     }
 
     async fn get_artist(&self, id: &str) -> Result<Artist, DomainError> {

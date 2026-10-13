@@ -1,0 +1,35 @@
+using Gtk 4.0;
+
+template $PlaylistPicker : Box {
+  orientation: vertical;
+  spacing: 6;
+  width-request: 240;
+  margin-top: 6;
+
+  styles [
+    "playlist-picker",
+  ]
+
+  SearchEntry entry {
+    /* Translators: placeholder of the search entry of the list of playlists a track can be added to */
+
+    placeholder-text: _("Find a playlist");
+  }
+
+  Box list {
+    orientation: vertical;
+  }
+
+  Label empty {
+    /* Translators: shown in the list of playlists a track can be added to when the search matches none */
+
+    label: _("No playlists found");
+    visible: false;
+    margin-top: 6;
+    margin-bottom: 6;
+
+    styles [
+      "dim-label",
+    ]
+  }
+}

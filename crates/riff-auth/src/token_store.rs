@@ -5,7 +5,11 @@ use std::time::Duration;
 
 use crate::credentials::Credentials;
 
-const ATTRS: &[(&'static str, &'static str)] = &[("riff", "yes")];
+type Attrs = &'static [(&'static str, &'static str)];
+
+const ATTRS: Attrs = &[("riff", "yes")];
+// Not matched by a search for `ATTRS`, and the other way around.
+const SESSION_ATTRS: Attrs = &[("riff-session", "yes")];
 const MAX_KEYRING_RETRIES: u32 = 6;
 // Base delay used for exponential backoff between keyring retries.
 const KEYRING_RETRY_BASE_DELAY: Duration = Duration::from_millis(50);
@@ -22,6 +26,8 @@ fn backoff_delay(attempt: u32) -> Duration {
 
 struct InnerTokenStore {
     storage: RwLock<Option<Credentials>>,
+    attrs: Attrs,
+    label: &'static str,
 }
 
 #[derive(Clone)]
@@ -29,8 +35,18 @@ pub struct TokenStore(Arc<InnerTokenStore>);
 
 impl TokenStore {
     pub fn new() -> Self {
+        Self::filed_under(ATTRS, "Spotify Credentials")
+    }
+
+    pub(crate) fn for_session() -> Self {
+        Self::filed_under(SESSION_ATTRS, "Riff Session Credentials")
+    }
+
+    fn filed_under(attrs: Attrs, label: &'static str) -> Self {
         Self(Arc::new(InnerTokenStore {
             storage: RwLock::new(None),
+            attrs,
+            label,
         }))
     }
 
@@ -83,7 +99,7 @@ impl TokenStore {
         let keyring = Self::keyring().await?;
         if matches!(keyring, Keyring::File(_)) {
             // migrate keys if inside flatpak
-            if let Err(e) = oo7::migrate(vec![ATTRS], true).await {
+            if let Err(e) = oo7::migrate(vec![self.0.attrs], true).await {
                 debug!("Failed to migrate system keyring: {e}");
             }
         }
@@ -99,7 +115,7 @@ impl TokenStore {
         let mut total_delay = Duration::ZERO;
         let mut last_err = None;
         for attempt in 0..MAX_KEYRING_RETRIES {
-            match Self::try_retrieve(&keyring).await {
+            match self.try_retrieve(&keyring).await {
                 Ok(creds) => return Ok(creds),
                 Err(e) => {
                     warn!(
@@ -118,8 +134,8 @@ impl TokenStore {
     }
 
     // Perform a single credential lookup against the keyring.
-    async fn try_retrieve(keyring: &Keyring) -> Result<Credentials> {
-        let items = keyring.search_items(&ATTRS).await?;
+    async fn try_retrieve(&self, keyring: &Keyring) -> Result<Credentials> {
+        let items = keyring.search_items(&self.0.attrs).await?;
         let item = items
             .first()
             .ok_or_else(|| anyhow::anyhow!("Empty keyring"))?;
@@ -130,7 +146,7 @@ impl TokenStore {
 
     // Try to clear the credentials
     async fn logout(&self) -> Result<()> {
-        let result = Self::keyring().await?.search_items(&ATTRS).await?;
+        let result = Self::keyring().await?.search_items(&self.0.attrs).await?;
         let Some(item) = result.first() else {
             warn!("Logout attempted, but keyring is empty");
             return Ok(());
@@ -145,7 +161,7 @@ impl TokenStore {
         let encoded = serde_json::to_vec(creds).unwrap();
         Self::keyring()
             .await?
-            .create_item("Spotify Credentials", &ATTRS, &encoded, true)
+            .create_item(self.0.label, &self.0.attrs, &encoded, true)
             .await?;
         info!("Saved credentials");
         Ok(())

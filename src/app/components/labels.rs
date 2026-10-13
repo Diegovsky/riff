@@ -10,6 +10,15 @@ lazy_static! {
     // translators: This is part of a contextual menu attached to a single track; this entry queues the track after the tracks already queued.
     pub static ref ADD_TO_QUEUE: String = gettext("Add to Queue");
 
+    // translators: This is part of a contextual menu attached to a single track; this entry opens a list of playlists to add the track to.
+    pub static ref ADD_TO_PLAYLIST: String = gettext("Add to Playlist");
+
+    // translators: This is part of a contextual menu attached to a single track; this entry starts selecting tracks, with this one.
+    pub static ref SELECT: String = gettext("Select Track");
+
+    // translators: This is part of a contextual menu attached to a single track; this entry removes the track from the playlist being viewed.
+    pub static ref REMOVE_FROM_PLAYLIST: String = gettext("Remove from Playlist");
+
     // translators: Name of the user's saved tracks, as the source of what's playing (e.g. "Next from: Saved Tracks").
     pub static ref SAVED_TRACKS: String = gettext("Saved Tracks");
 
@@ -70,6 +79,15 @@ lazy_static! {
     // translators: This is part of a contextual menu attached to a playlist in the sidebar; this entry unfollows a playlist the user does not own.
     pub static ref UNFOLLOW_PLAYLIST: String = gettext("Unfollow Playlist");
 
+    // translators: This is part of the menu of a playlist's page; this entry opens a dialog to edit the name, description, cover and visibility of a playlist owned by the user.
+    pub static ref EDIT_PLAYLIST_DETAILS: String = gettext("Edit Details");
+
+    // translators: This is the caption shown in the header of a playlist's detail page when anyone can open the playlist.
+    pub static ref PUBLIC_PLAYLIST_CAPTION: String = gettext("Public Playlist");
+
+    // translators: This is the caption shown in the header of a playlist's detail page when nobody but its owner can open the playlist.
+    pub static ref PRIVATE_PLAYLIST_CAPTION: String = gettext("Private Playlist");
+
     // translators: This is the caption shown in the header of an album's detail page when the release is a full album.
     pub static ref ALBUM_CAPTION: String = gettext("Album");
 
@@ -86,13 +104,41 @@ lazy_static! {
     pub static ref COMPILATION_CAPTION: String = gettext("Compilation");
 }
 
-pub fn add_to_playlist_label(playlist: &str) -> String {
+pub fn added_to_playlist_label(playlist: &str) -> String {
     // this is just to fool xgettext, it doesn't like macros (or rust for that matter) :(
     if cfg!(debug_assertions) {
-        // translators: This is part of a larger text that says "Add to <playlist name>". This text should be as short as possible.
-        gettext("Add to {}");
+        // translators: This notification is shown when a track was added to a playlist; {} is the name of the playlist.
+        gettext("Added to {}");
     }
-    gettext!("Add to {}", playlist)
+    gettext!("Added to {}", playlist)
+}
+
+pub fn already_in_playlist_label(playlist: &str) -> String {
+    // this is just to fool xgettext, it doesn't like macros (or rust for that matter) :(
+    if cfg!(debug_assertions) {
+        // translators: This notification is shown when nothing was added to a playlist, as it already lists the tracks; {} is the name of the playlist.
+        gettext("Already in {}");
+    }
+    gettext!("Already in {}", playlist)
+}
+
+pub fn added_to_playlist_skipping_label(playlist: &str, skipped: usize) -> String {
+    // this is just to fool xgettext, it doesn't like macros (or rust for that matter) :(
+    if cfg!(debug_assertions) {
+        // translators: This notification is shown when tracks were added to a playlist, except those it already lists; the first {} is the name of the playlist, the second {} is how many tracks were left out.
+        ngettext(
+            "Added to {}, skipping {} track already in it",
+            "Added to {}, skipping {} tracks already in it",
+            1,
+        );
+    }
+    ngettext!(
+        "Added to {}, skipping {} track already in it",
+        "Added to {}, skipping {} tracks already in it",
+        skipped as u32,
+        playlist,
+        skipped
+    )
 }
 
 pub fn n_tracks_selected_label(n: usize) -> String {

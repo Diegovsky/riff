@@ -210,3 +210,51 @@ pub fn decode_px(logical: i32) -> i32 {
         .clamp(1, 3);
     logical * scale
 }
+
+pub fn confirm_destructive(
+    parent: Option<&gtk::Widget>,
+    heading: &str,
+    body: &str,
+    confirm: &str,
+    on_confirmed: impl FnOnce() + 'static,
+) {
+    use gettextrs::gettext;
+    use libadwaita::prelude::*;
+
+    let dialog = libadwaita::AlertDialog::new(Some(heading), Some(body));
+    // translators: Button of a dialog asking to confirm something that cannot be undone: leaves things as they are.
+    dialog.add_response("cancel", &gettext("Cancel"));
+    dialog.add_response("confirm", confirm);
+    dialog.set_response_appearance("confirm", libadwaita::ResponseAppearance::Destructive);
+    dialog.set_default_response(Some("cancel"));
+    dialog.set_close_response("cancel");
+
+    let window = gio::Application::default()
+        .and_downcast::<gtk::Application>()
+        .and_then(|app| app.active_window())
+        .map(|window| window.upcast::<gtk::Widget>());
+    let parent = parent.cloned().or(window);
+    dialog.choose(parent.as_ref(), gio::Cancellable::NONE, move |response| {
+        if response.as_str() == "confirm" {
+            on_confirmed();
+        }
+    });
+}
+
+pub fn confirm_delete_playlist(
+    parent: Option<&gtk::Widget>,
+    on_confirmed: impl FnOnce() + 'static,
+) {
+    use gettextrs::gettext;
+
+    confirm_destructive(
+        parent,
+        // translators: Title of the dialog asking to confirm deleting a playlist.
+        &gettext("Delete Playlist?"),
+        // translators: Body of the dialog asking to confirm deleting a playlist.
+        &gettext("The playlist will be removed from your library."),
+        // translators: Button of the dialog asking to confirm deleting a playlist: deletes it.
+        &gettext("Delete"),
+        on_confirmed,
+    );
+}

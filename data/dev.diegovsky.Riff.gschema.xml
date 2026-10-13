@@ -217,14 +217,6 @@
       <summary>The playback repeat mode</summary>
       <default>'none'</default>
     </key>
-    <key name="feature-select-mode" type="b">
-      <default>false</default>
-      <summary>Enable selection mode to select multiple songs for queuing, saving, or removing</summary>
-    </key>
-    <key name="feature-create-new-playlist" type="b">
-      <default>false</default>
-      <summary>Enable the New Playlist button in the navigation panel</summary>
-    </key>
     <key name="feature-device-selector" type="b">
       <default>false</default>
       <summary>Enable the device selector in the Now Playing headerbar</summary>

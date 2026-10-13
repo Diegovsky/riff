@@ -5,7 +5,7 @@ use std::rc::Rc;
 use glib::clone;
 
 use crate::app::components::EventListener;
-use crate::app::state::{SelectionContext, SelectionEvent};
+use crate::app::state::{SelectionAction, SelectionEvent};
 use crate::app::{AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Dispatcher};
 
 use super::widget::AppHeaderBar;
@@ -13,18 +13,19 @@ use super::widget::AppHeaderBar;
 /// Selection behavior the shared header needs from the active screen.
 /// Back and title are handled by the header itself.
 pub trait HeaderBarModel {
-    fn selection_context(&self) -> Option<SelectionContext>;
-    fn can_select_all(&self) -> bool;
-    fn start_selection(&self);
     fn select_all(&self);
+    fn selectable_keys(&self) -> Vec<String>;
+    fn deselect_all(&self);
     fn cancel_selection(&self);
 }
 
 /// Per-screen selection hooks, wrapped into a [`HeaderBarModel`] by
 /// [`SimpleHeaderBarModelWrapper`].
 pub trait SimpleHeaderBarModel {
-    fn selection_context(&self) -> Option<SelectionContext>;
     fn select_all(&self);
+    fn selectable_keys(&self) -> Vec<String> {
+        vec![]
+    }
 }
 
 pub struct SimpleHeaderBarModelWrapper<M> {
@@ -45,28 +46,31 @@ impl<M> HeaderBarModel for SimpleHeaderBarModelWrapper<M>
 where
     M: SimpleHeaderBarModel + 'static,
 {
-    fn selection_context(&self) -> Option<SelectionContext> {
-        self.wrapped_model.selection_context()
-    }
-
-    fn can_select_all(&self) -> bool {
-        true
-    }
-
-    fn start_selection(&self) {
-        if let Some(context) = self.wrapped_model.selection_context() {
-            self.dispatcher
-                .dispatch(AppAction::EnableSelection(context));
-        }
-    }
-
     fn select_all(&self) {
         self.wrapped_model.select_all()
+    }
+
+    fn selectable_keys(&self) -> Vec<String> {
+        self.wrapped_model.selectable_keys()
+    }
+
+    fn deselect_all(&self) {
+        self.dispatcher
+            .dispatch(SelectionAction::DeselectAll.into())
     }
 
     fn cancel_selection(&self) {
         self.dispatcher.dispatch(AppAction::CancelSelection)
     }
+}
+
+fn all_selected(model: &dyn HeaderBarModel, app_model: &AppModel) -> bool {
+    let state = app_model.get_state();
+    if state.selection.count() == 0 {
+        return false;
+    }
+    let keys = model.selectable_keys();
+    !keys.is_empty() && keys.iter().all(|key| state.selection.is_song_selected(key))
 }
 
 /// Maps a header page name (see [`resolve_active_page`]) to the
@@ -111,21 +115,18 @@ impl AppHeaderBarComponent {
         widget.connect_go_back(move || dispatcher.dispatch(BrowserAction::NavigationPop.into()));
 
         // Selection controls route to the active screen.
-        widget.connect_selection_start(clone!(
-            #[strong]
-            active_model,
-            move || {
-                if let Some(model) = active_model.borrow().as_ref() {
-                    model.start_selection();
-                }
-            }
-        ));
         widget.connect_select_all(clone!(
             #[strong]
             active_model,
+            #[weak]
+            app_model,
             move || {
                 if let Some(model) = active_model.borrow().as_ref() {
-                    model.select_all();
+                    if all_selected(&**model, &app_model) {
+                        model.deselect_all();
+                    } else {
+                        model.select_all();
+                    }
                 }
             }
         ));
@@ -165,18 +166,20 @@ impl AppHeaderBarComponent {
         self.widget.set_active(&active);
 
         let model = self.models.borrow().get(&active).cloned();
-        if let Some(ref model) = model {
-            self.widget
-                .set_selection_possible(model.selection_context().is_some());
-            self.widget.set_select_all_possible(model.can_select_all());
-        } else {
-            self.widget.set_selection_possible(false);
-            self.widget.set_select_all_possible(false);
-        }
+        self.widget.set_select_all_possible(model.is_some());
         *self.active_model.borrow_mut() = model;
 
         self.widget
             .set_can_go_back(self.app_model.get_state().browser.can_pop());
+    }
+
+    fn refresh_select_all(&self) {
+        let all = self
+            .active_model
+            .borrow()
+            .as_ref()
+            .is_some_and(|model| all_selected(&**model, &self.app_model));
+        self.widget.set_all_selected(all);
     }
 
     fn cancel_active_selection(&self) {
@@ -206,10 +209,12 @@ impl EventListener for AppHeaderBarComponent {
             }
             AppEvent::SelectionEvent(SelectionEvent::SelectionModeChanged(active)) => {
                 self.widget.set_selection_active(*active);
+                self.refresh_select_all();
             }
             AppEvent::SelectionEvent(SelectionEvent::SelectionChanged) => {
                 let count = self.app_model.get_state().selection.count();
                 self.widget.set_selection_count(count);
+                self.refresh_select_all();
             }
             _ => {}
         }

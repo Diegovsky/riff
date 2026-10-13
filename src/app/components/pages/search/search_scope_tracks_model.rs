@@ -87,6 +87,10 @@ impl TrackListModel for SearchScopeTracksModel {
         Some(self.base.track_actions(song, None))
     }
 
+    fn playlist_picker(&self, song: &Track) -> Option<gtk::Widget> {
+        self.base.playlist_picker(song)
+    }
+
     fn menu_for(
         &self,
         _row: &SongModel,

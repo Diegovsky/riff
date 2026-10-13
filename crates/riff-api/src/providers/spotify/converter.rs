@@ -183,11 +183,59 @@ pub(super) fn track_from_object(t: &sp::TrackObject) -> Option<Track> {
     })
 }
 
+fn unescape_html(text: &str) -> String {
+    let mut unescaped = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find('&') {
+        unescaped.push_str(&rest[..start]);
+        rest = &rest[start..];
+        let reference = rest[1..]
+            .find(';')
+            .map(|end| &rest[1..=end])
+            .and_then(|name| Some((name, character_reference(name)?)));
+        match reference {
+            Some((name, character)) => {
+                unescaped.push(character);
+                rest = &rest[name.len() + 2..];
+            }
+            None => {
+                unescaped.push('&');
+                rest = &rest[1..];
+            }
+        }
+    }
+    unescaped.push_str(rest);
+    unescaped
+}
+
+fn character_reference(name: &str) -> Option<char> {
+    match name {
+        "amp" => Some('&'),
+        "lt" => Some('<'),
+        "gt" => Some('>'),
+        "quot" => Some('"'),
+        "apos" => Some('\''),
+        _ => {
+            let number = name.strip_prefix('#')?;
+            let code = match number.strip_prefix(['x', 'X']) {
+                Some(hex) => u32::from_str_radix(hex, 16).ok()?,
+                None => number.parse().ok()?,
+            };
+            char::from_u32(code)
+        }
+    }
+}
+
 pub(super) fn playlist_from_object(p: &sp::PlaylistObject) -> Playlist {
     Playlist {
         rri: rid(p.id.clone().unwrap_or_default()),
         title: text_or(p.name.clone().unwrap_or_default(), defaults::playlist_title),
-        description: None,
+        description: p
+            .description
+            .clone()
+            .flatten()
+            .map(|d| unescape_html(&d))
+            .filter(|d| !d.is_empty()),
         owner: p.owner.as_ref().map(|o| UserRef {
             rri: rid(o.id.clone().unwrap_or_default()),
             display_name: o.display_name.clone().flatten().unwrap_or_default(),
@@ -199,8 +247,8 @@ pub(super) fn playlist_from_object(p: &sp::PlaylistObject) -> Playlist {
             .unwrap_or_else(|| defaults::image_set_for(EntityKind::Playlist)),
         total_tracks: Some(p.tracks.as_ref().map(|t| t.total as u32).unwrap_or(0)),
         collaborative: None,
-        public: None,
-        version: None,
+        public: p.public,
+        version: p.snapshot_id.clone(),
         tracks: None,
         following: None,
         url: None,
@@ -432,6 +480,20 @@ pub(super) fn search_results_from_response(s: &sp::Search200Response) -> SearchR
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn playlist_description_is_unescaped_once() {
+        assert_eq!(
+            unescape_html("Rock &amp; Roll &lt;3 &quot;live&quot; it&#x27;s 50&#x2F;50"),
+            "Rock & Roll <3 \"live\" it's 50/50"
+        );
+        assert_eq!(unescape_html("&amp;lt;"), "&lt;");
+        assert_eq!(unescape_html("caf&#233; &#39;x&#X27;"), "café 'x'");
+        assert_eq!(
+            unescape_html("R&B; &nope; &#zz; a & b &"),
+            "R&B; &nope; &#zz; a & b &"
+        );
+    }
 
     #[test]
     fn empty_queue_converts_to_empty() {

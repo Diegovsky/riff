@@ -36,7 +36,8 @@ java -jar "$GENERATOR_JAR" generate \
     -g rust \
     -o "$OUTPUT_DIR" \
     --package-name spotify-api \
-    --additional-properties=library=reqwest,supportMiddleware=true
+    --additional-properties=library=reqwest,supportMiddleware=true \
+    --type-mappings=file=String
 
 # Clean up unnecessary generated files
 rm -f "$OUTPUT_DIR/git_push.sh" "$OUTPUT_DIR/.travis.yml" "$OUTPUT_DIR/.gitignore"

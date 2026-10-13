@@ -9,9 +9,13 @@ use gettextrs::*;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::future::Future;
+use std::sync::Arc;
 
-use crate::app::{load, AppAction, AppEvent, Dispatcher};
-use riff_api::{DomainError, Load, LoadPriority};
+use crate::app::models::Track;
+use crate::app::{
+    load, playlist_actions, AppAction, AppEvent, AppModel, BrowserAction, Dispatcher,
+};
+use riff_api::{ApiService, DomainError, Load, LoadPriority};
 
 mod pages;
 pub use pages::*;
@@ -67,6 +71,74 @@ where
     F: 'static + Send + Future<Output = Result<Vec<AppAction>, DomainError>>,
 {
     spawn_api_call(dispatcher, call)
+}
+
+pub fn add_tracks_to_playlist(
+    app_model: &AppModel,
+    dispatcher: &Dispatcher,
+    id: String,
+    tracks: Vec<Track>,
+    then: Option<AppAction>,
+) {
+    let api = app_model.api();
+    let state = app_model.get_state();
+    let lacks_cover = playlist_actions::playlist_lacks_cover(&state, &id);
+    let title = playlist_actions::playlist_title(&state, &id).unwrap_or_default();
+    drop(state);
+    let cover_dispatcher = dispatcher.clone();
+    let tag = load::visible();
+    dispatch_api_call_many(dispatcher, move || async move {
+        let added = playlist_actions::add_tracks_to_playlist(&api, &id, tracks, tag).await?;
+        let mut actions: Vec<AppAction> = then.into_iter().collect();
+        if added.tracks.is_empty() {
+            actions.push(AppAction::ShowNotification(
+                labels::already_in_playlist_label(&title),
+            ));
+            return Ok(actions);
+        }
+        if lacks_cover {
+            refresh_playlist_cover(&cover_dispatcher, api, id.clone(), true);
+        }
+        actions.push(BrowserAction::AddTracksToPlaylist(id, added.tracks).into());
+        actions.push(AppAction::ShowNotification(if added.skipped == 0 {
+            labels::added_to_playlist_label(&title)
+        } else {
+            labels::added_to_playlist_skipping_label(&title, added.skipped)
+        }));
+        Ok(actions)
+    })
+}
+
+pub fn upload_playlist_cover(
+    dispatcher: &Dispatcher,
+    api: Arc<ApiService>,
+    id: String,
+    cover: Vec<u8>,
+) {
+    let tag = load::visible();
+    dispatch_api_call_many(dispatcher, move || async move {
+        match playlist_actions::upload_playlist_cover(&api, id.clone(), cover, tag).await {
+            Ok(actions) => Ok(actions),
+            Err(e) => {
+                error!("could not upload the cover of playlist {id}: {e}");
+                Ok(vec![AppAction::ShowNotification(gettext(
+                    // translators: This notification is shown when uploading the cover of a playlist failed.
+                    "The playlist's cover could not be uploaded.",
+                ))])
+            }
+        }
+    })
+}
+
+pub fn refresh_playlist_cover(
+    dispatcher: &Dispatcher,
+    api: Arc<ApiService>,
+    id: String,
+    poll: bool,
+) {
+    dispatch_api_call_many(dispatcher, move || async move {
+        Ok(playlist_actions::refresh_playlist_cover(&api, id, poll).await)
+    })
 }
 
 /// Run an api read for the current page, tagged [`LoadPriority::Visible`].

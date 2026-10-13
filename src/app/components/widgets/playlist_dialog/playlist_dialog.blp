@@ -1,0 +1,167 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $PlaylistDialog : Adw.Dialog {
+  /* Translators: title of the dialog that creates a new playlist */
+
+  title: _("New Playlist");
+  content-width: 520;
+  default-widget: save_button;
+  focus-widget: name_entry;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Box {
+      orientation: vertical;
+      spacing: 18;
+      margin-top: 6;
+      margin-bottom: 18;
+      margin-start: 18;
+      margin-end: 18;
+
+      Box details {
+        spacing: 18;
+
+        Button cover_button {
+          /* Translators: tooltip of the button picking the cover image of a new playlist */
+
+          tooltip-text: _("Choose Cover");
+          width-request: 160;
+          height-request: 160;
+          valign: start;
+          overflow: hidden;
+
+          styles [
+            "card",
+            "playlist-dialog__cover",
+          ]
+
+          child: Overlay {
+            child: Image {
+              icon-name: "audio-x-generic-symbolic";
+              pixel-size: 64;
+
+              styles [
+                "dim-label",
+              ]
+            };
+
+            [overlay]
+            Picture cover_picture {
+              visible: false;
+              content-fit: cover;
+            }
+          };
+        }
+
+        Box {
+          orientation: vertical;
+          spacing: 12;
+          hexpand: true;
+
+          Entry name_entry {
+            /* Translators: label for the entry containing the name of a new playlist */
+
+            placeholder-text: _("Name");
+            activates-default: true;
+          }
+
+          Overlay {
+            vexpand: true;
+
+            child: ScrolledWindow {
+              hscrollbar-policy: never;
+              has-frame: true;
+
+              TextView description_view {
+                wrap-mode: word_char;
+                accepts-tab: false;
+                top-margin: 9;
+                bottom-margin: 9;
+                left-margin: 9;
+                right-margin: 9;
+              }
+            };
+
+            [overlay]
+            Label description_placeholder {
+              /* Translators: placeholder of the description of a new playlist */
+
+              label: _("Add an optional description");
+              halign: start;
+              valign: start;
+              margin-top: 9;
+              margin-start: 9;
+              margin-end: 9;
+              ellipsize: end;
+              can-target: false;
+
+              styles [
+                "dim-label",
+              ]
+            }
+          }
+        }
+      }
+
+      Label error_label {
+        /* Translators: shown in the dialog creating a new playlist when creating it failed */
+
+        label: _("The playlist could not be created.");
+        visible: false;
+        xalign: 0;
+        wrap: true;
+
+        styles [
+          "error",
+        ]
+      }
+
+      Box {
+        spacing: 12;
+
+        Switch public_switch {
+          valign: center;
+        }
+
+        Label {
+          /* Translators: label of the switch making a new playlist public */
+
+          label: _("Make public");
+          mnemonic-widget: public_switch;
+          hexpand: true;
+          xalign: 0;
+        }
+
+        Button save_button {
+          sensitive: false;
+
+          child: Stack save_stack {
+            StackPage {
+              name: "label";
+
+              child: Label save_label {
+                /* Translators: Button that creates a new playlist */
+
+                label: _("Create");
+              };
+            }
+
+            StackPage {
+              name: "spinner";
+
+              child: Adw.Spinner {};
+            }
+          };
+
+          styles [
+            "suggested-action",
+            "pill",
+          ]
+        }
+      }
+    };
+  };
+}

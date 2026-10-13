@@ -1,6 +1,5 @@
 use crate::app::components::EventListener;
 use crate::app::AppEvent;
-use gdk::prelude::ToVariant;
 use gettextrs::*;
 use gtk::prelude::*;
 use libadwaita::prelude::*;
@@ -86,21 +85,6 @@ impl Notification {
         self.add(content.to_string(), toast);
     }
 
-    fn show_playlist_created(&self, id: &str) {
-        // translators: This is a notification that pop ups when a new playlist is created. It includes the name of that playlist.
-        let message = gettext("New playlist created.");
-        // translators: This is a label in the notification shown after creating a new playlist. If it is clicked, the new playlist will be opened.
-        let label = gettext("View");
-        let toast = libadwaita::Toast::builder()
-            .title(message)
-            .timeout(4)
-            .action_name("app.open_playlist")
-            .button_label(label)
-            .action_target(&id.to_variant())
-            .build();
-        self.add(format!("playlist-created:{id}"), toast);
-    }
-
     fn set_connection_lost(&self, lost: bool) {
         if lost {
             let content = gtk::Box::builder().spacing(8).build();
@@ -133,7 +117,6 @@ impl EventListener for Notification {
     fn on_event(&mut self, event: &AppEvent) {
         match event {
             AppEvent::NotificationShown(content) => self.show(content),
-            AppEvent::PlaylistCreatedNotificationShown(id) => self.show_playlist_created(id),
             AppEvent::ConnectionLostChanged(lost) => self.set_connection_lost(*lost),
             _ => {}
         }
