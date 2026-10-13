@@ -2,8 +2,9 @@
 //!
 //! Tier order: memory LRU -> disk cache -> network.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -21,6 +22,24 @@ use crate::http;
 use crate::models::*;
 use crate::providers::MusicProvider;
 use crate::scheduler::{Admission, AdmissionQueue, Lane, Load, Slot};
+
+const PLAYLIST_ITEMS_PAGE: usize = 50;
+fn unlisted_uris(items: &[Option<String>], uris: Vec<String>) -> Vec<String> {
+    let mut seen: HashSet<&str> = items.iter().flatten().map(String::as_str).collect();
+    let unlisted: Vec<bool> = uris.iter().map(|uri| seen.insert(uri)).collect();
+    drop(seen);
+    uris.into_iter()
+        .zip(unlisted)
+        .filter_map(|(uri, unlisted)| unlisted.then_some(uri))
+        .collect()
+}
+
+fn cover_url(art: &ImageSet) -> Option<String> {
+    art.images.first().map(|image| image.url.clone())
+}
+
+const COVER_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const COVER_POLL_ATTEMPTS: u32 = 8;
 
 #[derive(Serialize, serde::Deserialize)]
 struct PersistedPage {
@@ -791,17 +810,59 @@ impl ApiService {
         result
     }
 
-    pub async fn add_to_playlist(&self, id: &str, uris: Vec<String>) -> Result<(), DomainError> {
-        self.json_cache
-            .remove(&CacheKey::PlaylistTracks(id.to_string()));
-        self.api_disk
-            .invalidate(&CacheKey::Playlist(id.to_string()).disk_key())
-            .await;
-        self.api_disk
-            .invalidate(&CacheKey::PlaylistTracks(id.to_string()).disk_key())
-            .await;
+    pub async fn add_to_playlist(
+        &self,
+        id: &str,
+        uris: Vec<String>,
+        load: Load,
+    ) -> Result<Vec<String>, DomainError> {
         let _lane = self.write_lane.enter().await;
-        self.provider.add_to_playlist(id, uris, None).await
+        let items = self.playlist_item_uris(id, load).await?;
+        let uris = unlisted_uris(&items, uris);
+        if uris.is_empty() {
+            return Ok(uris);
+        }
+        self.invalidate_playlist(id).await;
+        self.provider
+            .add_to_playlist(id, uris.clone(), None)
+            .await?;
+        Ok(uris)
+    }
+
+    async fn invalidate_playlist(&self, id: &str) {
+        for key in [
+            CacheKey::Playlist(id.to_string()),
+            CacheKey::PlaylistTracks(id.to_string()),
+        ] {
+            self.json_cache.remove(&key);
+            self.api_disk.invalidate(&key.disk_key()).await;
+        }
+    }
+
+    async fn fresh_playlist(&self, id: &str, load: Load) -> Result<Playlist, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_playlist(id).await
+    }
+
+    async fn playlist_item_uris(
+        &self,
+        id: &str,
+        load: Load,
+    ) -> Result<Vec<Option<String>>, DomainError> {
+        let mut items = Vec::new();
+        loop {
+            let (mut page, total) = {
+                let _slot = self.admit_read(load).await?;
+                self.provider
+                    .get_playlist_item_uris(id, items.len(), PLAYLIST_ITEMS_PAGE)
+                    .await?
+            };
+            let last = page.is_empty();
+            items.append(&mut page);
+            if last || items.len() >= total {
+                return Ok(items);
+            }
+        }
     }
 
     pub async fn remove_from_playlist(
@@ -809,14 +870,7 @@ impl ApiService {
         id: &str,
         uris: Vec<String>,
     ) -> Result<(), DomainError> {
-        self.json_cache
-            .remove(&CacheKey::PlaylistTracks(id.to_string()));
-        self.api_disk
-            .invalidate(&CacheKey::Playlist(id.to_string()).disk_key())
-            .await;
-        self.api_disk
-            .invalidate(&CacheKey::PlaylistTracks(id.to_string()).disk_key())
-            .await;
+        self.invalidate_playlist(id).await;
         let _lane = self.write_lane.enter().await;
         self.provider.remove_from_playlist(id, uris, None).await
     }
@@ -825,15 +879,106 @@ impl ApiService {
         &self,
         user_id: &str,
         name: &str,
+        description: Option<&str>,
+        public: bool,
     ) -> Result<Playlist, DomainError> {
         self.json_cache.remove(&CacheKey::SavedPlaylists);
         self.api_disk
             .invalidate(&CacheKey::SavedPlaylists.disk_key())
             .await;
         let _lane = self.write_lane.enter().await;
-        self.provider
-            .create_playlist(user_id, name, None, None, None)
+        let mut playlist = self
+            .provider
+            .create_playlist(user_id, name, None, None, description)
+            .await?;
+        if !public {
+            let id = &playlist.rri.id;
+            if let Err(e) = self.provider.set_playlist_public(id, false).await {
+                warn!("playlist {id}: could not be made private, removing it: {e}");
+                if let Err(e) = self.provider.unfollow_playlist(id).await {
+                    warn!("playlist {id}: could not be removed: {e}");
+                }
+                return Err(e);
+            }
+        }
+        playlist.public = Some(public);
+        Ok(playlist)
+    }
+
+    pub async fn upload_playlist_cover(
+        &self,
+        id: &str,
+        image: Vec<u8>,
+        load: Load,
+    ) -> Result<Option<ImageSet>, DomainError> {
+        let encoded = tokio::task::spawn_blocking(move || crate::image::encode_cover(&image))
             .await
+            .ok()
+            .flatten()
+            .ok_or_else(|| DomainError::Parse("could not encode the playlist cover".into()))?;
+        let previous = match self.fresh_playlist(id, load).await {
+            Ok(playlist) => cover_url(&playlist.art),
+            Err(e) => {
+                warn!("playlist {id}: could not read its cover before replacing it: {e}");
+                None
+            }
+        };
+        {
+            let _lane = self.write_lane.enter().await;
+            self.provider.upload_playlist_cover(id, encoded).await?;
+        }
+        Ok(self
+            .await_playlist_cover(id, previous.as_deref(), true, load)
+            .await)
+    }
+
+    pub async fn refreshed_playlist_cover(
+        &self,
+        id: &str,
+        poll: bool,
+        load: Load,
+    ) -> Option<ImageSet> {
+        self.await_playlist_cover(id, None, poll, load).await
+    }
+
+    async fn await_playlist_cover(
+        &self,
+        id: &str,
+        previous: Option<&str>,
+        poll: bool,
+        load: Load,
+    ) -> Option<ImageSet> {
+        let attempts = if poll { COVER_POLL_ATTEMPTS } else { 1 };
+        let mut cover = None;
+        for _ in 0..attempts {
+            if poll {
+                tokio::time::sleep(COVER_POLL_INTERVAL).await;
+            }
+            match self.fresh_playlist(id, load).await {
+                Ok(playlist) => {
+                    let url = cover_url(&playlist.art);
+                    if url.as_deref() != previous && url.is_some_and(|url| !is_resource_url(&url)) {
+                        cover = Some(playlist.art);
+                        break;
+                    }
+                }
+                Err(e) => {
+                    warn!("playlist {id}: could not check for its cover: {e}");
+                    break;
+                }
+            }
+        }
+        if cover.is_none() {
+            debug!("playlist {id}: no new cover showed up in time");
+            return None;
+        }
+
+        self.invalidate_playlist(id).await;
+        self.json_cache.remove(&CacheKey::SavedPlaylists);
+        self.api_disk
+            .invalidate(&CacheKey::SavedPlaylists.disk_key())
+            .await;
+        cover
     }
 
     pub async fn follow_playlist(&self, id: &str) -> Result<(), DomainError> {
@@ -862,19 +1007,31 @@ impl ApiService {
         self.provider.unfollow_playlist(id).await
     }
 
-    pub async fn update_playlist_details(&self, id: &str, name: &str) -> Result<(), DomainError> {
-        self.json_cache
-            .remove(&CacheKey::PlaylistTracks(id.to_string()));
-        self.api_disk
-            .invalidate(&CacheKey::Playlist(id.to_string()).disk_key())
-            .await;
-        self.api_disk
-            .invalidate(&CacheKey::PlaylistTracks(id.to_string()).disk_key())
-            .await;
+    pub async fn update_playlist_details(
+        &self,
+        id: &str,
+        name: &str,
+        description: Option<&str>,
+        public: Option<bool>,
+    ) -> Result<(), DomainError> {
+        self.invalidate_playlist(id).await;
         let _lane = self.write_lane.enter().await;
-        self.provider
-            .update_playlist_details(id, Some(name), None, None, None)
-            .await
+        if let Some(public) = public {
+            self.provider.set_playlist_public(id, public).await?;
+        }
+        let updated = self
+            .provider
+            .update_playlist_details(id, Some(name), None, None, description)
+            .await;
+        if let (Err(_), Some(public)) = (&updated, public) {
+            if let Err(e) = self.provider.set_playlist_public(id, !public).await {
+                warn!(
+                    "playlist {id}: could not be set back to public = {}: {e}",
+                    !public
+                );
+            }
+        }
+        updated
     }
 
     pub async fn get_devices(&self, load: Load) -> Result<Vec<Device>, DomainError> {
@@ -1256,6 +1413,35 @@ fn log_fetch_failure(key: &str, err: &DomainError, serving_stale: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn uris(items: &[&str]) -> Vec<Option<String>> {
+        items
+            .iter()
+            .map(|uri| (!uri.is_empty()).then(|| uri.to_string()))
+            .collect()
+    }
+
+    fn strings(items: &[&str]) -> Vec<String> {
+        items.iter().map(|uri| uri.to_string()).collect()
+    }
+
+    #[test]
+    fn unlisted_uris_leaves_out_what_the_playlist_lists() {
+        let items = uris(&["a", "", "b"]);
+        assert_eq!(
+            unlisted_uris(&items, strings(&["b", "c", "a", "d"])),
+            strings(&["c", "d"])
+        );
+        assert!(unlisted_uris(&items, strings(&["a", "b"])).is_empty());
+    }
+
+    #[test]
+    fn unlisted_uris_keeps_each_uri_once() {
+        assert_eq!(
+            unlisted_uris(&[], strings(&["a", "b", "a", "a"])),
+            strings(&["a", "b"])
+        );
+    }
 
     fn image_set(url: &str) -> ImageSet {
         ImageSet {

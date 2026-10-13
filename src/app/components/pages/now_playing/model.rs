@@ -8,9 +8,8 @@ use crate::app::components::{
     TrackListModel,
 };
 use crate::app::models::{ArtistRef, ImageSet, Track, TrackExt};
-use crate::app::state::{PlaybackAction, PlaybackEvent, SelectionContext};
+use crate::app::state::{PlaybackAction, PlaybackEvent};
 use crate::app::{AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Dispatcher};
-use crate::feature_flags::{self, FeatureFlag};
 use crate::settings;
 
 const VIEW_ALBUM: &str = "view_album";
@@ -229,15 +228,12 @@ impl PinnedPageModel for NowPlayingModel {
 }
 
 impl SimpleHeaderBarModel for NowPlayingModel {
-    fn selection_context(&self) -> Option<SelectionContext> {
-        if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
-            return None;
-        }
-        Some(self.queue_list.selection_context())
-    }
-
     fn select_all(&self) {
         self.queue_list.select_all();
+    }
+
+    fn selectable_keys(&self) -> Vec<String> {
+        self.queue_list.selectable_keys()
     }
 }
 
@@ -259,6 +255,7 @@ mod tests {
     fn test_header_follows_playback() {
         let token_provider: Arc<dyn riff_api::TokenProvider> = Arc::new(|| None::<String>);
         let api = Arc::new(riff_api::spotify_service(
+            Arc::clone(&token_provider),
             token_provider,
             1024 * 1024,
             1024 * 1024,

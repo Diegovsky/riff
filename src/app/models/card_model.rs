@@ -44,6 +44,19 @@ impl CardModel {
         builder.build()
     }
 
+    pub fn duplicate(&self) -> CardModel {
+        let mut builder = glib::Object::builder();
+        for property in self.list_properties() {
+            let name = property.name();
+            builder = builder.property(name, self.property_value(name));
+        }
+        builder.build()
+    }
+
+    pub fn set_image_url(&self, image: Option<&str>) {
+        self.set_property("image", image);
+    }
+
     pub fn with_data<T: Any>(self, data: T) -> Self {
         self.imp().data.borrow_mut().replace(Box::new(data));
         self
@@ -82,6 +95,8 @@ mod imp {
         insertion_position: Cell<i64>,
         #[property(get, set)]
         category: RefCell<String>,
+        #[property(get, set)]
+        owner: RefCell<String>,
 
         pub data: RefCell<Option<Box<dyn Any + 'static>>>,
     }
@@ -120,6 +135,33 @@ mod tests {
         assert_eq!(card.image(), Some(img));
         assert_eq!(card.title(), "My Title");
         assert_eq!(card.subtitle(), "My Subtitle");
+    }
+
+    #[test]
+    fn test_duplicate_copies_every_property() {
+        let img = "https://example.com/img.jpg".to_string();
+        let card = CardModel::new(
+            "id",
+            Some(&img),
+            "Title",
+            "Sub",
+            Some("2023-05-01"),
+            Some(42),
+            Some(7),
+            Some("album"),
+        );
+        card.set_owner("someone".to_string());
+        let copy = card.duplicate();
+        assert_ne!(card, copy);
+        for property in card.list_properties() {
+            let name = property.name();
+            assert_eq!(
+                format!("{:?}", card.property_value(name)),
+                format!("{:?}", copy.property_value(name)),
+                "{name}"
+            );
+        }
+        assert_eq!(copy.owner(), "someone");
     }
 
     #[test]

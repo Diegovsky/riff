@@ -16,6 +16,8 @@ template $SelectionToolbarWidget : Box {
         btn1.label: "";
         btn2.label: "";
         btn3.label: "";
+        btn4.label: "";
+        btn5.label: "";
       }
     }
 
@@ -41,8 +43,12 @@ template $SelectionToolbarWidget : Box {
       MenuButton add {
         valign: center;
         has-frame: false;
-        label: _("Add to Playlist");
         direction: up;
+
+        child: Adw.ButtonContent btn4 {
+          icon-name: "playlist2-symbolic";
+          label: _("Add to Playlist");
+        };
       }
 
       [end]
@@ -57,13 +63,24 @@ template $SelectionToolbarWidget : Box {
       }
 
       [end]
+      Button remove_from_playlist {
+        valign: center;
+        has-frame: false;
+
+        Adw.ButtonContent btn5 {
+          icon-name: "user-trash-symbolic";
+          label: _("Remove from Playlist");
+        }
+      }
+
+      [end]
       Button save {
         valign: center;
         has-frame: false;
 
         Adw.ButtonContent btn3 {
-          icon-name: "star-new-symbolic";
-          label: _("Save to Library");
+          icon-name: "audio-x-generic-symbolic";
+          label: _("Add to Saved Tracks");
         }
       }
     }

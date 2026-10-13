@@ -30,6 +30,23 @@
   background: none;
 }
 
+.navigation-sidebar > row.navigation-section,
+.navigation-sidebar > row.navigation-section:hover,
+.navigation-sidebar > row.navigation-section:active {
+  margin-top: 12px;
+  background: none;
+}
+
+.navigation-sidebar > row.navigation-section > box > label:disabled {
+  filter: none;
+}
+
+.navigation-sidebar > row.navigation-section > box > label {
+  font-size: 10pt;
+  font-weight: 700;
+  color: color-mix(in srgb, currentColor 55%, transparent);
+}
+
 /* Hide scrollbars while the navigation stack's page transition is running */
 stack.transitioning scrollbar {
   opacity: 0;

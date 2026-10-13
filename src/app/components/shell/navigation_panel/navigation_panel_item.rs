@@ -17,7 +17,6 @@ const TRACK: &str = "track";
 pub const SAVED_PLAYLISTS_SECTION: &str = "saved_playlists_section";
 pub const PINNED_SECTION: &str = "pinned_section";
 pub const LIBRARY_SECTION: &str = "library_section";
-pub const CREATE_PLAYLIST_ITEM: &str = "create_playlist";
 
 #[derive(Debug)]
 pub enum NavigationPanelDestination {
@@ -127,15 +126,6 @@ impl NavigationPanelItem {
             .build()
     }
 
-    pub fn create_playlist_item() -> Self {
-        glib::Object::builder()
-            .property("id", CREATE_PLAYLIST_ITEM)
-            .property("data", String::new())
-            .property("title", gettext("New Playlist"))
-            .property("navigatable", false)
-            .build()
-    }
-
     pub fn destination(&self) -> Option<NavigationPanelDestination> {
         let navigatable = self.property::<bool>("navigatable");
         if navigatable {
@@ -163,10 +153,7 @@ impl NavigationPanelItem {
     }
 
     pub fn icon(&self) -> Option<&str> {
-        match self.id().as_str() {
-            CREATE_PLAYLIST_ITEM => Some("list-add-symbolic"),
-            _ => self.destination().map(|d| d.icon()),
-        }
+        self.destination().map(|d| d.icon())
     }
 }
 

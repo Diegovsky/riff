@@ -25,7 +25,9 @@ use crate::audio_engine::{
 };
 use crate::player::AppPlayerDelegate;
 
-use riff_auth::{AuthcodeChallenge, OAuthError, RiffOauthClient, TokenStore, SESSION_CLIENT_ID};
+use riff_auth::{
+    AuthcodeChallenge, OAuthError, RiffOauthClient, SessionTokens, TokenStore, SESSION_CLIENT_ID,
+};
 
 use super::Command;
 use crate::settings::RiffSettings;
@@ -246,7 +248,6 @@ pub struct SpotifyPlayer {
     // Auth related stuff
     oauth_client: Arc<RiffOauthClient>,
     auth_challenge: Option<AuthcodeChallenge>,
-    session_auth_challenge: Option<AuthcodeChallenge>,
     command_sender: UnboundedSender<Command>,
 
     // librespot sessions are single-use: once the connection to the access
@@ -324,6 +325,7 @@ impl SpotifyPlayer {
         settings: SpotifyPlayerSettings,
         delegate: AppPlayerDelegate,
         token_store: TokenStore,
+        session_tokens: SessionTokens,
         command_sender: UnboundedSender<Command>,
     ) -> Self {
         let eq_controller = EqController::new(settings.eq_bands);
@@ -341,9 +343,8 @@ impl SpotifyPlayer {
             pan_controller,
             pitch_controller,
             mix_controller,
-            oauth_client: Arc::new(RiffOauthClient::new(token_store)),
+            oauth_client: Arc::new(RiffOauthClient::new(token_store, session_tokens)),
             auth_challenge: None,
-            session_auth_challenge: None,
             command_sender,
 
             // Playback state preserved across a rebuild.
@@ -530,7 +531,11 @@ impl SpotifyPlayer {
                     info!("No usable session credentials on disk; showing login");
                     return Err(SpotifyError::LoggedOut);
                 }
-                self.begin_login(credentials).await
+                if !self.oauth_client.restore_session_credentials().await {
+                    info!("No stored session token; showing login");
+                    return Err(SpotifyError::LoggedOut);
+                }
+                self.begin_login(credentials, None).await
             }
             Command::InitLogin => {
                 let auth_url = match self.auth_challenge.as_ref() {
@@ -558,8 +563,8 @@ impl SpotifyPlayer {
                     return Err(SpotifyError::LoginFailed);
                 };
 
-                info!("Exchanging auth code for token");
-                let credentials = self
+                info!("Exchanging auth codes for tokens");
+                let login = self
                     .oauth_client
                     .exchange_authcode(challenge)
                     .await
@@ -570,31 +575,9 @@ impl SpotifyPlayer {
 
                 info!(
                     "Login with OAuth2 (token expires at {:?})",
-                    credentials.token_expiry_time
+                    login.web_api.token_expiry_time
                 );
-                self.begin_login(credentials).await
-            }
-            Command::CompleteSessionLogin => {
-                let Some(challenge) = self.session_auth_challenge.take() else {
-                    error!("CompleteSessionLogin called but no session auth challenge was pending");
-                    return Err(SpotifyError::LoginFailed);
-                };
-
-                info!("Exchanging playback auth code for a session token");
-                let access_token = self
-                    .oauth_client
-                    .exchange_session_authcode(challenge)
-                    .await
-                    .map_err(|e| {
-                        error!("Session auth code exchange failed: {e:?}");
-                        SpotifyError::LoginFailed
-                    })?;
-
-                let session =
-                    connect_session_from_token(&access_token, self.settings.ap_port).await?;
-                note_session_minted();
-                self.finish_login(session);
-                Ok(())
+                self.begin_login(login.web_api, Some(login.session)).await
             }
             Command::ReloadSettings => {
                 let settings = RiffSettings::new_from_gsettings().unwrap_or_default();
@@ -713,6 +696,7 @@ impl SpotifyPlayer {
     async fn begin_login(
         &mut self,
         credentials: credentials::Credentials,
+        session_credentials: Option<credentials::Credentials>,
     ) -> Result<(), SpotifyError> {
         // Fresh login: reset the failure run so a previous account can't trip
         // a DRM block. has_played_since_login is seeded per-account below.
@@ -760,32 +744,28 @@ impl SpotifyPlayer {
 
         self.oauth_client.save_credentials(&credentials).await;
 
-        if session_cache_usable() {
-            info!(
-                "Reusing cached session credentials (ap_port: {:?})",
-                self.settings.ap_port
-            );
-            let session = connect_session_from_cache(self.settings.ap_port).await?;
-            self.finish_login(session);
-            Ok(())
-        } else {
-            info!("No usable session credentials; starting playback login");
-            self.start_session_login().await
-        }
-    }
-
-    async fn start_session_login(&mut self) -> Result<(), SpotifyError> {
-        let cmd = self.command_sender.clone();
-        let challenge = self
-            .oauth_client
-            .spawn_session_authcode_listener(move || {
-                cmd.unbounded_send(Command::CompleteSessionLogin).unwrap();
-            })
-            .await
-            .map_err(|_| SpotifyError::LoginFailed)?;
-        let auth_url = challenge.auth_url.clone();
-        self.session_auth_challenge = Some(challenge);
-        self.delegate.login_challenge_started(auth_url);
+        let session = match session_credentials {
+            Some(session_credentials) => {
+                self.oauth_client
+                    .save_session_credentials(&session_credentials)
+                    .await;
+                let session = connect_session_from_token(
+                    &session_credentials.access_token,
+                    self.settings.ap_port,
+                )
+                .await?;
+                note_session_minted();
+                session
+            }
+            None => {
+                info!(
+                    "Reusing cached session credentials (ap_port: {:?})",
+                    self.settings.ap_port
+                );
+                connect_session_from_cache(self.settings.ap_port).await?
+            }
+        };
+        self.finish_login(session);
         Ok(())
     }
 

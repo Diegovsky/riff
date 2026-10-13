@@ -5,7 +5,7 @@ use std::rc::Rc;
 use gettextrs::gettext;
 
 use crate::app::components::{
-    dispatch_api_read, playing_card, CardLayout, CardListComponent, CardListModel,
+    dispatch_api_read, playing_card, CardFilter, CardLayout, CardListComponent, CardListModel,
     CardListPageModel, CardSize, ImageShape, PlayingCard, SortOrder,
 };
 use crate::app::models::*;
@@ -14,6 +14,9 @@ use crate::app::{
     AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Dispatcher, ListStore,
     PaginationTarget,
 };
+
+const OWNED_FILTER: &str = "owned";
+const FOLLOWED_FILTER: &str = "followed";
 
 pub struct SavedPlaylistsModel {
     app_model: Rc<AppModel>,
@@ -94,6 +97,26 @@ impl CardListModel for SavedPlaylistsModel {
 
     fn image_shape(&self) -> ImageShape {
         ImageShape::Square
+    }
+
+    fn filter_options(&self) -> Vec<FilterOption> {
+        vec![
+            // translators: Filter of the saved playlists: shows all of them.
+            FilterOption::all(gettext("All")),
+            // translators: Filter of the saved playlists: shows only those the user created.
+            FilterOption::new(gettext("Created"), OWNED_FILTER),
+            // translators: Filter of the saved playlists: shows only those made by others, which the user follows.
+            FilterOption::new(gettext("Followed"), FOLLOWED_FILTER),
+        ]
+    }
+
+    fn resolve_filter(&self, category: &str) -> Option<CardFilter> {
+        let user = self.app_model.get_state().logged_user.user.clone()?;
+        match category {
+            OWNED_FILTER => Some(CardFilter::OwnedBy(user)),
+            FOLLOWED_FILTER => Some(CardFilter::NotOwnedBy(user)),
+            _ => None,
+        }
     }
 }
 

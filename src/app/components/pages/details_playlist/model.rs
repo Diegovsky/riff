@@ -6,21 +6,27 @@
 use gettextrs::gettext;
 use std::ops::Deref;
 use std::rc::Rc;
+use std::sync::Arc;
+use tokio::sync::oneshot;
 
 use crate::app::components::DetailsPageModel;
 use crate::app::components::{
-    dispatch_api_call, dispatch_api_read, dispatch_api_read_with_fallback, labels,
-    HasHeaderBarModel, HeaderImageShape, PageModel, PinnedPageModel, SimpleHeaderBarModel,
-    TrackListModel,
+    dispatch_api_call, dispatch_api_call_many, dispatch_api_read, dispatch_api_read_with_fallback,
+    labels, refresh_playlist_cover, upload_playlist_cover, HasHeaderBarModel, HeaderImageShape,
+    PageModel, PinnedPageModel, PlaylistForm, Saved, TrackListModel,
 };
 use crate::app::models::*;
+use crate::app::playlist_actions::unfollow_and_unpin_playlist;
 use crate::app::state::SelectionContext;
-use crate::app::state::{BrowserAction, BrowserEvent, SelectionAction, SelectionState};
+use crate::app::state::{BrowserAction, BrowserEvent, SelectionState};
 use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, PaginationTarget, SongsSource};
 use crate::feature_flags::{is_enabled, FeatureFlag};
 use crate::settings;
 use crate::{impl_source_page, impl_source_track_list, impl_track_list_model_base};
+use riff_api::models::is_resource_url;
 use riff_api::DomainError;
+
+const TRACKS_PAGE: usize = 50;
 
 /// Data model for the playlist detail page. Composes `DetailsPageModel` via Deref.
 pub struct PlaylistDetailsModel {
@@ -45,16 +51,7 @@ impl PlaylistDetailsModel {
 
     /// Returns true if the logged-in user owns this playlist.
     pub fn is_playlist_editable(&self) -> bool {
-        let state = self.app_model.get_state();
-        let Some(user) = state.logged_user.user.as_ref() else {
-            return false;
-        };
-        state
-            .browser
-            .playlist_details_state(&self.id)
-            .and_then(|s| s.playlist.as_ref())
-            .map(|p| p.owner.as_ref().map(|o| o.rri.id == *user).unwrap_or(false))
-            .unwrap_or(false)
+        self.owns_playlist(&self.id)
     }
 
     pub fn get_playlist_info(&self) -> Option<impl Deref<Target = Playlist> + '_> {
@@ -71,9 +68,53 @@ impl PlaylistDetailsModel {
         let api = self.app_model.api();
         let id = self.id.clone();
         dispatch_api_call(&self.dispatcher, move || async move {
-            api.update_playlist_details(&id, &title)
+            api.update_playlist_details(&id, &title, None, None)
                 .await
                 .map(|_| AppAction::UpdatePlaylistName(PlaylistSummary { id, title }))
+        });
+    }
+
+    pub fn edit_playlist(&self, form: PlaylistForm) -> oneshot::Receiver<()> {
+        let (saved, saved_rx) = Saved::channel();
+        let api = self.app_model.api();
+        let id = self.id.clone();
+        let dispatcher = self.dispatcher.clone();
+        let public = form.public_changed.then_some(form.public);
+        let kept = self.get_playlist_info().and_then(|p| p.description.clone());
+        let not_cleared = form.description.is_none() && kept.is_some();
+        let description = form.description.clone().or(kept);
+        dispatch_api_call_many(&self.dispatcher, move || async move {
+            api.update_playlist_details(&id, &form.name, form.description.as_deref(), public)
+                .await?;
+            saved.tell();
+            if let Some(cover) = form.cover {
+                upload_playlist_cover(&dispatcher, api, id.clone(), cover);
+            }
+            let mut actions = vec![
+                AppAction::UpdatePlaylistName(PlaylistSummary {
+                    id: id.clone(),
+                    title: form.name,
+                }),
+                BrowserAction::UpdatePlaylistInfo(id, description, public).into(),
+            ];
+            if not_cleared {
+                actions.push(AppAction::ShowNotification(gettext(
+                    // translators: This notification is shown when the user emptied the description of a playlist, which cannot be removed once set.
+                    "A playlist's description can't be removed, so it was kept.",
+                )));
+            }
+            Ok(actions)
+        });
+        saved_rx
+    }
+
+    pub fn delete_playlist(&self) {
+        let api = self.app_model.api();
+        let id = self.id.clone();
+        let user_id = self.app_model.get_state().logged_user.user.clone();
+        dispatch_api_call_many(&self.dispatcher, move || async move {
+            let removed = unfollow_and_unpin_playlist(&api, id, user_id).await?;
+            Ok(vec![removed, BrowserAction::NavigationPop.into()])
         });
     }
 }
@@ -103,7 +144,12 @@ impl PageModel for PlaylistDetailsModel {
     }
 
     fn get_caption(&self) -> Option<String> {
-        Some(gettext("Playlist"))
+        let public = self.get_playlist_info().and_then(|p| p.public);
+        Some(match public {
+            Some(true) => labels::PUBLIC_PLAYLIST_CAPTION.clone(),
+            Some(false) => labels::PRIVATE_PLAYLIST_CAPTION.clone(),
+            None => gettext("Playlist"),
+        })
     }
 
     fn header_image_shape(&self) -> HeaderImageShape {
@@ -117,12 +163,20 @@ impl PageModel for PlaylistDetailsModel {
     fn load_page_info(&self) {
         let api = self.app_model.api();
         let id = self.id.clone();
+        let dispatcher = self.dispatcher.clone();
         dispatch_api_read(&self.dispatcher, move |tag| async move {
             let (tracks_result, playlist_result) = futures::join!(
-                api.get_playlist_tracks(&id, 0, 50, tag),
+                api.get_playlist_tracks(&id, 0, TRACKS_PAGE, tag),
                 api.get_playlist(&id, tag)
             );
             let playlist_tracks = tracks_result?;
+            let cover = playlist_result
+                .as_ref()
+                .ok()
+                .and_then(|playlist| playlist.art.images.first());
+            if cover.is_none_or(|image| is_resource_url(&image.url)) {
+                refresh_playlist_cover(&dispatcher, Arc::clone(&api), id.clone(), false);
+            }
             match playlist_result {
                 Ok(playlist) => Ok(BrowserAction::SetPlaylistDetails(
                     Box::new(playlist),
@@ -300,9 +354,6 @@ impl TrackListModel for PlaylistDetailsModel {
     impl_source_track_list!();
 
     fn enable_selection(&self) -> bool {
-        if !is_enabled(FeatureFlag::SelectMode) {
-            return false;
-        }
         let context = if self.is_playlist_editable() {
             SelectionContext::EditablePlaylist(self.id.clone())
         } else {
@@ -312,24 +363,7 @@ impl TrackListModel for PlaylistDetailsModel {
     }
 }
 
-impl SimpleHeaderBarModel for PlaylistDetailsModel {
-    fn selection_context(&self) -> Option<SelectionContext> {
-        if !is_enabled(FeatureFlag::SelectMode) {
-            return None;
-        }
-        if self.is_playlist_editable() {
-            Some(SelectionContext::EditablePlaylist(self.id.clone()))
-        } else {
-            Some(SelectionContext::Playlist)
-        }
-    }
-
-    fn select_all(&self) {
-        let songs: Vec<Track> = TrackListModel::song_list_model(self).collect();
-        self.dispatcher
-            .dispatch(SelectionAction::Select(songs).into());
-    }
-}
+crate::impl_track_list_header_bar!(PlaylistDetailsModel);
 
 impl crate::app::ProvidesApi for PlaylistDetailsModel {
     fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {

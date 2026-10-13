@@ -91,6 +91,10 @@ row:hover .song--playing .song__play-hover,
   text-decoration-line: underline;
 }
 
+.playlist--selectable .song__link.song__link--hover {
+  text-decoration-line: none;
+}
+
 /* Unplayable tracks. The menu stays usable. */
 .song--unplayable label.title,
 .song--unplayable label.subtitle,

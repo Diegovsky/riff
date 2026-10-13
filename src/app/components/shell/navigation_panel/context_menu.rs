@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use super::{NavigationPanelDestination, NavigationPanelModel};
 use crate::app::components::labels;
+use crate::app::components::utils::confirm_delete_playlist;
 use crate::app::models::PlaylistSummary;
 use crate::feature_flags::{is_enabled, FeatureFlag};
 use crate::settings;
@@ -57,15 +58,28 @@ fn make_copy_link_action(id: &str) -> gio::SimpleAction {
     action
 }
 
+fn confirm_unfollow_playlist(model: &Rc<NavigationPanelModel>, id: String) {
+    if !model.is_playlist_owned(&id) {
+        model.unfollow_playlist(id);
+        return;
+    }
+    confirm_delete_playlist(
+        None,
+        clone!(
+            #[weak]
+            model,
+            move || model.unfollow_playlist(id)
+        ),
+    );
+}
+
 fn make_unfollow_action(id: &str, model: &Rc<NavigationPanelModel>) -> gio::SimpleAction {
     let action = gio::SimpleAction::new("unfollow", None);
     let id = id.to_owned();
     action.connect_activate(clone!(
         #[weak]
         model,
-        move |_, _| {
-            model.unfollow_playlist(id.clone());
-        }
+        move |_, _| confirm_unfollow_playlist(&model, id.clone())
     ));
     action
 }
@@ -195,7 +209,13 @@ pub fn build_pinned_actions(
         clone!(
             #[weak]
             model,
-            move || model.remove_from_library(kind, remove_id.clone())
+            move || {
+                if kind == settings::PinnedKind::Playlist {
+                    confirm_unfollow_playlist(&model, remove_id.clone());
+                } else {
+                    model.remove_from_library(kind, remove_id.clone());
+                }
+            }
         ),
     ));
 

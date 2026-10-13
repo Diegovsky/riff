@@ -116,8 +116,11 @@ impl<M: CardListPageModel + 'static> CardListComponent<M> {
             let status_page = page_widget.status_page().clone();
             let model = Rc::downgrade(&model);
             let card_list = Rc::downgrade(&card_list);
-            move |_: &str, _: usize| {
+            move |category: &str, _: usize| {
                 if let (Some(model), Some(card_list)) = (model.upgrade(), card_list.upgrade()) {
+                    if let Some(filter) = model.resolve_filter(category) {
+                        card_list.set_card_filter(filter);
+                    }
                     load_more_for_filter(&*model, &card_list);
                     update_status(&status_page, &*model, &card_list);
                 }

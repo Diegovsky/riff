@@ -1,3 +1,4 @@
+use gettextrs::gettext;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
@@ -29,9 +30,6 @@ mod imp {
 
         #[template_child]
         pub end_stack: TemplateChild<gtk::Stack>,
-
-        #[template_child]
-        pub start_selection: TemplateChild<gtk::Button>,
 
         #[template_child]
         pub selection_header: TemplateChild<libadwaita::HeaderBar>,
@@ -130,10 +128,6 @@ impl AppHeaderBar {
         self.imp().go_back.connect_clicked(move |_| f());
     }
 
-    pub fn connect_selection_start<F: Fn() + 'static>(&self, f: F) {
-        self.imp().start_selection.connect_clicked(move |_| f());
-    }
-
     pub fn connect_select_all<F: Fn() + 'static>(&self, f: F) {
         self.imp().select_all.connect_clicked(move |_| f());
     }
@@ -157,10 +151,6 @@ impl AppHeaderBar {
         self.imp().go_back.set_visible(can_go_back);
     }
 
-    pub fn set_selection_possible(&self, possible: bool) {
-        self.imp().start_selection.set_visible(possible);
-    }
-
     pub fn set_select_all_possible(&self, possible: bool) {
         self.imp().select_all.set_visible(possible);
     }
@@ -176,6 +166,16 @@ impl AppHeaderBar {
             imp.selection_title.set_visible(false);
             imp.selection_header.set_visible(false);
         }
+    }
+
+    pub fn set_all_selected(&self, all_selected: bool) {
+        self.imp().select_all.set_label(&if all_selected {
+            // translators: Button label. Deselects all songs, once they are all selected.
+            gettext("Deselect All")
+        } else {
+            // translators: Button label. Selects all visible songs.
+            gettext("Select All")
+        });
     }
 
     pub fn set_selection_count(&self, count: usize) {

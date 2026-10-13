@@ -2,12 +2,14 @@ use std::cell::Ref;
 use std::collections::HashSet;
 use std::ops::Deref;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gio::prelude::*;
 use gio::SimpleActionGroup;
 
 use crate::app::components::{
-    build_song_menu, dispatch_api_call, queue_source_tracks, QueueMenuEntry, SongActions,
+    add_tracks_to_playlist, build_song_menu, dispatch_api_call, queue_source_tracks,
+    PlaylistPicker, QueueMenuEntry, SongActions, REMOVE_FROM_PLAYLIST_ACTION,
 };
 use crate::app::dispatch::Dispatcher;
 use crate::app::models::{SongListModel, Track};
@@ -31,7 +33,10 @@ macro_rules! impl_track_list_model_base {
             self.base.current_song_id()
         }
         fn select_song(&self, id: &str) {
-            self.select_song_from_list(&TrackListModel::song_list_model(self), id);
+            self.select_songs(&[id.to_string()]);
+        }
+        fn select_songs(&self, ids: &[String]) {
+            self.select_songs_from_list(&TrackListModel::song_list_model(self), ids);
         }
         fn deselect_song(&self, id: &str) {
             self.base.deselect_song(id);
@@ -102,6 +107,23 @@ macro_rules! impl_source_page {
     };
 }
 
+#[macro_export]
+macro_rules! impl_track_list_header_bar {
+    ($model:ty) => {
+        impl $crate::app::components::SimpleHeaderBarModel for $model {
+            fn select_all(&self) {
+                let songs = $crate::app::components::TrackListModel::song_list_model(self);
+                self.dispatcher
+                    .dispatch($crate::app::state::SelectionAction::Select(songs.collect()).into());
+            }
+
+            fn selectable_keys(&self) -> Vec<String> {
+                $crate::app::components::TrackListModel::song_list_model(self).ids()
+            }
+        }
+    };
+}
+
 /// The `TrackListModel` methods of a page with a source.
 #[macro_export]
 macro_rules! impl_source_track_list {
@@ -132,6 +154,15 @@ macro_rules! impl_source_track_list {
                 self.base
                     .track_actions(song, PageModel::songs_source(self).as_ref()),
             )
+        }
+
+        fn playlist_picker(&self, song: &$crate::app::models::Track) -> Option<gtk::Widget> {
+            self.base.playlist_picker(song)
+        }
+
+        fn menu_opening(&self, actions: &gio::SimpleActionGroup) {
+            self.base
+                .refresh_track_actions(actions, PageModel::songs_source(self).as_ref());
         }
 
         fn menu_for(
@@ -190,6 +221,7 @@ pub fn track_menu(
         QueueMenuEntry::Add,
         Some(liked),
         pinned,
+        matches!(source, Some(SongsSource::Playlist(_))),
     )
 }
 
@@ -254,7 +286,83 @@ impl DetailsPageModel {
         for action in song.make_queue_actions(self.dispatcher.clone()) {
             group.add_action(&action);
         }
+        if let Some(action) = self.remove_from_playlist_action(song, source) {
+            group.add_action(&action);
+        }
         group
+    }
+
+    pub fn owns_playlist(&self, id: &str) -> bool {
+        let state = self.state();
+        let owner = state
+            .browser
+            .playlist_details_state(id)
+            .and_then(|s| s.playlist.as_ref())
+            .and_then(|p| p.owner.as_ref());
+        match (owner, state.logged_user.user.as_ref()) {
+            (Some(owner), Some(user)) => owner.rri.id == *user,
+            _ => false,
+        }
+    }
+
+    pub fn editable_playlist(&self, source: Option<&SongsSource>) -> Option<String> {
+        match source {
+            Some(SongsSource::Playlist(id)) if self.owns_playlist(id) => Some(id.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn refresh_track_actions(&self, actions: &SimpleActionGroup, source: Option<&SongsSource>) {
+        let remove = actions
+            .lookup_action(REMOVE_FROM_PLAYLIST_ACTION)
+            .and_downcast::<gio::SimpleAction>();
+        if let Some(remove) = remove {
+            remove.set_enabled(self.editable_playlist(source).is_some());
+        }
+    }
+
+    fn remove_from_playlist_action(
+        &self,
+        song: &Track,
+        source: Option<&SongsSource>,
+    ) -> Option<gio::SimpleAction> {
+        let Some(SongsSource::Playlist(id)) = source else {
+            return None;
+        };
+        let id = id.clone();
+        let uri = song.rri.uri.clone()?;
+        let api = self.app_model.api();
+        let dispatcher = self.dispatcher.clone();
+        let action = gio::SimpleAction::new(REMOVE_FROM_PLAYLIST_ACTION, None);
+        action.set_enabled(false);
+        action.connect_activate(move |_, _| {
+            let api = Arc::clone(&api);
+            let id = id.clone();
+            let uris = vec![uri.clone()];
+            dispatch_api_call(&dispatcher, move || async move {
+                api.remove_from_playlist(&id, uris.clone()).await?;
+                Ok(BrowserAction::RemoveTracksFromPlaylist(id, uris).into())
+            })
+        });
+        Some(action)
+    }
+
+    pub fn playlist_picker(&self, song: &Track) -> Option<gtk::Widget> {
+        song.rri.uri.as_ref()?;
+        let song = song.clone();
+        let playlists = self.state().logged_user.owned_playlists();
+        let app_model = Rc::clone(&self.app_model);
+        let dispatcher = self.dispatcher.clone();
+        let picker = PlaylistPicker::new(playlists, move |playlist| {
+            add_tracks_to_playlist(
+                &app_model,
+                &dispatcher,
+                playlist.id.clone(),
+                vec![song.clone()],
+                None,
+            );
+        });
+        Some(picker.upcast())
     }
 
     pub fn share_link(&self, link: &str) {
@@ -294,17 +402,19 @@ impl DetailsPageModel {
         Some(Box::new(self.app_model.map_state(|s| &s.selection)))
     }
 
-    pub fn select_song_from_list(&self, song_list: &SongListModel, id: &str) {
-        if let Some(song) = song_list.get(id) {
+    pub fn select_songs_from_list(&self, song_list: &SongListModel, ids: &[String]) {
+        let songs: Vec<Track> = ids
+            .iter()
+            .filter_map(|id| song_list.get(id))
+            .map(|song| song.description().clone())
+            .collect();
+        if !songs.is_empty() {
             self.dispatcher
-                .dispatch(SelectionAction::Select(vec![song.description().clone()]).into());
+                .dispatch(SelectionAction::Select(songs).into());
         }
     }
 
     pub fn enable_selection_with_context(&self, context: SelectionContext) -> bool {
-        if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
-            return false;
-        }
         self.dispatcher
             .dispatch(AppAction::EnableSelection(context));
         true
@@ -474,6 +584,7 @@ mod tests {
                 let token_provider: Arc<dyn riff_api::TokenProvider> =
                     Arc::new(|| None::<String>);
                 Arc::new(riff_api::spotify_service(
+                    Arc::clone(&token_provider),
                     token_provider,
                     1024 * 1024,
                     1024 * 1024,
@@ -584,10 +695,10 @@ mod tests {
     }
 
     #[test]
-    fn test_select_song_from_list_dispatches() {
+    fn test_select_songs_from_list_dispatches() {
         let (model, dispatcher) = make_model();
         let list = make_song_list(vec![song("a"), song("b")]);
-        model.select_song_from_list(&list, "b");
+        model.select_songs_from_list(&list, &["b".to_string()]);
         let action = dispatcher.last_action().unwrap();
         assert!(
             matches!(action, AppAction::SelectionAction(SelectionAction::Select(songs)) if songs.len() == 1 && songs[0].rri.id == "b")
@@ -595,10 +706,10 @@ mod tests {
     }
 
     #[test]
-    fn test_select_song_from_list_nonexistent() {
+    fn test_select_songs_from_list_nonexistent() {
         let (model, dispatcher) = make_model();
         let list = make_song_list(vec![song("a")]);
-        model.select_song_from_list(&list, "nonexistent");
+        model.select_songs_from_list(&list, &["nonexistent".to_string()]);
         assert!(dispatcher.last_action().is_none());
     }
 

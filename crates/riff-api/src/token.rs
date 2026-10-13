@@ -18,3 +18,9 @@ impl TokenProvider for riff_auth::TokenStore {
         self.get_cached_blocking().map(|creds| creds.access_token)
     }
 }
+
+impl TokenProvider for riff_auth::SessionTokens {
+    fn access_token(&self) -> Option<String> {
+        riff_auth::SessionTokens::access_token(self)
+    }
+}

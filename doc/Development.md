@@ -128,7 +128,7 @@ Use `gsettings` to toggle flags without opening the Settings dialog:
 
 ```sh
 gsettings set dev.diegovsky.Riff feature-device-selector true
-gsettings set dev.diegovsky.Riff feature-select-mode false
+gsettings set dev.diegovsky.Riff feature-pinned-objects false
 ```
 
 ## Testing and Debugging

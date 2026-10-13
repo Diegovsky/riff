@@ -347,15 +347,23 @@ impl SongList {
             self.index_song(song);
         }
 
-        if let Some(old) = self.batches.insert(index, songs) {
-            // The same page loaded twice
-            self.total_loaded -= old.len();
-            self.reindex();
-        }
+        // The same page loaded twice: its rows are replaced, not added to
+        let replaced = match self.batches.insert(index, songs) {
+            Some(old) => {
+                self.total_loaded -= old.len();
+                self.reindex();
+                old.len()
+            }
+            None => 0,
+        };
         self.total_loaded += len;
         self.last_batch_key = usize::max(self.last_batch_key, index);
 
-        Some(ListRangeUpdate::inserted(insertion_start, len))
+        Some(ListRangeUpdate(
+            insertion_start as i32,
+            replaced as i32,
+            len as i32,
+        ))
     }
 
     fn index_mut(&mut self, i: usize) -> Option<&mut SongModel> {
@@ -563,6 +571,18 @@ mod tests {
         let range = list.add(batch(2));
         assert_eq!(range, Some(ListRangeUpdate::inserted(4, 2)));
         assert_eq!(list.partial_len(), 8);
+    }
+
+    #[test]
+    fn test_add_same_page_twice_reports_its_rows_replaced() {
+        let mut list = SongList::new_from_initial_batch(batch(0));
+        let mut short = batch(1);
+        short.items.truncate(1);
+        list.add(short);
+
+        let range = list.add(batch(1));
+        assert_eq!(range, Some(ListRangeUpdate(2, 1, 2)));
+        assert_eq!(list.partial_len(), 4);
     }
 
     #[test]

@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use gettextrs::gettext;
 
 use crate::app::components::labels;
-use crate::app::models::{Playlist, PlaylistSummary, Track};
+use crate::app::models::{ImageSet, Playlist, PlaylistSummary, Track};
 use crate::app::state::{
     browser_state::{BrowserAction, BrowserEvent, BrowserState},
     login_state::{LoginAction, LoginEvent, LoginState},
@@ -42,6 +42,7 @@ pub enum AppAction {
     CancelSelection,
     CreatePlaylist(Playlist),
     UpdatePlaylistName(PlaylistSummary),
+    UpdatePlaylistArt(String, ImageSet),
     RemovePlaylist(String),
 }
 
@@ -102,7 +103,6 @@ pub enum AppEvent {
     NotificationShown(String),
     DrmBlockedDialogShown,
     ConnectionLostChanged(bool),
-    PlaylistCreatedNotificationShown(String),
     SettingsEvent(SettingsEvent),
 }
 
@@ -216,9 +216,8 @@ impl AppState {
                 }
             }
             AppAction::CreatePlaylist(playlist) => {
-                let id = playlist.rri.id.clone();
                 let mut events = forward_action(
-                    LoginAction::PrependUserPlaylist(vec![playlist.clone().into()]),
+                    LoginAction::PrependOwnedPlaylist(playlist.clone().into()),
                     &mut self.logged_user,
                 );
                 let mut more_events = forward_action(
@@ -226,8 +225,10 @@ impl AppState {
                     &mut self.browser,
                 );
                 events.append(&mut more_events);
-                events.push(AppEvent::PlaylistCreatedNotificationShown(id));
                 events
+            }
+            AppAction::UpdatePlaylistArt(id, art) => {
+                forward_action(BrowserAction::UpdatePlaylistArt(id, art), &mut self.browser)
             }
             AppAction::UpdatePlaylistName(s) => {
                 let mut events = forward_action(

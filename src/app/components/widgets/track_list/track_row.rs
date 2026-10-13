@@ -1,4 +1,5 @@
 use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gdk::Rectangle;
@@ -13,7 +14,9 @@ use riff_api::models::is_resource_url;
 use riff_api::ApiService;
 
 use crate::app::components::utils::{add_hover_class, decode_px, set_css_class, set_missing_art};
-use crate::app::components::{display_add_css_provider, labels, SubtitleLinksBox};
+use crate::app::components::{
+    display_add_css_provider, labels, SubtitleLinksBox, PLAYLIST_PICKER_MENU_ID,
+};
 use crate::app::load;
 use crate::app::models::{SongModel, Track};
 
@@ -67,6 +70,14 @@ fn activate_row_action(widget: &gtk::Widget, action: &str) {
     }
 }
 
+pub const SELECTABLE_LIST_CLASS: &str = "playlist--selectable";
+
+fn in_selection_mode(widget: &gtk::Widget) -> bool {
+    widget
+        .ancestor(gtk::ListView::static_type())
+        .is_some_and(|list| list.has_css_class(SELECTABLE_LIST_CLASS))
+}
+
 fn wire_link_label(label: &gtk::Label, action_name: String) {
     let click = gtk::GestureClick::new();
     // Claim the click so the row doesn't also play the track.
@@ -75,7 +86,7 @@ fn wire_link_label(label: &gtk::Label, action_name: String) {
         let Some(label) = gesture.widget() else {
             return;
         };
-        if label.has_css_class(LINK_CLASS) {
+        if label.has_css_class(LINK_CLASS) && !in_selection_mode(&label) {
             gesture.set_state(gtk::EventSequenceState::Claimed);
             activate_row_action(&label, &action_name);
         }
@@ -230,6 +241,12 @@ impl Default for TrackRow {
     }
 }
 
+#[derive(Clone)]
+pub struct MenuHooks {
+    pub opening: Rc<dyn Fn()>,
+    pub picker: Rc<dyn Fn() -> Option<gtk::Widget>>,
+}
+
 impl TrackRow {
     pub fn new() -> Self {
         display_add_css_provider(resource!("/components/track_row.css"));
@@ -283,7 +300,12 @@ impl TrackRow {
         right_click.connect_pressed(clone!(
             #[weak(rename_to = row)]
             self,
-            move |_, _, x, y| row.show_menu(x, y)
+            move |gesture, _, x, y| {
+                let held = gesture.current_event_state();
+                if !held.contains(gdk::ModifierType::BUTTON1_MASK) {
+                    row.show_menu(x, y);
+                }
+            }
         ));
         self.add_controller(right_click);
 
@@ -337,14 +359,35 @@ impl TrackRow {
         self.insert_action_group("song", actions);
     }
 
-    pub fn set_menu(&self, menu: Option<&MenuModel>) {
+    pub fn set_menu(&self, menu: Option<&MenuModel>, hooks: Option<&MenuHooks>) {
         let menu_btn = &self.imp().menu_btn;
         menu_btn.set_menu_model(menu);
         menu_btn.set_visible(menu.is_some());
-        if let Some(popover) = menu_btn.popover() {
-            popover.set_has_arrow(false);
-            popover.connect_closed(|popover| popover.set_pointing_to(None));
-        }
+        let Some(popover) = menu_btn.popover() else {
+            return;
+        };
+        popover.set_has_arrow(false);
+        popover.connect_closed(|popover| popover.set_pointing_to(None));
+
+        let Some((hooks, popover)) = hooks.zip(popover.downcast_ref::<gtk::PopoverMenu>()) else {
+            return;
+        };
+        let shown: RefCell<Option<gtk::Widget>> = RefCell::default();
+        popover.connect_show(clone!(
+            #[strong]
+            hooks,
+            move |popover| {
+                (hooks.opening)();
+                if let Some(previous) = shown.take() {
+                    popover.remove_child(&previous);
+                }
+                if let Some(child) = (hooks.picker)() {
+                    if popover.add_child(&child, PLAYLIST_PICKER_MENU_ID) {
+                        shown.replace(Some(child));
+                    }
+                }
+            }
+        ));
     }
 
     fn show_menu(&self, x: f64, y: f64) {
@@ -433,7 +476,7 @@ impl TrackRow {
         self.set_actions(None);
         // No menu, but the button keeps its space (hidden by the CSS), so
         // the time block sits where a real row's time does.
-        self.set_menu(None);
+        self.set_menu(None, None);
         imp.menu_btn.set_visible(true);
         self.update_layout();
     }

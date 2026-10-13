@@ -58,7 +58,8 @@ src/app/components/shell/headerbar/headerbar.blp
 src/app/components/shell/playback/playback_controls.blp
 src/app/components/shell/playback/playback_info.blp
 src/app/components/shell/playback/playback_widget.blp
-src/app/components/shell/navigation_panel/create_playlist.blp
+src/app/components/widgets/playlist_dialog/playlist_dialog.blp
+src/app/components/widgets/playlist_picker/playlist_picker.blp
 src/app/components/shell/navigation_panel/navigation_panel_row.blp
 src/app/components/widgets/card/card.blp
 src/app/components/widgets/card_list/card_list.blp

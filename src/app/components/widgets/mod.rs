@@ -7,8 +7,14 @@ pub use crate::app::models::{CardLayout, CardSize, SortOrder};
 pub mod card_list;
 pub use card_list::*;
 
+pub mod playlist_dialog;
+pub use playlist_dialog::*;
+
 pub mod details_page;
 pub use details_page::*;
+
+pub mod playlist_picker;
+pub use playlist_picker::*;
 
 pub mod segmented_button;
 pub use segmented_button::*;

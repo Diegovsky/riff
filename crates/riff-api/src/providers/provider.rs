@@ -42,6 +42,13 @@ pub trait MusicProvider: Send + Sync + 'static {
         limit: usize,
     ) -> Result<Page<Playlist>, DomainError>;
     async fn get_playlist(&self, id: &str) -> Result<Playlist, DomainError>;
+
+    async fn get_playlist_item_uris(
+        &self,
+        id: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<(Vec<Option<String>>, usize), DomainError>;
     async fn get_playlist_tracks(
         &self,
         id: &str,
@@ -68,6 +75,8 @@ pub trait MusicProvider: Send + Sync + 'static {
         collaborative: Option<bool>,
         description: Option<&str>,
     ) -> Result<Playlist, DomainError>;
+    async fn upload_playlist_cover(&self, id: &str, jpeg_base64: String)
+        -> Result<(), DomainError>;
     async fn follow_playlist(&self, id: &str) -> Result<(), DomainError>;
     async fn unfollow_playlist(&self, id: &str) -> Result<(), DomainError>;
     async fn update_playlist_details(
@@ -78,6 +87,8 @@ pub trait MusicProvider: Send + Sync + 'static {
         collaborative: Option<bool>,
         description: Option<&str>,
     ) -> Result<(), DomainError>;
+
+    async fn set_playlist_public(&self, id: &str, public: bool) -> Result<(), DomainError>;
 
     async fn get_artist(&self, id: &str) -> Result<Artist, DomainError>;
     async fn get_artist_albums(

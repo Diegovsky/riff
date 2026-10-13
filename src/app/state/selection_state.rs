@@ -9,6 +9,7 @@ pub enum SelectionAction {
     Select(Vec<Track>),
     SelectKeyed(Vec<(String, Track)>),
     Deselect(Vec<String>),
+    DeselectAll,
     Clear,
 }
 
@@ -156,6 +157,14 @@ impl UpdatableState for SelectionState {
                     vec![]
                 }
             }
+            SelectionAction::DeselectAll => {
+                if self.selected_keys.is_empty() {
+                    return vec![];
+                }
+                self.selected_songs.clear();
+                self.selected_keys.clear();
+                vec![SelectionEvent::SelectionChanged]
+            }
             SelectionAction::Clear => {
                 self.take_selection();
                 vec![SelectionEvent::SelectionModeChanged(false)]
@@ -168,6 +177,22 @@ impl UpdatableState for SelectionState {
 mod tests {
     use super::*;
     use crate::app::models::make_track;
+
+    #[test]
+    fn test_deselect_all_keeps_selection_mode() {
+        let mut state = SelectionState::default();
+        state.set_mode(Some(SelectionContext::Default));
+        state.update_with(Cow::Owned(SelectionAction::Select(vec![
+            make_track("a"),
+            make_track("b"),
+        ])));
+        assert_eq!(state.count(), 2);
+
+        let events = state.update_with(Cow::Owned(SelectionAction::DeselectAll));
+        assert!(matches!(events[..], [SelectionEvent::SelectionChanged]));
+        assert_eq!(state.count(), 0);
+        assert!(state.is_selection_enabled());
+    }
 
     fn update(state: &mut SelectionState, action: SelectionAction) -> Vec<SelectionEvent> {
         state.update_with(Cow::Owned(action))

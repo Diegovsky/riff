@@ -1,10 +1,11 @@
 use std::borrow::Cow;
 use std::cmp::PartialEq;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::{
     pagination::Pagination, BrowserAction, BrowserEvent, PaginationTarget, UpdatableState,
 };
+use crate::app::components::card::IMAGE_SIZE;
 use crate::app::models::*;
 use crate::app::ListStore;
 
@@ -121,6 +122,28 @@ impl UpdatableState for DetailsState {
     }
 }
 
+fn replace_card(cards: &mut ListStore<CardModel>, id: &str, change: impl FnOnce(&CardModel)) {
+    let Some(position) = cards.iter().position(|card| card.id() == id) else {
+        return;
+    };
+    let replacement = cards.get(position as u32).duplicate();
+    change(&replacement);
+    cards.remove(position as u32);
+    cards.insert(position as u32, replacement);
+}
+
+fn not_listed<'a, T>(
+    cards: &ListStore<CardModel>,
+    items: &'a [T],
+    id: impl Fn(&T) -> &String,
+) -> Vec<&'a T> {
+    let listed: HashSet<String> = cards.iter().map(|card| card.id()).collect();
+    items
+        .iter()
+        .filter(|item| !listed.contains(id(item)))
+        .collect()
+}
+
 pub struct PlaylistDetailsState {
     pub id: String,
     pub name: ScreenName,
@@ -163,6 +186,28 @@ impl UpdatableState for PlaylistDetailsState {
                 }
                 vec![BrowserEvent::PlaylistDetailsLoaded(self.id.clone())]
             }
+            BrowserAction::UpdatePlaylistInfo(id, description, public) if id == &self.id => {
+                let Some(p) = self.playlist.as_mut() else {
+                    return vec![];
+                };
+                p.description = description.clone();
+                let relabelled = public.is_some() && p.public != *public;
+                p.public = public.or(p.public);
+                if relabelled {
+                    vec![BrowserEvent::PlaylistDetailsLoaded(self.id.clone())]
+                } else {
+                    vec![]
+                }
+            }
+            BrowserAction::UpdatePlaylistArt(id, art) if id == &self.id => {
+                match self.playlist.as_mut() {
+                    Some(p) if &p.art != art => {
+                        p.art = art.clone();
+                        vec![BrowserEvent::PlaylistDetailsLoaded(self.id.clone())]
+                    }
+                    _ => vec![],
+                }
+            }
             BrowserAction::AppendPlaylistTracks(id, song_batch) if id == &self.id => {
                 self.next_tracks_page
                     .set_loaded_count(song_batch.items.len());
@@ -181,10 +226,46 @@ impl UpdatableState for PlaylistDetailsState {
                 self.next_tracks_page.restore_offset(*offset);
                 vec![]
             }
-            BrowserAction::RemoveTracksFromPlaylist(id, uris) if id == &self.id => {
-                self.songs.remove(&uris[..]).commit();
+            BrowserAction::AddTracksToPlaylist(id, tracks) if id == &self.id => {
                 if let Some(total) = self.playlist.as_mut().and_then(|p| p.total_tracks.as_mut()) {
-                    *total = total.saturating_sub(uris.len() as u32);
+                    *total += tracks.len() as u32;
+                }
+                if self.next_tracks_page.next_offset.is_some() {
+                    return vec![BrowserEvent::PlaylistDetailsLoaded(self.id.clone())];
+                }
+                let batch_size = self.next_tracks_page.batch_size;
+                let mut listed = self.songs.collect();
+                let first_changed = listed.len() / batch_size * batch_size;
+                let total = listed.len() + tracks.len();
+                let mut changed = listed.split_off(first_changed);
+                changed.extend(tracks.iter().cloned());
+                for (i, page) in changed.chunks(batch_size).enumerate() {
+                    self.songs
+                        .add(Page {
+                            items: page.to_vec(),
+                            offset: Some(first_changed + i * batch_size),
+                            total: Some(total),
+                            next_cursor: None,
+                        })
+                        .commit();
+                }
+                vec![
+                    BrowserEvent::PlaylistTracksAppended(self.id.clone()),
+                    BrowserEvent::PlaylistDetailsLoaded(self.id.clone()),
+                ]
+            }
+            BrowserAction::RemoveTracksFromPlaylist(id, uris) if id == &self.id => {
+                let uris: HashSet<&String> = uris.iter().collect();
+                let ids: Vec<String> = self
+                    .songs
+                    .collect()
+                    .into_iter()
+                    .filter(|track| track.rri.uri.as_ref().is_some_and(|uri| uris.contains(uri)))
+                    .map(|track| track.rri.id)
+                    .collect();
+                self.songs.remove(&ids[..]).commit();
+                if let Some(total) = self.playlist.as_mut().and_then(|p| p.total_tracks.as_mut()) {
+                    *total = total.saturating_sub(ids.len() as u32);
                 }
                 vec![BrowserEvent::PlaylistTracksRemoved(self.id.clone())]
             }
@@ -339,6 +420,21 @@ impl HomeState {
         }
         changed
     }
+
+    fn set_playlist_card_art(&mut self, id: &str, art: &ImageSet) -> Vec<BrowserEvent> {
+        let image = art.best_for_width(IMAGE_SIZE).map(str::to_owned);
+        let outdated = self
+            .playlists
+            .iter()
+            .any(|card| card.id() == id && card.image() != image);
+        if !outdated {
+            return vec![];
+        }
+        replace_card(&mut self.playlists, id, |card| {
+            card.set_image_url(image.as_deref())
+        });
+        vec![BrowserEvent::SavedPlaylistsUpdated]
+    }
 }
 
 impl UpdatableState for HomeState {
@@ -368,7 +464,8 @@ impl UpdatableState for HomeState {
             }
             BrowserAction::AppendLibraryContent(content) => {
                 self.next_albums_page.set_loaded_count(content.len());
-                self.albums.extend(content.iter().map(|a| a.into()));
+                let new = not_listed(&self.albums, content, |a| &a.rri.id);
+                self.albums.extend(new.into_iter().map(|a| a.into()));
                 vec![BrowserEvent::LibraryUpdated]
             }
             BrowserAction::SaveAlbum(album) => {
@@ -403,14 +500,19 @@ impl UpdatableState for HomeState {
             }
             BrowserAction::AppendPlaylistsContent(content) => {
                 self.next_playlists_page.set_loaded_count(content.len());
-                self.playlists.extend(content.iter().map(|p| p.into()));
+                let new = not_listed(&self.playlists, content, |p| &p.rri.id);
+                self.playlists.extend(new.into_iter().map(|p| p.into()));
                 vec![BrowserEvent::SavedPlaylistsUpdated]
             }
             BrowserAction::UpdatePlaylistName(PlaylistSummary { id, title }) => {
-                if let Some(p) = self.playlists.iter().find(|p| &p.id() == id) {
-                    p.set_title(title.to_owned());
-                }
+                replace_card(&mut self.playlists, id, |card| {
+                    card.set_title(title.clone())
+                });
                 vec![BrowserEvent::SavedPlaylistsUpdated]
+            }
+            BrowserAction::UpdatePlaylistArt(id, art) => self.set_playlist_card_art(id, art),
+            BrowserAction::SetPlaylistDetails(playlist, _) => {
+                self.set_playlist_card_art(&playlist.rri.id, &playlist.art)
             }
             BrowserAction::SavePlaylist(playlist) => {
                 let already_present = self.playlists.iter().any(|p| p.id() == playlist.rri.id);
@@ -759,6 +861,20 @@ mod tests {
     }
 
     #[test]
+    fn test_library_page_delivered_twice_is_listed_once() {
+        let page: Vec<Album> = (0..CARD_BATCH_SIZE)
+            .map(|i| make_album(&format!("album{i}")))
+            .collect();
+        let mut home = HomeState::default();
+        home.next_albums_page.next_offset_take();
+        home.update_with(Cow::Owned(BrowserAction::SetLibraryContent(page.clone())));
+        home.update_with(Cow::Owned(BrowserAction::AppendLibraryContent(page)));
+
+        assert_eq!(home.albums.len(), CARD_BATCH_SIZE);
+        assert_eq!(home.next_albums_page.next_offset, Some(CARD_BATCH_SIZE));
+    }
+
+    #[test]
     fn test_next_page_more() {
         let fake_album = make_album("");
         let id = "id".to_string();
@@ -807,6 +923,178 @@ mod tests {
             50,
         )));
         assert_eq!(state.next_tracks_page.next_offset, Some(50));
+    }
+
+    fn playlist_state_with_tracks(id: &str, count: usize) -> PlaylistDetailsState {
+        let mut state = PlaylistDetailsState::new(id.to_string());
+        state.update_with(Cow::Owned(BrowserAction::SetPlaylistDetails(
+            Box::new(crate::app::models::Playlist {
+                rri: crate::app::models::ResourceId::new(
+                    riff_api::models::Provider::Spotify,
+                    id.to_string(),
+                ),
+                total_tracks: Some(count as u32),
+                ..Default::default()
+            }),
+            Box::new(Page {
+                items: (0..count.min(50))
+                    .map(|i| make_track(&format!("t{i}")))
+                    .collect(),
+                offset: Some(0),
+                total: None,
+                next_cursor: None,
+            }),
+        )));
+        state
+    }
+
+    fn listed_ids(state: &PlaylistDetailsState) -> Vec<String> {
+        state
+            .songs
+            .collect()
+            .into_iter()
+            .map(|t| t.rri.id)
+            .collect()
+    }
+
+    #[test]
+    fn test_adding_tracks_to_a_loaded_playlist_lists_them_last() {
+        let mut state = playlist_state_with_tracks("p", 2);
+        state.update_with(Cow::Owned(BrowserAction::AddTracksToPlaylist(
+            "p".to_string(),
+            vec![make_track("new")],
+        )));
+        assert_eq!(listed_ids(&state), ["t0", "t1", "new"]);
+        assert_eq!(state.playlist.as_ref().unwrap().total_tracks, Some(3));
+
+        state.update_with(Cow::Owned(BrowserAction::AddTracksToPlaylist(
+            "other".to_string(),
+            vec![make_track("elsewhere")],
+        )));
+        assert_eq!(listed_ids(&state), ["t0", "t1", "new"]);
+    }
+
+    #[test]
+    fn test_adding_tracks_fills_the_last_page_and_starts_the_next() {
+        let mut state = playlist_state_with_tracks("p", 49);
+        state.update_with(Cow::Owned(BrowserAction::AddTracksToPlaylist(
+            "p".to_string(),
+            vec![make_track("a"), make_track("b")],
+        )));
+        let ids = listed_ids(&state);
+        assert_eq!(ids.len(), 51);
+        assert_eq!(ids[48..], ["t48", "a", "b"]);
+    }
+
+    #[test]
+    fn test_adding_tracks_to_a_partly_loaded_playlist_only_counts_them() {
+        let mut state = playlist_state_with_tracks("p", 120);
+        state.update_with(Cow::Owned(BrowserAction::AddTracksToPlaylist(
+            "p".to_string(),
+            vec![make_track("new")],
+        )));
+        assert_eq!(listed_ids(&state).len(), 50);
+        assert_eq!(state.playlist.as_ref().unwrap().total_tracks, Some(121));
+    }
+
+    #[test]
+    fn test_loading_a_playlist_brings_its_new_cover_to_its_card() {
+        let art = |url: &str| ImageSet {
+            images: vec![riff_api::models::Image {
+                url: url.to_string(),
+                width: Some(640),
+                height: Some(640),
+            }],
+            template: None,
+        };
+        let playlist = |url: &str| crate::app::models::Playlist {
+            rri: crate::app::models::ResourceId::new(
+                riff_api::models::Provider::Spotify,
+                "p".to_string(),
+            ),
+            art: art(url),
+            ..Default::default()
+        };
+        let details = |url: &str| {
+            BrowserAction::SetPlaylistDetails(Box::new(playlist(url)), Box::new(Page::default()))
+        };
+        let mut home = HomeState::default();
+        home.update_with(Cow::Owned(BrowserAction::PrependPlaylistsContent(vec![
+            playlist("https://example.com/stand-in.png"),
+        ])));
+
+        let events = home.update_with(Cow::Owned(details("https://example.com/mosaic.jpg")));
+        assert_eq!(events, vec![BrowserEvent::SavedPlaylistsUpdated]);
+        assert_eq!(
+            home.playlists.get(0).image().as_deref(),
+            Some("https://example.com/mosaic.jpg")
+        );
+
+        let events = home.update_with(Cow::Owned(details("https://example.com/mosaic.jpg")));
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn test_replacing_a_card_swaps_its_model_in_place() {
+        let card = |id: &str, title: &str| {
+            CardModel::new(id, None, title, "owner", None, None, Some(7), None)
+        };
+        let mut cards: ListStore<CardModel> = ListStore::new();
+        cards.extend(vec![card("a", "A"), card("b", "B"), card("c", "C")].into_iter());
+        let before = cards.get(1);
+
+        replace_card(&mut cards, "b", |card| {
+            card.set_title("Renamed".to_string())
+        });
+
+        let titles: Vec<String> = cards.iter().map(|c| c.title()).collect();
+        assert_eq!(titles, ["A", "Renamed", "C"]);
+        let after = cards.get(1);
+        assert_ne!(before, after);
+        assert_eq!(after.subtitle(), "owner");
+        assert_eq!(after.insertion_position(), 7);
+    }
+
+    #[test]
+    fn test_removing_tracks_from_playlist_drops_them_from_the_list() {
+        let id = "playlist-id".to_string();
+        let track = |n: usize| {
+            let mut track = make_track(&format!("t{n}"));
+            track.rri.uri = Some(format!("spotify:track:t{n}"));
+            track
+        };
+        let mut state = PlaylistDetailsState::new(id.clone());
+        state.update_with(Cow::Owned(BrowserAction::SetPlaylistDetails(
+            Box::new(crate::app::models::Playlist {
+                rri: crate::app::models::ResourceId::new(
+                    riff_api::models::Provider::Spotify,
+                    id.clone(),
+                ),
+                total_tracks: Some(3),
+                ..Default::default()
+            }),
+            Box::new(Page {
+                items: (0..3).map(track).collect(),
+                offset: Some(0),
+                total: None,
+                next_cursor: None,
+            }),
+        )));
+
+        let events = state.update_with(Cow::Owned(BrowserAction::RemoveTracksFromPlaylist(
+            id.clone(),
+            vec!["spotify:track:t1".to_string()],
+        )));
+
+        assert_eq!(events, vec![BrowserEvent::PlaylistTracksRemoved(id)]);
+        let left: Vec<String> = state
+            .songs
+            .collect()
+            .into_iter()
+            .map(|t| t.rri.id)
+            .collect();
+        assert_eq!(left, ["t0", "t2"]);
+        assert_eq!(state.playlist.unwrap().total_tracks, Some(2));
     }
 
     #[test]

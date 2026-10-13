@@ -28,6 +28,7 @@ glib = "0.22.9"
 gdk-pixbuf = "0.22.0"
 futures = "0.3.18"
 uuid = { version = "1.18", features = ["v5"] }
+prost = "0.14"
 
 [dependencies.serde]
 version = "1.0.136"

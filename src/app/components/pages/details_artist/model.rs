@@ -7,7 +7,6 @@ use std::ops::Deref;
 use std::rc::Rc;
 
 use crate::app::components::DetailsPageModel;
-use crate::app::components::SimpleHeaderBarModel;
 use crate::app::components::{
     dispatch_api_call, dispatch_api_read, labels, playing_card, CardListModel, HasHeaderBarModel,
     HeaderImageShape, ImageShape, PageModel, PinnedPageModel, PlayingCard, TrackListModel,
@@ -277,12 +276,7 @@ impl TrackListModel for ArtistDetailsModel {
     }
 }
 
-impl SimpleHeaderBarModel for ArtistDetailsModel {
-    fn selection_context(&self) -> Option<SelectionContext> {
-        None
-    }
-    fn select_all(&self) {}
-}
+crate::impl_track_list_header_bar!(ArtistDetailsModel);
 
 impl crate::app::ProvidesApi for ArtistDetailsModel {
     fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {

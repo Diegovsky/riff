@@ -28,6 +28,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::task::JoinHandle;
 use url::Url;
 
+use crate::session_tokens::SessionTokens;
 use crate::token_store::TokenStore;
 
 pub const CLIENT_ID: &str = "782ae96ea60f4cdf986a766049607005";
@@ -46,10 +47,16 @@ playlist-modify-public,\
 playlist-modify-private,\
 user-modify-playback-state,\
 streaming,\
-playlist-modify-public";
+playlist-modify-public,\
+ugc-image-upload";
 
 pub const SESSION_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
-pub const SESSION_SCOPES: &str = "streaming";
+// The playlist scopes are for the internal API, which makes a playlist private
+// or public.
+pub const SESSION_SCOPES: &str = "streaming,\
+playlist-read-private,\
+playlist-modify-public,\
+playlist-modify-private";
 
 // Interval between background refresh retries. The refresh token stays valid
 // far longer than the access token, so on a transient failure we keep polling
@@ -62,23 +69,33 @@ const REFRESH_POLL_INTERVAL: Duration = Duration::from_secs(10);
 // expired token.
 const REFRESH_LEAD_TIME: Duration = Duration::from_secs(60);
 
+// How long a connection to the login listener has to send its request.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
 pub struct RiffOauthClient {
     client: BasicClient,
-    session_client: BasicClient,
     token_store: TokenStore,
+    session_tokens: SessionTokens,
 }
 
 pub struct AuthcodeChallenge {
     pkce_verifier: PkceCodeVerifier,
+    session_pkce_verifier: PkceCodeVerifier,
     pub auth_url: Url,
-    listener: JoinHandle<Result<AuthorizationCode, OAuthError>>,
+    listener: JoinHandle<Result<AuthCodes, OAuthError>>,
 }
 
-async fn build_authcode_challenge(
-    client: &BasicClient,
-    scopes: &str,
-    notify_complete: impl FnOnce() + Send + 'static,
-) -> Result<AuthcodeChallenge, OAuthError> {
+pub struct LoginCredentials {
+    pub web_api: Credentials,
+    pub session: Credentials,
+}
+
+struct AuthCodes {
+    code: AuthorizationCode,
+    session_code: AuthorizationCode,
+}
+
+fn authorization(client: &BasicClient, scopes: &str) -> (Url, CsrfToken, PkceCodeVerifier) {
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
     // Generate the full authorization URL.
@@ -92,27 +109,19 @@ async fn build_authcode_challenge(
         .set_pkce_challenge(pkce_challenge)
         .url();
 
-    Ok(AuthcodeChallenge {
-        pkce_verifier,
-        auth_url,
-        listener: tokio::task::spawn(async move {
-            let result = wait_for_authcode(csrf_token).await;
-            notify_complete();
-            result
-        }),
-    })
+    (auth_url, csrf_token, pkce_verifier)
 }
 
 impl RiffOauthClient {
-    pub fn new(token_store: TokenStore) -> Self {
+    pub fn new(token_store: TokenStore, session_tokens: SessionTokens) -> Self {
         Self {
             client: Self::build_client(CLIENT_ID),
-            session_client: Self::build_client(SESSION_CLIENT_ID),
             token_store,
+            session_tokens,
         }
     }
 
-    fn build_client(client_id: &str) -> BasicClient {
+    pub(crate) fn build_client(client_id: &str) -> BasicClient {
         let auth_url = AuthUrl::new("https://accounts.spotify.com/authorize".to_string())
             .expect("Malformed URL");
         let token_url = TokenUrl::new("https://accounts.spotify.com/api/token".to_string())
@@ -131,31 +140,53 @@ impl RiffOauthClient {
         &self,
         notify_complete: impl FnOnce() + Send + 'static,
     ) -> Result<AuthcodeChallenge, OAuthError> {
-        build_authcode_challenge(&self.client, SCOPES, notify_complete).await
+        let (auth_url, state, pkce_verifier) = authorization(&self.client, SCOPES);
+        let (session_auth_url, session_state, session_pkce_verifier) =
+            authorization(self.session_tokens.client(), SESSION_SCOPES);
+
+        Ok(AuthcodeChallenge {
+            pkce_verifier,
+            session_pkce_verifier,
+            auth_url,
+            listener: tokio::task::spawn(async move {
+                let result = wait_for_authcodes(state, session_state, session_auth_url).await;
+                notify_complete();
+                result
+            }),
+        })
     }
 
-    pub async fn spawn_session_authcode_listener(
-        &self,
-        notify_complete: impl FnOnce() + Send + 'static,
-    ) -> Result<AuthcodeChallenge, OAuthError> {
-        build_authcode_challenge(&self.session_client, SESSION_SCOPES, notify_complete).await
-    }
-
-    /// Obtain a Spotify access token using the authorization code with PKCE OAuth flow.
+    /// Obtain the access tokens of a login, using the authorization
+    /// code with PKCE OAuth flow.
     /// The redirect_uri must match what is registered to the client ID.
     pub async fn exchange_authcode(
         &self,
         challenge: AuthcodeChallenge,
-    ) -> Result<Credentials, OAuthError> {
-        let code = challenge
+    ) -> Result<LoginCredentials, OAuthError> {
+        let codes = challenge
             .listener
             .await
             .map_err(|_| OAuthError::AuthCodeListenerTerminated)??;
 
-        let token = self
-            .client
+        let web_api = Self::exchange(&self.client, codes.code, challenge.pkce_verifier).await?;
+        let session = Self::exchange(
+            self.session_tokens.client(),
+            codes.session_code,
+            challenge.session_pkce_verifier,
+        )
+        .await?;
+
+        Ok(LoginCredentials { web_api, session })
+    }
+
+    async fn exchange(
+        client: &BasicClient,
+        code: AuthorizationCode,
+        pkce_verifier: PkceCodeVerifier,
+    ) -> Result<Credentials, OAuthError> {
+        let token = client
             .exchange_code(code)
-            .set_pkce_verifier(challenge.pkce_verifier)
+            .set_pkce_verifier(pkce_verifier)
             .request_async(async_http_client)
             .await
             .map_err(|e| match e {
@@ -191,47 +222,34 @@ impl RiffOauthClient {
         Ok(token)
     }
 
-    pub async fn exchange_session_authcode(
-        &self,
-        challenge: AuthcodeChallenge,
-    ) -> Result<String, OAuthError> {
-        let code = challenge
-            .listener
-            .await
-            .map_err(|_| OAuthError::AuthCodeListenerTerminated)??;
-
-        let token = self
-            .session_client
-            .exchange_code(code)
-            .set_pkce_verifier(challenge.pkce_verifier)
-            .request_async(async_http_client)
-            .await
-            .map_err(|e| match e {
-                RequestTokenError::ServerResponse(res) => {
-                    error!(
-                        "An error occured while exchanging a session code: {}",
-                        res.to_string()
-                    );
-                    OAuthError::ExchangeCode { e: res.to_string() }
-                }
-                e => OAuthError::ExchangeCode { e: e.to_string() },
-            })?;
-
-        Ok(token.access_token().secret().to_string())
-    }
-
     pub async fn clear_credentials(&self) {
         self.token_store.clear().await;
+        self.session_tokens.clear().await;
     }
 
     pub async fn save_credentials(&self, creds: &Credentials) {
         self.token_store.set(creds.clone()).await;
     }
 
+    pub async fn save_session_credentials(&self, creds: &Credentials) {
+        self.session_tokens.save(creds).await;
+    }
+
+    pub async fn restore_session_credentials(&self) -> bool {
+        self.session_tokens.restore().await
+    }
+
     pub async fn get_valid_token(&self) -> Result<Credentials, OAuthError> {
-        let token = self.token_store.get().await.ok_or(OAuthError::LoggedOut)?;
+        Self::valid_token(&self.client, &self.token_store).await
+    }
+
+    pub(crate) async fn valid_token(
+        client: &BasicClient,
+        token_store: &TokenStore,
+    ) -> Result<Credentials, OAuthError> {
+        let token = token_store.get().await.ok_or(OAuthError::LoggedOut)?;
         if token.token_expired() {
-            self.refresh_token(token).await
+            Self::refresh(client, token_store, token).await
         } else {
             Ok(token)
         }
@@ -254,10 +272,17 @@ impl RiffOauthClient {
     /// ([`OAuthError::RefreshTransient`]) and the credentials are left intact so
     /// a caller can poll and try again later.
     pub async fn refresh_token(&self, old_token: Credentials) -> Result<Credentials, OAuthError> {
+        Self::refresh(&self.client, &self.token_store, old_token).await
+    }
+
+    async fn refresh(
+        client: &BasicClient,
+        token_store: &TokenStore,
+        old_token: Credentials,
+    ) -> Result<Credentials, OAuthError> {
         let refresh_token = old_token.refresh_token.clone();
 
-        match self
-            .client
+        match client
             .exchange_refresh_token(&RefreshToken::new(refresh_token.clone()))
             .request_async(async_http_client)
             .await
@@ -281,7 +306,7 @@ impl RiffOauthClient {
                     ),
                 };
 
-                self.token_store.set(new_token.clone()).await;
+                token_store.set(new_token.clone()).await;
                 Ok(new_token)
             }
             Err(e) => {
@@ -297,7 +322,7 @@ impl RiffOauthClient {
 
                 if fatal {
                     error!("Refresh token rejected by Spotify: {e}");
-                    self.token_store.clear().await;
+                    token_store.clear().await;
                     Err(OAuthError::RefreshFailed { e: e.to_string() })
                 } else {
                     warn!("Transient error while refreshing token: {e}");
@@ -308,7 +333,14 @@ impl RiffOauthClient {
     }
 
     pub async fn refresh_token_at_expiry(&self) -> Result<Credentials, OAuthError> {
-        let Some(old_token) = self.token_store.get_cached().await.take() else {
+        Self::refresh_at_expiry(&self.client, &self.token_store).await
+    }
+
+    pub(crate) async fn refresh_at_expiry(
+        client: &BasicClient,
+        token_store: &TokenStore,
+    ) -> Result<Credentials, OAuthError> {
+        let Some(old_token) = token_store.get_cached().await.take() else {
             return Err(OAuthError::NoRefreshToken);
         };
 
@@ -328,7 +360,7 @@ impl RiffOauthClient {
         // token) stops the poll and propagates to the caller.
         loop {
             info!("Refreshing token...");
-            match self.refresh_token(old_token.clone()).await {
+            match Self::refresh(client, token_store, old_token.clone()).await {
                 Ok(new_token) => return Ok(new_token),
                 Err(OAuthError::RefreshTransient { e }) => {
                     warn!(
@@ -377,51 +409,137 @@ pub enum OAuthError {
 
     #[error("No saved token")]
     LoggedOut,
-
-    #[error("Mismatched state during auth code exchange")]
-    InvalidState,
 }
 
-/// Spawn HTTP server at provided socket address to accept OAuth callback and return auth code.
-async fn wait_for_authcode(expected_state: CsrfToken) -> Result<AuthorizationCode, OAuthError> {
+/// Spawn HTTP server at provided socket address to accept the OAuth callbacks
+/// of a login and return its auth codes.
+async fn wait_for_authcodes(
+    state: CsrfToken,
+    session_state: CsrfToken,
+    session_auth_url: Url,
+) -> Result<AuthCodes, OAuthError> {
     let addr = get_socket_address(REDIRECT_URI).expect("Invalid redirect uri");
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .map_err(|e| OAuthError::AuthCodeListenerBind { addr, e })?;
 
-    let (mut stream, _) = listener
-        .accept()
-        .await
-        .map_err(|_| OAuthError::AuthCodeListenerTerminated)?;
+    accept_authcodes(listener, state, session_state, session_auth_url).await
+}
 
+async fn accept_authcodes(
+    listener: tokio::net::TcpListener,
+    state: CsrfToken,
+    session_state: CsrfToken,
+    session_auth_url: Url,
+) -> Result<AuthCodes, OAuthError> {
+    let (requests_tx, mut requests) = tokio::sync::mpsc::unbounded_channel();
+    let accepting = tokio::task::spawn(async move {
+        while let Ok((mut stream, _)) = listener.accept().await {
+            let requests_tx = requests_tx.clone();
+            tokio::task::spawn(async move {
+                let request = tokio::time::timeout(REQUEST_TIMEOUT, read_request(&mut stream));
+                if let Ok(Ok(request_line)) = request.await {
+                    let _ = requests_tx.send((stream, request_line));
+                }
+            });
+        }
+    });
+    let _accepting = AbortOnDrop(accepting);
+
+    let mut first_code = None;
+    loop {
+        let (mut stream, request_line) = requests
+            .recv()
+            .await
+            .ok_or(OAuthError::AuthCodeListenerTerminated)?;
+
+        let Ok((callback_state, code)) = parse_query(&request_line) else {
+            turn_away(&mut stream).await;
+            continue;
+        };
+        let awaited = if first_code.is_none() {
+            &state
+        } else {
+            &session_state
+        };
+        if callback_state.secret() != awaited.secret() {
+            turn_away(&mut stream).await;
+            continue;
+        }
+        let Some(code) = code else {
+            let _ = respond(&mut stream, "200 OK", "", REFUSED_MESSAGE).await;
+            return Err(OAuthError::AuthCodeNotFound);
+        };
+
+        match first_code.take() {
+            None => {
+                first_code = Some(code);
+                let location = format!("location: {session_auth_url}\r\n");
+                respond(&mut stream, "302 Found", &location, "").await?;
+            }
+            Some(first_code) => {
+                let _ = respond(&mut stream, "200 OK", "", include_str!("./login.html")).await;
+                return Ok(AuthCodes {
+                    code: first_code,
+                    session_code: code,
+                });
+            }
+        }
+    }
+}
+
+const REFUSED_MESSAGE: &str = "Login cancelled. You can close this tab.";
+
+async fn turn_away(stream: &mut tokio::net::TcpStream) {
+    let _ = respond(stream, "404 Not Found", "", "").await;
+}
+
+struct AbortOnDrop(JoinHandle<()>);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+async fn read_request(stream: &mut tokio::net::TcpStream) -> Result<String, OAuthError> {
+    let mut reader = BufReader::new(stream);
     let mut request_line = String::new();
-    let mut reader = BufReader::new(&mut stream);
     reader
         .read_line(&mut request_line)
         .await
         .map_err(|_| OAuthError::AuthCodeListenerParse)?;
-
-    let (state, code) = parse_query(&request_line)?;
-    if *expected_state.secret() != *state.secret() {
-        return Err(OAuthError::InvalidState);
+    let mut header = String::new();
+    loop {
+        header.clear();
+        match reader.read_line(&mut header).await {
+            Ok(0) => break,
+            Ok(_) if header.trim_end().is_empty() => break,
+            Ok(_) => {}
+            Err(_) => return Err(OAuthError::AuthCodeListenerParse),
+        }
     }
+    Ok(request_line)
+}
 
-    let message = include_str!("./login.html");
+async fn respond(
+    stream: &mut tokio::net::TcpStream,
+    status: &str,
+    headers: &str,
+    body: &str,
+) -> Result<(), OAuthError> {
     let response = format!(
-        "HTTP/1.1 200 OK\r\ncontent-length: {}\r\n\r\n{}",
-        message.len(),
-        message
+        "HTTP/1.1 {status}\r\n{headers}content-length: {}\r\nconnection: close\r\n\r\n{body}",
+        body.len(),
     );
     stream
         .write_all(response.as_bytes())
         .await
-        .map_err(|_| OAuthError::AuthCodeListenerWrite)?;
-
-    Ok(code)
+        .map_err(|_| OAuthError::AuthCodeListenerWrite)
 }
 
-fn parse_query(request_line: &str) -> Result<(CsrfToken, AuthorizationCode), OAuthError> {
+fn parse_query(request_line: &str) -> Result<(CsrfToken, Option<AuthorizationCode>), OAuthError> {
     let query = request_line
         .split_whitespace()
         .nth(1)
@@ -438,10 +556,7 @@ fn parse_query(request_line: &str) -> Result<(CsrfToken, AuthorizationCode), OAu
         .remove("state")
         .map(CsrfToken::new)
         .ok_or(OAuthError::CsrfTokenNotFound)?;
-    let code = query_params
-        .remove("code")
-        .map(AuthorizationCode::new)
-        .ok_or(OAuthError::AuthCodeNotFound)?;
+    let code = query_params.remove("code").map(AuthorizationCode::new);
 
     Ok((csrf_token, code))
 }
@@ -504,5 +619,68 @@ mod test {
             get_socket_address("http://[::1]:8888/foo"),
             Some(localhost_v6)
         );
+    }
+
+    async fn get(addr: SocketAddr, target: &str) -> String {
+        use tokio::io::AsyncReadExt;
+
+        let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let request = format!("GET {target} HTTP/1.1\r\nhost: localhost\r\n\r\n");
+        stream.write_all(request.as_bytes()).await.unwrap();
+        let mut response = String::new();
+        stream.read_to_string(&mut response).await.unwrap();
+        response
+    }
+
+    async fn listen() -> (SocketAddr, JoinHandle<Result<AuthCodes, OAuthError>>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let codes = tokio::task::spawn(accept_authcodes(
+            listener,
+            CsrfToken::new("first".to_string()),
+            CsrfToken::new("second".to_string()),
+            Url::parse("https://accounts.example/authorize?client_id=session").unwrap(),
+        ));
+        (addr, codes)
+    }
+
+    #[tokio::test]
+    async fn login_goes_through_both_authorizations() {
+        let (addr, codes) = listen().await;
+
+        assert!(get(addr, "/favicon.ico").await.starts_with("HTTP/1.1 404"));
+        let stale = get(addr, "/login?code=x&state=stale").await;
+        assert!(stale.starts_with("HTTP/1.1 404"));
+        let refused = get(addr, "/login?error=access_denied&state=stale").await;
+        assert!(refused.starts_with("HTTP/1.1 404"));
+        let early = get(addr, "/login?code=x&state=second").await;
+        assert!(early.starts_with("HTTP/1.1 404"));
+
+        let _idle = tokio::net::TcpStream::connect(addr).await.unwrap();
+
+        let first = get(addr, "/login?code=one&state=first").await;
+        assert!(first.starts_with("HTTP/1.1 302"));
+        assert!(
+            first.contains("location: https://accounts.example/authorize?client_id=session\r\n")
+        );
+
+        let second = get(addr, "/login?code=two&state=second").await;
+        assert!(second.starts_with("HTTP/1.1 200"));
+
+        let codes = codes.await.unwrap().unwrap();
+        assert_eq!(codes.code.secret(), "one");
+        assert_eq!(codes.session_code.secret(), "two");
+    }
+
+    #[tokio::test]
+    async fn login_ends_when_refused() {
+        let (addr, codes) = listen().await;
+        let refused = get(addr, "/login?error=access_denied&state=first").await;
+        assert!(refused.starts_with("HTTP/1.1 200"));
+        assert!(refused.ends_with(REFUSED_MESSAGE));
+        assert!(matches!(
+            codes.await.unwrap(),
+            Err(OAuthError::AuthCodeNotFound)
+        ));
     }
 }

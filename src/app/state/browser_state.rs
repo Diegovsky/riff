@@ -32,6 +32,7 @@ pub enum BrowserAction {
     SetPlaylistsContent(Vec<Playlist>),
     AppendPlaylistsContent(Vec<Playlist>),
     RemoveTracksFromPlaylist(String, Vec<String>),
+    AddTracksToPlaylist(String, Vec<Track>),
     RemovePlaylist(String),
     SetAlbumInfo(Box<Album>),
     SetAlbumTracks(String, Box<Page<Track>>),
@@ -39,6 +40,8 @@ pub enum BrowserAction {
     AppendAlbumTracks(String, Box<Page<Track>>),
     SetPlaylistDetails(Box<Playlist>, Box<Page<Track>>),
     UpdatePlaylistName(PlaylistSummary),
+    UpdatePlaylistArt(String, ImageSet),
+    UpdatePlaylistInfo(String, Option<String>, Option<bool>),
     AppendPlaylistTracks(String, Box<Page<Track>>),
     Search(String),
     /// Used to tell the currently loaded Details screen to play a song

@@ -4,7 +4,7 @@ use crate::settings::{RiffSettings, StateTracker};
 use futures::channel::mpsc::UnboundedSender;
 use gio::prelude::SettingsExt;
 use glib::object::Cast;
-use riff_auth::TokenStore;
+use riff_auth::{SessionTokens, TokenStore};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -29,6 +29,8 @@ pub use state::{
 };
 
 pub mod load;
+
+pub mod playlist_actions;
 
 #[cfg(debug_assertions)]
 mod dev_tools;
@@ -61,6 +63,9 @@ impl App {
         // Token
         let token_store = TokenStore::new();
         let token_provider: Arc<dyn riff_api::TokenProvider> = Arc::new(token_store.clone());
+        let session_tokens = SessionTokens::new();
+        let session_token_provider: Arc<dyn riff_api::TokenProvider> =
+            Arc::new(session_tokens.clone());
 
         // Setting
         let gsettings = gio::Settings::new("dev.diegovsky.Riff");
@@ -70,6 +75,7 @@ impl App {
         let disk_cache_mb = gsettings.uint("disk-cache-size-mb").max(1) as usize;
         let api_service = Arc::new(riff_api::spotify_service(
             token_provider,
+            session_token_provider,
             memory_cache_mb * 1024 * 1024,
             disk_cache_mb * 1024 * 1024,
         ));
@@ -80,6 +86,7 @@ impl App {
             settings.player_settings.clone(),
             sender.clone(),
             token_store,
+            session_tokens,
         );
 
         let api = model.api();

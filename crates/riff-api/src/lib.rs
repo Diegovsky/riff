@@ -9,6 +9,7 @@ mod token;
 
 pub(crate) mod cache;
 pub(crate) mod http;
+mod image;
 pub(crate) mod providers;
 mod scheduler;
 pub(crate) mod service;
