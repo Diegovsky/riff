@@ -187,26 +187,31 @@ impl CardViewMenu {
 
         let size_ref = Rc::clone(&size);
         let card_list_ref = Rc::clone(&card_list);
-        let inc_btn = increase_btn.clone();
+
+        let inc_btn = increase_btn.downgrade();
         let dispatch = dispatcher.clone();
         decrease_btn.connect_clicked(move |btn| {
             let new_size = size_ref.get().decrease();
             size_ref.set(new_size);
             card_list_ref.update_size(new_size);
             btn.set_sensitive(new_size != CardSize::Small);
-            inc_btn.set_sensitive(true);
+            if let Some(inc_btn) = inc_btn.upgrade() {
+                inc_btn.set_sensitive(true);
+            }
             dispatch.dispatch(BrowserAction::ChangeCardSize(new_size).into());
         });
 
         let size_ref = size;
         let card_list_ref = card_list;
-        let dec_btn = decrease_btn.clone();
+        let dec_btn = decrease_btn.downgrade();
         increase_btn.connect_clicked(move |btn| {
             let new_size = size_ref.get().increase();
             size_ref.set(new_size);
             card_list_ref.update_size(new_size);
             btn.set_sensitive(new_size != CardSize::Large);
-            dec_btn.set_sensitive(true);
+            if let Some(dec_btn) = dec_btn.upgrade() {
+                dec_btn.set_sensitive(true);
+            }
             dispatcher.dispatch(BrowserAction::ChangeCardSize(new_size).into());
         });
     }

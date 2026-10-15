@@ -128,6 +128,7 @@ mod imp {
         pub song_length: TemplateChild<gtk::Label>,
         #[template_child]
         pub menu_btn: TemplateChild<gtk::MenuButton>,
+        pub menu: RefCell<Option<RowMenu>>,
 
         // Inputs to update_layout.
         pub(super) width: Cell<RowWidth>,
@@ -241,6 +242,20 @@ impl Default for TrackRow {
     }
 }
 
+pub type MenuBuilder = Rc<dyn Fn() -> Option<MenuModel>>;
+
+#[derive(Clone)]
+pub struct RowMenu {
+    build: MenuBuilder,
+    hooks: Option<MenuHooks>,
+}
+
+impl std::fmt::Debug for RowMenu {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RowMenu").finish_non_exhaustive()
+    }
+}
+
 #[derive(Clone)]
 pub struct MenuHooks {
     pub opening: Rc<dyn Fn()>,
@@ -293,6 +308,14 @@ impl TrackRow {
             move |_| row.set_hovered(false)
         ));
         self.add_controller(hover);
+
+        imp.menu_btn.set_create_popup_func(clone!(
+            #[weak(rename_to = row)]
+            self,
+            move |_| {
+                row.build_menu();
+            }
+        ));
 
         let right_click = gtk::GestureClick::builder()
             .button(gdk::BUTTON_SECONDARY)
@@ -359,21 +382,30 @@ impl TrackRow {
         self.insert_action_group("song", actions);
     }
 
-    pub fn set_menu(&self, menu: Option<&MenuModel>, hooks: Option<&MenuHooks>) {
+    pub fn set_menu(&self, build: Option<MenuBuilder>, hooks: Option<&MenuHooks>) {
         let menu_btn = &self.imp().menu_btn;
-        menu_btn.set_menu_model(menu);
-        menu_btn.set_visible(menu.is_some());
-        let Some(popover) = menu_btn.popover() else {
-            return;
-        };
+        menu_btn.set_menu_model(None::<&MenuModel>);
+        menu_btn.set_visible(build.is_some());
+        self.imp().menu.replace(build.map(|build| RowMenu {
+            build,
+            hooks: hooks.cloned(),
+        }));
+    }
+
+    fn build_menu(&self) -> Option<gtk::Popover> {
+        let RowMenu { build, hooks } = self.imp().menu.borrow().clone()?;
+        let menu_btn = &self.imp().menu_btn;
+        menu_btn.set_menu_model(build().as_ref());
+        let popover = menu_btn.popover()?;
         popover.set_has_arrow(false);
         popover.connect_closed(|popover| popover.set_pointing_to(None));
 
-        let Some((hooks, popover)) = hooks.zip(popover.downcast_ref::<gtk::PopoverMenu>()) else {
-            return;
+        let Some((hooks, popover_menu)) = hooks.zip(popover.downcast_ref::<gtk::PopoverMenu>())
+        else {
+            return Some(popover);
         };
         let shown: RefCell<Option<gtk::Widget>> = RefCell::default();
-        popover.connect_show(clone!(
+        popover_menu.connect_show(clone!(
             #[strong]
             hooks,
             move |popover| {
@@ -388,11 +420,12 @@ impl TrackRow {
                 }
             }
         ));
+        Some(popover)
     }
 
     fn show_menu(&self, x: f64, y: f64) {
         let menu_btn = &*self.imp().menu_btn;
-        let Some(popover) = menu_btn.popover() else {
+        let Some(popover) = self.build_menu() else {
             return;
         };
         let Some(origin) = self.compute_point(menu_btn, &Point::zero()) else {

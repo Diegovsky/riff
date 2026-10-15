@@ -42,7 +42,7 @@
 /* Playing: the animated indicator replaces the index/cover. */
 .song--playing .song__icon {
   opacity: 1;
-  animation: playing 1s linear infinite;
+  animation: playing 1s steps(17) infinite;
   color: @accent_bg_color;
   min-width: 16px;
   -gtk-icon-source: -gtk-icontheme("playback-0-symbolic");

@@ -58,7 +58,7 @@ stack.transitioning scrollbar {
   min-height: 16px;
   color: @accent_bg_color;
   -gtk-icon-source: -gtk-icontheme("playback-0-symbolic");
-  animation: playing 1s linear infinite;
+  animation: playing 1s steps(17) infinite;
 }
 
 .now-playing__idle,
@@ -85,22 +85,22 @@ stack.transitioning scrollbar {
 
 @keyframes playing {
   0% { -gtk-icon-source: -gtk-icontheme("playback-0-symbolic"); }
-  6% { -gtk-icon-source: -gtk-icontheme("playback-1-symbolic"); }
-  12% { -gtk-icon-source: -gtk-icontheme("playback-2-symbolic"); }
-  18% { -gtk-icon-source: -gtk-icontheme("playback-3-symbolic"); }
-  24% { -gtk-icon-source: -gtk-icontheme("playback-4-symbolic"); }
-  30% { -gtk-icon-source: -gtk-icontheme("playback-5-symbolic"); }
-  36% { -gtk-icon-source: -gtk-icontheme("playback-6-symbolic"); }
-  42% { -gtk-icon-source: -gtk-icontheme("playback-7-symbolic"); }
-  49% { -gtk-icon-source: -gtk-icontheme("playback-8-symbolic"); }
-  54% { -gtk-icon-source: -gtk-icontheme("playback-9-symbolic"); }
-  60% { -gtk-icon-source: -gtk-icontheme("playback-10-symbolic"); }
-  66% { -gtk-icon-source: -gtk-icontheme("playback-11-symbolic"); }
-  72% { -gtk-icon-source: -gtk-icontheme("playback-12-symbolic"); }
-  79% { -gtk-icon-source: -gtk-icontheme("playback-13-symbolic"); }
-  85% { -gtk-icon-source: -gtk-icontheme("playback-14-symbolic"); }
-  90% { -gtk-icon-source: -gtk-icontheme("playback-15-symbolic"); }
-  96% { -gtk-icon-source: -gtk-icontheme("playback-16-symbolic"); }
+  5.88% { -gtk-icon-source: -gtk-icontheme("playback-1-symbolic"); }
+  11.76% { -gtk-icon-source: -gtk-icontheme("playback-2-symbolic"); }
+  17.65% { -gtk-icon-source: -gtk-icontheme("playback-3-symbolic"); }
+  23.53% { -gtk-icon-source: -gtk-icontheme("playback-4-symbolic"); }
+  29.41% { -gtk-icon-source: -gtk-icontheme("playback-5-symbolic"); }
+  35.29% { -gtk-icon-source: -gtk-icontheme("playback-6-symbolic"); }
+  41.18% { -gtk-icon-source: -gtk-icontheme("playback-7-symbolic"); }
+  47.06% { -gtk-icon-source: -gtk-icontheme("playback-8-symbolic"); }
+  52.94% { -gtk-icon-source: -gtk-icontheme("playback-9-symbolic"); }
+  58.82% { -gtk-icon-source: -gtk-icontheme("playback-10-symbolic"); }
+  64.71% { -gtk-icon-source: -gtk-icontheme("playback-11-symbolic"); }
+  70.59% { -gtk-icon-source: -gtk-icontheme("playback-12-symbolic"); }
+  76.47% { -gtk-icon-source: -gtk-icontheme("playback-13-symbolic"); }
+  82.35% { -gtk-icon-source: -gtk-icontheme("playback-14-symbolic"); }
+  88.24% { -gtk-icon-source: -gtk-icontheme("playback-15-symbolic"); }
+  94.12% { -gtk-icon-source: -gtk-icontheme("playback-16-symbolic"); }
   100% { -gtk-icon-source: -gtk-icontheme("playback-0-symbolic"); }
 }
 
