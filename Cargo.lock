@@ -3987,6 +3987,7 @@ dependencies = [
  "int-enum",
  "lazy_static",
  "libadwaita",
+ "libc",
  "librespot",
  "log",
  "open",

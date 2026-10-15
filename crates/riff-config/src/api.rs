@@ -7,10 +7,6 @@ use std::time::Duration;
 
 // Caching
 
-/// Estimated bytes per cached item in the in-memory LRU. Budget accounting
-/// only, so it need not be exact.
-pub const BYTES_PER_ITEM: usize = 512;
-
 /// Appended to disk cache entries that hold expiry metadata.
 pub const EXPIRY_EXT: &str = ".expiry";
 

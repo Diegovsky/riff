@@ -10,8 +10,8 @@ use riff_api::ApiService;
 
 use crate::app::components::utils::{ancestor, set_css_class, AnimatorDefault};
 use crate::app::components::{
-    labels, Component, DiscHeaderRow, EventListener, GroupButton, MenuHooks, RowOptions, TrackRow,
-    PLAYLIST_PICKER_MENU_ID, ROW_HEIGHT_PX, SELECTABLE_LIST_CLASS,
+    labels, Component, DiscHeaderRow, EventListener, GroupButton, MenuBuilder, MenuHooks,
+    RowOptions, TrackRow, PLAYLIST_PICKER_MENU_ID, ROW_HEIGHT_PX, SELECTABLE_LIST_CLASS,
 };
 use crate::app::models::{SongListModel, SongModel, SongState, Track, TrackExt};
 use crate::app::state::{BrowserEvent, PlaybackEvent, SelectionEvent, SelectionState};
@@ -714,10 +714,13 @@ where
         // keyboard), so restore the centered anchor once it's done.
         let refollow = {
             let follow = Rc::clone(&follow);
-            let adj = adj.clone();
+
+            let adj = adj.downgrade();
             move || {
+                let Some(adj) = adj.upgrade() else {
+                    return;
+                };
                 let follow = Rc::clone(&follow);
-                let adj = adj.clone();
                 glib::idle_add_local_once(move || follow(&adj, true));
             }
         };
@@ -899,28 +902,15 @@ fn bind_track<Model: TrackListModel + 'static>(
             move || model.playlist_picker(&picker_track)
         )),
     };
-    row.set_menu(menu_for(model, song).as_ref(), Some(&hooks));
-    let model = Rc::clone(model);
-    let menu_for = Rc::new(menu_for);
-    for property in ["liked", "pinned"] {
-        let handler = song.connect_notify_local(
-            Some(property),
-            clone!(
-                #[weak]
-                model,
-                #[weak]
-                row,
-                #[strong]
-                menu_for,
-                #[strong]
-                hooks,
-                move |song, _| {
-                    row.set_menu(menu_for(&model, song).as_ref(), Some(&hooks));
-                }
-            ),
-        );
-        song.push_signal(handler);
-    }
+
+    let has_menu = menu_for(model, song).is_some();
+    let weak_model = Rc::downgrade(model);
+    let weak_song = song.downgrade();
+    let build: MenuBuilder = Rc::new(move || {
+        let (model, song) = (weak_model.upgrade()?, weak_song.upgrade()?);
+        menu_for(&model, &song)
+    });
+    row.set_menu(has_menu.then_some(build), Some(&hooks));
     row
 }
 

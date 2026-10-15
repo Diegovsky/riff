@@ -34,8 +34,15 @@ use crate::app::{state::PlaybackAction, App, AppAction, BrowserAction};
 // Steps of the seek and volume shortcuts
 const SEEK_STEP_MS: i32 = 5_000;
 const VOLUME_STEP: f64 = 0.05;
+#[cfg(target_env = "gnu")]
+const MALLOC_ARENAS: libc::c_int = 4;
 
 fn main() {
+    #[cfg(target_env = "gnu")]
+    unsafe {
+        libc::mallopt(libc::M_ARENA_MAX, MALLOC_ARENAS);
+    }
+
     let settings = settings::RiffSettings::new_from_gsettings().unwrap_or_default();
     setup_gtk(&settings);
 

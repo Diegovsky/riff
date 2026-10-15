@@ -187,6 +187,8 @@ impl DetailsPage {
         adj.connect_value_changed(clone!(
             #[weak]
             title,
+            #[weak]
+            header_area,
             move |adj| {
                 let (_, header_height, _, _) = header_area.measure(gtk::Orientation::Vertical, -1);
                 let header_height = header_height as f64;
@@ -205,6 +207,8 @@ impl DetailsPage {
         let update = Rc::new(clone!(
             #[weak]
             widget,
+            #[weak]
+            scroll_child,
             move |adj: &gtk::Adjustment| {
                 if widget.height() == 0 {
                     return;

@@ -16,6 +16,7 @@ serde = { version = "1.0", features = ["derive"] }
 gio = "0.22"
 glib = "0.22.9"
 futures = "0.3.18"
+libc = "0.2"
 ref_filter_map = "1.0.1"
 zbus = "4.4.0"
 zvariant = "4.2.0"

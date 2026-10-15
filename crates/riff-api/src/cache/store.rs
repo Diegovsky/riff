@@ -7,12 +7,33 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use riff_config::api::BYTES_PER_ITEM;
+use serde::Serialize;
 
 use super::lru::LruCache;
 use super::CacheKey;
 
 type Stored = Box<dyn Any + Send + Sync>;
+
+const VALUE_OVERHEAD: usize = 64;
+
+fn measured_bytes<T: Serialize>(value: &T) -> usize {
+    struct Counter(usize);
+
+    impl std::io::Write for Counter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0 += buf.len();
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let mut counter = Counter(0);
+    let _ = serde_json::to_writer(&mut counter, value);
+    VALUE_OVERHEAD + std::mem::size_of::<T>() + counter.0
+}
 
 enum EntryData {
     Single(Stored),
@@ -20,8 +41,13 @@ enum EntryData {
 }
 
 struct PaginatedList {
-    pages: HashMap<usize, Vec<Stored>>,
+    pages: HashMap<usize, CachedPage>,
     total: usize,
+}
+
+struct CachedPage {
+    items: Vec<Stored>,
+    bytes: usize,
 }
 
 pub struct Store {
@@ -43,13 +69,14 @@ impl Store {
         }
     }
 
-    pub fn insert_single<T: Clone + Send + Sync + 'static>(&self, key: &CacheKey, value: T) {
+    pub fn insert_single<T: Clone + Send + Sync + Serialize + 'static>(
+        &self,
+        key: &CacheKey,
+        value: T,
+    ) {
+        let bytes = measured_bytes(&value);
         let mut store = self.store.lock().unwrap();
-        store.insert(
-            key.clone(),
-            EntryData::Single(Box::new(value)),
-            BYTES_PER_ITEM,
-        );
+        store.insert(key.clone(), EntryData::Single(Box::new(value)), bytes);
     }
 
     /// Return the page at `offset`, or `None` if not cached.
@@ -71,7 +98,7 @@ impl Store {
             return None;
         };
 
-        match downcast_page::<T>(page) {
+        match downcast_page::<T>(&page.items) {
             Some(items) => {
                 debug!(
                     "cache: hit {:?} offset {offset} ({} items)",
@@ -86,7 +113,7 @@ impl Store {
                 warn!(
                     "cache: downcast failure for {:?} offset {offset} (stored {} items, type {})",
                     key,
-                    page.len(),
+                    page.items.len(),
                     std::any::type_name::<T>()
                 );
                 None
@@ -95,7 +122,7 @@ impl Store {
     }
 
     /// Store the page at `offset`, replacing any previous page there.
-    pub fn append_paginated<T: Clone + Send + Sync + 'static>(
+    pub fn append_paginated<T: Clone + Send + Sync + Serialize + 'static>(
         &self,
         key: &CacheKey,
         offset: usize,
@@ -110,6 +137,7 @@ impl Store {
             total,
             std::any::type_name::<T>()
         );
+        let bytes = items.iter().map(measured_bytes).sum();
         let mut store = self.store.lock().unwrap();
 
         // Get or create the paginated entry, promoting it to most-recently-used.
@@ -124,10 +152,9 @@ impl Store {
         // object is left untouched (matching the previous behaviour).
         let new_bytes = if let EntryData::Paginated(list) = entry {
             list.total = total;
-            let page: Vec<Stored> = items.into_iter().map(|it| Box::new(it) as Stored).collect();
-            list.pages.insert(offset, page);
-            let item_count: usize = list.pages.values().map(|p| p.len()).sum();
-            Some(item_count * BYTES_PER_ITEM)
+            let items: Vec<Stored> = items.into_iter().map(|it| Box::new(it) as Stored).collect();
+            list.pages.insert(offset, CachedPage { items, bytes });
+            Some(list.pages.values().map(|page| page.bytes).sum())
         } else {
             None
         };
@@ -171,6 +198,10 @@ mod tests {
     struct FakeAlbum {
         id: String,
         title: String,
+    }
+
+    fn albums_bytes(range: std::ops::Range<usize>) -> usize {
+        albums(range).iter().map(measured_bytes).sum()
     }
 
     fn albums(range: std::ops::Range<usize>) -> Vec<FakeAlbum> {
@@ -327,7 +358,7 @@ mod tests {
         );
         assert_eq!(
             store.store.lock().unwrap().current_bytes(),
-            10 * BYTES_PER_ITEM
+            albums_bytes(0..10)
         );
         assert_bytes_consistent(&store);
     }
@@ -342,7 +373,7 @@ mod tests {
 
         assert_eq!(
             store.store.lock().unwrap().current_bytes(),
-            15 * BYTES_PER_ITEM
+            albums_bytes(0..15)
         );
         assert_bytes_consistent(&store);
     }
@@ -435,32 +466,48 @@ mod tests {
     }
 
     #[test]
+    fn larger_values_cost_more() {
+        let small = FakeAlbum {
+            id: "x".into(),
+            title: "X".into(),
+        };
+        let large = FakeAlbum {
+            id: "x".into(),
+            title: "X".repeat(1000),
+        };
+        assert!(measured_bytes(&small) > std::mem::size_of::<FakeAlbum>());
+        assert_eq!(measured_bytes(&large) - measured_bytes(&small), 999);
+    }
+
+    #[test]
     fn single_eviction_respects_budget_invariant() {
-        // Budget holds exactly three single objects.
-        let store = Store::new(BYTES_PER_ITEM * 3);
+        // Budget holds exactly three single objects (all the same size).
+        let budget = albums_bytes(0..3);
+        let store = Store::new(budget);
         for i in 0..8 {
             store.insert_single(
                 &CacheKey::Album(format!("a{i}")),
                 FakeAlbum {
                     id: format!("a{i}"),
-                    title: format!("A {i}"),
+                    title: format!("Album {i}"),
                 },
             );
             assert!(
-                store.store.lock().unwrap().current_bytes() <= BYTES_PER_ITEM * 3,
+                store.store.lock().unwrap().current_bytes() <= budget,
                 "usage must never exceed the budget"
             );
             assert_bytes_consistent(&store);
         }
-        assert_eq!(
-            store.store.lock().unwrap().current_bytes(),
-            BYTES_PER_ITEM * 3
-        );
+        assert_eq!(store.store.lock().unwrap().current_bytes(), budget);
     }
 
     #[test]
     fn lru_touch_protects_recently_used_single() {
-        let store = Store::new(BYTES_PER_ITEM * 3);
+        let entry_bytes = measured_bytes(&FakeAlbum {
+            id: "x".into(),
+            title: "X".into(),
+        });
+        let store = Store::new(entry_bytes * 3);
         let a = CacheKey::Album("1".into());
         let b = CacheKey::Album("2".into());
         let c = CacheKey::Album("3".into());
