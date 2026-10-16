@@ -34,6 +34,7 @@ pub enum QueueMenuEntry {
     None,
     Add,
     Queued,
+    Context,
 }
 
 fn shift_held(list: &gtk::ListView) -> bool {
@@ -111,6 +112,10 @@ pub fn build_song_menu(
             track_section.append(Some(&*labels::ADD_TO_QUEUE), Some("song.queue"));
         }
         QueueMenuEntry::Queued => {
+            track_section.append(Some(&*labels::REMOVE_FROM_QUEUE), Some("song.dequeue"));
+        }
+        QueueMenuEntry::Context => {
+            track_section.append(Some(&*labels::ADD_TO_QUEUE), Some("song.queue"));
             track_section.append(Some(&*labels::REMOVE_FROM_QUEUE), Some("song.dequeue"));
         }
     }
@@ -527,7 +532,7 @@ where
         factory.connect_unbind(|_, item| {
             let item = item.downcast_ref::<gtk::ListItem>().unwrap();
             if let Some(ListEntry::Track { song, .. }) = item.item().and_then(|i| list_entry(&i)) {
-                song.unbind_all();
+                song.unbind(binding_owner(item));
             }
         });
 
@@ -792,6 +797,10 @@ fn list_offset(listview: &gtk::ListView, content: &gtk::Widget) -> f64 {
         .map_or(0.0, |p| p.y() as f64)
 }
 
+fn binding_owner(item: &gtk::ListItem) -> usize {
+    item.as_ptr() as usize
+}
+
 fn item_row<W: IsA<gtk::Widget> + Default>(item: &gtk::ListItem) -> W {
     item.child().and_downcast::<W>().unwrap_or_else(|| {
         let row = W::default();
@@ -846,6 +855,7 @@ fn bind_track<Model: TrackListModel + 'static>(
 ) -> TrackRow {
     set_interactive(item, true);
     let row = item_row::<TrackRow>(item);
+    song.begin_bindings(binding_owner(item));
     row.bind(song, Arc::clone(api_service), options);
     row.set_disc_position(disc_start, disc_end);
 

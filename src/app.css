@@ -108,3 +108,11 @@ bottom-sheet.bottom-sheet--padded > sheet {
   margin-left: 32px;
   margin-right: 32px;
 }
+
+.utility-panel__header {
+  padding-bottom: 6px;
+}
+
+.queue-page__selection-bar {
+  padding-bottom: 11px;
+}

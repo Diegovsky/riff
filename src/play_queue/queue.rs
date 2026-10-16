@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
 use rand::{Rng, SeedableRng};
@@ -53,6 +55,20 @@ enum Step {
     Wrap(usize),
 }
 
+enum Move {
+    Queued { from: usize, to: usize },
+    Context { next: bool, from: usize, to: usize },
+    IntoQueue { index: usize, to: usize },
+}
+
+fn landing(from: usize, gap: usize) -> Option<usize> {
+    match gap {
+        _ if gap == from || gap == from + 1 => None,
+        _ if gap > from => Some(gap - 1),
+        _ => Some(gap),
+    }
+}
+
 #[derive(Debug)]
 pub struct QueueView {
     pub queued: Vec<(EntryKey, Track)>,
@@ -65,6 +81,7 @@ pub struct PlayQueue {
     order: Vec<usize>,
     cursor: Option<usize>,
     next_order: Vec<usize>,
+    removed: HashSet<usize>,
     separation: usize,
     queued: Vec<Queued>,
     now: Now,
@@ -86,6 +103,7 @@ impl PlayQueue {
             order: vec![],
             cursor: None,
             next_order: vec![],
+            removed: HashSet::new(),
             separation: DEFAULT_SEPARATION,
             queued: vec![],
             now: Now::Nothing,
@@ -204,12 +222,17 @@ impl PlayQueue {
     fn reset_context(&mut self, source: Option<SongsSource>) {
         self.context = Context::new(source);
         self.order.clear();
+        self.removed.clear();
         self.cursor = None;
         self.now = Now::Nothing;
     }
 
     fn rebuild_order(&mut self, first: Option<usize>) {
-        let mut order: Vec<usize> = self.context.loaded().collect();
+        let mut order: Vec<usize> = self
+            .context
+            .loaded()
+            .filter(|i| !self.removed.contains(i))
+            .collect();
         if self.shuffled {
             order.shuffle(&mut self.rng);
             if let Some(pos) = first.and_then(|f| order.iter().position(|&i| i == f)) {
@@ -221,6 +244,10 @@ impl PlayQueue {
         self.plan_next_loop();
     }
 
+    fn source_position(&self, i: usize) -> usize {
+        self.order.iter().rposition(|&j| j < i).map_or(0, |p| p + 1)
+    }
+
     fn integrate(&mut self, added: Vec<usize>) {
         for i in added {
             let pos = if self.shuffled {
@@ -230,7 +257,7 @@ impl PlayQueue {
                 self.next_order.insert(at, i);
                 pos
             } else {
-                self.order.partition_point(|&j| j < i)
+                self.source_position(i)
             };
             self.order.insert(pos, i);
             if let Some(c) = self.cursor.as_mut().filter(|c| pos <= **c) {
@@ -387,9 +414,14 @@ impl PlayQueue {
         else {
             return false;
         };
+        let restored = self.removed.remove(&i);
         if self.shuffled {
             self.rebuild_order(Some(i));
         } else {
+            if restored {
+                let pos = self.source_position(i);
+                self.order.insert(pos, i);
+            }
             self.cursor = self.order.iter().position(|&j| j == i);
         }
         self.now = Now::Context;
@@ -417,42 +449,185 @@ impl PlayQueue {
         self.now = Now::Nothing;
     }
 
+    fn new_queued(&mut self, track: Track) -> Queued {
+        self.next_uid += 1;
+        Queued {
+            uid: self.next_uid,
+            track,
+        }
+    }
+
     pub fn enqueue(&mut self, tracks: Vec<Track>) {
         for track in tracks {
-            self.next_uid += 1;
-            self.queued.push(Queued {
-                uid: self.next_uid,
-                track,
-            });
+            let entry = self.new_queued(track);
+            self.queued.push(entry);
         }
     }
 
     pub fn remove(&mut self, keys: &[EntryKey]) -> bool {
-        let removed = keys
-            .iter()
-            .filter_map(|key| match key {
-                EntryKey::Queued(uid) => self.take_queued(*uid),
-                EntryKey::Context(_) | EntryKey::NextLoop(_) => None,
-            })
-            .count();
-        removed > 0
+        let mut changed = false;
+        for key in keys {
+            changed |= match *key {
+                EntryKey::Queued(uid) => self.take_queued(uid).is_some(),
+                EntryKey::Context(i) => {
+                    self.current_context_index() != Some(i) && self.remove_from_context(i)
+                }
+                EntryKey::NextLoop(i) => self.remove_from_context(i),
+            };
+        }
+        changed
     }
 
-    pub fn move_queued(&mut self, key: EntryKey, to: usize) -> bool {
-        let EntryKey::Queued(uid) = key else {
+    fn remove_from_context(&mut self, i: usize) -> bool {
+        let Some(pos) = self.order.iter().position(|&j| j == i) else {
             return false;
         };
-        let Some(from) = self.queued_index(uid) else {
-            return false;
-        };
-        let to = if to > from { to - 1 } else { to };
-        let to = to.min(self.queued.len() - 1);
-        if to == from {
-            return false;
+
+        if self.current_context_index() == Some(i) {
+            if let Some(track) = self.context.get(i).cloned() {
+                self.now = Now::Queued(Box::new(self.new_queued(track)));
+            }
         }
-        let entry = self.queued.remove(from);
-        self.queued.insert(to, entry);
+        self.order.remove(pos);
+        self.cursor = match self.cursor {
+            Some(c) if pos <= c => c.checked_sub(1),
+            cursor => cursor,
+        };
+        self.next_order.retain(|&j| j != i);
+        self.removed.insert(i);
         true
+    }
+
+    fn context_rows(&self, repeat: RepeatMode) -> Vec<(EntryKey, usize)> {
+        let this_loop = self.upcoming_order().iter();
+        let next_loop = self.next_loop()[..self.next_loop_shown(repeat)].iter();
+        this_loop
+            .map(|&i| (EntryKey::Context(i), i))
+            .chain(next_loop.map(|&i| (EntryKey::NextLoop(i), i)))
+            .collect()
+    }
+
+    fn plan_move(
+        &self,
+        key: EntryKey,
+        target: EntryKey,
+        after: bool,
+        repeat: RepeatMode,
+        current_listed: bool,
+    ) -> Option<Move> {
+        let context = self.context_rows(repeat);
+        let row = |key: EntryKey| context.iter().position(|(k, _)| *k == key);
+        let queued = |key: EntryKey| match key {
+            EntryKey::Queued(uid) => self.queued_index(uid),
+            _ => None,
+        };
+        let from_queue = queued(key);
+        let from_context = row(key);
+        if from_queue.is_none() && from_context.is_none() {
+            return None;
+        }
+
+        let current = self.current_key();
+        let current_listed = current_listed && current.is_some();
+        let ends_queue = from_queue.is_some() || (self.queued.is_empty() && !current_listed);
+        let queue_gap = if let Some(i) = queued(target) {
+            Some(i + after as usize)
+        } else if Some(target) == current {
+            Some(after.then_some(0)?)
+        } else if !after && ends_queue && row(target) == Some(0) {
+            Some(self.queued.len())
+        } else {
+            None
+        };
+
+        match (from_queue, queue_gap) {
+            (Some(from), Some(gap)) => {
+                let to = landing(from, gap)?;
+                Some(Move::Queued { from, to })
+            }
+            (Some(_), None) => None,
+            (None, Some(to)) => {
+                let (_, index) = context[from_context?];
+                Some(Move::IntoQueue { index, to })
+            }
+            (None, None) => {
+                let this_loop = self.upcoming_order().len();
+                let (from, gap) = (from_context?, row(target)? + after as usize);
+                let next = from >= this_loop;
+                let (start, end, base) = if next {
+                    (this_loop, context.len(), 0)
+                } else {
+                    (0, this_loop, self.upcoming_start())
+                };
+                if gap < start || gap > end {
+                    return None;
+                }
+                let to = landing(from - start, gap - start)?;
+                Some(Move::Context {
+                    next,
+                    from: base + from - start,
+                    to: base + to,
+                })
+            }
+        }
+    }
+
+    pub fn can_move_entry(
+        &self,
+        key: EntryKey,
+        target: EntryKey,
+        after: bool,
+        repeat: RepeatMode,
+        current_listed: bool,
+    ) -> bool {
+        self.plan_move(key, target, after, repeat, current_listed)
+            .is_some()
+    }
+
+    pub fn move_entry(
+        &mut self,
+        key: EntryKey,
+        target: EntryKey,
+        after: bool,
+        repeat: RepeatMode,
+        current_listed: bool,
+    ) -> bool {
+        let Some(planned) = self.plan_move(key, target, after, repeat, current_listed) else {
+            return false;
+        };
+        match planned {
+            Move::Queued { from, to } => {
+                let entry = self.queued.remove(from);
+                self.queued.insert(to, entry);
+            }
+            Move::Context { next, from, to } => {
+                let order = if next && self.shuffled {
+                    &mut self.next_order
+                } else {
+                    &mut self.order
+                };
+                let i = order.remove(from);
+                order.insert(to, i);
+            }
+            Move::IntoQueue { index, to } => {
+                let Some(track) = self.context.get(index).cloned() else {
+                    return false;
+                };
+                let entry = self.new_queued(track);
+                self.queued.insert(to, entry);
+                self.remove_from_context(index);
+            }
+        }
+        true
+    }
+
+    fn next_loop_shown(&self, repeat: RepeatMode) -> usize {
+        if repeat != RepeatMode::Context {
+            return 0;
+        }
+        let gone = self.order.len() - self.upcoming_order().len();
+        let current = matches!(self.now, Now::Context) as usize;
+        gone.saturating_sub(current).min(self.next_loop().len())
     }
 
     pub fn upcoming(&self) -> Vec<&Track> {
@@ -474,20 +649,9 @@ impl PlayQueue {
             .iter()
             .map(|e| (EntryKey::Queued(e.uid), e.track.clone()))
             .collect();
-        let upcoming = self.upcoming_order();
-        let next_loop_shown = if repeat == RepeatMode::Context {
-            let gone = self.order.len() - upcoming.len();
-            let current = matches!(self.now, Now::Context) as usize;
-            gone.saturating_sub(current).min(self.next_loop().len())
-        } else {
-            0
-        };
-        let this_loop = upcoming.iter().map(|&i| (EntryKey::Context(i), i));
-        let next_loop = self.next_loop()[..next_loop_shown]
-            .iter()
-            .map(|&i| (EntryKey::NextLoop(i), i));
-        let context = this_loop
-            .chain(next_loop)
+        let context = self
+            .context_rows(repeat)
+            .into_iter()
             .filter_map(|(key, i)| Some((key, self.context.get(i)?.clone())))
             .collect();
         QueueView { queued, context }
@@ -653,28 +817,217 @@ mod tests {
         let keys = queued_keys(&q);
         assert!(q.remove(&[keys[1]]));
         assert_eq!(queued_keys(&q), [keys[0], keys[2]]);
-        assert!(!q.remove(&[EntryKey::Context(1)]));
+        assert!(!q.remove(&[EntryKey::Context(0)]));
         assert_eq!(order_ids(&q), ["1", "2"]);
     }
 
     #[test]
-    fn test_move_queued() {
-        let mut q = playing(&["1"], "1");
+    fn test_removed_context_tracks_stay_out_of_every_loop() {
+        let mut q = playing(&["1", "2", "3", "4"], "2");
+        assert!(q.remove(&[EntryKey::Context(2)]));
+        assert!(!q.remove(&[EntryKey::Context(2)]));
+        assert_eq!(context_ids(&q, RepeatMode::Context), ["4", "1"]);
+        assert!(q.remove(&[EntryKey::NextLoop(0)]));
+        assert_eq!(current_id(&q).as_deref(), Some("2"));
+        assert_eq!(context_ids(&q, RepeatMode::Context), ["4"]);
+        assert_eq!(
+            ended_times(&mut q, RepeatMode::Context, 4),
+            ["4", "2", "4", "2"]
+        );
+        assert_eq!(id(q.go_back(RepeatMode::Off, no_skip)).as_deref(), None);
+
+        q.set_shuffled(true);
+        q.set_shuffled(false);
+        assert_eq!(order_ids(&q), ["2", "4"]);
+        q.add_page(SongsSource::Album("a".into()), page(0, 4, Some(4)));
+        assert_eq!(order_ids(&q), ["2", "4"]);
+
+        assert!(q.play_id("3"));
+        assert_eq!(order_ids(&q), ["2", "3", "4"]);
+        album(&mut q, &["1", "2", "3", "4"]);
+        assert_eq!(order_ids(&q), ["1", "2", "3", "4"]);
+    }
+
+    #[test]
+    fn test_removing_shuffled_context_tracks() {
+        let mut q = shuffled(&numbered(10), "0");
+        ended_times(&mut q, RepeatMode::Context, 5);
+        let playing = current_id(&q);
+        let view = q.view(RepeatMode::Context);
+        let gone: Vec<EntryKey> = [0, 5].iter().map(|&i| view.context[i].0).collect();
+        assert!(matches!(
+            gone[..],
+            [EntryKey::Context(_), EntryKey::NextLoop(_)]
+        ));
+        assert!(q.remove(&gone));
+        let shown = context_ids(&q, RepeatMode::Context);
+        for i in [0, 5] {
+            assert!(!shown.contains(&view.context[i].1.rri.id));
+        }
+        assert_eq!(current_id(&q), playing);
+        assert_eq!(order_ids(&q).len() + q.removed.len(), 10);
+        let played = ended_times(&mut q, RepeatMode::Context, 30);
+        assert_eq!(played.len(), 30);
+        for i in [0, 5] {
+            assert!(!played.contains(&view.context[i].1.rri.id));
+        }
+    }
+
+    #[test]
+    fn test_removing_the_playing_track_from_the_next_loop_lets_it_finish() {
+        let mut q = shuffled(&numbered(5), "0");
+        let i = q.current_context_index().unwrap();
+        assert!(q.remove(&[EntryKey::NextLoop(i)]));
+        assert_eq!(current_id(&q).as_deref(), Some("0"));
+        assert_eq!(q.current_context_index(), None);
+        let played = ended_times(&mut q, RepeatMode::Context, 12);
+        assert_eq!(played.len(), 12);
+        assert!(!played.contains(&"0".to_string()));
+    }
+
+    fn context_keys(q: &PlayQueue, repeat: RepeatMode) -> Vec<EntryKey> {
+        q.view(repeat).context.iter().map(|(k, _)| *k).collect()
+    }
+
+    fn drag(q: &mut PlayQueue, key: EntryKey, target: EntryKey, after: bool) -> bool {
+        q.move_entry(key, target, after, RepeatMode::Off, true)
+    }
+
+    fn drag_repeating(q: &mut PlayQueue, key: EntryKey, target: EntryKey, after: bool) -> bool {
+        q.move_entry(key, target, after, RepeatMode::Context, true)
+    }
+
+    #[test]
+    fn test_moving_context_rows_reorders_a_loop_and_keeps_it_on_repeat() {
+        let off = RepeatMode::Off;
+        let mut q = playing(&["1", "2", "3", "4", "5"], "2");
+        let current = q.current_key().unwrap();
+        let keys = context_keys(&q, off);
+        assert!(drag(&mut q, keys[2], keys[0], false));
+        assert_eq!(context_ids(&q, off), ["5", "3", "4"]);
+        assert!(drag(&mut q, keys[0], keys[1], true));
+        assert_eq!(context_ids(&q, off), ["5", "4", "3"]);
+        for (key, target, after) in [
+            (keys[2], keys[2], false),
+            (keys[2], keys[2], true),
+            (keys[1], keys[2], true),
+            (keys[2], current, false),
+            (current, keys[0], true),
+            (EntryKey::NextLoop(0), keys[0], true),
+        ] {
+            assert!(!q.can_move_entry(key, target, after, off, true));
+            assert!(!drag(&mut q, key, target, after));
+        }
+        assert_eq!(current_id(&q).as_deref(), Some("2"));
+
+        let repeat = RepeatMode::Context;
+        assert_eq!(
+            ended_times(&mut q, repeat, 8),
+            ["5", "4", "3", "1", "2", "5", "4", "3"]
+        );
+        assert_eq!(context_ids(&q, repeat), ["1", "2", "5", "4"]);
+        let keys = context_keys(&q, repeat);
+        assert!(keys.iter().all(|k| matches!(k, EntryKey::NextLoop(_))));
+        assert!(drag_repeating(&mut q, keys[3], keys[0], false));
+        assert_eq!(ended_times(&mut q, repeat, 4), ["4", "1", "2", "5"]);
+
+        q.add_page(SongsSource::Album("a".into()), page(50, 1, None));
+        assert_eq!(order_ids(&q).last().map(String::as_str), Some("50"));
+    }
+
+    #[test]
+    fn test_moving_a_context_row_keeps_it_in_its_loop() {
+        let repeat = RepeatMode::Context;
+        let mut q = shuffled(&numbered(10), "0");
+        ended_times(&mut q, repeat, 5);
+        let keys = context_keys(&q, repeat);
+        let shown = context_ids(&q, repeat);
+        assert!(matches!(keys[3], EntryKey::Context(_)));
+        assert!(matches!(keys[4], EntryKey::NextLoop(_)));
+        assert!(!drag_repeating(&mut q, keys[0], keys[5], false));
+        assert!(!drag_repeating(&mut q, keys[6], keys[3], false));
+
+        assert!(drag_repeating(&mut q, keys[0], keys[3], true));
+        assert!(drag_repeating(&mut q, keys[6], keys[4], false));
+        let moved: Vec<&str> = [1, 2, 3, 0, 6, 4, 5, 7, 8]
+            .iter()
+            .map(|&i| shown[i].as_str())
+            .collect();
+        assert_eq!(context_ids(&q, repeat), moved);
+        assert_eq!(ended_times(&mut q, repeat, 9), moved);
+    }
+
+    #[test]
+    fn test_moving_a_context_row_into_the_queue_takes_it_out_of_the_context() {
+        let repeat = RepeatMode::Context;
+        let mut q = playing(&["1", "2", "3", "4"], "2");
+        q.enqueue(tracks(&["a", "b"]));
+        let keys = queued_keys(&q);
+        assert!(drag_repeating(&mut q, EntryKey::Context(3), keys[0], true));
+        assert!(drag_repeating(&mut q, EntryKey::NextLoop(0), keys[1], true));
+        assert_eq!(queued_ids(&q), ["a", "4", "b", "1"]);
+        assert_eq!(context_ids(&q, repeat), ["3"]);
+        assert!(!drag_repeating(&mut q, EntryKey::Context(3), keys[0], true));
+        assert!(!drag_repeating(&mut q, EntryKey::Context(7), keys[0], true));
+        assert_eq!(
+            ended_times(&mut q, repeat, 8),
+            ["a", "4", "b", "1", "3", "2", "3", "2"]
+        );
+    }
+
+    #[test]
+    fn test_moving_a_context_row_above_the_context() {
+        let off = RepeatMode::Off;
+        let mut q = playing(&["1", "2", "3", "4"], "1");
+        let current = q.current_key().unwrap();
+        let keys = context_keys(&q, off);
+
+        assert!(q.move_entry(keys[2], keys[0], false, off, true));
+        assert_eq!(context_ids(&q, off), ["4", "2", "3"]);
+        assert!(queued_ids(&q).is_empty());
+
+        assert!(q.move_entry(keys[1], keys[2], false, off, false));
+        assert_eq!(queued_ids(&q), ["3"]);
+        assert_eq!(context_ids(&q, off), ["4", "2"]);
+        assert!(q.move_entry(keys[0], keys[2], false, off, false));
+        assert_eq!(queued_ids(&q), ["3"]);
+        assert_eq!(context_ids(&q, off), ["2", "4"]);
+
+        assert!(drag(&mut q, keys[2], current, true));
+        assert_eq!(queued_ids(&q), ["4", "3"]);
+        assert_eq!(context_ids(&q, off), ["2"]);
+    }
+
+    #[test]
+    fn test_moving_queued_rows() {
+        let mut q = playing(&["1", "2"], "1");
         q.enqueue(tracks(&["a", "b", "c", "d"]));
+        let current = q.current_key().unwrap();
+        let context = EntryKey::Context(1);
         let keys = queued_keys(&q);
 
-        assert!(q.move_queued(keys[0], 3));
+        assert!(drag(&mut q, keys[0], keys[3], false));
         assert_eq!(queued_ids(&q), ["b", "c", "a", "d"]);
-        assert!(q.move_queued(keys[3], 0));
+        assert!(drag(&mut q, keys[3], keys[1], false));
         assert_eq!(queued_ids(&q), ["d", "b", "c", "a"]);
-        assert!(q.move_queued(keys[1], 9));
+        assert!(drag(&mut q, keys[1], context, false));
         assert_eq!(queued_ids(&q), ["d", "c", "a", "b"]);
+        assert!(drag(&mut q, keys[0], current, true));
+        assert_eq!(queued_ids(&q), ["a", "d", "c", "b"]);
 
-        assert!(!q.move_queued(keys[2], 1));
-        assert!(!q.move_queued(keys[2], 2));
-        assert!(!q.move_queued(EntryKey::Context(0), 0));
-        assert!(!q.move_queued(EntryKey::Queued(999), 0));
-        assert_eq!(queued_ids(&q), ["d", "c", "a", "b"]);
+        for (key, target, after) in [
+            (keys[2], keys[2], false),
+            (keys[2], keys[3], true),
+            (keys[2], keys[1], false),
+            (keys[2], current, false),
+            (keys[2], context, true),
+            (current, keys[2], true),
+            (EntryKey::Queued(999), keys[2], true),
+        ] {
+            assert!(!drag(&mut q, key, target, after));
+        }
+        assert_eq!(queued_ids(&q), ["a", "d", "c", "b"]);
+        assert_eq!(context_ids(&q, RepeatMode::Off), ["2"]);
     }
 
     #[test]

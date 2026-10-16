@@ -17,6 +17,7 @@ pub trait HeaderBarModel {
     fn selectable_keys(&self) -> Vec<String>;
     fn deselect_all(&self);
     fn cancel_selection(&self);
+    fn selects_queue(&self) -> bool;
 }
 
 /// Per-screen selection hooks, wrapped into a [`HeaderBarModel`] by
@@ -25,6 +26,9 @@ pub trait SimpleHeaderBarModel {
     fn select_all(&self);
     fn selectable_keys(&self) -> Vec<String> {
         vec![]
+    }
+    fn selects_queue(&self) -> bool {
+        false
     }
 }
 
@@ -61,6 +65,10 @@ where
 
     fn cancel_selection(&self) {
         self.dispatcher.dispatch(AppAction::CancelSelection)
+    }
+
+    fn selects_queue(&self) -> bool {
+        self.wrapped_model.selects_queue()
     }
 }
 
@@ -171,6 +179,28 @@ impl AppHeaderBarComponent {
 
         self.widget
             .set_can_go_back(self.app_model.get_state().browser.can_pop());
+        self.refresh_selection();
+    }
+
+    fn selecting_here(&self) -> bool {
+        let queue = self
+            .active_model
+            .borrow()
+            .as_ref()
+            .is_some_and(|model| model.selects_queue());
+        self.app_model.get_state().selection.is_selecting_in(queue)
+    }
+
+    fn refresh_selection(&self) {
+        let active = self.selecting_here();
+        if active != self.widget.is_selection_active() {
+            self.widget.set_selection_active(active);
+        }
+        if active {
+            let count = self.app_model.get_state().selection.count();
+            self.widget.set_selection_count(count);
+        }
+        self.refresh_select_all();
     }
 
     fn refresh_select_all(&self) {
@@ -183,6 +213,9 @@ impl AppHeaderBarComponent {
     }
 
     fn cancel_active_selection(&self) {
+        if !self.selecting_here() {
+            return;
+        }
         let model = self.active_model.borrow().clone();
         if let Some(model) = model {
             model.cancel_selection();
@@ -204,18 +237,13 @@ impl EventListener for AppHeaderBarComponent {
                 self.refresh_active();
             }
             AppEvent::BrowserEvent(BrowserEvent::HomeVisiblePageChanged(page)) => {
+                self.cancel_active_selection();
                 self.home_page = (*page).to_string();
                 self.refresh_active();
             }
-            AppEvent::SelectionEvent(SelectionEvent::SelectionModeChanged(active)) => {
-                self.widget.set_selection_active(*active);
-                self.refresh_select_all();
-            }
-            AppEvent::SelectionEvent(SelectionEvent::SelectionChanged) => {
-                let count = self.app_model.get_state().selection.count();
-                self.widget.set_selection_count(count);
-                self.refresh_select_all();
-            }
+            AppEvent::SelectionEvent(
+                SelectionEvent::SelectionModeChanged(_) | SelectionEvent::SelectionChanged,
+            ) => self.refresh_selection(),
             _ => {}
         }
     }

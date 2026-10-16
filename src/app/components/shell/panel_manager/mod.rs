@@ -3,10 +3,10 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use crate::app::components::{
-    AppHeaderBar, BottomSheet, Component, EventListener, QueuePage, UtilityPanel,
+    AppHeaderBar, BottomSheet, Component, EventListener, QueuePage, QueuePageWidget, UtilityPanel,
 };
 use crate::app::state::PlaybackEvent;
-use crate::app::{AppEvent, AppModel, Dispatcher};
+use crate::app::{AppAction, AppEvent, AppModel, Dispatcher};
 use crate::feature_flags::FeatureFlag;
 use crate::settings::SETTINGS;
 
@@ -66,11 +66,20 @@ impl Panels {
         }
         self.set_open(false);
         match self.placement.get() {
-            Some(Placement::Side) => self.panel.set_content(None, ""),
-            Some(Placement::Sheet) => self.sheet.set_page(None),
+            Some(Placement::Side) => {
+                self.panel.set_selection(None, false);
+                self.panel.set_content(None, "")
+            }
+            Some(Placement::Sheet) => {
+                self.sheet.set_selecting(false);
+                self.sheet.set_page(None)
+            }
             None => {}
         }
         self.placement.set(Some(placement));
+        if let Some(page) = self.queue.downcast_ref::<QueuePageWidget>() {
+            page.set_selection_bar_hidden(placement == Placement::Side);
+        }
         match placement {
             Placement::Side => self
                 .panel
@@ -97,7 +106,17 @@ impl PanelManager {
         app_model: Rc<AppModel>,
         dispatcher: Dispatcher,
     ) -> Self {
-        let queue = QueuePage::new(app_model.clone(), dispatcher);
+        let queue = QueuePage::new(app_model.clone(), dispatcher.clone());
+        panel.connect_selection_cancel(clone!(
+            #[weak(rename_to = model)]
+            queue.model(),
+            move || model.cancel_selection()
+        ));
+        panel.connect_select_all(clone!(
+            #[weak(rename_to = model)]
+            queue.model(),
+            move || model.toggle_select_all()
+        ));
         let panels = Rc::new(Panels {
             queue: queue.widget().clone().upcast(),
             panel,
@@ -123,11 +142,11 @@ impl PanelManager {
             app_model,
             _settings: settings,
         };
-        manager.wire_toggle(window);
+        manager.wire_toggle(window, dispatcher);
         manager
     }
 
-    fn wire_toggle(&self, window: &libadwaita::ApplicationWindow) {
+    fn wire_toggle(&self, window: &libadwaita::ApplicationWindow, dispatcher: Dispatcher) {
         let action = self.panels.action.clone();
         let panels = Rc::downgrade(&self.panels);
         action.connect_change_state(move |_, state| {
@@ -138,12 +157,16 @@ impl PanelManager {
         window.add_action(&action);
 
         let panels = Rc::downgrade(&self.panels);
+        let app_model = self.app_model.clone();
         let open_changed = Rc::new(move || {
             let Some(panels) = panels.upgrade() else {
                 return;
             };
             action.set_state(&panels.is_open().to_variant());
             panels.sync_header();
+            if !panels.is_open() && app_model.get_state().selection.is_selecting_in(true) {
+                dispatcher.dispatch(AppAction::CancelSelection);
+            }
         });
         self.panels.panel.connect_open_notify(clone!(
             #[strong]
@@ -156,6 +179,17 @@ impl PanelManager {
     }
 }
 
+impl PanelManager {
+    fn sync_selection(&self) {
+        let (selected, all_selected) = self.queue.selection();
+        match self.panels.placement.get() {
+            Some(Placement::Side) => self.panels.panel.set_selection(selected, all_selected),
+            Some(Placement::Sheet) => self.panels.sheet.set_selecting(selected.is_some()),
+            None => {}
+        }
+    }
+}
+
 impl Component for PanelManager {
     fn get_root_widget(&self) -> &gtk::Widget {
         self.queue.get_root_widget()
@@ -165,6 +199,11 @@ impl Component for PanelManager {
 impl EventListener for PanelManager {
     fn on_event(&mut self, event: &AppEvent) {
         self.queue.on_event(event);
+        if let AppEvent::SelectionEvent(_)
+        | AppEvent::PlaybackEvent(PlaybackEvent::PlaylistChanged) = event
+        {
+            self.sync_selection();
+        }
         if let AppEvent::PlaybackEvent(
             PlaybackEvent::TrackChanged(_)
             | PlaybackEvent::PlaybackStopped

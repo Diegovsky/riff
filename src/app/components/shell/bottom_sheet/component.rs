@@ -9,6 +9,10 @@ use crate::app::components::{QueueBarWidget, QueuePageWidget};
 /// Inside the scroller, so the scrollbar stays at the sheet's edge
 const SHEET_MARGIN_X: i32 = 12;
 
+/// Room for the sheet's drag handle, drawn over its content (as in bottom_sheet.blp):
+/// the theme's 36px for it, and 5px more
+const HANDLE_ROOM: i32 = 41;
+
 /// About as long as the sheet takes to open
 const HOLD_AT_TOP_MICROS: i64 = 500_000;
 
@@ -57,6 +61,12 @@ impl BottomSheet {
         self.sheet
             .set_sheet(page.is_some().then_some(&self.content));
         self.sync_bottom_bar();
+    }
+
+    pub fn set_selecting(&self, selecting: bool) {
+        self.sheet.set_show_drag_handle(!selecting);
+        self.content
+            .set_margin_top(if selecting { 0 } else { HANDLE_ROOM });
     }
 
     pub fn set_has_track(&self, has_track: bool) {
