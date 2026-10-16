@@ -42,7 +42,10 @@
 .force-skeleton .details-page--loaded .play__button,
 .force-skeleton .details-page--loaded .shuffle__button,
 .force-skeleton .details-page--loaded .like__button,
-.force-skeleton .details-page--loaded .menu__button,
+.force-skeleton .details-page--loaded .like-pin__button > button,
+.force-skeleton .details-page--loaded .like-pin__button revealer > box > button,
+.force-skeleton .details-page--loaded .share__button,
+.force-skeleton .details-page--loaded .menu__button > button,
 .force-skeleton .details-page--loaded .edit__button {
   background-color: @skeleton_color;
   color: transparent;

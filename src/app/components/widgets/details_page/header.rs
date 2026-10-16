@@ -400,6 +400,7 @@ impl DetailsHeader {
     pub fn add_like_pin_segmented_button(&self) -> (gtk::Button, gtk::Button) {
         let seg = SegmentedButton::new(ExpandBehavior::OnHover);
         seg.widget().set_valign(gtk::Align::Center);
+        seg.widget().add_css_class("like-pin__button");
 
         let like = seg.add_icon("non-starred-symbolic", &gettext("Add to Library"), || {});
         let pin = seg.add_icon("view-pin-outline-symbolic", &labels::PIN_TO_SIDEBAR, || {});

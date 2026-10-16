@@ -63,7 +63,9 @@
 .details-page-content:not(.details-page--loaded) .details-header .play__button,
 .details-page-content:not(.details-page--loaded) .details-header .shuffle__button,
 .details-page-content:not(.details-page--loaded) .details-header .like__button,
-.details-page-content:not(.details-page--loaded) .details-header .menu__button,
+.details-page-content:not(.details-page--loaded) .details-header .like-pin__button > button,
+.details-page-content:not(.details-page--loaded) .details-header .like-pin__button revealer > box > button,
+.details-page-content:not(.details-page--loaded) .details-header .menu__button > button,
 .details-page-content:not(.details-page--loaded) .details-header .share__button,
 .details-page-content:not(.details-page--loaded) .details-header .edit__button {
   background-color: @skeleton_color;
