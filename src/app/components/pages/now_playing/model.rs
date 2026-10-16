@@ -235,6 +235,10 @@ impl SimpleHeaderBarModel for NowPlayingModel {
     fn selectable_keys(&self) -> Vec<String> {
         self.queue_list.selectable_keys()
     }
+
+    fn selects_queue(&self) -> bool {
+        true
+    }
 }
 
 impl crate::app::ProvidesApi for NowPlayingModel {

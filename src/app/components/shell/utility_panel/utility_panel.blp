@@ -14,12 +14,18 @@ template $UtilityPanelWidget : Adw.Bin {
       ]
     }
 
-    Adw.ToolbarView toolbar {
+
+    Box {
+      orientation: vertical;
       hexpand: true;
 
-      [top]
       Adw.HeaderBar header {
         show-start-title-buttons: false;
+
+        styles [
+          "flat",
+          "utility-panel__header",
+        ]
 
         // Set with the content (see UtilityPanel::set_content)
         title-widget: Adw.WindowTitle title {};
@@ -31,6 +37,41 @@ template $UtilityPanelWidget : Adw.Bin {
           focus-on-click: false;
           can-focus: false;
         }
+      }
+
+      Adw.HeaderBar selection_header {
+        show-start-title-buttons: false;
+        show-end-title-buttons: false;
+        visible: false;
+
+        styles [
+          "flat",
+          "selection-mode",
+          "utility-panel__header",
+        ]
+
+        title-widget: Adw.WindowTitle selection_title {};
+
+        [start]
+        Button selection_cancel {
+          valign: center;
+
+          /* Translators: Button label. Exits selection mode. */
+          label: _("Cancel");
+        }
+
+        [end]
+        Button select_all {
+          valign: center;
+
+          /* Translators: Button label. Selects all visible songs. */
+          label: _("Select All");
+        }
+      }
+
+      // Set with UtilityPanel::set_content
+      Adw.Bin content {
+        vexpand: true;
       }
     }
   };

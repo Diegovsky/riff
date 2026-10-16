@@ -399,7 +399,18 @@ impl DetailsPageModel {
     }
 
     pub fn selection(&self) -> Option<Box<dyn Deref<Target = SelectionState> + '_>> {
-        Some(Box::new(self.app_model.map_state(|s| &s.selection)))
+        self.selection_in(false)
+    }
+
+    pub fn selection_in(
+        &self,
+        queue: bool,
+    ) -> Option<Box<dyn Deref<Target = SelectionState> + '_>> {
+        let selection = self.app_model.map_state(|s| &s.selection);
+        if selection.is_selecting_in(!queue) {
+            return None;
+        }
+        Some(Box::new(selection))
     }
 
     pub fn select_songs_from_list(&self, song_list: &SongListModel, ids: &[String]) {

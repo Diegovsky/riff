@@ -15,7 +15,7 @@ use crate::app::state::{
     Device, EntryKey, PlaybackAction, PlaybackState, SelectionAction, SelectionContext,
     SelectionState,
 };
-use crate::app::{AppModel, Dispatcher};
+use crate::app::{AppAction, AppModel, Dispatcher};
 
 pub struct QueueListModel {
     base: DetailsPageModel,
@@ -64,6 +64,38 @@ impl QueueListModel {
             .collect()
     }
 
+    pub fn is_selecting(&self) -> bool {
+        self.base
+            .app_model
+            .get_state()
+            .selection
+            .is_selecting_in(true)
+    }
+
+    pub fn selected_count(&self) -> usize {
+        self.base.app_model.get_state().selection.count()
+    }
+
+    pub fn all_selected(&self) -> bool {
+        let keys = self.selectable_keys();
+        let state = self.base.app_model.get_state();
+        !keys.is_empty() && keys.iter().all(|key| state.selection.is_song_selected(key))
+    }
+
+    pub fn toggle_select_all(&self) {
+        if self.all_selected() {
+            self.base
+                .dispatcher
+                .dispatch(SelectionAction::DeselectAll.into());
+        } else {
+            self.select_all();
+        }
+    }
+
+    pub fn cancel_selection(&self) {
+        self.base.dispatcher.dispatch(AppAction::CancelSelection);
+    }
+
     pub fn select_all(&self) {
         let rows: Vec<(String, Track)> = {
             let queue = self.queue();
@@ -90,38 +122,13 @@ impl QueueListModel {
         }
     }
 
-    fn drop_gap(&self, key: &str, target: &str, after: bool) -> Option<(EntryKey, usize)> {
-        let key: EntryKey = key.parse().ok()?;
-        let target: EntryKey = target.parse().ok()?;
-        let queue = self.queue();
-        let queued = queued_rows(&queue);
-        let from = queued.iter().position(|k| *k == key)?;
-        let gap = match queued.iter().position(|k| *k == target) {
-            Some(i) => i + after as usize,
-            None if Some(target) == queue.current_key() => after.then_some(0)?,
-            None if !after && queue.upcoming_keys().get(queued.len()) == Some(&target) => {
-                queued.len()
-            }
-            None => return None,
-        };
-        (gap != from && gap != from + 1).then_some((key, gap))
+    fn drop_keys(key: &str, target: &str) -> Option<(EntryKey, EntryKey)> {
+        Some((key.parse().ok()?, target.parse().ok()?))
     }
 
     pub fn toggle_play(&self) {
         self.base.toggle_playback(true, || None);
     }
-}
-
-fn queued_rows(queue: &PlaybackState) -> &[EntryKey] {
-    if !matches!(queue.current_device(), Device::Local) {
-        return &[];
-    }
-    let upcoming = queue.upcoming_keys();
-    let count = upcoming
-        .iter()
-        .take_while(|k| matches!(k, EntryKey::Queued(_)))
-        .count();
-    &upcoming[..count]
 }
 
 fn queue_entry(row: &SongModel) -> Option<(EntryKey, QueueRole)> {
@@ -168,7 +175,7 @@ impl TrackListModel for QueueListModel {
     }
 
     fn selection(&self) -> Option<Box<dyn Deref<Target = SelectionState> + '_>> {
-        self.base.selection()
+        self.base.selection_in(true)
     }
 
     fn load_more(&self) {
@@ -275,18 +282,25 @@ impl TrackListModel for QueueListModel {
         let Ok(key) = key.parse::<EntryKey>() else {
             return false;
         };
-        queued_rows(&self.queue()).contains(&key) && !self.is_selection_enabled()
+        self.queue().is_movable(key) && !self.is_selection_enabled()
     }
 
     fn can_drop_row(&self, key: &str, target: &str, after: bool) -> bool {
-        self.drop_gap(key, target, after).is_some()
+        Self::drop_keys(key, target).is_some_and(|(key, target)| {
+            self.queue()
+                .can_move_entry(key, target, after, self.show_now_playing)
+        })
     }
 
     fn drop_row(&self, key: &str, target: &str, after: bool) {
-        if let Some((key, to)) = self.drop_gap(key, target, after) {
-            self.base
-                .dispatcher
-                .dispatch(PlaybackAction::MoveQueued { key, to }.into());
+        if let Some((key, target)) = Self::drop_keys(key, target) {
+            let action = PlaybackAction::MoveEntry {
+                key,
+                target,
+                after,
+                current_listed: self.show_now_playing,
+            };
+            self.base.dispatcher.dispatch(action.into());
         }
     }
 
@@ -302,9 +316,12 @@ impl TrackListModel for QueueListModel {
             Some((key, QueueRole::Queued)) => {
                 song.make_queue_entry_actions(key, dispatcher.clone())
             }
-            Some((_, QueueRole::Context | QueueRole::Current)) => {
-                song.make_queue_actions(dispatcher.clone())
+            Some((key, QueueRole::Context)) => {
+                let mut actions = song.make_queue_actions(dispatcher.clone());
+                actions.extend(song.make_queue_entry_actions(key, dispatcher.clone()));
+                actions
             }
+            Some((_, QueueRole::Current)) => song.make_queue_actions(dispatcher.clone()),
             _ => vec![],
         };
         for a in actions {
@@ -326,7 +343,8 @@ impl TrackListModel for QueueListModel {
     ) -> Option<gio::MenuModel> {
         let queue_entry = match queue_entry(row) {
             Some((_, QueueRole::Queued)) => QueueMenuEntry::Queued,
-            Some((_, QueueRole::Context | QueueRole::Current)) => QueueMenuEntry::Add,
+            Some((_, QueueRole::Context)) => QueueMenuEntry::Context,
+            Some((_, QueueRole::Current)) => QueueMenuEntry::Add,
             _ => QueueMenuEntry::None,
         };
         Some(build_song_menu(
@@ -352,7 +370,7 @@ mod tests {
     use super::*;
     use crate::app::models::make_track;
     use crate::app::state::AppState;
-    use crate::app::{AppAction, SongsSource};
+    use crate::app::SongsSource;
     use std::cell::Cell;
     use std::sync::Arc;
 
@@ -431,9 +449,11 @@ mod tests {
         let keys = app_model.get_state().playback.view_keys().to_vec();
         let actions: Vec<AppAction> = vec![
             PlaybackAction::RemoveEntries(vec![keys[2]]).into(),
-            PlaybackAction::MoveQueued {
+            PlaybackAction::MoveEntry {
                 key: keys[3],
-                to: 0,
+                target: keys[1],
+                after: false,
+                current_listed: true,
             }
             .into(),
             PlaybackAction::PlayEntry(keys[3]).into(),
@@ -483,9 +503,8 @@ mod tests {
                 .is_some_and(|g| g.lookup_action(name).is_some())
         };
         assert!(has_action(&queued, "dequeue") && !has_action(&queued, "queue"));
-        for row in [&current, &context] {
-            assert!(has_action(row, "queue") && !has_action(row, "dequeue"));
-        }
+        assert!(has_action(&current, "queue") && !has_action(&current, "dequeue"));
+        assert!(has_action(&context, "queue") && has_action(&context, "dequeue"));
         let button = model.group_button(&queued.group().unwrap()).unwrap();
         assert_eq!(button.tooltip, *labels::CLEAR_QUEUE);
         assert!(button.destructive);
@@ -498,34 +517,87 @@ mod tests {
             panic!("unexpected rows {:?}", rows);
         };
         assert!(model.can_drag_row(c));
-        assert!(!model.can_drag_row(current) && !model.can_drag_row(context));
-        let gap = |key, target, after| model.drop_gap(key, target, after).map(|g| g.1);
-        assert_eq!(gap(c, current, true), Some(0));
-        assert_eq!(gap(c, p, false), Some(0));
-        assert_eq!(gap(p, c, true), Some(4));
-        assert_eq!(gap(p, context, false), Some(4));
-        assert_eq!(gap(b, a, true), None);
-        assert_eq!(gap(b, c, false), None);
-        assert_eq!(gap(p, current, false), None);
-        assert_eq!(gap(p, context, true), None);
+        assert!(!model.can_drag_row(current) && model.can_drag_row(context));
+        assert!(model.can_drop_row(c, p, false));
+        assert!(model.can_drop_row(context, a, true));
+        assert!(!model.can_drop_row(b, a, true));
+        assert!(!model.can_drop_row(context, context, false));
+        assert!(!model.can_drop_row(current, a, true));
+        assert!(!model.can_drop_row("abc", a, true));
+    }
 
-        let (key, to) = model.drop_gap(c, p, false).unwrap();
-        app_model.update_state(PlaybackAction::MoveQueued { key, to }.into());
-        assert_eq!(
-            row_keys(&app_model)[1..],
-            [c, p, a, b, context].map(|k| k.to_string())
+    #[test]
+    fn test_drops_tell_if_the_current_track_is_listed() {
+        let (sender, mut receiver) = futures::channel::mpsc::unbounded();
+        let app_model = Rc::new(AppModel::new(AppState::new(), test_api_service()));
+        let tracks = ["1", "2", "3"].iter().map(|id| make_track(id)).collect();
+        app_model.update_state(
+            PlaybackAction::LoadContextSongs(SongsSource::Album("a".into()), tracks).into(),
         );
-
-        app_model.update_state(PlaybackAction::Next.into());
+        app_model.update_state(PlaybackAction::Load("1".to_string()).into());
         let rows = row_keys(&app_model);
-        let [current, p, _a, b, _context] = &rows[..] else {
-            panic!("unexpected rows {:?}", rows);
+
+        for show_now_playing in [true, false] {
+            let model = QueueListModel::new(
+                app_model.clone(),
+                Dispatcher::new(sender.clone()),
+                show_now_playing,
+            );
+            assert!(model.can_drop_row(&rows[2], &rows[1], false));
+            model.drop_row(&rows[2], &rows[1], false);
+            let action = receiver.try_next().ok().flatten().expect("an action");
+            let AppAction::PlaybackAction(PlaybackAction::MoveEntry {
+                key,
+                target,
+                after: false,
+                current_listed,
+            }) = action
+            else {
+                panic!("not MoveEntry: {:?}", action);
+            };
+            assert_eq!(
+                (key.to_string(), target.to_string()),
+                (rows[2].clone(), rows[1].clone())
+            );
+            assert_eq!(current_listed, show_now_playing);
+        }
+    }
+
+    #[test]
+    fn test_selection_stays_out_of_the_other_lists() {
+        let (app_model, model) = make_model(true);
+        let page =
+            DetailsPageModel::new_without_id(app_model.clone(), model.base.dispatcher.clone());
+        let tracks = ["1", "2"].iter().map(|id| make_track(id)).collect();
+        app_model.update_state(
+            PlaybackAction::LoadContextSongs(SongsSource::Album("a".into()), tracks).into(),
+        );
+        app_model.update_state(PlaybackAction::Load("1".to_string()).into());
+        let enabled = |selecting: bool| {
+            (
+                selecting,
+                model.is_selection_enabled(),
+                page.selection().is_some_and(|s| s.is_selection_enabled()),
+            )
         };
-        assert_eq!(current, c);
-        assert!(!model.can_drag_row(current));
-        assert_eq!(gap(b, p, false), Some(0));
-        assert_eq!(gap(b, current, true), Some(0));
-        assert_eq!(gap(b, current, false), None);
+        assert_eq!(enabled(model.is_selecting()), (false, false, false));
+
+        app_model.update_state(AppAction::EnableSelection(model.selection_context()));
+        assert_eq!(enabled(model.is_selecting()), (true, true, false));
+        assert!(!model.all_selected());
+        let rows = row_keys(&app_model)
+            .into_iter()
+            .map(|key| (key, make_track("x")))
+            .collect();
+        app_model.update_state(SelectionAction::SelectKeyed(rows).into());
+        assert!(model.all_selected());
+        assert_eq!(model.selected_count(), 2);
+
+        let events = app_model.update_state(AppAction::EnableSelection(SelectionContext::Default));
+        assert_eq!(events.len(), 2);
+        assert_eq!(enabled(model.is_selecting()), (false, false, true));
+        assert_eq!(model.selected_count(), 0);
+        assert!(!model.all_selected());
     }
 
     #[test]

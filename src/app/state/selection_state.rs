@@ -42,6 +42,12 @@ pub enum SelectionContext {
     Default,
 }
 
+impl SelectionContext {
+    pub fn is_queue(&self) -> bool {
+        matches!(self, Self::Queue | Self::ReadOnlyQueue)
+    }
+}
+
 pub struct SelectionState {
     selected_songs: Vec<(String, Track)>,
     selected_keys: HashSet<String>,
@@ -75,10 +81,15 @@ impl SelectionState {
         self.selected_keys.remove(key)
     }
 
+    pub fn is_selecting_in(&self, queue: bool) -> bool {
+        self.selection_active && self.context.is_queue() == queue
+    }
+
     pub fn set_mode(&mut self, context: Option<SelectionContext>) -> Option<bool> {
         let currently_active = self.selection_active;
         match (currently_active, context) {
-            (false, Some(context)) => {
+            (true, Some(context)) if context.is_queue() == self.context.is_queue() => None,
+            (_, Some(context)) => {
                 *self = Default::default();
                 self.selection_active = true;
                 self.context = context;
@@ -192,6 +203,26 @@ mod tests {
         assert!(matches!(events[..], [SelectionEvent::SelectionChanged]));
         assert_eq!(state.count(), 0);
         assert!(state.is_selection_enabled());
+    }
+
+    #[test]
+    fn test_selecting_elsewhere_starts_over() {
+        let mut state = SelectionState::default();
+        assert!(!state.is_selecting_in(false) && !state.is_selecting_in(true));
+        assert_eq!(state.set_mode(Some(SelectionContext::Playlist)), Some(true));
+        update(&mut state, SelectionAction::Select(vec![make_track("a")]));
+        assert!(state.is_selecting_in(false) && !state.is_selecting_in(true));
+
+        assert_eq!(state.set_mode(Some(SelectionContext::SavedTracks)), None);
+        assert!(matches!(state.context, SelectionContext::Playlist));
+        assert_eq!(state.count(), 1);
+
+        assert_eq!(state.set_mode(Some(SelectionContext::Queue)), Some(true));
+        assert!(state.is_selecting_in(true) && !state.is_selecting_in(false));
+        assert_eq!(state.count(), 0);
+        assert_eq!(state.set_mode(Some(SelectionContext::ReadOnlyQueue)), None);
+        assert_eq!(state.set_mode(None), Some(false));
+        assert!(!state.is_selecting_in(true));
     }
 
     fn update(state: &mut SelectionState, action: SelectionAction) -> Vec<SelectionEvent> {

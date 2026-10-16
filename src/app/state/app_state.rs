@@ -202,11 +202,15 @@ impl AppState {
                 events
             }
             AppAction::EnableSelection(context) => {
-                if let Some(active) = self.selection.set_mode(Some(context)) {
-                    vec![SelectionEvent::SelectionModeChanged(active).into()]
-                } else {
-                    vec![]
+                let had_selection = self.selection.count() > 0;
+                let Some(active) = self.selection.set_mode(Some(context)) else {
+                    return vec![];
+                };
+                let mut events = vec![SelectionEvent::SelectionModeChanged(active).into()];
+                if had_selection {
+                    events.push(SelectionEvent::SelectionChanged.into());
                 }
+                events
             }
             AppAction::CancelSelection => {
                 if let Some(active) = self.selection.set_mode(None) {

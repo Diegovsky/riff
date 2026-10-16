@@ -155,6 +155,10 @@ impl AppHeaderBar {
         self.imp().select_all.set_visible(possible);
     }
 
+    pub fn is_selection_active(&self) -> bool {
+        self.imp().selection_header.is_visible()
+    }
+
     pub fn set_selection_active(&self, active: bool) {
         let imp = self.imp();
         if active {

@@ -38,6 +38,18 @@ impl UtilityPanel {
             .set_visible(content.is_some() && !self.split.is_collapsed());
     }
 
+    pub fn set_selection(&self, selected: Option<usize>, all_selected: bool) {
+        self.widget.set_selection(selected, all_selected);
+    }
+
+    pub fn connect_selection_cancel<F: Fn() + 'static>(&self, f: F) {
+        self.widget.connect_selection_cancel(f);
+    }
+
+    pub fn connect_select_all<F: Fn() + 'static>(&self, f: F) {
+        self.widget.connect_select_all(f);
+    }
+
     pub fn is_open(&self) -> bool {
         self.split.shows_sidebar()
     }

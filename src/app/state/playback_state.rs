@@ -154,7 +154,7 @@ impl PlaybackState {
     }
 
     fn refresh_view(&mut self) {
-        let local = matches!(self.current_device, Device::Local);
+        let local = self.is_local();
         let view = self.queue.view(self.repeat);
         let queue_group = labels::QUEUE_NEXT_IN_QUEUE.clone();
         let context_group = self
@@ -215,8 +215,38 @@ impl PlaybackState {
         changed
     }
 
-    pub fn move_queued(&mut self, key: EntryKey, to: usize) -> bool {
-        let changed = self.queue.move_queued(key, to);
+    fn is_local(&self) -> bool {
+        matches!(self.current_device, Device::Local)
+    }
+
+    pub fn is_movable(&self, key: EntryKey) -> bool {
+        self.is_local() && self.upcoming_keys().contains(&key)
+    }
+
+    pub fn can_move_entry(
+        &self,
+        key: EntryKey,
+        target: EntryKey,
+        after: bool,
+        current_listed: bool,
+    ) -> bool {
+        self.is_local()
+            && self
+                .queue
+                .can_move_entry(key, target, after, self.repeat, current_listed)
+    }
+
+    fn move_entry(
+        &mut self,
+        key: EntryKey,
+        target: EntryKey,
+        after: bool,
+        current_listed: bool,
+    ) -> bool {
+        let changed = self.is_local()
+            && self
+                .queue
+                .move_entry(key, target, after, self.repeat, current_listed);
         if changed {
             self.refresh_view();
         }
@@ -441,9 +471,11 @@ pub enum PlaybackAction {
     SetShuffleSeparation(u32),
     PlayEntry(EntryKey),
     RemoveEntries(Vec<EntryKey>),
-    MoveQueued {
+    MoveEntry {
         key: EntryKey,
-        to: usize,
+        target: EntryKey,
+        after: bool,
+        current_listed: bool,
     },
     SwitchDevice(Device),
     SetAvailableDevices(Vec<ConnectDevice>),
@@ -652,7 +684,12 @@ impl UpdatableState for PlaybackState {
                 changed_events(changed)
             }
             PlaybackAction::RemoveEntries(keys) => changed_events(self.dequeue(&keys)),
-            PlaybackAction::MoveQueued { key, to } => changed_events(self.move_queued(key, to)),
+            PlaybackAction::MoveEntry {
+                key,
+                target,
+                after,
+                current_listed,
+            } => changed_events(self.move_entry(key, target, after, current_listed)),
             PlaybackAction::Seek(pos) => self.seek_to(pos),
             PlaybackAction::SeekBy(delta) => {
                 let Some(duration) = self.queue.current().map(|song| song.duration_ms) else {
@@ -763,6 +800,15 @@ mod tests {
             self.upcoming_ids()
         }
 
+        fn drag(&mut self, key: EntryKey, target: EntryKey, after: bool) -> Vec<PlaybackEvent> {
+            self.act(PlaybackAction::MoveEntry {
+                key,
+                target,
+                after,
+                current_listed: true,
+            })
+        }
+
         fn act(&mut self, action: PlaybackAction) -> Vec<PlaybackEvent> {
             self.update_with(Cow::Owned(action))
         }
@@ -815,18 +861,10 @@ mod tests {
         assert!(state.view_track(keys[1]).is_none());
         assert!(!state.dequeue(&[state.current_key().unwrap()]));
 
-        let events = state.act(PlaybackAction::MoveQueued {
-            key: keys[3],
-            to: 0,
-        });
+        let events = state.drag(keys[3], keys[0], false);
         assert!(matches!(&events[..], [PlaybackEvent::PlaylistChanged]));
         assert_eq!(state.song_ids(), ["1", "c", "a", "b", "2", "3"]);
-        assert!(state
-            .act(PlaybackAction::MoveQueued {
-                key: keys[3],
-                to: 1
-            })
-            .is_empty());
+        assert!(state.drag(keys[3], keys[0], false).is_empty());
 
         assert_eq!(
             track_changes(&mut state, PlaybackAction::PlayEntry(keys[2]), 1),
@@ -1056,10 +1094,56 @@ mod tests {
         state.play("1");
         state.queue(vec![song("a"), song("b"), song("c"), song("d")]);
 
-        let keys: Vec<EntryKey> = state.upcoming_keys()[1..].to_vec();
+        let keys: Vec<EntryKey> = state.upcoming_keys()[1..4].to_vec();
         state.dequeue(&keys);
         assert_eq!(state.current_song_id(), Some("1".to_string()));
         assert_eq!(state.song_ids(), ["1", "a", "2"]);
+    }
+
+    #[test]
+    fn test_remove_context_track() {
+        let mut state = playing(&["1", "2", "3"], "1");
+        let keys = state.upcoming_keys().to_vec();
+        let events = state.act(PlaybackAction::RemoveEntries(vec![keys[0]]));
+        assert!(matches!(&events[..], [PlaybackEvent::PlaylistChanged]));
+        assert_eq!(state.song_ids(), ["1", "3"]);
+        assert!(state
+            .act(PlaybackAction::RemoveEntries(vec![keys[0]]))
+            .is_empty());
+        assert_eq!(state.next_song().map(|t| t.rri.id).as_deref(), Some("3"));
+    }
+
+    #[test]
+    fn test_drag_context_tracks() {
+        let mut state = playing(&["1", "2", "3", "4"], "1");
+        state.queue(vec![song("a")]);
+        let keys = state.upcoming_keys().to_vec();
+        assert!(keys.iter().all(|&key| state.is_movable(key)));
+        assert!(!state.is_movable(state.current_key().unwrap()));
+        assert!(state.can_move_entry(keys[3], keys[1], false, true));
+        assert!(!state.can_move_entry(keys[3], keys[3], false, true));
+
+        let events = state.drag(keys[3], keys[1], false);
+        assert!(matches!(&events[..], [PlaybackEvent::PlaylistChanged]));
+        assert_eq!(state.song_ids(), ["1", "a", "4", "2", "3"]);
+
+        let events = state.drag(keys[2], keys[0], false);
+        assert!(matches!(&events[..], [PlaybackEvent::PlaylistChanged]));
+        assert_eq!(state.song_ids(), ["1", "3", "a", "4", "2"]);
+        assert!(state.view_track(keys[2]).is_none());
+        assert!(state.drag(keys[2], keys[0], false).is_empty());
+
+        let remote = ConnectDevice {
+            id: "remote".to_string(),
+            label: "Remote".to_string(),
+            kind: DeviceKind::Speaker,
+            is_active: true,
+            volume_percent: None,
+        };
+        state.act(PlaybackAction::SwitchDevice(Device::Connect(remote)));
+        assert!(!state.is_movable(keys[3]));
+        assert!(!state.can_move_entry(keys[3], keys[1], true, true));
+        assert!(state.drag(keys[3], keys[1], true).is_empty());
     }
 
     #[test]

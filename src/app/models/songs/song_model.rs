@@ -169,8 +169,13 @@ impl SongModel {
         );
     }
 
-    pub fn unbind_all(&self) {
-        self.imp().unbind_all(self);
+    pub fn begin_bindings(&self, owner: usize) {
+        self.unbind(owner);
+        self.imp().binding_owner.set(owner);
+    }
+
+    pub fn unbind(&self, owner: usize) {
+        self.imp().unbind(self, owner);
     }
 
     pub fn push_signal(&self, id: SignalHandlerId) {
@@ -197,8 +202,10 @@ mod imp {
 
     use super::*;
     use std::cell::{Cell, RefCell};
+    use std::collections::HashMap;
 
-    // Keep track of signals and bindings targeting this song
+    // Keep track of signals and bindings targeting this song, by the row
+    // they are for
     #[derive(Default)]
     struct BindingsInner {
         pub signals: Vec<SignalHandlerId>,
@@ -212,22 +219,30 @@ mod imp {
         pub queue_role: Cell<Option<QueueRole>>,
         pub group: RefCell<Option<String>>,
         pub state: Cell<SongState>,
-        bindings: RefCell<BindingsInner>,
+        bindings: RefCell<HashMap<usize, BindingsInner>>,
+        pub binding_owner: Cell<usize>,
     }
 
     impl SongModel {
+        fn with_owner_bindings(&self, f: impl FnOnce(&mut BindingsInner)) {
+            let mut bindings = self.bindings.borrow_mut();
+            f(bindings.entry(self.binding_owner.get()).or_default());
+        }
+
         pub fn push_signal(&self, id: SignalHandlerId) {
-            self.bindings.borrow_mut().signals.push(id);
+            self.with_owner_bindings(|b| b.signals.push(id));
         }
 
         pub fn push_binding(&self, binding: glib::Binding) {
-            self.bindings.borrow_mut().bindings.push(binding);
+            self.with_owner_bindings(|b| b.bindings.push(binding));
         }
 
-        pub fn unbind_all<O: ObjectExt>(&self, o: &O) {
-            let mut bindings = self.bindings.borrow_mut();
-            bindings.signals.drain(..).for_each(|s| o.disconnect(s));
-            bindings.bindings.drain(..).for_each(|b| b.unbind());
+        pub fn unbind<O: ObjectExt>(&self, o: &O, owner: usize) {
+            let Some(bindings) = self.bindings.borrow_mut().remove(&owner) else {
+                return;
+            };
+            bindings.signals.into_iter().for_each(|s| o.disconnect(s));
+            bindings.bindings.into_iter().for_each(|b| b.unbind());
         }
     }
 
@@ -397,6 +412,31 @@ mod tests {
     use crate::app::models::make_track;
     use std::cell::Cell;
     use std::rc::Rc;
+
+    #[test]
+    fn test_unbinding_a_row_leaves_the_song_bound_to_its_other_rows() {
+        let song = SongModel::new(make_track("song1"));
+        let (row_a, row_b) = (
+            SongModel::new(make_track("a")),
+            SongModel::new(make_track("b")),
+        );
+        let is_selected = |row: &SongModel| row.property::<bool>("selected");
+
+        song.begin_bindings(1);
+        song.bind_selected(&row_a, "selected");
+        song.begin_bindings(2);
+        song.bind_selected(&row_b, "selected");
+        song.set_selected(true);
+        assert!(is_selected(&row_a) && is_selected(&row_b));
+
+        song.unbind(2);
+        song.set_selected(false);
+        assert!(!is_selected(&row_a) && is_selected(&row_b));
+
+        song.begin_bindings(1);
+        song.set_selected(true);
+        assert!(!is_selected(&row_a));
+    }
 
     fn count_notifications(property: &str, apply: impl Fn(&SongModel)) -> u32 {
         let model = SongModel::new(make_track("song1"));
