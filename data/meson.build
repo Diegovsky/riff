@@ -2,8 +2,11 @@ install_data('dev.diegovsky.Riff.desktop',
   install_dir: get_option('datadir') / 'applications'
 )
 
+# symbolic/actions is bundled into the gresource; installing it would put
+# generic (Adwaita-named) icons into the system-wide hicolor theme
 install_subdir('hicolor',
-  install_dir: get_option('datadir') / 'icons'
+  install_dir: get_option('datadir') / 'icons',
+  exclude_directories: ['symbolic/actions']
 )
 
 install_data('dev.diegovsky.Riff.metainfo.xml',

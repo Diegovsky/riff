@@ -66,8 +66,7 @@
 .details-page-content:not(.details-page--loaded) .details-header .like-pin__button > button,
 .details-page-content:not(.details-page--loaded) .details-header .like-pin__button revealer > box > button,
 .details-page-content:not(.details-page--loaded) .details-header .menu__button > button,
-.details-page-content:not(.details-page--loaded) .details-header .share__button,
-.details-page-content:not(.details-page--loaded) .details-header .edit__button {
+.details-page-content:not(.details-page--loaded) .details-header .share__button {
   background-color: @skeleton_color;
   color: transparent;
   animation: skeleton-pulse 1.5s ease-in-out infinite;
