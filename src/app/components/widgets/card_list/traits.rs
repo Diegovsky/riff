@@ -19,7 +19,7 @@ pub trait CardListPageModel: CardListModel + ProvidesApi {
     fn empty_title(&self) -> String;
     fn empty_description(&self) -> String;
     fn empty_icon(&self) -> &str {
-        "emblem-music-symbolic"
+        "audio-x-generic-symbolic"
     }
 
     // Sort capabilities

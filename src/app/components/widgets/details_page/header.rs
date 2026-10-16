@@ -75,9 +75,6 @@ mod imp {
 
         #[template_child]
         pub button_box: TemplateChild<gtk::Box>,
-
-        #[template_child]
-        pub edit_button: TemplateChild<gtk::Button>,
     }
 
     #[glib::object_subclass]
@@ -330,14 +327,6 @@ impl DetailsHeader {
     /// Connect a handler to the share button. Also makes the button visible.
     pub fn connect_share<F: Fn() + 'static>(&self, f: F) {
         let button = &self.widget.imp().share_button;
-        button.set_visible(true);
-        button.connect_clicked(move |_| f());
-    }
-
-    /// Connect a handler to the edit button. Also makes the button visible.
-    #[allow(dead_code)]
-    pub fn connect_edit<F: Fn() + 'static>(&self, f: F) {
-        let button = &self.widget.imp().edit_button;
         button.set_visible(true);
         button.connect_clicked(move |_| f());
     }
