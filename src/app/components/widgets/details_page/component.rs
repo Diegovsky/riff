@@ -10,7 +10,7 @@ use crate::app::components::{
     TrackListModel,
 };
 use crate::app::{AppEvent, Dispatcher};
-use crate::feature_flags::{is_enabled, FeatureFlag};
+use riff_config::feature_flags::{is_enabled, FeatureFlag};
 
 const QUEUE: &str = "queue";
 

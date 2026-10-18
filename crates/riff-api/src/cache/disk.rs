@@ -7,6 +7,7 @@
 
 use std::os::unix::fs::DirBuilderExt;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Once};
 use std::time::{Duration, SystemTime};
 
@@ -37,7 +38,7 @@ pub enum EntryState {
 #[derive(Clone)]
 pub struct DiskCache {
     root: PathBuf,
-    max_bytes: usize,
+    max_bytes: Arc<AtomicUsize>,
     default_ttl: Duration,
     /// Shared across clones so the `mkdir` happens once per cache.
     root_created: Arc<Once>,
@@ -48,7 +49,7 @@ impl DiskCache {
         let root: PathBuf = glib::user_cache_dir();
         Self {
             root: root.join(subdir),
-            max_bytes,
+            max_bytes: Arc::new(AtomicUsize::new(max_bytes)),
             default_ttl,
             root_created: Arc::new(Once::new()),
         }
@@ -141,8 +142,13 @@ impl DiskCache {
         }
     }
 
+    pub fn set_max_bytes(&self, max_bytes: usize) {
+        self.max_bytes.store(max_bytes, Ordering::Relaxed);
+    }
+
     /// Evict oldest entries until total size is within budget.
     pub async fn evict_to_budget(&self) {
+        let max_bytes = self.max_bytes.load(Ordering::Relaxed);
         let mut entries: Vec<(String, usize, SystemTime)> = Vec::new();
         let mut total_bytes = 0usize;
 
@@ -166,7 +172,7 @@ impl DiskCache {
             entries.push((name, size, mtime));
         }
 
-        if total_bytes <= self.max_bytes {
+        if total_bytes <= max_bytes {
             return;
         }
 
@@ -174,7 +180,7 @@ impl DiskCache {
         entries.sort_by_key(|(_, _, mtime)| *mtime);
 
         for (key, size, _) in entries {
-            if total_bytes <= self.max_bytes {
+            if total_bytes <= max_bytes {
                 break;
             }
             let _ = fs::remove_file(self.root.join(&key)).await;

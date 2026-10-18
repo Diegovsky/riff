@@ -5,8 +5,7 @@ use gtk::{glib, CompositeTemplate};
 use crate::app::components::display_add_css_provider;
 use crate::app::components::utils::{decode_px, format_duration, Clock, Debouncer};
 use crate::app::models::RepeatMode;
-use crate::feature_flags::FeatureFlag;
-use crate::settings::SETTINGS;
+use crate::settings::{QUEUE_SIDE_PANEL, SETTINGS};
 use gio::prelude::SettingsExtManual;
 
 use riff_api::models::is_resource_url;
@@ -80,11 +79,7 @@ mod imp {
             display_add_css_provider(resource!("/components/playback.css"));
 
             gio::Settings::new(SETTINGS)
-                .bind(
-                    FeatureFlag::QueueSidePanel.key(),
-                    &*self.queue_button,
-                    "visible",
-                )
+                .bind(QUEUE_SIDE_PANEL, &*self.queue_button, "visible")
                 .get()
                 .invert_boolean()
                 .build();

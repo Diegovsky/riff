@@ -13,7 +13,8 @@ use crate::app::components::{
 };
 use crate::app::state::PlaybackEvent;
 use crate::app::AppEvent;
-use crate::feature_flags::{self, FeatureFlag};
+use riff_config::feature_flags::FeatureFlag;
+use riff_config::settings::SETTINGS;
 
 /// GTK widget for the now-playing/queue detail page.
 pub struct NowPlaying {
@@ -33,15 +34,17 @@ impl NowPlaying {
         queue_list.connect_scrolling();
         component.add_child(Box::new(queue_list));
 
-        if feature_flags::is_enabled(FeatureFlag::DeviceSelector) {
-            let ds_widget: DeviceSelectorWidget = glib::Object::new();
-            component.header().add_end(&ds_widget);
-            let device_selector = Box::new(DeviceSelector::new(
-                ds_widget,
-                model.device_selector_model(),
-            ));
-            component.add_child(device_selector);
-        }
+        let ds_widget: DeviceSelectorWidget = glib::Object::new();
+        gio::Settings::new(SETTINGS)
+            .bind(FeatureFlag::DeviceSelector.key(), &ds_widget, "visible")
+            .get()
+            .build();
+        component.header().add_end(&ds_widget);
+        let device_selector = Box::new(DeviceSelector::new(
+            ds_widget,
+            model.device_selector_model(),
+        ));
+        component.add_child(device_selector);
 
         let status_page = libadwaita::StatusPage::new();
         status_page.set_title(&gettext("No Track Playing"));

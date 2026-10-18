@@ -5,7 +5,7 @@ use gtk::CompositeTemplate;
 
 use super::lock_button;
 
-const SETTINGS: &str = "dev.diegovsky.Riff";
+use riff_config::settings::SETTINGS;
 
 /// GSettings keys for the ten EQ bands, in ascending frequency order.
 const EQ_BAND_KEYS: [&str; 10] = [

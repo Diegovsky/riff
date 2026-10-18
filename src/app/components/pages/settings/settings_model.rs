@@ -26,6 +26,10 @@ impl SettingsModel {
             .dispatch(SettingsAction::ChangeSettings.into());
     }
 
+    pub fn show_restart_required(&self) {
+        self.dispatcher.dispatch(AppAction::ShowRestartRequired);
+    }
+
     /// Clear the on-disk and in-memory data caches, plus librespot's
     /// downloaded audio cache, then notify the user.
     pub fn clear_cache(&self) {

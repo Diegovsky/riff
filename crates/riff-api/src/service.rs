@@ -105,6 +105,17 @@ impl ApiService {
         self.image_disk.evict_to_budget().await;
     }
 
+    pub fn set_memory_cache_bytes(&self, max_bytes: usize) {
+        self.json_cache.set_max_bytes(max_bytes);
+        self.texture_cache.set_max_bytes(max_bytes);
+    }
+
+    pub async fn set_disk_cache_bytes(&self, max_bytes: usize) {
+        self.api_disk.set_max_bytes(max_bytes);
+        self.image_disk.set_max_bytes(max_bytes);
+        self.run_cache_maintenance().await;
+    }
+
     /// Clear all cached data, on disk (API responses + images) and in memory
     /// (API response cache + decoded textures).
     pub async fn clear_user_cache(&self) {

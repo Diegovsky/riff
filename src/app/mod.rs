@@ -5,6 +5,7 @@ use futures::channel::mpsc::UnboundedSender;
 use gio::prelude::SettingsExt;
 use glib::object::Cast;
 use riff_auth::{SessionTokens, TokenStore};
+use riff_config::feature_flags::FeatureFlag;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -50,6 +51,7 @@ pub struct App {
     // so it is compiled out of release builds entirely.
     #[cfg(debug_assertions)]
     player_command_sender: UnboundedSender<Command>,
+    _live_settings: gio::Settings,
 }
 
 impl App {
@@ -68,7 +70,7 @@ impl App {
             Arc::new(session_tokens.clone());
 
         // Setting
-        let gsettings = gio::Settings::new("dev.diegovsky.Riff");
+        let gsettings = gio::Settings::new(crate::settings::SETTINGS);
 
         // API
         let memory_cache_mb = gsettings.uint("memory-cache-size-mb").max(1) as usize;
@@ -80,6 +82,8 @@ impl App {
             disk_cache_mb * 1024 * 1024,
         ));
 
+        let live_settings =
+            App::watch_live_settings(gsettings, Arc::clone(&api_service), sender.clone());
         let model = Rc::new(AppModel::new(state, api_service));
 
         let player_command_sender = crate::player::start_player_service(
@@ -117,7 +121,30 @@ impl App {
             sender,
             #[cfg(debug_assertions)]
             player_command_sender,
+            _live_settings: live_settings,
         }
+    }
+
+    fn watch_live_settings(
+        settings: gio::Settings,
+        api: Arc<riff_api::ApiService>,
+        sender: UnboundedSender<AppAction>,
+    ) -> gio::Settings {
+        let dispatcher = Dispatcher::new(sender);
+        settings.connect_changed(Some(FeatureFlag::PinnedObjects.key()), move |_, _| {
+            dispatcher.dispatch(BrowserAction::NotifyPinnedPlaylistsUpdated.into());
+        });
+        let memory_api = Arc::clone(&api);
+        settings.connect_changed(Some("memory-cache-size-mb"), move |settings, key| {
+            let mb = settings.uint(key).max(1) as usize;
+            memory_api.set_memory_cache_bytes(mb * 1024 * 1024);
+        });
+        settings.connect_changed(Some("disk-cache-size-mb"), move |settings, key| {
+            let mb = settings.uint(key).max(1) as usize;
+            let api = Arc::clone(&api);
+            tokio::spawn(async move { api.set_disk_cache_bytes(mb * 1024 * 1024).await });
+        });
+        settings
     }
 
     fn add_ui_components(&mut self) {

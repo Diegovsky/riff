@@ -18,8 +18,8 @@ use crate::app::state::{
     SelectionState,
 };
 use crate::app::{AppAction, AppModel, AppState, SongsSource};
-use crate::feature_flags::{self, FeatureFlag};
 use crate::settings;
+use riff_config::feature_flags::{self, FeatureFlag};
 
 /// Generates the boilerplate TrackListModel methods that delegate to `self.base`.
 /// Use inside an `impl TrackListModel for X { ... }` block.
