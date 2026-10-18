@@ -344,6 +344,7 @@ impl PlaybackState {
         if self.queue.current().is_none() {
             return vec![];
         }
+        let mut events = vec![];
         if self.seek_position.current() <= 2000 {
             let skip = self.skipper();
             if self.queue.go_back(self.repeat, skip).is_some() {
@@ -351,9 +352,11 @@ impl PlaybackState {
                     return vec![PlaybackEvent::TrackChanged(id)];
                 }
             }
+            events.push(PlaybackEvent::NoPreviousTrack);
         }
         self.seek_position.set(0, self.is_playing);
-        vec![PlaybackEvent::TrackSeeked(0)]
+        events.push(PlaybackEvent::TrackSeeked(0));
+        events
     }
 
     fn seek_to(&mut self, pos: u32) -> Vec<PlaybackEvent> {
@@ -526,6 +529,7 @@ pub enum PlaybackEvent {
     ShuffleChanged(bool),
     PlaylistChanged,
     PlaybackStopped,
+    NoPreviousTrack,
     SwitchedDevice(Device),
     AvailableDevicesChanged,
     /// Emitted when the skip_explicit preference changes (either locally or
@@ -1060,7 +1064,13 @@ mod tests {
         assert_eq!(state.current_song_id(), Some("1".to_string()));
 
         let events = state.act(PlaybackAction::Previous);
-        assert!(matches!(&events[..], [PlaybackEvent::TrackSeeked(0)]));
+        assert!(matches!(
+            &events[..],
+            [
+                PlaybackEvent::NoPreviousTrack,
+                PlaybackEvent::TrackSeeked(0)
+            ]
+        ));
         assert_eq!(state.current_song_id(), Some("1".to_string()));
     }
 

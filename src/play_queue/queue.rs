@@ -21,7 +21,15 @@ enum Now {
     Queued(Box<Queued>),
 }
 
+#[derive(Clone, Debug)]
+struct Played {
+    track: Track,
+    source: Option<SongsSource>,
+    index: Option<usize>,
+}
+
 const DEFAULT_SEPARATION: usize = 2;
+const HISTORY_LENGTH: usize = 50;
 
 fn next_shuffled_loop(loop_order: &[usize], separation: usize, rng: &mut SmallRng) -> Vec<usize> {
     let n = loop_order.len();
@@ -85,6 +93,7 @@ pub struct PlayQueue {
     separation: usize,
     queued: Vec<Queued>,
     now: Now,
+    history: Vec<Played>,
     shuffled: bool,
     next_uid: u64,
     rng: SmallRng,
@@ -107,6 +116,7 @@ impl PlayQueue {
             separation: DEFAULT_SEPARATION,
             queued: vec![],
             now: Now::Nothing,
+            history: vec![],
             shuffled: false,
             next_uid: 0,
             rng,
@@ -220,6 +230,7 @@ impl PlayQueue {
     }
 
     fn reset_context(&mut self, source: Option<SongsSource>) {
+        self.remember_current();
         self.context = Context::new(source);
         self.order.clear();
         self.removed.clear();
@@ -396,13 +407,64 @@ impl PlayQueue {
                 self.take_queued(*uid);
             }
         }
+        if step != Step::Current {
+            self.remember_current();
+        }
         self.go_to(step);
         self.current().cloned()
     }
 
+    fn remember_current(&mut self) {
+        let index = self.current_context_index();
+        let Some(track) = self.current().cloned() else {
+            return;
+        };
+        let source = self.context.source.clone();
+        self.history.push(Played {
+            track,
+            source,
+            index,
+        });
+        if self.history.len() > HISTORY_LENGTH {
+            self.history.remove(0);
+        }
+    }
+
+    fn requeue_current(&mut self) {
+        if let Now::Queued(entry) = std::mem::replace(&mut self.now, Now::Nothing) {
+            self.queued.insert(0, *entry);
+        }
+    }
+
     pub fn go_back(&mut self, repeat: RepeatMode, skip: impl Fn(&Track) -> bool) -> Option<Track> {
-        let step = self.first_playable(&self.prev_steps(repeat), &skip)?;
-        self.go_to(step);
+        let current = self.current().map(|t| t.rri.id.clone());
+        let played = std::iter::from_fn(|| self.history.pop())
+            .find(|p| !skip(&p.track) && Some(&p.track.rri.id) != current.as_ref());
+        let Some(played) = played else {
+            let step = self.first_playable(&self.prev_steps(repeat), &skip)?;
+            self.requeue_current();
+            self.go_to(step);
+            return self.current().cloned();
+        };
+        let was_context = matches!(self.now, Now::Context);
+        self.requeue_current();
+        let position = played
+            .index
+            .filter(|_| played.source == self.context.source)
+            .and_then(|i| self.order.iter().position(|&j| j == i))
+            .filter(|&p| self.cursor.is_some_and(|c| p <= c));
+        match position {
+            Some(p) => {
+                self.cursor = Some(p);
+                self.now = Now::Context;
+            }
+            None => {
+                if was_context {
+                    self.cursor = self.cursor.and_then(|c| c.checked_sub(1));
+                }
+                self.now = Now::Queued(Box::new(self.new_queued(played.track)));
+            }
+        }
         self.current().cloned()
     }
 
@@ -414,6 +476,7 @@ impl PlayQueue {
         else {
             return false;
         };
+        self.remember_current();
         let restored = self.removed.remove(&i);
         if self.shuffled {
             self.rebuild_order(Some(i));
@@ -441,6 +504,7 @@ impl PlayQueue {
         let Some(step) = step.filter(|&step| self.track_at(step).is_some()) else {
             return false;
         };
+        self.remember_current();
         self.go_to(step);
         true
     }
@@ -834,7 +898,10 @@ mod tests {
             ended_times(&mut q, RepeatMode::Context, 4),
             ["4", "2", "4", "2"]
         );
-        assert_eq!(id(q.go_back(RepeatMode::Off, no_skip)).as_deref(), None);
+        assert_eq!(
+            id(q.go_back(RepeatMode::Off, no_skip)).as_deref(),
+            Some("4")
+        );
 
         q.set_shuffled(true);
         q.set_shuffled(false);
@@ -1185,6 +1252,7 @@ mod tests {
             id(q.go_back(RepeatMode::Off, no_skip)).as_deref(),
             Some("2")
         );
+        assert_eq!(queued_ids(&q), ["a"]);
         assert_eq!(
             id(q.go_back(RepeatMode::Off, no_skip)).as_deref(),
             Some("1")
@@ -1194,6 +1262,93 @@ mod tests {
             id(q.go_back(RepeatMode::Context, no_skip)).as_deref(),
             Some("3")
         );
+    }
+
+    fn back(q: &mut PlayQueue) -> Option<String> {
+        id(q.go_back(RepeatMode::Off, no_skip))
+    }
+
+    #[test]
+    fn test_previous_then_next_returns_to_queued() {
+        let mut q = playing(&["1", "2", "3"], "2");
+        q.enqueue(tracks(&["a"]));
+        next(&mut q);
+        assert_eq!(back(&mut q).as_deref(), Some("2"));
+        assert_eq!(play_all(&mut q), ["a", "3"]);
+    }
+
+    #[test]
+    fn test_previous_returns_to_played_queued_track() {
+        let mut q = playing(&["1", "2", "3"], "2");
+        q.enqueue(tracks(&["a"]));
+        assert_eq!(next(&mut q).as_deref(), Some("a"));
+        assert_eq!(next(&mut q).as_deref(), Some("3"));
+        assert_eq!(back(&mut q).as_deref(), Some("a"));
+        assert_eq!(back(&mut q).as_deref(), Some("2"));
+        assert_eq!(play_all(&mut q), ["a", "3"]);
+    }
+
+    #[test]
+    fn test_previous_follows_shuffled_play_order() {
+        let ids = numbered(10);
+        let mut q = shuffled(&ids, "0");
+        let mut played = vec!["0".to_string()];
+        played.extend((0..4).filter_map(|_| next(&mut q)));
+        let current = played.pop();
+        assert_eq!(current_id(&q), current);
+        let backwards: Vec<String> = (0..4).filter_map(|_| back(&mut q)).collect();
+        played.reverse();
+        assert_eq!(backwards, played);
+    }
+
+    #[test]
+    fn test_previous_survives_shuffle_toggle_and_wrap() {
+        let mut q = playing(&["1", "2", "3"], "1");
+        next(&mut q);
+        q.set_shuffled(true);
+        assert_eq!(back(&mut q).as_deref(), Some("1"));
+
+        let mut q = playing(&["1", "2"], "2");
+        assert_eq!(ended(&mut q, RepeatMode::Context).as_deref(), Some("1"));
+        assert_eq!(back(&mut q).as_deref(), Some("2"));
+    }
+
+    #[test]
+    fn test_previous_returns_to_track_jumped_from() {
+        let mut q = playing(&["1", "2", "3", "4"], "1");
+        assert!(q.play_key(EntryKey::Context(3)));
+        assert_eq!(back(&mut q).as_deref(), Some("1"));
+
+        let mut q = playing(&["1", "2", "3", "4"], "4");
+        assert!(q.play_id("2"));
+        assert_eq!(back(&mut q).as_deref(), Some("4"));
+        assert_eq!(next(&mut q).as_deref(), Some("2"));
+    }
+
+    #[test]
+    fn test_previous_crosses_contexts() {
+        let mut q = playing(&["1", "2"], "2");
+        q.set_context(Some(SongsSource::Album("b".into())), tracks(&["x", "y"]));
+        assert!(q.play_id("y"));
+        assert_eq!(back(&mut q).as_deref(), Some("2"));
+        assert_eq!(next(&mut q).as_deref(), Some("y"));
+    }
+
+    #[test]
+    fn test_previous_skips_filtered_history() {
+        let mut q = playing(&["1", "2", "3"], "1");
+        next(&mut q);
+        next(&mut q);
+        let skip = |t: &Track| t.rri.id == "2";
+        assert_eq!(id(q.go_back(RepeatMode::Off, skip)).as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn test_previous_ignores_replay_of_current_track() {
+        let mut q = playing(&["1", "2"], "2");
+        album(&mut q, &["1", "2"]);
+        assert!(q.play_id("2"));
+        assert_eq!(back(&mut q).as_deref(), Some("1"));
     }
 
     #[test]

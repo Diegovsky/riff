@@ -1,4 +1,5 @@
 use crate::app::components::EventListener;
+use crate::app::state::PlaybackEvent;
 use crate::app::AppEvent;
 use gettextrs::*;
 use gtk::prelude::*;
@@ -118,6 +119,10 @@ impl EventListener for Notification {
         match event {
             AppEvent::NotificationShown(content) => self.show(content),
             AppEvent::ConnectionLostChanged(lost) => self.set_connection_lost(*lost),
+            AppEvent::PlaybackEvent(PlaybackEvent::NoPreviousTrack) => {
+                // translators: Shown in a toast when the user presses Previous but there is no earlier track to play.
+                self.show(&gettext("No previous track"))
+            }
             _ => {}
         }
     }
