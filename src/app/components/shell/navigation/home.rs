@@ -2,6 +2,7 @@ use gtk::prelude::*;
 
 use crate::app::components::navigation_panel::NavigationPanelDestination;
 use crate::app::components::{Component, EventListener, ScreenFactory};
+use crate::app::state::{HomePage, Route, Transition};
 use crate::app::{AppEvent, BrowserEvent};
 
 pub struct HomePane {
@@ -21,40 +22,16 @@ impl HomePane {
         let stack = gtk::Stack::new();
         stack.set_transition_type(gtk::StackTransitionType::Crossfade);
 
-        let dest = NavigationPanelDestination::Library;
-        stack.add_titled(
-            library.get_root_widget(),
-            Option::from(dest.id()),
-            &dest.title(),
-        );
-
-        let dest = NavigationPanelDestination::SavedTracks;
-        stack.add_titled(
-            saved_tracks.get_root_widget(),
-            Option::from(dest.id()),
-            &dest.title(),
-        );
-
-        let dest = NavigationPanelDestination::SavedPlaylists;
-        stack.add_titled(
-            saved_playlists.get_root_widget(),
-            Option::from(dest.id()),
-            &dest.title(),
-        );
-
-        let dest = NavigationPanelDestination::SavedArtists;
-        stack.add_titled(
-            saved_artists.get_root_widget(),
-            Option::from(dest.id()),
-            &dest.title(),
-        );
-
-        let dest = NavigationPanelDestination::NowPlaying;
-        stack.add_titled(
-            now_playing.get_root_widget(),
-            Option::from(dest.id()),
-            &dest.title(),
-        );
+        for (page, widget) in [
+            (HomePage::Library, library.get_root_widget()),
+            (HomePage::SavedTracks, saved_tracks.get_root_widget()),
+            (HomePage::SavedPlaylists, saved_playlists.get_root_widget()),
+            (HomePage::SavedArtists, saved_artists.get_root_widget()),
+            (HomePage::NowPlaying, now_playing.get_root_widget()),
+        ] {
+            let title = NavigationPanelDestination::from_home_page(page).title();
+            stack.add_titled(widget, Some(page.id()), &title);
+        }
 
         Self {
             stack,
@@ -82,8 +59,12 @@ impl Component for HomePane {
 
 impl EventListener for HomePane {
     fn on_event(&mut self, event: &AppEvent) {
-        if let AppEvent::BrowserEvent(BrowserEvent::HomeVisiblePageChanged(page)) = event {
-            self.stack.set_visible_child_name(page);
+        if let AppEvent::BrowserEvent(BrowserEvent::NavigationChanged(Transition {
+            to: Route::Home(page),
+            ..
+        })) = event
+        {
+            self.stack.set_visible_child_name(page.id());
         }
         self.broadcast_event(event);
     }

@@ -3996,6 +3996,7 @@ dependencies = [
  "ref_filter_map",
  "riff-api",
  "riff-auth",
+ "riff-core",
  "serde",
  "serde_json",
  "tokio",
@@ -4048,6 +4049,10 @@ dependencies = [
 
 [[package]]
 name = "riff-config"
+version = "0.1.0"
+
+[[package]]
+name = "riff-core"
 version = "0.1.0"
 
 [[package]]

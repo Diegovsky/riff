@@ -10,7 +10,7 @@ use super::{
     PINNED_SECTION, SAVED_PLAYLISTS_SECTION,
 };
 use crate::app::components::PlaylistDialog;
-use crate::app::state::PlaybackEvent;
+use crate::app::state::{HomePage, PlaybackEvent, Route, Transition};
 use crate::app::{AppEvent, BrowserEvent, Component, EventListener};
 
 pub struct NavigationPanel {
@@ -254,6 +254,21 @@ impl NavigationPanel {
         }
     }
 
+    fn select_home_page(&self, page: HomePage) {
+        let index = (0..self.list_store.n_items()).find(|&i| {
+            self.list_store
+                .item(i)
+                .and_downcast::<NavigationPanelItem>()
+                .and_then(|item| item.destination())
+                .and_then(|dest| dest.home_page())
+                == Some(page)
+        });
+        let row = index.and_then(|i| self.listbox.row_at_index(i as i32));
+        if let Some(row) = row {
+            self.listbox.select_row(Some(&row));
+        }
+    }
+
     fn update_playlists_in_navigation_panel(&self) {
         self.model
             .apply_navigation_panel_items(&self.list_store, self.num_fixed_entries);
@@ -272,6 +287,10 @@ impl EventListener for NavigationPanel {
             AppEvent::BrowserEvent(
                 BrowserEvent::SavedPlaylistsUpdated | BrowserEvent::PinnedPlaylistsUpdated,
             ) => self.update_playlists_in_navigation_panel(),
+            AppEvent::BrowserEvent(BrowserEvent::NavigationChanged(Transition {
+                to: Route::Home(page),
+                ..
+            })) => self.select_home_page(*page),
             AppEvent::PlaybackEvent(
                 PlaybackEvent::PlaybackPaused
                 | PlaybackEvent::PlaybackResumed

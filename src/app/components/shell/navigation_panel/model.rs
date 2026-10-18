@@ -12,7 +12,7 @@ use crate::app::components::{
 };
 use crate::app::models::{CardModel, PlaylistSummary};
 use crate::app::playlist_actions::unfollow_and_unpin_playlist;
-use crate::app::state::{load_context, start_actions, PlaybackAction, ScreenName};
+use crate::app::state::{load_context, start_actions, PlaybackAction, Route};
 use crate::app::{AppAction, AppModel, BrowserAction, Dispatcher, PaginationTarget, SongsSource};
 use crate::feature_flags::{is_enabled, FeatureFlag};
 use crate::play_queue::CONTEXT_PAGE_SIZE;
@@ -256,10 +256,8 @@ impl NavigationPanelModel {
             | NavigationPanelDestination::NowPlaying
             | NavigationPanelDestination::SavedPlaylists
             | NavigationPanelDestination::SavedArtists => {
-                vec![
-                    BrowserAction::NavigationPopTo(ScreenName::Home).into(),
-                    BrowserAction::SetHomeVisiblePage(dest.id()).into(),
-                ]
+                let page = dest.home_page().expect("home destination");
+                vec![BrowserAction::Navigate(Route::Home(page)).into()]
             }
             NavigationPanelDestination::Playlist(PlaylistSummary { id, .. }) => {
                 vec![AppAction::ViewPlaylist(id)]

@@ -11,7 +11,7 @@ use crate::app::state::{
     screen_states::liked_statuses,
     selection_state::{SelectionAction, SelectionContext, SelectionEvent, SelectionState},
     settings_state::{SettingsAction, SettingsEvent, SettingsState},
-    EntryKey, ScreenName, SpotifyLink, UpdatableState,
+    EntryKey, Route, SpotifyLink, UpdatableState,
 };
 
 // It's a big one...
@@ -66,27 +66,27 @@ impl AppAction {
 
     #[allow(non_snake_case)]
     pub fn ViewAlbum(id: String) -> Self {
-        BrowserAction::NavigationPush(ScreenName::AlbumDetails(id)).into()
+        BrowserAction::Navigate(Route::Album(id)).into()
     }
 
     #[allow(non_snake_case)]
     pub fn ViewArtist(id: String) -> Self {
-        BrowserAction::NavigationPush(ScreenName::Artist(id)).into()
+        BrowserAction::Navigate(Route::Artist(id)).into()
     }
 
     #[allow(non_snake_case)]
     pub fn ViewPlaylist(id: String) -> Self {
-        BrowserAction::NavigationPush(ScreenName::PlaylistDetails(id)).into()
+        BrowserAction::Navigate(Route::Playlist(id)).into()
     }
 
     #[allow(non_snake_case)]
     pub fn ViewUser(id: String) -> Self {
-        BrowserAction::NavigationPush(ScreenName::User(id)).into()
+        BrowserAction::Navigate(Route::User(id)).into()
     }
 
     #[allow(non_snake_case)]
     pub fn ViewSearch() -> Self {
-        BrowserAction::NavigationPush(ScreenName::Search).into()
+        BrowserAction::Navigate(Route::Search).into()
     }
 }
 

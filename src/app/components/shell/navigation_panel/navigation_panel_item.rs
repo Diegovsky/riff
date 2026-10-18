@@ -4,6 +4,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use crate::app::models::PlaylistSummary;
+use crate::app::state::HomePage;
 
 const LIBRARY: &str = "library";
 const SAVED_TRACKS: &str = "saved_tracks";
@@ -32,6 +33,29 @@ pub enum NavigationPanelDestination {
 }
 
 impl NavigationPanelDestination {
+    pub fn home_page(&self) -> Option<HomePage> {
+        match self {
+            Self::Library => Some(HomePage::Library),
+            Self::SavedTracks => Some(HomePage::SavedTracks),
+            Self::NowPlaying => Some(HomePage::NowPlaying),
+            Self::SavedPlaylists => Some(HomePage::SavedPlaylists),
+            Self::SavedArtists => Some(HomePage::SavedArtists),
+            Self::Playlist(_) | Self::Album { .. } | Self::Artist { .. } | Self::Track { .. } => {
+                None
+            }
+        }
+    }
+
+    pub fn from_home_page(page: HomePage) -> Self {
+        match page {
+            HomePage::Library => Self::Library,
+            HomePage::SavedTracks => Self::SavedTracks,
+            HomePage::NowPlaying => Self::NowPlaying,
+            HomePage::SavedPlaylists => Self::SavedPlaylists,
+            HomePage::SavedArtists => Self::SavedArtists,
+        }
+    }
+
     pub fn id(&self) -> &'static str {
         match self {
             Self::Library => LIBRARY,

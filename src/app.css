@@ -47,6 +47,11 @@
   color: color-mix(in srgb, currentColor 55%, transparent);
 }
 
+/* History menus hang off header bar buttons, whose bold label weight they would inherit */
+popover.history-menu {
+  font-weight: normal;
+}
+
 /* Hide scrollbars while the navigation stack's page transition is running */
 stack.transitioning scrollbar {
   opacity: 0;

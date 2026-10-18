@@ -295,8 +295,8 @@ mod tests {
         let action = receiver.try_next().ok().flatten().expect("an action");
         assert!(matches!(
             action,
-            AppAction::BrowserAction(BrowserAction::NavigationPush(
-                crate::app::state::ScreenName::AlbumDetails(ref id)
+            AppAction::BrowserAction(BrowserAction::Navigate(
+                crate::app::state::Route::Album(ref id)
             )) if id == "album1"
         ));
 

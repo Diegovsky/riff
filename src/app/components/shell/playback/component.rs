@@ -1,10 +1,9 @@
 use std::ops::Deref;
 use std::rc::Rc;
 
-use crate::app::components::navigation_panel::NavigationPanelDestination;
 use crate::app::components::EventListener;
 use crate::app::models::*;
-use crate::app::state::{PlaybackAction, PlaybackEvent, ScreenName, SelectionEvent};
+use crate::app::state::{HomePage, PlaybackAction, PlaybackEvent, Route, SelectionEvent};
 use crate::app::{AppEvent, AppModel, AppState, BrowserAction, Dispatcher};
 
 use super::playback_widget::PlaybackWidget;
@@ -32,12 +31,8 @@ impl PlaybackModel {
     }
 
     fn go_home(&self) {
-        // Reach now-playing like the navigation panel does: pop to home and select its
-        // now-playing sub-page, reusing the home sub-page switch path.
-        self.dispatcher.dispatch_many(vec![
-            BrowserAction::NavigationPopTo(ScreenName::Home).into(),
-            BrowserAction::SetHomeVisiblePage(NavigationPanelDestination::NowPlaying.id()).into(),
-        ]);
+        self.dispatcher
+            .dispatch(BrowserAction::Navigate(Route::Home(HomePage::NowPlaying)).into());
     }
 
     fn is_playing(&self) -> bool {

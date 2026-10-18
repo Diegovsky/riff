@@ -38,8 +38,9 @@ impl ScreenFactory {
         title: &str,
         page: CardListComponent<M>,
     ) -> CardListComponent<M> {
-        self.registrar.set_static_title(name, title);
-        self.registrar.add_end(name, page.view_button());
+        let header = self.registrar.page(name);
+        header.set_title(title);
+        header.add_end(page.view_button());
         page
     }
 
@@ -86,7 +87,7 @@ impl ScreenFactory {
             Rc::clone(&self.app_model),
             self.dispatcher.clone(),
         ));
-        NowPlaying::new(model, self.registrar.clone(), "now_playing".to_string())
+        NowPlaying::new(model, self.registrar.page("now_playing"))
     }
 
     pub fn make_saved_tracks(&self) -> impl ListenerComponent {
@@ -94,7 +95,7 @@ impl ScreenFactory {
             Rc::clone(&self.app_model),
             self.dispatcher.clone(),
         ));
-        SavedTracks::new(model, self.registrar.clone(), "saved_tracks".to_string())
+        SavedTracks::new(model, self.registrar.page("saved_tracks"))
     }
 
     pub fn make_album_details(&self, id: String) -> impl ListenerComponent {
@@ -104,7 +105,7 @@ impl ScreenFactory {
             Rc::clone(&self.app_model),
             self.dispatcher.clone(),
         ));
-        Details::new(model, self.registrar.clone(), name)
+        Details::new(model, self.registrar.page(&name))
     }
 
     pub fn make_search_results(&self) -> impl ListenerComponent {
@@ -114,7 +115,7 @@ impl ScreenFactory {
             Rc::clone(&self.shared_layout),
             Rc::clone(&self.shared_size),
             self.dispatcher.clone(),
-            self.registrar.clone(),
+            self.registrar.page("search"),
         )
     }
 
@@ -130,8 +131,7 @@ impl ScreenFactory {
             Rc::clone(&self.shared_layout),
             Rc::clone(&self.shared_size),
             self.dispatcher.clone(),
-            self.registrar.clone(),
-            name,
+            self.registrar.page(&name),
         )
     }
 
@@ -142,7 +142,7 @@ impl ScreenFactory {
             Rc::clone(&self.app_model),
             self.dispatcher.clone(),
         ));
-        PlaylistDetails::new(model, self.registrar.clone(), name)
+        PlaylistDetails::new(model, self.registrar.page(&name))
     }
 
     pub fn make_user_details(&self, id: String) -> impl ListenerComponent {
@@ -153,8 +153,7 @@ impl ScreenFactory {
             Rc::clone(&self.shared_layout),
             Rc::clone(&self.shared_size),
             self.dispatcher.clone(),
-            self.registrar.clone(),
-            name,
+            self.registrar.page(&name),
         )
     }
 }

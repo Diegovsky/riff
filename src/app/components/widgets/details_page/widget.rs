@@ -177,16 +177,12 @@ impl DetailsPage {
     ///
     /// Uses opacity, not `visible`: the shared header's `GtkStack` won't switch
     /// to a child whose `visible` is false, so it stays visible but transparent.
-    pub fn connect_title_reveal(&self, title: &libadwaita::WindowTitle) {
-        title.set_opacity(0.0);
-
+    pub fn connect_title_reveal<F: Fn(bool) + 'static>(&self, f: F) {
         let title_shown = Rc::new(Cell::new(false));
         let adj = self.widget.imp().scrolled_window.vadjustment();
         let header_area = self.widget.imp().header_area.get();
 
         adj.connect_value_changed(clone!(
-            #[weak]
-            title,
             #[weak]
             header_area,
             move |adj| {
@@ -195,7 +191,7 @@ impl DetailsPage {
                 let scrolled_past = header_height > 0.0 && adj.value() >= header_height * 0.5;
                 if scrolled_past != title_shown.get() {
                     title_shown.set(scrolled_past);
-                    title.set_opacity(if scrolled_past { 1.0 } else { 0.0 });
+                    f(scrolled_past);
                 }
             }
         ));

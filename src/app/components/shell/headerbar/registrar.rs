@@ -5,9 +5,6 @@ use gtk::prelude::*;
 use super::component::{HeaderBarModel, HeaderModelRegistry};
 use super::widget::AppHeaderBar;
 
-/// Handle screens use to contribute to the shared [`AppHeaderBar`]: a title
-/// widget, optional end buttons, and the [`HeaderBarModel`] driving
-/// selection/back. Each contribution is keyed by the screen's page name.
 #[derive(Clone)]
 pub struct HeaderRegistrar {
     widget: AppHeaderBar,
@@ -19,39 +16,66 @@ impl HeaderRegistrar {
         Self { widget, models }
     }
 
-    /// Register a fixed-text title for `name`.
-    pub fn set_static_title(&self, name: &str, title: &str) {
-        let window_title = libadwaita::WindowTitle::new(title, "");
-        self.widget.add_title(name, &window_title);
+    pub fn page(&self, name: &str) -> PageHeader {
+        PageHeader {
+            name: name.to_string(),
+            widget: self.widget.clone(),
+            models: Rc::clone(&self.models),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct PageHeader {
+    name: String,
+    widget: AppHeaderBar,
+    models: HeaderModelRegistry,
+}
+
+impl PageHeader {
+    pub fn set_title(&self, title: &str) {
+        self.widget
+            .update_page(&self.name, |page| page.title = title.to_string());
     }
 
-    /// Register (and return) a title widget for `name` whose content and
-    /// visibility the caller controls (used by detail pages to reveal the
-    /// title on scroll).
-    pub fn add_title_widget(&self, name: &str) -> libadwaita::WindowTitle {
-        let window_title = libadwaita::WindowTitle::new("", "");
-        self.widget.add_title(name, &window_title);
-        window_title
+    pub fn set_subtitle(&self, subtitle: &str) {
+        self.widget
+            .update_page(&self.name, |page| page.subtitle = subtitle.to_string());
     }
 
-    /// Register a widget in the optional-buttons (end) area for `name`.
-    pub fn add_end(&self, name: &str, widget: &impl IsA<gtk::Widget>) {
-        self.widget.add_end(name, widget);
+    pub fn set_title_revealed(&self, revealed: bool) {
+        self.widget
+            .update_page(&self.name, |page| page.title_revealed = revealed);
     }
 
-    /// Register a caller-provided widget as the title for `name`.
-    pub fn add_title(&self, name: &str, widget: &impl IsA<gtk::Widget>) {
-        self.widget.add_title(name, widget);
+    pub fn set_title_widget(&self, widget: &impl IsA<gtk::Widget>) {
+        let widget = widget.clone().upcast();
+        self.widget
+            .update_page(&self.name, |page| page.title_widget = Some(widget));
     }
 
-    /// Register the [`HeaderBarModel`] driving selection/back for `name`.
-    pub fn register_model(&self, name: &str, model: Rc<dyn HeaderBarModel>) {
-        self.models.borrow_mut().insert(name.to_string(), model);
+    pub fn add_end(&self, widget: &impl IsA<gtk::Widget>) {
+        let widget = widget.clone().upcast();
+        self.widget.update_page(&self.name, |page| {
+            if !page.end.contains(&widget) {
+                page.end.push(widget);
+            }
+        });
     }
 
-    /// Remove every contribution registered under `name`.
-    pub fn remove(&self, name: &str) {
-        self.widget.remove_page(name);
-        self.models.borrow_mut().remove(name);
+    pub fn remove_end(&self, widget: &impl IsA<gtk::Widget>) {
+        let widget = widget.upcast_ref();
+        self.widget.detach_end(widget);
+        self.widget
+            .update_page(&self.name, |page| page.end.retain(|w| w != widget));
+    }
+
+    pub fn set_model(&self, model: Rc<dyn HeaderBarModel>) {
+        self.models.borrow_mut().insert(self.name.clone(), model);
+    }
+
+    pub fn remove(&self) {
+        self.widget.remove_page(&self.name);
+        self.models.borrow_mut().remove(&self.name);
     }
 }

@@ -17,6 +17,7 @@ use crate::app::components::{
 };
 use crate::app::models::*;
 use crate::app::playlist_actions::unfollow_and_unpin_playlist;
+use crate::app::state::Route;
 use crate::app::state::SelectionContext;
 use crate::app::state::{BrowserAction, BrowserEvent, SelectionState};
 use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, PaginationTarget, SongsSource};
@@ -113,8 +114,9 @@ impl PlaylistDetailsModel {
         let id = self.id.clone();
         let user_id = self.app_model.get_state().logged_user.user.clone();
         dispatch_api_call_many(&self.dispatcher, move || async move {
+            let leave = BrowserAction::NavigationLeave(Route::Playlist(id.clone())).into();
             let removed = unfollow_and_unpin_playlist(&api, id, user_id).await?;
-            Ok(vec![removed, BrowserAction::NavigationPop.into()])
+            Ok(vec![removed, leave])
         });
     }
 }
@@ -184,7 +186,9 @@ impl PageModel for PlaylistDetailsModel {
                 )
                 .into()),
                 Err(DomainError::ClientError { status: 400, .. })
-                | Err(DomainError::NotFound { .. }) => Ok(BrowserAction::NavigationPop.into()),
+                | Err(DomainError::NotFound { .. }) => {
+                    Ok(BrowserAction::NavigationLeave(Route::Playlist(id)).into())
+                }
                 Err(e) => Err(e),
             }
         });

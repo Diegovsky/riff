@@ -11,6 +11,7 @@ use crate::app::components::{
     HasHeaderBarModel, HeaderImageShape, PageModel, PinnedPageModel, TrackListModel,
 };
 use crate::app::models::*;
+use crate::app::state::Route;
 use crate::app::state::SelectionContext;
 use crate::app::state::CARD_BATCH_SIZE;
 use crate::app::state::{BrowserAction, BrowserEvent, SelectionState};
@@ -82,14 +83,16 @@ impl PageModel for DetailsModel {
         let api = self.app_model.api();
 
         // Album metadata: drives the header and the release-details dialog.
-        // A 400/404 means the album does not exist, so navigate back.
+        // A 400/404 means the album does not exist, so leave it.
         let id = self.id.clone();
         let info_api = api.clone();
         dispatch_api_read(&self.dispatcher, move |tag| async move {
             match info_api.get_album(&id, tag).await {
                 Ok(album) => Ok(BrowserAction::SetAlbumInfo(Box::new(album)).into()),
                 Err(DomainError::ClientError { status: 400, .. })
-                | Err(DomainError::NotFound { .. }) => Ok(BrowserAction::NavigationPop.into()),
+                | Err(DomainError::NotFound { .. }) => {
+                    Ok(BrowserAction::NavigationLeave(Route::Album(id)).into())
+                }
                 Err(e) => Err(e),
             }
         });

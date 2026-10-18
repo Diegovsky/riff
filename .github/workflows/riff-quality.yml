@@ -36,10 +36,6 @@ jobs:
   blueprint-lint:
     name: "Blueprint Lint"
     runs-on: ubuntu-latest
-    # Ubuntu's apt libadwaita typelib lags behind; run in a Fedora container
-    # that ships libadwaita 1.8+ so blueprints using newer Adw widgets (e.g.
-    # Adw.WrapBox, Adw.ShortcutsDialog) validate against the version the app
-    # actually builds against (Cargo.toml pins the `v1_8` libadwaita feature).
     container:
       image: fedora:43
     steps:
@@ -66,8 +62,13 @@ jobs:
   check-icons:
     name: "Bundled Icons"
     runs-on: ubuntu-latest
+    container:
+      image: fedora:44
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: dnf install -y gtk4 libadwaita glib2-devel findutils
 
       - name: Check every referenced icon is bundled
         run: ./scripts/check-icons.sh
