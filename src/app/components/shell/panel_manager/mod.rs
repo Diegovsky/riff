@@ -7,8 +7,7 @@ use crate::app::components::{
 };
 use crate::app::state::PlaybackEvent;
 use crate::app::{AppAction, AppEvent, AppModel, Dispatcher};
-use crate::feature_flags::FeatureFlag;
-use crate::settings::SETTINGS;
+use crate::settings::{QUEUE_SIDE_PANEL, SETTINGS};
 
 const TOGGLE_ACTION: &str = "utility-panel";
 
@@ -19,8 +18,8 @@ enum Placement {
 }
 
 impl Placement {
-    fn from_flag(settings: &gio::Settings) -> Self {
-        if settings.boolean(FeatureFlag::QueueSidePanel.key()) {
+    fn from_settings(settings: &gio::Settings) -> Self {
+        if settings.boolean(QUEUE_SIDE_PANEL) {
             Self::Side
         } else {
             Self::Sheet
@@ -126,13 +125,13 @@ impl PanelManager {
             placement: Cell::new(None),
         });
         let settings = gio::Settings::new(SETTINGS);
-        panels.place(Placement::from_flag(&settings));
+        panels.place(Placement::from_settings(&settings));
         settings.connect_changed(
-            Some(FeatureFlag::QueueSidePanel.key()),
+            Some(QUEUE_SIDE_PANEL),
             clone!(
                 #[weak]
                 panels,
-                move |settings, _| panels.place(Placement::from_flag(settings))
+                move |settings, _| panels.place(Placement::from_settings(settings))
             ),
         );
 

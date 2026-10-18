@@ -1,11 +1,12 @@
 use gio::prelude::SettingsExt;
 
+use crate::settings::SETTINGS;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FeatureFlag {
     DeviceSelector,
     Normalisation,
     PinnedObjects,
-    QueueSidePanel,
 }
 
 impl FeatureFlag {
@@ -13,7 +14,6 @@ impl FeatureFlag {
         FeatureFlag::DeviceSelector,
         FeatureFlag::Normalisation,
         FeatureFlag::PinnedObjects,
-        FeatureFlag::QueueSidePanel,
     ];
 
     pub fn key(&self) -> &'static str {
@@ -21,7 +21,6 @@ impl FeatureFlag {
             FeatureFlag::DeviceSelector => "feature-device-selector",
             FeatureFlag::Normalisation => "feature-normalisation",
             FeatureFlag::PinnedObjects => "feature-pinned-objects",
-            FeatureFlag::QueueSidePanel => "feature-queue-side-panel",
         }
     }
 
@@ -30,7 +29,6 @@ impl FeatureFlag {
             FeatureFlag::DeviceSelector => "Device Selector",
             FeatureFlag::Normalisation => "Audio Normalisation",
             FeatureFlag::PinnedObjects => "Pinned Items",
-            FeatureFlag::QueueSidePanel => "Queue Side Panel",
         }
     }
 
@@ -45,14 +43,11 @@ impl FeatureFlag {
             FeatureFlag::PinnedObjects => {
                 "Enable pinning saved playlists, albums, artists, and tracks to the navigation panel."
             }
-            FeatureFlag::QueueSidePanel => {
-                "Show the queue in a panel at the side of the window"
-            }
         }
     }
 }
 
 pub fn is_enabled(flag: FeatureFlag) -> bool {
-    let settings = gio::Settings::new(crate::settings::SETTINGS);
+    let settings = gio::Settings::new(SETTINGS);
     settings.boolean(flag.key())
 }

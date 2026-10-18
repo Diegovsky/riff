@@ -5,7 +5,7 @@ use gtk::CompositeTemplate;
 
 use super::lock_button;
 
-const SETTINGS: &str = "dev.diegovsky.Riff";
+use riff_config::settings::SETTINGS;
 
 mod imp {
     use super::*;

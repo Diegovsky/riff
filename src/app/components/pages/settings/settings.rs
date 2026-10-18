@@ -1,7 +1,7 @@
 use crate::app::components::{labels, EventListener};
 use crate::app::AppEvent;
-use crate::feature_flags::{self, FeatureFlag};
 use crate::settings::RiffSettings;
+use riff_config::feature_flags::FeatureFlag;
 
 use std::rc::Rc;
 
@@ -15,7 +15,7 @@ use super::PanWidget;
 use super::PitchWidget;
 use super::SettingsModel;
 
-const SETTINGS: &str = "dev.diegovsky.Riff";
+use riff_config::settings::{RESTART_REQUIRED_KEYS, SETTINGS};
 
 mod imp {
 
@@ -45,6 +45,9 @@ mod imp {
 
         #[template_child]
         pub theme: TemplateChild<libadwaita::ComboRow>,
+
+        #[template_child]
+        pub queue_side_panel_switch: TemplateChild<libadwaita::SwitchRow>,
 
         #[template_child]
         pub close_behavior: TemplateChild<libadwaita::ComboRow>,
@@ -156,16 +159,8 @@ impl SettingsDialog {
         dialog.bind_settings();
         dialog.setup_bitrate_lossless_factory();
         dialog.bind_feature_flags();
-        dialog.apply_feature_flag_visibility();
         dialog.connect_theme_select();
         dialog
-    }
-
-    fn apply_feature_flag_visibility(&self) {
-        let widget = self.imp();
-        widget
-            .normalisation_group
-            .set_visible(feature_flags::is_enabled(FeatureFlag::Normalisation));
     }
 
     fn bind_backend_and_device(&self) {
@@ -576,6 +571,14 @@ impl SettingsDialog {
             })
             .build();
 
+        settings
+            .bind(
+                crate::settings::QUEUE_SIDE_PANEL,
+                &*widget.queue_side_panel_switch,
+                "active",
+            )
+            .build();
+
         let close_behavior = widget
             .close_behavior
             .downcast_ref::<libadwaita::ComboRow>()
@@ -692,9 +695,17 @@ impl SettingsDialog {
         let group = libadwaita::PreferencesGroup::new();
         group.set_title(&gettextrs::gettext("Experimental Features"));
         group.set_description(Some(&gettextrs::gettext(
-            "These features are still in development and may be unstable or incomplete. \
-             Changes take effect after restarting the application.",
+            "These features are still in development and may be unstable or incomplete.",
         )));
+
+        settings
+            .bind(
+                FeatureFlag::Normalisation.key(),
+                &*self.imp().normalisation_group,
+                "visible",
+            )
+            .get()
+            .build();
 
         for flag in FeatureFlag::ALL.iter() {
             let row = libadwaita::SwitchRow::new();
@@ -726,6 +737,14 @@ impl SettingsDialog {
 
             manager.set_color_scheme(pref);
         });
+    }
+
+    fn connect_closed<F>(&self, on_closed: F)
+    where
+        F: Fn() + 'static,
+    {
+        let dialog = self.upcast_ref::<libadwaita::Dialog>();
+        dialog.connect_closed(move |_| on_closed());
     }
 
     fn connect_close<F>(&self, on_close: F)
@@ -801,6 +820,22 @@ impl Settings {
                 close_model.stop_player();
             }
             close_model.set_settings();
+        });
+
+        let gsettings = gio::Settings::new(SETTINGS);
+        let startup_values: Vec<_> = RESTART_REQUIRED_KEYS
+            .iter()
+            .map(|key| gsettings.value(key))
+            .collect();
+        let restart_model = model.clone();
+        settings_dialog.connect_closed(move || {
+            let changed = RESTART_REQUIRED_KEYS
+                .iter()
+                .zip(&startup_values)
+                .any(|(key, startup)| gsettings.value(key) != *startup);
+            if changed {
+                restart_model.show_restart_required();
+            }
         });
 
         let clear_model = model.clone();

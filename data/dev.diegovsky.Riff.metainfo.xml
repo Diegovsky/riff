@@ -61,6 +61,7 @@
   </screenshots>
 
   <releases>
+    <release version="26.10" date="2026-10-30"/>
     <release version="26.07.01" date="2026-08-14">
         <description>
             <p>This release fixes a playback issue and adds some polish for Flathub</p>

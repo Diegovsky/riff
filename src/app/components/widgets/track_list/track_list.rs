@@ -16,7 +16,7 @@ use crate::app::components::{
 use crate::app::models::{SongListModel, SongModel, SongState, Track, TrackExt};
 use crate::app::state::{BrowserEvent, PlaybackEvent, SelectionEvent, SelectionState};
 use crate::app::{AppAction, AppEvent, ProvidesApi};
-use crate::feature_flags::{is_enabled, FeatureFlag};
+use riff_config::feature_flags::{is_enabled, FeatureFlag};
 
 const SKELETON_ROW_COUNT: usize = 10;
 
@@ -891,10 +891,9 @@ fn bind_track<Model: TrackListModel + 'static>(
     actions.add_action(&select);
     row.set_actions(Some(actions.upcast_ref()));
 
-    let pin_enabled = is_enabled(FeatureFlag::PinnedObjects);
     let picker_track = track.clone();
     let menu_for = move |model: &Model, song: &SongModel| {
-        let pinned = pin_enabled.then_some(song.get_pinned());
+        let pinned = is_enabled(FeatureFlag::PinnedObjects).then_some(song.get_pinned());
         model.menu_for(song, &track, song.get_liked(), pinned)
     };
     let hooks = MenuHooks {

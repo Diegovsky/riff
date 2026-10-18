@@ -6,8 +6,8 @@ use riff_api::{ApiService, DomainError, Load};
 use crate::app::models::Track;
 use crate::app::state::AppState;
 use crate::app::AppAction;
-use crate::feature_flags::{is_enabled, FeatureFlag};
 use crate::settings;
+use riff_config::feature_flags::{is_enabled, FeatureFlag};
 
 pub struct TracksAdded {
     pub tracks: Vec<Track>,

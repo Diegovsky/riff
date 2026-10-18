@@ -15,7 +15,7 @@ use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, SongsSource};
 use crate::connect::ConnectCommand;
 use crate::player::Command;
 
-const SETTINGS: &str = "dev.diegovsky.Riff";
+use riff_config::settings::SETTINGS;
 
 enum CurrentlyPlaying {
     WithSource {

@@ -15,6 +15,10 @@ impl TextureCache {
         }
     }
 
+    pub fn set_max_bytes(&self, max_bytes: usize) {
+        self.inner.lock().unwrap().set_max_bytes(max_bytes);
+    }
+
     pub fn get(&self, key: &str) -> Option<gdk::Texture> {
         self.inner.lock().unwrap().get(key).cloned()
     }

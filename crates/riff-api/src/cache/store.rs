@@ -61,6 +61,10 @@ impl Store {
         }
     }
 
+    pub fn set_max_bytes(&self, max_bytes: usize) {
+        self.store.lock().unwrap().set_max_bytes(max_bytes);
+    }
+
     pub fn get_single<T: Clone + Send + Sync + 'static>(&self, key: &CacheKey) -> Option<T> {
         let mut store = self.store.lock().unwrap();
         match store.get(key)? {

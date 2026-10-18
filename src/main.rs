@@ -14,13 +14,13 @@ use gio::prelude::*;
 use gio::ApplicationFlags;
 use gio::SimpleAction;
 use gtk::prelude::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 mod app;
 mod audio_engine;
 mod config;
 mod connect;
 mod dbus;
-pub mod feature_flags;
 mod inhibitor;
 mod play_queue;
 mod player;
@@ -107,7 +107,26 @@ fn main() {
         gtk_app.run();
     });
 
+    if RESTART_REQUESTED.load(Ordering::Relaxed) {
+        relaunch();
+    }
+
     std::process::exit(0);
+}
+
+static RESTART_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+fn relaunch() {
+    use std::os::unix::process::CommandExt;
+
+    let Ok(exe) = std::env::current_exe() else {
+        error!("Cannot restart: unknown executable path");
+        return;
+    };
+    let err = std::process::Command::new(exe)
+        .args(std::env::args_os().skip(1))
+        .exec();
+    error!("Cannot restart: {err}");
 }
 
 fn setup_gtk(settings: &settings::RiffSettings) {
@@ -169,6 +188,17 @@ fn register_actions(app: &gtk::Application, sender: UnboundedSender<AppAction>) 
         }
     ));
     app.add_action(&quit);
+
+    let restart = SimpleAction::new("restart", None);
+    restart.connect_activate(clone!(
+        #[weak]
+        app,
+        move |_, _| {
+            RESTART_REQUESTED.store(true, Ordering::Relaxed);
+            app.quit();
+        }
+    ));
+    app.add_action(&restart);
 
     app.add_action(&make_action(
         "toggle_playback",

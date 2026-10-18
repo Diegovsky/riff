@@ -13,7 +13,7 @@ use crate::app::state::LoginEvent;
 use crate::app::{AppEvent, AppModel};
 use crate::settings::{CloseWindowBehavior, WindowGeometry};
 
-const SETTINGS: &str = "dev.diegovsky.Riff";
+use riff_config::settings::SETTINGS;
 
 thread_local! {
     static WINDOW_GEOMETRY: RefCell<WindowGeometry> = const { RefCell::new(WindowGeometry {

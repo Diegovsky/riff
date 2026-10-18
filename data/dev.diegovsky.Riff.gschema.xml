@@ -229,7 +229,7 @@
       <default>false</default>
       <summary>Enable pinning objects to the navigation panel</summary>
     </key>
-    <key name="feature-queue-side-panel" type="b">
+    <key name="queue-side-panel" type="b">
       <default>false</default>
       <summary>Show the queue in the utility panel at the window's end, instead of the bottom sheet</summary>
     </key>

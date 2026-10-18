@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 const CONNECTION_LOST_KEY: &str = "connection-lost";
+const RESTART_REQUIRED_KEY: &str = "restart-required";
 
 type ActiveToasts = Rc<RefCell<HashMap<String, libadwaita::Toast>>>;
 
@@ -86,6 +87,17 @@ impl Notification {
         self.add(content.to_string(), toast);
     }
 
+    fn show_restart_required(&self) {
+        let toast = libadwaita::Toast::builder()
+            // translators: Shown in a toast after closing settings when a changed setting needs an app restart.
+            .title(gettext("Please restart the app to apply the changes"))
+            // translators: Button in the toast that restarts the app to apply changed settings.
+            .button_label(gettext("Restart"))
+            .action_name("app.restart")
+            .build();
+        self.add(RESTART_REQUIRED_KEY.to_string(), toast);
+    }
+
     fn set_connection_lost(&self, lost: bool) {
         if lost {
             let content = gtk::Box::builder().spacing(8).build();
@@ -118,6 +130,7 @@ impl EventListener for Notification {
     fn on_event(&mut self, event: &AppEvent) {
         match event {
             AppEvent::NotificationShown(content) => self.show(content),
+            AppEvent::RestartRequiredShown => self.show_restart_required(),
             AppEvent::ConnectionLostChanged(lost) => self.set_connection_lost(*lost),
             AppEvent::PlaybackEvent(PlaybackEvent::NoPreviousTrack) => {
                 // translators: Shown in a toast when the user presses Previous but there is no earlier track to play.

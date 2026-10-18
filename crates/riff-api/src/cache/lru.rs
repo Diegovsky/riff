@@ -47,6 +47,11 @@ where
         }
     }
 
+    pub(crate) fn set_max_bytes(&mut self, max_bytes: usize) {
+        self.max_bytes = max_bytes;
+        self.evict_to_budget(None);
+    }
+
     /// Look up a value, promoting it to most-recently-used.
     pub(crate) fn get<Q>(&mut self, key: &Q) -> Option<&V>
     where

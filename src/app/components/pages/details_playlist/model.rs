@@ -21,11 +21,11 @@ use crate::app::state::Route;
 use crate::app::state::SelectionContext;
 use crate::app::state::{BrowserAction, BrowserEvent, SelectionState};
 use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, PaginationTarget, SongsSource};
-use crate::feature_flags::{is_enabled, FeatureFlag};
 use crate::settings;
 use crate::{impl_source_page, impl_source_track_list, impl_track_list_model_base};
 use riff_api::models::is_resource_url;
 use riff_api::DomainError;
+use riff_config::feature_flags::{is_enabled, FeatureFlag};
 
 const TRACKS_PAGE: usize = 50;
 
