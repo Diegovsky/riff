@@ -35,17 +35,48 @@ template $AppHeaderBar : Adw.Bin {
         has-frame: false;
         focus-on-click: false;
         can-focus: false;
-        visible: false;
+        sensitive: false;
 
         /* Translators: Tooltip for the header bar button that navigates back. */
 
         tooltip-text: _("Back");
+
+        GestureClick back_right_click {
+          button: 3;
+        }
+
+        GestureLongPress back_long_press {}
+      }
+
+      Button go_forward {
+        receives-default: true;
+        halign: start;
+        valign: center;
+        icon-name: "go-next-symbolic";
+        has-frame: false;
+        focus-on-click: false;
+        can-focus: false;
+        sensitive: false;
+
+        /* Translators: Tooltip for the header bar button that navigates forward. */
+
+        tooltip-text: _("Forward");
+
+        GestureClick forward_right_click {
+          button: 3;
+        }
+
+        GestureLongPress forward_long_press {}
       }
 
       [title]
       Stack title_stack {
         hexpand: true;
         hhomogeneous: false;
+
+        Adw.WindowTitle window_title {}
+
+        Adw.Bin custom_title {}
       }
 
       // Hidden while the utility panel shows: its header has the same button
@@ -60,8 +91,9 @@ template $AppHeaderBar : Adw.Bin {
       }
 
       [end]
-      Stack end_stack {
-        hhomogeneous: false;
+      Box end_box {
+        spacing: 6;
+        visible: false;
       }
     }
 
@@ -99,5 +131,40 @@ template $AppHeaderBar : Adw.Bin {
         label: _("Select All");
       }
     }
+  }
+}
+
+// History menus, parented to go_back and go_forward in code
+Popover back_history {
+  has-arrow: false;
+
+  styles [
+    "menu",
+    "history-menu",
+  ]
+
+  ListBox back_history_list {
+    selection-mode: none;
+
+    styles [
+      "navigation-sidebar",
+    ]
+  }
+}
+
+Popover forward_history {
+  has-arrow: false;
+
+  styles [
+    "menu",
+    "history-menu",
+  ]
+
+  ListBox forward_history_list {
+    selection-mode: none;
+
+    styles [
+      "navigation-sidebar",
+    ]
   }
 }

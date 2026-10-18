@@ -12,6 +12,7 @@ use crate::app::components::{
     HeaderImageShape, ImageShape, PageModel, PinnedPageModel, PlayingCard, TrackListModel,
 };
 use crate::app::models::*;
+use crate::app::state::Route;
 use crate::app::state::SelectionContext;
 use crate::app::state::CARD_BATCH_SIZE;
 use crate::app::state::{BrowserAction, BrowserEvent, PaginationTarget, SelectionState};
@@ -76,7 +77,9 @@ impl PageModel for ArtistDetailsModel {
             match info_api.get_artist(&id, tag).await {
                 Ok(artist) => Ok(BrowserAction::SetArtistInfo(Box::new(artist)).into()),
                 Err(DomainError::ClientError { status: 400, .. })
-                | Err(DomainError::NotFound { .. }) => Ok(BrowserAction::NavigationPop.into()),
+                | Err(DomainError::NotFound { .. }) => {
+                    Ok(BrowserAction::NavigationLeave(Route::Artist(id)).into())
+                }
                 Err(e) => Err(e),
             }
         });

@@ -223,9 +223,9 @@ pub fn wire_dev_tools(
         info!("logged-in user: {:?}", state.logged_user.user);
         info!("saved playlists: {}", state.logged_user.playlists.len());
         info!(
-            "browser screen: {:?} (nav depth {})",
+            "browser screen: {:?} (history length {})",
             state.browser.current_screen(),
-            state.browser.count()
+            state.browser.navigator().entries().len()
         );
         info!(
             "selection: enabled={} count={} context={:?}",

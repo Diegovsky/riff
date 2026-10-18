@@ -2,13 +2,17 @@ use gettextrs::gettext;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
+use libadwaita::prelude::BinExt;
 use libadwaita::subclass::prelude::BinImpl;
 
+use super::HistoryMenuRow;
 use crate::app::components::labels;
 
 mod imp {
 
     use super::*;
+    use std::cell::RefCell;
+    use std::collections::HashMap;
 
     #[derive(Debug, Default, CompositeTemplate)]
     #[template(resource = "/dev/diegovsky/Riff/components/headerbar.ui")]
@@ -26,10 +30,47 @@ mod imp {
         pub go_back: TemplateChild<gtk::Button>,
 
         #[template_child]
+        pub go_forward: TemplateChild<gtk::Button>,
+
+        #[template_child]
+        pub back_right_click: TemplateChild<gtk::GestureClick>,
+
+        #[template_child]
+        pub back_long_press: TemplateChild<gtk::GestureLongPress>,
+
+        #[template_child]
+        pub forward_right_click: TemplateChild<gtk::GestureClick>,
+
+        #[template_child]
+        pub forward_long_press: TemplateChild<gtk::GestureLongPress>,
+
+        #[template_child]
+        pub back_history: TemplateChild<gtk::Popover>,
+
+        #[template_child]
+        pub back_history_list: TemplateChild<gtk::ListBox>,
+
+        #[template_child]
+        pub forward_history: TemplateChild<gtk::Popover>,
+
+        #[template_child]
+        pub forward_history_list: TemplateChild<gtk::ListBox>,
+
+        #[template_child]
         pub title_stack: TemplateChild<gtk::Stack>,
 
         #[template_child]
-        pub end_stack: TemplateChild<gtk::Stack>,
+        pub window_title: TemplateChild<libadwaita::WindowTitle>,
+
+        #[template_child]
+        pub custom_title: TemplateChild<libadwaita::Bin>,
+
+        #[template_child]
+        pub end_box: TemplateChild<gtk::Box>,
+
+        pub pages: RefCell<HashMap<String, PageState>>,
+
+        pub active: RefCell<Option<String>>,
 
         #[template_child]
         pub selection_header: TemplateChild<libadwaita::HeaderBar>,
@@ -59,9 +100,53 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for AppHeaderBar {}
+    impl ObjectImpl for AppHeaderBar {
+        fn constructed(&self) {
+            self.parent_constructed();
+            self.back_history.set_parent(&*self.go_back);
+            self.forward_history.set_parent(&*self.go_forward);
+        }
+
+        fn dispose(&self) {
+            self.back_history.unparent();
+            self.forward_history.unparent();
+        }
+    }
     impl WidgetImpl for AppHeaderBar {}
     impl BinImpl for AppHeaderBar {}
+}
+
+#[derive(Debug)]
+pub struct PageState {
+    pub(super) title: String,
+    pub(super) subtitle: String,
+    pub(super) title_revealed: bool,
+    pub(super) title_widget: Option<gtk::Widget>,
+    pub(super) end: Vec<gtk::Widget>,
+}
+
+impl Default for PageState {
+    fn default() -> Self {
+        Self {
+            title: String::new(),
+            subtitle: String::new(),
+            title_revealed: true,
+            title_widget: None,
+            end: vec![],
+        }
+    }
+}
+
+pub struct HistoryMenuItem {
+    pub id: u64,
+    pub icon: &'static str,
+    pub label: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HistorySide {
+    Back,
+    Forward,
 }
 
 glib::wrapper! {
@@ -80,45 +165,75 @@ impl AppHeaderBar {
         glib::Object::new()
     }
 
-    // --- Per-screen page registration ---
-
-    /// Register a title-area widget for `name`. No-op if one already exists.
-    pub fn add_title(&self, name: &str, widget: &impl IsA<gtk::Widget>) {
-        let stack = &self.imp().title_stack;
-        if stack.child_by_name(name).is_none() {
-            stack.add_named(widget, Some(name));
+    pub(super) fn update_page(&self, name: &str, f: impl FnOnce(&mut PageState)) {
+        f(self
+            .imp()
+            .pages
+            .borrow_mut()
+            .entry(name.to_string())
+            .or_default());
+        if self.imp().active.borrow().as_deref() == Some(name) {
+            self.render();
         }
     }
 
-    /// Register an end-area widget for `name`. No-op if one already exists.
-    pub fn add_end(&self, name: &str, widget: &impl IsA<gtk::Widget>) {
-        let stack = &self.imp().end_stack;
-        if stack.child_by_name(name).is_none() {
-            stack.add_named(widget, Some(name));
+    pub(super) fn remove_page(&self, name: &str) {
+        self.imp().pages.borrow_mut().remove(name);
+        if self.imp().active.borrow().as_deref() == Some(name) {
+            self.render();
         }
     }
 
-    /// Remove any title and end pages registered under `name`.
-    pub fn remove_page(&self, name: &str) {
-        if let Some(child) = self.imp().title_stack.child_by_name(name) {
-            self.imp().title_stack.remove(&child);
-        }
-        if let Some(child) = self.imp().end_stack.child_by_name(name) {
-            self.imp().end_stack.remove(&child);
-        }
-    }
-
-    /// Show the title and end pages for `name`; hide the end area if none.
     pub fn set_active(&self, name: &str) {
+        self.imp().active.replace(Some(name.to_string()));
+        self.render();
+    }
+
+    fn render(&self) {
         let imp = self.imp();
-        if imp.title_stack.child_by_name(name).is_some() {
-            imp.title_stack.set_visible_child_name(name);
+        let active = imp.active.borrow();
+        let pages = imp.pages.borrow();
+        let page = active.as_deref().and_then(|name| pages.get(name));
+
+        match page.and_then(|page| page.title_widget.as_ref()) {
+            Some(widget) => {
+                if imp.custom_title.child().as_ref() != Some(widget) {
+                    imp.custom_title.set_child(Some(widget));
+                }
+                imp.title_stack.set_visible_child(&*imp.custom_title);
+            }
+            None => {
+                imp.custom_title.set_child(None::<&gtk::Widget>);
+                let (title, subtitle, revealed) = page
+                    .map(|page| {
+                        (
+                            page.title.as_str(),
+                            page.subtitle.as_str(),
+                            page.title_revealed,
+                        )
+                    })
+                    .unwrap_or_default();
+                imp.window_title.set_title(title);
+                imp.window_title.set_subtitle(subtitle);
+                imp.window_title
+                    .set_opacity(if revealed { 1.0 } else { 0.0 });
+                imp.title_stack.set_visible_child(&*imp.window_title);
+            }
         }
-        if imp.end_stack.child_by_name(name).is_some() {
-            imp.end_stack.set_visible_child_name(name);
-            imp.end_stack.set_visible(true);
-        } else {
-            imp.end_stack.set_visible(false);
+
+        while let Some(child) = imp.end_box.first_child() {
+            imp.end_box.remove(&child);
+        }
+        let end = page.map(|page| page.end.as_slice()).unwrap_or_default();
+        for widget in end {
+            imp.end_box.append(widget);
+        }
+        imp.end_box.set_visible(!end.is_empty());
+    }
+
+    pub(super) fn detach_end(&self, widget: &gtk::Widget) {
+        if widget.parent().as_ref() == Some(self.imp().end_box.upcast_ref()) {
+            self.imp().end_box.remove(widget);
         }
     }
 
@@ -126,6 +241,72 @@ impl AppHeaderBar {
 
     pub fn connect_go_back<F: Fn() + 'static>(&self, f: F) {
         self.imp().go_back.connect_clicked(move |_| f());
+    }
+
+    pub fn connect_go_forward<F: Fn() + 'static>(&self, f: F) {
+        self.imp().go_forward.connect_clicked(move |_| f());
+    }
+
+    pub fn connect_history_menu<F: Fn(HistorySide) + 'static>(&self, f: F) {
+        let imp = self.imp();
+        let f = std::rc::Rc::new(f);
+        for (right_click, long_press, side) in [
+            (
+                &*imp.back_right_click,
+                &*imp.back_long_press,
+                HistorySide::Back,
+            ),
+            (
+                &*imp.forward_right_click,
+                &*imp.forward_long_press,
+                HistorySide::Forward,
+            ),
+        ] {
+            let on_click = f.clone();
+            right_click.connect_pressed(move |gesture, _, _, _| {
+                gesture.set_state(gtk::EventSequenceState::Claimed);
+                on_click(side);
+            });
+            let on_press = f.clone();
+            long_press.connect_pressed(move |gesture, _, _| {
+                gesture.set_state(gtk::EventSequenceState::Claimed);
+                on_press(side);
+            });
+        }
+    }
+
+    pub fn connect_history_pick<F: Fn(u64) + 'static>(&self, f: F) {
+        let imp = self.imp();
+        let f = std::rc::Rc::new(f);
+        for (popover, list) in [
+            (&*imp.back_history, &*imp.back_history_list),
+            (&*imp.forward_history, &*imp.forward_history_list),
+        ] {
+            let on_pick = f.clone();
+            list.connect_row_activated(clone!(
+                #[weak]
+                popover,
+                move |_, row| {
+                    popover.popdown();
+                    if let Some(row) = row.downcast_ref::<HistoryMenuRow>() {
+                        on_pick(row.entry_id());
+                    }
+                }
+            ));
+        }
+    }
+
+    pub fn show_history_menu(&self, side: HistorySide, items: Vec<HistoryMenuItem>) {
+        let imp = self.imp();
+        let (popover, list) = match side {
+            HistorySide::Back => (&imp.back_history, &imp.back_history_list),
+            HistorySide::Forward => (&imp.forward_history, &imp.forward_history_list),
+        };
+        list.remove_all();
+        for item in &items {
+            list.append(&HistoryMenuRow::new(item));
+        }
+        popover.popup();
     }
 
     pub fn connect_select_all<F: Fn() + 'static>(&self, f: F) {
@@ -148,7 +329,11 @@ impl AppHeaderBar {
     }
 
     pub fn set_can_go_back(&self, can_go_back: bool) {
-        self.imp().go_back.set_visible(can_go_back);
+        self.imp().go_back.set_sensitive(can_go_back);
+    }
+
+    pub fn set_can_go_forward(&self, can_go_forward: bool) {
+        self.imp().go_forward.set_sensitive(can_go_forward);
     }
 
     pub fn set_select_all_possible(&self, possible: bool) {

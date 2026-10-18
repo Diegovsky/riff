@@ -57,6 +57,7 @@
     <file alias="components/selection_toolbar.css">app/components/widgets/selection/selection_toolbar.css</file>
     <!-- app header -->
     <file alias="components/headerbar.ui">app/components/shell/headerbar/headerbar.ui</file>
+    <file alias="components/history_menu_row.ui">app/components/shell/headerbar/history_menu_row.ui</file>
     <!-- playlist dialog -->
     <file alias="components/playlist_dialog.ui">app/components/widgets/playlist_dialog/playlist_dialog.ui</file>
     <file alias="components/playlist_dialog.css">app/components/widgets/playlist_dialog/playlist_dialog.css</file>
@@ -76,6 +77,7 @@
     <file compressed="true" preprocess="xml-stripblanks" alias="library-music-symbolic.svg">../data/hicolor/symbolic/actions/library-music-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="search-filters-symbolic.svg">../data/hicolor/symbolic/actions/search-filters-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="view-pin-outline-symbolic.svg">../data/hicolor/symbolic/actions/view-pin-outline-symbolic.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="paper-sheet-symbolic.svg">../data/hicolor/symbolic/actions/paper-sheet-symbolic.svg</file>
     <!-- fallback copies of Adwaita icons for themes that lack them -->
     <file compressed="true" preprocess="xml-stripblanks" alias="audio-speakers-symbolic.svg">../data/hicolor/symbolic/actions/audio-speakers-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="audio-x-generic-symbolic.svg">../data/hicolor/symbolic/actions/audio-x-generic-symbolic.svg</file>

@@ -9,7 +9,7 @@ use std::rc::Rc;
 use super::NowPlayingModel;
 use crate::app::components::{
     Component, DetailsPageComponent, DeviceSelector, DeviceSelectorWidget, EventListener,
-    HasHeaderBarModel, HeaderRegistrar, QueueList,
+    HasHeaderBarModel, PageHeader, QueueList,
 };
 use crate::app::state::PlaybackEvent;
 use crate::app::AppEvent;
@@ -24,9 +24,9 @@ pub struct NowPlaying {
 }
 
 impl NowPlaying {
-    pub fn new(model: Rc<NowPlayingModel>, registrar: HeaderRegistrar, name: String) -> Self {
+    pub fn new(model: Rc<NowPlayingModel>, header: PageHeader) -> Self {
         let mut component =
-            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), registrar, name);
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), header);
         let queue_list = QueueList::new(model.queue_list_model());
         component.append_content(queue_list.widget());
         // Once the list is in the page's ScrolledWindow
@@ -35,7 +35,7 @@ impl NowPlaying {
 
         if feature_flags::is_enabled(FeatureFlag::DeviceSelector) {
             let ds_widget: DeviceSelectorWidget = glib::Object::new();
-            component.add_header_end(&ds_widget);
+            component.header().add_end(&ds_widget);
             let device_selector = Box::new(DeviceSelector::new(
                 ds_widget,
                 model.device_selector_model(),

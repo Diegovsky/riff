@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/riff-auth", "crates/riff-api", "crates/riff-config", "generated/spotify-api"]
+members = ["crates/riff-auth", "crates/riff-api", "crates/riff-config", "crates/riff-core", "generated/spotify-api"]
 resolver = "2"
 
 [package]
@@ -11,6 +11,7 @@ license = "MIT"
 [dependencies]
 riff-api = { path = "crates/riff-api" }
 riff-auth = { path = "crates/riff-auth" }
+riff-core = { path = "crates/riff-core" }
 serde_json = "1.0.96"
 serde = { version = "1.0", features = ["derive"] }
 gio = "0.22"

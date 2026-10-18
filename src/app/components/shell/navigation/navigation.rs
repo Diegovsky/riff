@@ -1,15 +1,21 @@
-use gtk::prelude::WidgetExt;
-use std::cell::Cell;
+use gtk::prelude::*;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gio::prelude::{ActionExt, ActionMapExt};
 use glib::prelude::ToVariant;
+use glib::SignalHandlerId;
 
 use crate::app::components::{EventListener, ListenerComponent};
-use crate::app::state::ScreenName;
+use crate::app::state::{Direction, Route, Transition};
 use crate::app::{AppEvent, BrowserEvent};
 
 use super::{factory::ScreenFactory, home::HomePane, NavigationModel};
+
+/// Horizontal touchpad travel, in pixels, that counts as a back/forward swipe.
+const TOUCHPAD_SWIPE_DISTANCE: f64 = 200.0;
+/// Horizontal touch velocity, in pixels per second, that counts as a swipe.
+const TOUCH_SWIPE_VELOCITY: f64 = 1000.0;
 
 pub struct Navigation {
     model: Rc<NavigationModel>,
@@ -17,7 +23,8 @@ pub struct Navigation {
     content_stack: gtk::Stack,
     home_listbox: gtk::ListBox,
     screen_factory: ScreenFactory,
-    children: Vec<Box<dyn ListenerComponent>>,
+    screens: Vec<(String, Box<dyn ListenerComponent>)>,
+    pending_restore: Option<PendingRestore>,
 }
 
 impl Navigation {
@@ -30,7 +37,6 @@ impl Navigation {
         window: libadwaita::ApplicationWindow,
     ) -> Self {
         let model = Rc::new(model);
-
         let show_navigation_panel_action = gio::SimpleAction::new_stateful(
             "show-navigation-panel",
             None,
@@ -91,21 +97,33 @@ impl Navigation {
             }
         });
 
+        connect_back_forward_input(&model, &window, &content_stack);
+
         Self {
             model,
             split_view,
             content_stack,
             home_listbox,
             screen_factory,
-            children: vec![],
+            screens: vec![],
+            pending_restore: None,
         }
     }
 
-    fn make_home(&self) -> Box<dyn ListenerComponent> {
-        Box::new(HomePane::new(
-            self.home_listbox.clone(),
-            &self.screen_factory,
-        ))
+    fn make_screen(&self, route: &Route) -> Box<dyn ListenerComponent> {
+        match route {
+            Route::Home(_) => Box::new(HomePane::new(
+                self.home_listbox.clone(),
+                &self.screen_factory,
+            )),
+            Route::Album(id) => Box::new(self.screen_factory.make_album_details(id.to_owned())),
+            Route::Search => Box::new(self.screen_factory.make_search_results()),
+            Route::Artist(id) => Box::new(self.screen_factory.make_artist_details(id.to_owned())),
+            Route::Playlist(id) => {
+                Box::new(self.screen_factory.make_playlist_details(id.to_owned()))
+            }
+            Route::User(id) => Box::new(self.screen_factory.make_user_details(id.to_owned())),
+        }
     }
 
     // Only collapsed: showing it beside the content panel would undo a hide
@@ -121,55 +139,76 @@ impl Navigation {
         }
     }
 
-    fn push_screen(&mut self, name: &ScreenName) {
-        let component: Box<dyn ListenerComponent> = match name {
-            ScreenName::Home => self.make_home(),
-            ScreenName::AlbumDetails(id) => {
-                Box::new(self.screen_factory.make_album_details(id.to_owned()))
-            }
-            ScreenName::Search => Box::new(self.screen_factory.make_search_results()),
-            ScreenName::Artist(id) => {
-                Box::new(self.screen_factory.make_artist_details(id.to_owned()))
-            }
-            ScreenName::PlaylistDetails(id) => {
-                Box::new(self.screen_factory.make_playlist_details(id.to_owned()))
-            }
-            ScreenName::User(id) => Box::new(self.screen_factory.make_user_details(id.to_owned())),
-        };
-
-        let widget = component.get_root_widget().clone();
-        self.children.push(component);
-
-        self.show_content();
+    fn ensure_screen(&mut self, route: &Route) -> bool {
+        let key = route.screen_key();
+        if self.screens.iter().any(|(k, _)| *k == key) {
+            return false;
+        }
+        let component = self.make_screen(route);
         self.content_stack
-            .add_named(&widget, Some(name.identifier().as_ref()));
-        self.content_stack
-            .set_visible_child_name(name.identifier().as_ref());
-
-        glib::source::idle_add_local_once(move || {
-            widget.grab_focus();
-        });
+            .add_named(component.get_root_widget(), Some(&key));
+        self.screens.push((key, component));
+        true
     }
 
-    fn pop(&mut self) {
-        let children = &mut self.children;
-        let popped = children.pop();
-
-        let name = self.model.visible_child_name();
+    fn show_screen(&mut self, route: &Route) {
+        self.ensure_screen(route);
         self.content_stack
-            .set_visible_child_name(name.identifier().as_ref());
+            .set_visible_child_name(&route.screen_key());
+    }
 
-        if let Some(child) = popped {
-            self.content_stack.remove(child.get_root_widget());
+    fn save_scroll(&self, transition: &Transition) {
+        let scroller = self
+            .content_stack
+            .visible_child()
+            .and_then(|screen| visible_scroller(&screen));
+        if let Some(scroller) = scroller {
+            self.model
+                .save_scroll(transition.from_entry, scroller.vadjustment().value());
         }
     }
 
-    fn pop_to(&mut self, screen: &ScreenName) {
-        self.content_stack
-            .set_visible_child_name(screen.identifier().as_ref());
-        let remainder = self.children.split_off(self.model.children_count());
-        for widget in remainder {
-            self.content_stack.remove(widget.get_root_widget());
+    fn go(&mut self, transition: &Transition) {
+        self.save_scroll(transition);
+        self.cancel_restore();
+
+        let transition_type = match transition.direction {
+            _ if transition.from.same_screen(&transition.to) => gtk::StackTransitionType::None,
+            Direction::Forward => gtk::StackTransitionType::SlideLeft,
+            Direction::Backward => gtk::StackTransitionType::SlideRight,
+        };
+        self.content_stack.set_transition_type(transition_type);
+        self.show_screen(&transition.to);
+        self.show_content();
+
+        for route in &transition.evicted {
+            let key = route.screen_key();
+            if let Some(i) = self.screens.iter().position(|(k, _)| *k == key) {
+                let (_, component) = self.screens.remove(i);
+                self.content_stack.remove(component.get_root_widget());
+            }
+        }
+
+        if let Some(widget) = self.content_stack.visible_child() {
+            glib::source::idle_add_local_once(move || {
+                widget.grab_focus();
+            });
+        }
+    }
+
+    fn restore_scroll(&mut self, scroll: u32) {
+        let scroller = self
+            .content_stack
+            .visible_child()
+            .and_then(|screen| visible_scroller(&screen));
+        if let Some(scroller) = scroller {
+            self.pending_restore = PendingRestore::start(scroller.vadjustment(), f64::from(scroll));
+        }
+    }
+
+    fn cancel_restore(&mut self) {
+        if let Some(pending) = self.pending_restore.take() {
+            pending.cancel();
         }
     }
 }
@@ -178,29 +217,174 @@ impl EventListener for Navigation {
     fn on_event(&mut self, event: &AppEvent) {
         match event {
             AppEvent::Started => {
-                self.push_screen(&ScreenName::Home);
+                self.show_screen(&Route::Home(Default::default()));
             }
-            AppEvent::BrowserEvent(BrowserEvent::NavigationPushed(name)) => {
-                self.push_screen(name);
+            AppEvent::BrowserEvent(BrowserEvent::NavigationChanged(transition)) => {
+                self.go(transition);
             }
             AppEvent::BrowserEvent(BrowserEvent::NavigationHidden(false)) => {
                 self.show_navigation();
             }
-            AppEvent::BrowserEvent(BrowserEvent::NavigationPopped) => {
-                self.pop();
-            }
-            AppEvent::BrowserEvent(BrowserEvent::NavigationPoppedTo(name)) => {
-                self.pop_to(name);
-            }
-            AppEvent::BrowserEvent(BrowserEvent::HomeVisiblePageChanged(_)) => {
-                self.show_content();
-            }
             _ => {}
         };
-        for child in self.children.iter_mut() {
-            child.on_event(event);
+        for (_, screen) in self.screens.iter_mut() {
+            screen.on_event(event);
+        }
+        // After the screens handled it, so the home pane shows the right page
+        if let AppEvent::BrowserEvent(BrowserEvent::NavigationChanged(Transition {
+            restore_scroll: Some(scroll),
+            ..
+        })) = event
+        {
+            self.restore_scroll(*scroll);
         }
     }
+}
+
+struct PendingRestore {
+    adjustment: gtk::Adjustment,
+    handler: Rc<RefCell<Option<SignalHandlerId>>>,
+}
+
+impl PendingRestore {
+    fn start(adjustment: gtk::Adjustment, target: f64) -> Option<Self> {
+        let max = |adj: &gtk::Adjustment| adj.upper() - adj.page_size();
+        adjustment.set_value(target.min(max(&adjustment)));
+        if max(&adjustment) >= target {
+            return None;
+        }
+
+        let handler: Rc<RefCell<Option<SignalHandlerId>>> = Default::default();
+        let id = adjustment.connect_upper_notify(clone!(
+            #[strong]
+            handler,
+            move |adj| {
+                adj.set_value(target.min(max(adj)));
+                if max(adj) >= target {
+                    if let Some(id) = handler.borrow_mut().take() {
+                        adj.disconnect(id);
+                    }
+                }
+            }
+        ));
+        handler.replace(Some(id));
+        Some(Self {
+            adjustment,
+            handler,
+        })
+    }
+
+    fn cancel(self) {
+        if let Some(id) = self.handler.borrow_mut().take() {
+            self.adjustment.disconnect(id);
+        }
+    }
+}
+
+fn visible_scroller(widget: &gtk::Widget) -> Option<gtk::ScrolledWindow> {
+    if let Some(scroller) = widget.downcast_ref::<gtk::ScrolledWindow>() {
+        return Some(scroller.clone());
+    }
+    if let Some(stack) = widget.downcast_ref::<gtk::Stack>() {
+        return stack.visible_child().and_then(|c| visible_scroller(&c));
+    }
+    let mut child = widget.first_child();
+    while let Some(c) = child {
+        if c.is_visible() {
+            if let Some(scroller) = visible_scroller(&c) {
+                return Some(scroller);
+            }
+        }
+        child = c.next_sibling();
+    }
+    None
+}
+
+fn connect_back_forward_input(
+    model: &Rc<NavigationModel>,
+    window: &libadwaita::ApplicationWindow,
+    content_stack: &gtk::Stack,
+) {
+    const MOUSE_BACK: u32 = 8;
+    const MOUSE_FORWARD: u32 = 9;
+
+    let click = gtk::GestureClick::new();
+    click.set_button(0);
+    click.set_propagation_phase(gtk::PropagationPhase::Capture);
+    click.connect_pressed(clone!(
+        #[weak]
+        model,
+        move |gesture, _, _, _| {
+            match gesture.current_button() {
+                MOUSE_BACK => model.go_back(),
+                MOUSE_FORWARD => model.go_forward(),
+                _ => return,
+            }
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+        }
+    ));
+    window.add_controller(click);
+
+    let swipe = gtk::GestureSwipe::new();
+    swipe.set_touch_only(true);
+    swipe.connect_swipe(clone!(
+        #[weak]
+        model,
+        move |_, vx, vy| {
+            if vx.abs() < TOUCH_SWIPE_VELOCITY || vx.abs() < 2.0 * vy.abs() {
+                return;
+            }
+            // Content follows the finger: dragging it right reveals what came before
+            if vx > 0.0 {
+                model.go_back();
+            } else {
+                model.go_forward();
+            }
+        }
+    ));
+    content_stack.add_controller(swipe);
+
+    // Touchpad two-finger swipes arrive as horizontal scrolling in pixels
+    let travelled = Rc::new(Cell::new(0.0));
+    let fired = Rc::new(Cell::new(false));
+    let scroll = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::HORIZONTAL);
+    scroll.connect_scroll_begin(clone!(
+        #[strong]
+        travelled,
+        #[strong]
+        fired,
+        move |_| {
+            travelled.set(0.0);
+            fired.set(false);
+        }
+    ));
+    scroll.connect_scroll(clone!(
+        #[weak]
+        model,
+        #[strong]
+        travelled,
+        #[strong]
+        fired,
+        #[upgrade_or]
+        glib::Propagation::Proceed,
+        move |controller, dx, _| {
+            if controller.unit() != gdk::ScrollUnit::Surface || fired.get() {
+                return glib::Propagation::Proceed;
+            }
+            travelled.set(travelled.get() + dx);
+            if travelled.get().abs() < TOUCHPAD_SWIPE_DISTANCE {
+                return glib::Propagation::Proceed;
+            }
+            fired.set(true);
+            if travelled.get() < 0.0 {
+                model.go_back();
+            } else {
+                model.go_forward();
+            }
+            glib::Propagation::Stop
+        }
+    ));
+    content_stack.add_controller(scroll);
 }
 
 /// Collapsed with the navigation panel hidden, going back shows it.

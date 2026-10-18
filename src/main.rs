@@ -7,7 +7,7 @@ extern crate lazy_static;
 extern crate log;
 extern crate gettextrs;
 
-use app::state::ScreenName;
+use app::state::{HomePage, Route};
 use futures::channel::mpsc::UnboundedSender;
 use gettextrs::*;
 use gio::prelude::*;
@@ -27,7 +27,6 @@ mod player;
 mod settings;
 
 use crate::app::components::expose_custom_widgets;
-use crate::app::components::navigation_panel::NavigationPanelDestination;
 use crate::app::dispatch::DispatchLoop;
 use crate::app::{state::PlaybackAction, App, AppAction, BrowserAction};
 
@@ -95,7 +94,9 @@ fn main() {
         gtk_app.activate();
 
         // There should only be one target because %u is used in desktop file
-        let target = &targets[0];
+        let Some(target) = targets.first() else {
+            return;
+        };
         let uri = target.uri().to_string();
         let action = AppAction::OpenURI(uri)
             .unwrap_or_else(|| AppAction::ShowNotification(gettext("Failed to open link!")));
@@ -229,36 +230,36 @@ fn register_actions(app: &gtk::Application, sender: UnboundedSender<AppAction>) 
         sender.clone(),
     ));
 
-    for (name, dest) in [
-        ("nav_now_playing", NavigationPanelDestination::NowPlaying),
-        ("nav_artists", NavigationPanelDestination::SavedArtists),
-        ("nav_albums", NavigationPanelDestination::Library),
-        ("nav_playlists", NavigationPanelDestination::SavedPlaylists),
-        ("nav_tracks", NavigationPanelDestination::SavedTracks),
+    for (name, page) in [
+        ("nav_now_playing", HomePage::NowPlaying),
+        ("nav_artists", HomePage::SavedArtists),
+        ("nav_albums", HomePage::Library),
+        ("nav_playlists", HomePage::SavedPlaylists),
+        ("nav_tracks", HomePage::SavedTracks),
     ] {
-        let action = SimpleAction::new(name, None);
-        let sender = sender.clone();
         // Same as picking the page in the navigation panel
-        action.connect_activate(move |_, _| {
-            for app_action in [
-                BrowserAction::NavigationPopTo(ScreenName::Home).into(),
-                BrowserAction::SetHomeVisiblePage(dest.id()).into(),
-            ] {
-                sender.unbounded_send(app_action).unwrap();
-            }
-        });
-        app.add_action(&action);
+        app.add_action(&make_action(
+            name,
+            BrowserAction::Navigate(Route::Home(page)).into(),
+            sender.clone(),
+        ));
     }
 
     app.add_action(&make_action(
-        "nav_pop",
-        AppAction::BrowserAction(BrowserAction::NavigationPop),
+        "nav_back",
+        AppAction::BrowserAction(BrowserAction::NavigationBack),
+        sender.clone(),
+    ));
+
+    app.add_action(&make_action(
+        "nav_forward",
+        AppAction::BrowserAction(BrowserAction::NavigationForward),
         sender.clone(),
     ));
 
     app.add_action(&make_action(
         "search",
-        AppAction::BrowserAction(BrowserAction::NavigationPush(ScreenName::Search)),
+        AppAction::BrowserAction(BrowserAction::Navigate(Route::Search)),
         sender.clone(),
     ));
 }

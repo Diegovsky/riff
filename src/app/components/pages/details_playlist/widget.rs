@@ -11,7 +11,7 @@ use super::PlaylistDetailsModel;
 
 use crate::app::components::utils::{confirm_delete_playlist, decode_px};
 use crate::app::components::{
-    labels, Component, DetailsPageComponent, EventListener, HasHeaderBarModel, HeaderRegistrar,
+    labels, Component, DetailsPageComponent, EventListener, HasHeaderBarModel, PageHeader,
     PlaylistDialog,
 };
 use crate::app::load;
@@ -31,9 +31,9 @@ pub struct PlaylistDetails {
 }
 
 impl PlaylistDetails {
-    pub fn new(model: Rc<PlaylistDetailsModel>, registrar: HeaderRegistrar, name: String) -> Self {
+    pub fn new(model: Rc<PlaylistDetailsModel>, header: PageHeader) -> Self {
         let mut component =
-            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), registrar, name);
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), header);
         component.create_track_list(None);
 
         Self {

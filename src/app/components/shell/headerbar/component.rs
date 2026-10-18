@@ -4,11 +4,12 @@ use std::rc::Rc;
 
 use glib::clone;
 
-use crate::app::components::EventListener;
-use crate::app::state::{SelectionAction, SelectionEvent};
+use crate::app::components::navigation_panel::NavigationPanelDestination;
+use crate::app::components::{labels, EventListener};
+use crate::app::state::{Entry, HomePage, Route, SelectionAction, SelectionEvent};
 use crate::app::{AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Dispatcher};
 
-use super::widget::AppHeaderBar;
+use super::widget::{AppHeaderBar, HistoryMenuItem, HistorySide};
 
 /// Selection behavior the shared header needs from the active screen.
 /// Back and title are handled by the header itself.
@@ -86,17 +87,38 @@ fn all_selected(model: &dyn HeaderBarModel, app_model: &AppModel) -> bool {
 /// [`AppHeaderBarComponent`] reads it to rebind the header on screen changes.
 pub type HeaderModelRegistry = Rc<RefCell<HashMap<String, Rc<dyn HeaderBarModel>>>>;
 
-/// Home sub-page shown before the first [`BrowserEvent::HomeVisiblePageChanged`].
-const DEFAULT_HOME_PAGE: &str = "library";
+/// Most entries listed in a history menu.
+const HISTORY_MENU_LENGTH: usize = 10;
 
-/// Resolve which header page is active. The "home" screen hosts several
-/// sub-pages, so it follows the visible home sub-page; any other screen maps
-/// to its own identifier.
-fn resolve_active_page<'a>(current_screen: &'a str, home_page: &'a str) -> &'a str {
-    if current_screen == "home" {
-        home_page
-    } else {
-        current_screen
+fn resolve_active_page(route: &Route) -> String {
+    match route {
+        Route::Home(page) => page.id().to_string(),
+        _ => route.screen_key(),
+    }
+}
+
+fn history_menu<'a>(entries: impl Iterator<Item = &'a Entry>) -> Vec<HistoryMenuItem> {
+    entries
+        .take(HISTORY_MENU_LENGTH)
+        .map(|entry| HistoryMenuItem {
+            id: entry.id,
+            icon: route_icon(&entry.route),
+            label: entry
+                .title
+                .clone()
+                .unwrap_or_else(|| labels::route_label(&entry.route)),
+        })
+        .collect()
+}
+
+fn route_icon(route: &Route) -> &'static str {
+    match route {
+        Route::Home(HomePage::NowPlaying) => NavigationPanelDestination::NowPlaying.icon(),
+        Route::Home(_) => "paper-sheet-symbolic",
+        Route::Album(_) => "library-music-symbolic",
+        Route::Artist(_) | Route::User(_) => "avatar-default-symbolic",
+        Route::Playlist(_) => "playlist2-symbolic",
+        Route::Search => "system-search-symbolic",
     }
 }
 
@@ -107,7 +129,6 @@ pub struct AppHeaderBarComponent {
     app_model: Rc<AppModel>,
     models: HeaderModelRegistry,
     active_model: Rc<RefCell<Option<Rc<dyn HeaderBarModel>>>>,
-    home_page: String,
 }
 
 impl AppHeaderBarComponent {
@@ -119,8 +140,38 @@ impl AppHeaderBarComponent {
     ) -> Self {
         let active_model: Rc<RefCell<Option<Rc<dyn HeaderBarModel>>>> = Rc::new(RefCell::new(None));
 
-        // Back navigates the browser stack.
-        widget.connect_go_back(move || dispatcher.dispatch(BrowserAction::NavigationPop.into()));
+        widget.connect_go_back(clone!(
+            #[strong]
+            dispatcher,
+            move || dispatcher.dispatch(BrowserAction::NavigationBack.into())
+        ));
+        widget.connect_go_forward(clone!(
+            #[strong]
+            dispatcher,
+            move || dispatcher.dispatch(BrowserAction::NavigationForward.into())
+        ));
+
+        widget.connect_history_menu(clone!(
+            #[weak]
+            app_model,
+            #[weak]
+            widget,
+            move |side| {
+                let state = app_model.get_state();
+                let navigator = state.browser.navigator();
+                let items = match side {
+                    HistorySide::Back => history_menu(navigator.back_entries()),
+                    HistorySide::Forward => history_menu(navigator.forward_entries()),
+                };
+                drop(state);
+                widget.show_history_menu(side, items);
+            }
+        ));
+        widget.connect_history_pick(clone!(
+            #[strong]
+            dispatcher,
+            move |id| dispatcher.dispatch(BrowserAction::NavigationGoTo(id).into())
+        ));
 
         // Selection controls route to the active screen.
         widget.connect_select_all(clone!(
@@ -153,23 +204,12 @@ impl AppHeaderBarComponent {
             app_model,
             models,
             active_model,
-            home_page: DEFAULT_HOME_PAGE.to_string(),
         }
-    }
-
-    fn current_screen_id(&self) -> String {
-        self.app_model
-            .get_state()
-            .browser
-            .current_screen()
-            .identifier()
-            .into_owned()
     }
 
     /// Recompute the active page and rebind the header's stacks and state.
     fn refresh_active(&self) {
-        let current = self.current_screen_id();
-        let active = resolve_active_page(&current, &self.home_page).to_string();
+        let active = resolve_active_page(self.app_model.get_state().browser.current_screen());
 
         self.widget.set_active(&active);
 
@@ -177,8 +217,11 @@ impl AppHeaderBarComponent {
         self.widget.set_select_all_possible(model.is_some());
         *self.active_model.borrow_mut() = model;
 
+        let state = self.app_model.get_state();
+        self.widget.set_can_go_back(state.browser.can_go_back());
         self.widget
-            .set_can_go_back(self.app_model.get_state().browser.can_pop());
+            .set_can_go_forward(state.browser.can_go_forward());
+        drop(state);
         self.refresh_selection();
     }
 
@@ -228,17 +271,9 @@ impl EventListener for AppHeaderBarComponent {
         match event {
             AppEvent::Started => self.refresh_active(),
             AppEvent::BrowserEvent(
-                BrowserEvent::NavigationPushed(_)
-                | BrowserEvent::NavigationPopped
-                | BrowserEvent::NavigationPoppedTo(_)
-                | BrowserEvent::NavigationHidden(_),
+                BrowserEvent::NavigationChanged(_) | BrowserEvent::NavigationHidden(_),
             ) => {
                 self.cancel_active_selection();
-                self.refresh_active();
-            }
-            AppEvent::BrowserEvent(BrowserEvent::HomeVisiblePageChanged(page)) => {
-                self.cancel_active_selection();
-                self.home_page = (*page).to_string();
                 self.refresh_active();
             }
             AppEvent::SelectionEvent(
@@ -252,20 +287,33 @@ impl EventListener for AppHeaderBarComponent {
 #[cfg(test)]
 mod tests {
     use super::resolve_active_page;
+    use crate::app::state::{HomePage, Route};
 
     #[test]
     fn home_screen_follows_home_sub_page() {
-        assert_eq!(resolve_active_page("home", "library"), "library");
-        assert_eq!(resolve_active_page("home", "saved_tracks"), "saved_tracks");
-        assert_eq!(resolve_active_page("home", "now_playing"), "now_playing");
+        assert_eq!(
+            resolve_active_page(&Route::Home(HomePage::Library)),
+            "library"
+        );
+        assert_eq!(
+            resolve_active_page(&Route::Home(HomePage::SavedTracks)),
+            "saved_tracks"
+        );
+        assert_eq!(
+            resolve_active_page(&Route::Home(HomePage::NowPlaying)),
+            "now_playing"
+        );
     }
 
     #[test]
-    fn pushed_screen_maps_to_itself() {
-        assert_eq!(resolve_active_page("album_123", "library"), "album_123");
-        assert_eq!(resolve_active_page("search", "saved_tracks"), "search");
+    fn other_screens_map_to_their_key() {
         assert_eq!(
-            resolve_active_page("artist_abc", "now_playing"),
+            resolve_active_page(&Route::Album("123".into())),
+            "album_123"
+        );
+        assert_eq!(resolve_active_page(&Route::Search), "search");
+        assert_eq!(
+            resolve_active_page(&Route::Artist("abc".into())),
             "artist_abc"
         );
     }

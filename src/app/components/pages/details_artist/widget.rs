@@ -11,7 +11,7 @@ use super::ArtistDetailsModel;
 
 use crate::app::components::{
     align_cards_to_edges, CardLayout, CardSize, Component, DetailsPageComponent, EventListener,
-    HasHeaderBarModel, HeaderRegistrar, SortOrder,
+    HasHeaderBarModel, PageHeader, SortOrder,
 };
 use crate::app::{AppEvent, Dispatcher};
 
@@ -26,11 +26,10 @@ impl ArtistDetails {
         shared_layout: Rc<Cell<CardLayout>>,
         shared_size: Rc<Cell<CardSize>>,
         dispatcher: Dispatcher,
-        registrar: HeaderRegistrar,
-        name: String,
+        header: PageHeader,
     ) -> Self {
         let mut component =
-            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), registrar, name);
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), header);
         component.create_track_list(Some(&gettext("Top Tracks")));
         let releases = component.create_embedded_card_list(
             Some(&gettext("Releases")),

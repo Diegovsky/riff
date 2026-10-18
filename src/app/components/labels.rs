@@ -1,5 +1,8 @@
 use gettextrs::*;
 
+use crate::app::components::navigation_panel::NavigationPanelDestination;
+use crate::app::state::Route;
+
 lazy_static! {
     // translators: This is part of a contextual menu attached to a single track; this entry allows viewing the album containing a specific track.
     pub static ref VIEW_ALBUM: String = gettext("View Album");
@@ -217,6 +220,22 @@ pub fn album_by_artist_label(album: &str, artist: &str) -> String {
         gettext("{} by {}");
     }
     gettext!("{} by {}", album, artist)
+}
+
+pub fn route_label(route: &Route) -> String {
+    match route {
+        Route::Home(page) => NavigationPanelDestination::from_home_page(*page).title(),
+        // translators: An album in the back/forward history menu, while its name is loading.
+        Route::Album(_) => gettext("Album"),
+        // translators: An artist in the back/forward history menu, while their name is loading.
+        Route::Artist(_) => gettext("Artist"),
+        // translators: A playlist in the back/forward history menu, while its name is loading.
+        Route::Playlist(_) => gettext("Playlist"),
+        // translators: A user's page in the back/forward history menu, while their name is loading.
+        Route::User(_) => gettext("User"),
+        // translators: The search page in the back/forward history menu.
+        Route::Search => gettext("Search"),
+    }
 }
 
 #[cfg(test)]

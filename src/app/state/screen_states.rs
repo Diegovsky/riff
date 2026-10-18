@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 
 use super::{
@@ -12,41 +11,9 @@ use crate::app::ListStore;
 /// Number of cards (albums, playlists) to load per batch.
 pub const CARD_BATCH_SIZE: usize = 50;
 
-#[derive(Clone, Debug)]
-pub enum ScreenName {
-    Home,
-    AlbumDetails(String),
-    Search,
-    Artist(String),
-    PlaylistDetails(String),
-    User(String),
-}
-
-impl ScreenName {
-    pub fn identifier(&self) -> Cow<str> {
-        match self {
-            Self::Home => Cow::Borrowed("home"),
-            Self::AlbumDetails(s) => Cow::Owned(format!("album_{s}")),
-            Self::Search => Cow::Borrowed("search"),
-            Self::Artist(s) => Cow::Owned(format!("artist_{s}")),
-            Self::PlaylistDetails(s) => Cow::Owned(format!("playlist_{s}")),
-            Self::User(s) => Cow::Owned(format!("user_{s}")),
-        }
-    }
-}
-
-impl PartialEq for ScreenName {
-    fn eq(&self, other: &Self) -> bool {
-        self.identifier() == other.identifier()
-    }
-}
-
-impl Eq for ScreenName {}
-
 // ALBUM details
 pub struct DetailsState {
     pub id: String,
-    pub name: ScreenName,
     pub album: Option<Album>,
     pub is_liked: bool,
     // Read the songs from here, not `album` (which carries no track list).
@@ -58,7 +25,6 @@ impl DetailsState {
     pub fn new(id: String) -> Self {
         Self {
             id: id.clone(),
-            name: ScreenName::AlbumDetails(id.clone()),
             album: None,
             is_liked: false,
             songs: SongListModel::new(50),
@@ -146,7 +112,6 @@ fn not_listed<'a, T>(
 
 pub struct PlaylistDetailsState {
     pub id: String,
-    pub name: ScreenName,
     pub playlist: Option<Playlist>,
     // Read the songs from here, not content (won't get more than the initial batch of songs)
     pub songs: SongListModel,
@@ -157,7 +122,6 @@ impl PlaylistDetailsState {
     pub fn new(id: String) -> Self {
         Self {
             id: id.clone(),
-            name: ScreenName::PlaylistDetails(id.clone()),
             playlist: None,
             songs: SongListModel::new(50),
             next_tracks_page: Pagination::new(id, 50),
@@ -282,7 +246,6 @@ impl UpdatableState for PlaylistDetailsState {
 
 pub struct ArtistState {
     pub id: String,
-    pub name: ScreenName,
     pub artist: Option<String>,
     pub photo: Option<ImageSet>,
     pub is_followed: bool,
@@ -295,7 +258,6 @@ impl ArtistState {
     pub fn new(id: String) -> Self {
         Self {
             id: id.clone(),
-            name: ScreenName::Artist(id.clone()),
             artist: None,
             photo: None,
             is_followed: false,
@@ -358,8 +320,6 @@ impl UpdatableState for ArtistState {
 
 // The "home" represents screens visible initially (saved albums, saved playlists, saved tracks)
 pub struct HomeState {
-    pub name: ScreenName,
-    pub visible_page: &'static str,
     pub next_albums_page: Pagination<()>,
     pub albums: ListStore<CardModel>,
     pub next_playlists_page: Pagination<()>,
@@ -377,8 +337,6 @@ pub struct HomeState {
 impl Default for HomeState {
     fn default() -> Self {
         Self {
-            name: ScreenName::Home,
-            visible_page: "library",
             next_albums_page: Pagination::new((), CARD_BATCH_SIZE),
             albums: ListStore::new(),
             next_playlists_page: Pagination::new((), CARD_BATCH_SIZE),
@@ -445,10 +403,6 @@ impl UpdatableState for HomeState {
         let status_changed =
             self.record_liked_statuses(liked_statuses(delivered_tracks(action.as_ref())));
         let mut events = match action.as_ref() {
-            BrowserAction::SetHomeVisiblePage(page) => {
-                self.visible_page = *page;
-                vec![BrowserEvent::HomeVisiblePageChanged(page)]
-            }
             BrowserAction::SetLibraryContent(content) => {
                 if !self.albums.eq(content, |a, b| a.id() == b.rri.id) {
                     self.albums.replace_all(content.iter().map(|a| a.into()));
@@ -672,7 +626,6 @@ pub fn liked_statuses(tracks: &[Track]) -> impl Iterator<Item = (String, bool)> 
 }
 
 pub struct SearchState {
-    pub name: ScreenName,
     pub query: String,
     /// Active filter. `None` shows the combined multi-section results.
     pub filter: Option<SearchType>,
@@ -689,7 +642,6 @@ pub struct SearchState {
 impl Default for SearchState {
     fn default() -> Self {
         Self {
-            name: ScreenName::Search,
             query: String::new(),
             filter: None,
             results: SearchResults::default(),
@@ -790,7 +742,6 @@ fn cards_from_results(search_type: SearchType, results: &SearchResults) -> Vec<C
 // Screen when we click on the name of a playlist owner
 pub struct UserState {
     pub id: String,
-    pub name: ScreenName,
     pub user: Option<String>,
     pub photo: Option<ImageSet>,
     pub next_page: Pagination<String>,
@@ -801,7 +752,6 @@ impl UserState {
     pub fn new(id: String) -> Self {
         Self {
             id: id.clone(),
-            name: ScreenName::User(id.clone()),
             user: None,
             photo: None,
             next_page: Pagination::new(id, CARD_BATCH_SIZE),

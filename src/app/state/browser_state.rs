@@ -1,10 +1,11 @@
 use super::{
-    AppAction, AppEvent, ArtistState, DetailsState, HomeState, PlaylistDetailsState, ScreenName,
-    SearchState, UpdatableState, UserState,
+    AppAction, AppEvent, ArtistState, DetailsState, HomeState, PlaylistDetailsState, SearchState,
+    UpdatableState, UserState,
 };
 use crate::app::components::{CardLayout, CardSize, SortOrder};
 use crate::app::load;
 use crate::app::models::*;
+use riff_core::navigation::{EntryId, Navigator, Route, Transition};
 use std::borrow::Cow;
 use std::iter::Iterator;
 
@@ -25,7 +26,6 @@ pub enum PaginationTarget {
 #[derive(Clone, Debug)]
 pub enum BrowserAction {
     SetNavigationHidden(bool),
-    SetHomeVisiblePage(&'static str),
     SetLibraryContent(Vec<Album>),
     PrependPlaylistsContent(Vec<Playlist>),
     AppendLibraryContent(Vec<Album>),
@@ -58,9 +58,12 @@ pub enum BrowserAction {
     SetArtistTopTracks(String, Vec<Track>),
     SetArtistFollowedStatus(String, bool),
     AppendArtistReleases(String, Vec<Album>),
-    NavigationPush(ScreenName),
-    NavigationPop,
-    NavigationPopTo(ScreenName),
+    Navigate(Route),
+    NavigationBack,
+    NavigationForward,
+    NavigationGoTo(EntryId),
+    NavigationLeave(Route),
+    SaveScroll(EntryId, u32),
     SaveAlbum(Box<Album>),
     UnsaveAlbum(String),
     SetUserInfo(Box<User>),
@@ -96,7 +99,8 @@ impl From<BrowserAction> for AppAction {
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum BrowserEvent {
     NavigationHidden(bool),
-    HomeVisiblePageChanged(&'static str),
+    NavigationChanged(Transition),
+    NavigationHistoryChanged,
     LibraryUpdated,
     SavedPlaylistsUpdated,
     /// Emitted when local pinned playlist IDs change (no Spotify fetch).
@@ -116,9 +120,6 @@ pub enum BrowserEvent {
     /// The scoped search view's results changed.
     SearchScopeUpdated(SearchType),
     ArtistDetailsUpdated(String),
-    NavigationPushed(ScreenName),
-    NavigationPopped,
-    NavigationPoppedTo(ScreenName),
     AlbumSaved(String),
     /// Notifies a DetailsModel that a song is requested
     SongPlaybackRequested(String),
@@ -136,9 +137,8 @@ impl From<BrowserEvent> for AppEvent {
     }
 }
 
-// Any screen that can be "pushed"
 pub enum BrowserScreen {
-    Home(Box<HomeState>), // Except this one is special, it's there at the start
+    Home(Box<HomeState>),
     AlbumDetails(Box<DetailsState>),
     Search(Box<SearchState>),
     Artist(Box<ArtistState>),
@@ -147,20 +147,29 @@ pub enum BrowserScreen {
 }
 
 impl BrowserScreen {
-    fn from_name(name: &ScreenName) -> Self {
-        match name {
-            ScreenName::Home => BrowserScreen::Home(Default::default()),
-            ScreenName::AlbumDetails(id) => {
-                BrowserScreen::AlbumDetails(Box::new(DetailsState::new(id.to_string())))
+    fn from_route(route: &Route) -> Self {
+        match route {
+            Route::Home(_) => BrowserScreen::Home(Default::default()),
+            Route::Album(id) => {
+                BrowserScreen::AlbumDetails(Box::new(DetailsState::new(id.clone())))
             }
-            ScreenName::Search => BrowserScreen::Search(Default::default()),
-            ScreenName::Artist(id) => {
-                BrowserScreen::Artist(Box::new(ArtistState::new(id.to_string())))
+            Route::Search => BrowserScreen::Search(Default::default()),
+            Route::Artist(id) => BrowserScreen::Artist(Box::new(ArtistState::new(id.clone()))),
+            Route::Playlist(id) => {
+                BrowserScreen::PlaylistDetails(Box::new(PlaylistDetailsState::new(id.clone())))
             }
-            ScreenName::PlaylistDetails(id) => {
-                BrowserScreen::PlaylistDetails(Box::new(PlaylistDetailsState::new(id.to_string())))
-            }
-            ScreenName::User(id) => BrowserScreen::User(Box::new(UserState::new(id.to_string()))),
+            Route::User(id) => BrowserScreen::User(Box::new(UserState::new(id.clone()))),
+        }
+    }
+
+    fn shows(&self, route: &Route) -> bool {
+        match (self, route) {
+            (Self::Home(_), Route::Home(_)) | (Self::Search(_), Route::Search) => true,
+            (Self::AlbumDetails(s), Route::Album(id)) => &s.id == id,
+            (Self::Artist(s), Route::Artist(id)) => &s.id == id,
+            (Self::PlaylistDetails(s), Route::Playlist(id)) => &s.id == id,
+            (Self::User(s), Route::User(id)) => &s.id == id,
+            _ => false,
         }
     }
 
@@ -177,109 +186,10 @@ impl BrowserScreen {
     }
 }
 
-impl NamedScreen for BrowserScreen {
-    type Name = ScreenName;
-
-    fn name(&self) -> &Self::Name {
-        match self {
-            Self::Home(state) => &state.name,
-            Self::AlbumDetails(state) => &state.name,
-            Self::Search(state) => &state.name,
-            Self::Artist(state) => &state.name,
-            Self::PlaylistDetails(state) => &state.name,
-            Self::User(state) => &state.name,
-        }
-    }
-}
-
-pub trait NamedScreen {
-    type Name: PartialEq;
-    fn name(&self) -> &Self::Name;
-}
-
-#[derive(Debug)]
-enum ScreenState {
-    NotPresent,
-    Present,
-    Current,
-}
-
-// The navigation stack where we push screens (something with an equatable name)
-struct NavStack<Screen>(Vec<Screen>);
-
-impl<Screen> NavStack<Screen>
-where
-    Screen: NamedScreen,
-{
-    // Its len is guaranteed to be always 1 (see can_pop)
-    fn new(initial: Screen) -> Self {
-        Self(vec![initial])
-    }
-
-    fn iter_mut(&mut self) -> impl Iterator<Item = &mut Screen> {
-        self.0.iter_mut().rev()
-    }
-
-    fn iter_rev(&self) -> impl Iterator<Item = &Screen> {
-        self.0.iter().rev()
-    }
-
-    fn count(&self) -> usize {
-        self.0.len()
-    }
-
-    fn current(&self) -> &Screen {
-        self.0.last().unwrap()
-    }
-
-    fn current_mut(&mut self) -> &mut Screen {
-        self.0.last_mut().unwrap()
-    }
-
-    fn can_pop(&self) -> bool {
-        self.0.len() > 1
-    }
-
-    fn push(&mut self, screen: Screen) {
-        self.0.push(screen)
-    }
-
-    fn pop(&mut self) -> bool {
-        if self.can_pop() {
-            self.0.pop();
-            true
-        } else {
-            false
-        }
-    }
-
-    fn pop_to(&mut self, name: &Screen::Name) {
-        let split = self.0.iter().position(|s| s.name() == name).unwrap();
-        self.0.truncate(split + 1);
-    }
-
-    fn screen_visibility(&self, name: &Screen::Name) -> ScreenState {
-        // We iterate screens in reverse order
-        self.0
-            .iter()
-            .rev()
-            .enumerate()
-            .find_map(|(i, screen)| {
-                let is_screen = screen.name() == name;
-                match (i, is_screen) {
-                    // If we find the screen at pos 0 (last), it's therefore the current screen
-                    (0, true) => Some(ScreenState::Current),
-                    (_, true) => Some(ScreenState::Present),
-                    (_, _) => None,
-                }
-            })
-            .unwrap_or(ScreenState::NotPresent)
-    }
-}
-
 pub struct BrowserState {
     navigation_hidden: bool,
-    navigation: NavStack<BrowserScreen>,
+    navigator: Navigator,
+    screens: Vec<BrowserScreen>,
 }
 
 macro_rules! extract_state {
@@ -293,7 +203,7 @@ macro_rules! extract_state {
 
 macro_rules! extract_state_full {
     ($e:expr, $p:pat if $guard:expr => $i:ident) => {{
-        $e.navigation.iter_rev().find_map(|screen| match screen {
+        $e.screens.iter().find_map(|screen| match screen {
             $p if $guard => Some(&**$i),
             _ => None,
         })
@@ -304,28 +214,25 @@ impl BrowserState {
     pub fn new() -> Self {
         Self {
             navigation_hidden: false,
-            navigation: NavStack::new(BrowserScreen::Home(Default::default())),
+            navigator: Navigator::default(),
+            screens: vec![BrowserScreen::Home(Default::default())],
         }
     }
 
-    pub fn current_screen(&self) -> &ScreenName {
-        self.navigation.current().name()
+    pub fn current_screen(&self) -> &Route {
+        self.navigator.current_route()
     }
 
-    /// Whether a back button should be offered for the current screen.
-    ///
-    /// Only pushed detail screens (artist, album, playlist, user) get one.
-    /// Home sub-pages share the "home" screen, so there is nowhere to go back.
-    /// Search lives on the stack but is treated as top-level, so no back button.
-    pub fn can_pop(&self) -> bool {
-        if matches!(self.current_screen(), ScreenName::Search) {
-            return false;
-        }
-        self.navigation.can_pop()
+    pub fn navigator(&self) -> &Navigator {
+        &self.navigator
     }
 
-    pub fn count(&self) -> usize {
-        self.navigation.count()
+    pub fn can_go_back(&self) -> bool {
+        self.navigator.can_go_back()
+    }
+
+    pub fn can_go_forward(&self) -> bool {
+        self.navigator.can_go_forward()
     }
 
     pub fn home_state(&self) -> Option<&HomeState> {
@@ -333,7 +240,7 @@ impl BrowserState {
     }
 
     pub fn home_state_mut(&mut self) -> Option<&mut HomeState> {
-        self.navigation.iter_mut().find_map(|screen| match screen {
+        self.screens.iter_mut().find_map(|screen| match screen {
             BrowserScreen::Home(s) => Some(&mut **s),
             _ => None,
         })
@@ -359,24 +266,46 @@ impl BrowserState {
         extract_state!(self, BrowserScreen::User(state) if state.id == id => state)
     }
 
-    // If a screen we want to push is already in the stack
-    // we just pop all the way back to it
-    fn push_if_needed(&mut self, name: &ScreenName) -> Vec<BrowserEvent> {
-        let navigation = &mut self.navigation;
-        let screen_visibility = navigation.screen_visibility(name);
+    fn apply(&mut self, transition: Option<Transition>) -> Vec<BrowserEvent> {
+        let Some(transition) = transition else {
+            return vec![];
+        };
+        self.screens
+            .retain(|screen| !transition.evicted.iter().any(|route| screen.shows(route)));
+        if !self
+            .screens
+            .iter()
+            .any(|screen| screen.shows(&transition.to))
+        {
+            self.screens.push(BrowserScreen::from_route(&transition.to));
+        }
+        load::bump_epoch();
+        vec![BrowserEvent::NavigationChanged(transition)]
+    }
 
-        match screen_visibility {
-            ScreenState::Current => vec![],
-            ScreenState::Present => {
-                navigation.pop_to(name);
-                load::bump_epoch();
-                vec![BrowserEvent::NavigationPoppedTo(name.clone())]
+    fn record_title(&mut self, action: &BrowserAction) -> Vec<BrowserEvent> {
+        let (route, title) = match action {
+            BrowserAction::SetAlbumInfo(album) => {
+                (Route::Album(album.rri.id.clone()), &album.title)
             }
-            ScreenState::NotPresent => {
-                navigation.push(BrowserScreen::from_name(name));
-                load::bump_epoch();
-                vec![BrowserEvent::NavigationPushed(name.clone())]
+            BrowserAction::SetArtistInfo(artist) => {
+                (Route::Artist(artist.rri.id.clone()), &artist.name)
             }
+            BrowserAction::SetPlaylistDetails(playlist, _) => {
+                (Route::Playlist(playlist.rri.id.clone()), &playlist.title)
+            }
+            BrowserAction::UpdatePlaylistName(PlaylistSummary { id, title }) => {
+                (Route::Playlist(id.clone()), title)
+            }
+            BrowserAction::SetUserInfo(user) => {
+                (Route::User(user.rri.id.clone()), &user.display_name)
+            }
+            _ => return vec![],
+        };
+        if self.navigator.set_title(&route, title) {
+            vec![BrowserEvent::NavigationHistoryChanged]
+        } else {
+            vec![]
         }
     }
 }
@@ -386,7 +315,6 @@ impl UpdatableState for BrowserState {
     type Event = BrowserEvent;
 
     fn update_with(&mut self, action: Cow<Self::Action>) -> Vec<Self::Event> {
-        let can_pop = self.navigation.can_pop();
         let action_ref = action.as_ref();
 
         match action_ref {
@@ -394,29 +322,45 @@ impl UpdatableState for BrowserState {
                 self.navigation_hidden = *navigation_hidden;
                 vec![BrowserEvent::NavigationHidden(*navigation_hidden)]
             }
-            // The search action will be handled here first before being passed down
-            // to push the search screen if it's not there already
             BrowserAction::Search(_) => {
-                let mut events = self.push_if_needed(&ScreenName::Search);
-
-                let mut update_events = self.navigation.current_mut().state().update_with(action);
-                events.append(&mut update_events);
+                let transition = self.navigator.navigate(Route::Search);
+                let mut events = self.apply(transition);
+                let search = self
+                    .screens
+                    .iter_mut()
+                    .find(|screen| screen.shows(&Route::Search));
+                if let Some(search) = search {
+                    events.append(&mut search.state().update_with(action));
+                }
                 events
             }
-            BrowserAction::NavigationPush(name) => self.push_if_needed(name),
-            BrowserAction::NavigationPopTo(name) => {
-                self.navigation.pop_to(name);
-                load::bump_epoch();
-                vec![BrowserEvent::NavigationPoppedTo(name.clone())]
+            BrowserAction::Navigate(route) => {
+                let transition = self.navigator.navigate(route.clone());
+                self.apply(transition)
             }
-            BrowserAction::NavigationPop if can_pop => {
-                self.navigation.pop();
-                load::bump_epoch();
-                vec![BrowserEvent::NavigationPopped]
+            BrowserAction::NavigationBack if self.navigator.can_go_back() => {
+                let transition = self.navigator.back();
+                self.apply(transition)
             }
-            BrowserAction::NavigationPop if self.navigation_hidden => {
+            BrowserAction::NavigationBack if self.navigation_hidden => {
                 self.navigation_hidden = false;
                 vec![BrowserEvent::NavigationHidden(false)]
+            }
+            BrowserAction::NavigationForward => {
+                let transition = self.navigator.forward();
+                self.apply(transition)
+            }
+            BrowserAction::NavigationGoTo(id) => {
+                let transition = self.navigator.go_to(*id);
+                self.apply(transition)
+            }
+            BrowserAction::NavigationLeave(route) => {
+                let transition = self.navigator.leave_if_current(route);
+                self.apply(transition)
+            }
+            BrowserAction::SaveScroll(id, scroll) => {
+                self.navigator.save_scroll(*id, *scroll);
+                vec![]
             }
             BrowserAction::ChangeCardLayout(layout) => {
                 vec![BrowserEvent::CardLayoutChanged(*layout)]
@@ -430,12 +374,15 @@ impl UpdatableState for BrowserState {
             BrowserAction::NotifyPinnedPlaylistsUpdated => {
                 vec![BrowserEvent::PinnedPlaylistsUpdated]
             }
-            // Besides navigation actions, we just forward actions to each dedicated reducer
-            _ => self
-                .navigation
-                .iter_mut()
-                .flat_map(|s| s.state().update_with(Cow::Borrowed(action_ref)))
-                .collect(),
+            _ => {
+                let mut events = self.record_title(action_ref);
+                events.extend(
+                    self.screens
+                        .iter_mut()
+                        .flat_map(|s| s.state().update_with(Cow::Borrowed(action_ref))),
+                );
+                events
+            }
         }
     }
 }
@@ -444,128 +391,151 @@ impl UpdatableState for BrowserState {
 pub mod tests {
 
     use super::*;
+    use riff_core::navigation::{Direction, HomePage};
+
+    const LIBRARY: Route = Route::Home(HomePage::Library);
+
+    fn artist(id: &str) -> Route {
+        Route::Artist(id.to_string())
+    }
+
+    fn album(id: &str) -> Route {
+        Route::Album(id.to_string())
+    }
+
+    fn navigate(state: &mut BrowserState, route: Route) -> Vec<BrowserEvent> {
+        state.update_with(Cow::Owned(BrowserAction::Navigate(route)))
+    }
+
+    fn back(state: &mut BrowserState) -> Vec<BrowserEvent> {
+        state.update_with(Cow::Owned(BrowserAction::NavigationBack))
+    }
+
+    fn forward(state: &mut BrowserState) -> Vec<BrowserEvent> {
+        state.update_with(Cow::Owned(BrowserAction::NavigationForward))
+    }
 
     /// Going back must bump the epoch too, or work queued for the screen the
     /// user left keeps competing with the one they moved to.
     #[test]
     fn every_navigation_advances_the_epoch() {
         let mut state = BrowserState::new();
-        let artist = ScreenName::Artist("some_id".to_string());
 
         let before_push = load::current_epoch();
-        state.update_with(Cow::Owned(BrowserAction::NavigationPush(artist.clone())));
+        navigate(&mut state, artist("some_id"));
         let after_push = load::current_epoch();
-        assert!(after_push > before_push, "pushing a new screen");
+        assert!(after_push > before_push, "going somewhere new");
 
-        state.update_with(Cow::Owned(BrowserAction::NavigationPop));
-        let after_pop = load::current_epoch();
-        assert!(after_pop > after_push, "popping back");
+        back(&mut state);
+        let after_back = load::current_epoch();
+        assert!(after_back > after_push, "going back");
 
-        // Pushing a screen already in the stack pops back to it.
-        state.update_with(Cow::Owned(BrowserAction::NavigationPush(artist.clone())));
-        state.update_with(Cow::Owned(BrowserAction::NavigationPush(
-            ScreenName::Search,
-        )));
-        let before_pop_to = load::current_epoch();
-        state.update_with(Cow::Owned(BrowserAction::NavigationPush(artist)));
-        assert!(
-            load::current_epoch() > before_pop_to,
-            "popping back to a screen already in the stack"
-        );
+        forward(&mut state);
+        assert!(load::current_epoch() > after_back, "going forward");
     }
 
     /// Re-requesting the current screen must not demote its own work.
     #[test]
     fn renavigating_to_the_current_screen_is_not_a_navigation() {
         let mut state = BrowserState::new();
-        let artist = ScreenName::Artist("current".to_string());
-        state.update_with(Cow::Owned(BrowserAction::NavigationPush(artist.clone())));
+        navigate(&mut state, artist("current"));
 
+        let before = load::current_epoch();
+        assert!(navigate(&mut state, artist("current")).is_empty());
+        assert_eq!(load::current_epoch(), before);
+    }
+
+    #[test]
+    fn navigating_creates_the_screen_state() {
+        let mut state = BrowserState::new();
+        assert_eq!(*state.current_screen(), LIBRARY);
+
+        let events = navigate(&mut state, artist("some_id"));
+
+        assert_eq!(state.current_screen(), &artist("some_id"));
+        assert!(state.artist_state("some_id").is_some());
         assert!(matches!(
-            state.navigation.screen_visibility(&artist),
-            ScreenState::Current
+            events.as_slice(),
+            [BrowserEvent::NavigationChanged(Transition {
+                direction: Direction::Forward,
+                ..
+            })]
         ));
-        // The `Current` arm returns no events and skips the bump.
-        assert!(state.push_if_needed(&artist).is_empty());
     }
 
     #[test]
-    fn test_navigation_push() {
+    fn back_and_forward() {
         let mut state = BrowserState::new();
+        navigate(&mut state, artist("a"));
+        navigate(&mut state, album("b"));
 
-        assert_eq!(*state.current_screen(), ScreenName::Home);
-        assert_eq!(state.count(), 1);
+        back(&mut state);
+        assert_eq!(state.current_screen(), &artist("a"));
+        assert!(state.can_go_forward());
+        assert!(state.details_state("b").is_some());
 
-        let new_screen = ScreenName::Artist("some_id".to_string());
-        state.update_with(Cow::Owned(BrowserAction::NavigationPush(
-            new_screen.clone(),
-        )));
-
-        assert_eq!(state.current_screen(), &new_screen);
-        assert_eq!(state.count(), 2);
-        assert_eq!(state.artist_state("some_id").is_some(), true);
+        forward(&mut state);
+        assert_eq!(state.current_screen(), &album("b"));
+        assert!(forward(&mut state).is_empty());
     }
 
     #[test]
-    fn test_navigation_pop() {
+    fn back_at_the_start_does_nothing() {
         let mut state = BrowserState::new();
-        let new_screen = ScreenName::Artist("some_id".to_string());
-        state.update_with(Cow::Owned(BrowserAction::NavigationPush(
-            new_screen.clone(),
-        )));
-
-        assert_eq!(state.current_screen(), &new_screen);
-        assert_eq!(state.count(), 2);
-
-        state.update_with(Cow::Owned(BrowserAction::NavigationPop));
-        assert_eq!(state.current_screen(), &ScreenName::Home);
-        assert_eq!(state.count(), 1);
-
-        let events = state.update_with(Cow::Owned(BrowserAction::NavigationPop));
-        assert_eq!(state.current_screen(), &ScreenName::Home);
-        assert_eq!(state.count(), 1);
-        assert_eq!(events, vec![]);
+        assert_eq!(back(&mut state), vec![]);
+        assert_eq!(*state.current_screen(), LIBRARY);
     }
 
     #[test]
-    fn test_navigation_push_same_screen() {
+    fn back_at_the_start_shows_hidden_navigation() {
         let mut state = BrowserState::new();
-        let new_screen = ScreenName::Artist("some_id".to_string());
-        state.update_with(Cow::Owned(BrowserAction::NavigationPush(
-            new_screen.clone(),
-        )));
-
-        assert_eq!(state.current_screen(), &new_screen);
-        assert_eq!(state.count(), 2);
-
-        let events = state.update_with(Cow::Owned(BrowserAction::NavigationPush(
-            new_screen.clone(),
-        )));
-        assert_eq!(state.current_screen(), &new_screen);
-        assert_eq!(state.count(), 2);
-        assert_eq!(events, vec![]);
+        state.update_with(Cow::Owned(BrowserAction::SetNavigationHidden(true)));
+        assert_eq!(
+            back(&mut state),
+            vec![BrowserEvent::NavigationHidden(false)]
+        );
     }
 
     #[test]
-    fn test_navigation_push_same_screen_will_pop() {
+    fn home_pages_keep_history() {
         let mut state = BrowserState::new();
-        let new_screen = ScreenName::Artist("some_id".to_string());
-        state.update_with(Cow::Owned(BrowserAction::NavigationPush(
-            new_screen.clone(),
-        )));
-        state.update_with(Cow::Owned(BrowserAction::NavigationPush(
-            ScreenName::Search,
-        )));
+        navigate(&mut state, album("a"));
+        navigate(&mut state, Route::Home(HomePage::SavedArtists));
 
-        assert_eq!(state.current_screen(), &ScreenName::Search);
-        assert_eq!(state.count(), 3);
+        back(&mut state);
+        assert_eq!(state.current_screen(), &album("a"));
+    }
 
-        let events = state.update_with(Cow::Owned(BrowserAction::NavigationPush(
-            new_screen.clone(),
-        )));
-        assert_eq!(state.current_screen(), &new_screen);
-        assert_eq!(state.count(), 2);
-        assert_eq!(events, vec![BrowserEvent::NavigationPoppedTo(new_screen)]);
+    #[test]
+    fn search_has_a_back_button() {
+        let mut state = BrowserState::new();
+        state.update_with(Cow::Owned(BrowserAction::Search("q".to_string())));
+        assert_eq!(state.current_screen(), &Route::Search);
+        assert!(state.can_go_back());
+        assert!(state.search_state().is_some());
+    }
+
+    #[test]
+    fn leaving_a_missing_item_only_when_current() {
+        let mut state = BrowserState::new();
+        navigate(&mut state, album("missing"));
+        navigate(&mut state, artist("b"));
+
+        let events =
+            state.update_with(Cow::Owned(BrowserAction::NavigationLeave(album("missing"))));
+        assert!(events.is_empty());
+        assert_eq!(state.current_screen(), &artist("b"));
+    }
+
+    #[test]
+    fn far_screens_drop_their_state() {
+        let mut state = BrowserState::new();
+        for i in 0..=Navigator::DEFAULT_LIVE_LIMIT {
+            navigate(&mut state, album(&i.to_string()));
+        }
+        assert!(state.details_state("0").is_none());
+        assert!(state.details_state("1").is_some());
+        assert!(state.home_state().is_some());
     }
 
     #[test]

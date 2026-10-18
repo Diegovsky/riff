@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use super::SavedTracksModel;
 use crate::app::components::{
-    Component, DetailsPageComponent, EventListener, HasHeaderBarModel, HeaderRegistrar,
+    Component, DetailsPageComponent, EventListener, HasHeaderBarModel, PageHeader,
 };
 use crate::app::state::LoginEvent;
 use crate::app::AppEvent;
@@ -17,9 +17,9 @@ pub struct SavedTracks {
 }
 
 impl SavedTracks {
-    pub fn new(model: Rc<SavedTracksModel>, registrar: HeaderRegistrar, name: String) -> Self {
+    pub fn new(model: Rc<SavedTracksModel>, header: PageHeader) -> Self {
         let mut component =
-            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), registrar, name);
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), header);
         component.create_track_list(None);
 
         Self { model, component }

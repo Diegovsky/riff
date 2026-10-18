@@ -6,7 +6,7 @@ use super::header::DETAIL_SEPARATOR;
 use super::{is_playback_event, DetailsHeader, DetailsPage, DetailsSectionWidget, PinnedPageModel};
 use crate::app::components::{
     filter_matches_nothing, labels, CardLayout, CardList, CardListModel, CardSize, Component,
-    EmbeddedCardList, EventListener, HeaderBarModel, HeaderRegistrar, SortOrder, TrackList,
+    EmbeddedCardList, EventListener, HeaderBarModel, PageHeader, SortOrder, TrackList,
     TrackListModel,
 };
 use crate::app::{AppEvent, Dispatcher};
@@ -21,10 +21,7 @@ pub struct DetailsPageComponent<M> {
     page: DetailsPage,
     content: gtk::Box,
     children: Vec<Box<dyn EventListener>>,
-    registrar: HeaderRegistrar,
-    name: String,
-    header_title: libadwaita::WindowTitle,
-    end_box: gtk::Box,
+    header: PageHeader,
     // Header menu entries added by the page
     page_menu: Rc<RefCell<Vec<(String, String, Rc<dyn Fn()>)>>>,
 }
@@ -48,38 +45,33 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
     pub fn new<H: HeaderBarModel + 'static>(
         model: Rc<M>,
         headerbar_model: Rc<H>,
-        registrar: HeaderRegistrar,
-        name: String,
+        header: PageHeader,
     ) -> Self {
         let page = DetailsPage::new(model.header_image_shape());
         let content = page.content().clone();
 
-        // Register this screen's header contribution: a scroll-revealed title,
-        // an end-button container, and the selection/back model.
-        let header_title = registrar.add_title_widget(&name);
-        page.connect_title_reveal(&header_title);
-        let end_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        registrar.add_end(&name, &end_box);
-        registrar.register_model(&name, headerbar_model);
+        header.set_title_revealed(false);
+        page.connect_title_reveal(clone!(
+            #[strong]
+            header,
+            move |revealed| header.set_title_revealed(revealed)
+        ));
+        header.set_model(headerbar_model);
 
         let mut c = Self {
             model,
             page,
             content,
             children: vec![],
-            registrar,
-            name,
-            header_title,
-            end_box,
+            header,
             page_menu: Default::default(),
         };
         c.wire();
         c
     }
 
-    /// Append a widget to this page's end area in the shared header.
-    pub fn add_header_end(&self, widget: &impl IsA<gtk::Widget>) {
-        self.end_box.append(widget);
+    pub fn header(&self) -> &PageHeader {
+        &self.header
     }
 
     /// For content with its own component, like a `QueueList`.
@@ -167,21 +159,23 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
                 button,
                 #[weak]
                 button_slot,
-                #[weak(rename_to = end_box)]
-                self.end_box,
+                #[strong(rename_to = header)]
+                self.header,
                 move |past| {
-                    let target = if past {
+                    if past {
                         // Keep the row's height once the button leaves it, so
                         // the content below doesn't shift.
                         button_slot.set_height_request(button_slot.height());
-                        &end_box
+                        if button.parent().as_ref() == Some(button_slot.upcast_ref()) {
+                            button_slot.remove(&button);
+                        }
+                        header.add_end(&button);
                     } else {
-                        &button_slot
-                    };
-                    if let Some(parent) = button.parent().and_downcast::<gtk::Box>() {
-                        parent.remove(&button);
+                        header.remove_end(&button);
+                        if button.parent().is_none() {
+                            button_slot.append(&button);
+                        }
                     }
-                    target.append(&button);
                 }
             ),
         );
@@ -332,8 +326,8 @@ impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
                 None => subtitle.clone(),
             };
             self.page.set_details(&title, &full_subtitle);
-            self.header_title.set_title(&title);
-            self.header_title.set_subtitle(&subtitle);
+            self.header.set_title(&title);
+            self.header.set_subtitle(&subtitle);
         }
 
         // Set subtitle links if the model provides them
@@ -446,7 +440,7 @@ impl<M: PinnedPageModel + 'static> Component for DetailsPageComponent<M> {
 impl<M> Drop for DetailsPageComponent<M> {
     fn drop(&mut self) {
         // Unregister from the shared header so a re-push re-registers cleanly.
-        self.registrar.remove(&self.name);
+        self.header.remove();
     }
 }
 

@@ -9,7 +9,7 @@ use crate::app::components::utils::Debouncer;
 use crate::app::components::widgets::card_list::card_view_menu::CardViewMenu;
 use crate::app::components::{
     display_add_css_provider, CardLayout, CardList, CardListModel, CardSize, CardWidget, Component,
-    EventListener, HeaderRegistrar, ImageShape, SortOrder, TrackList, CLAMP_MAX_SIZE,
+    EventListener, ImageShape, PageHeader, SortOrder, TrackList, CLAMP_MAX_SIZE,
 };
 use crate::app::models::{CardModel, SearchType, Track};
 use crate::app::state::{AppEvent, BrowserEvent};
@@ -325,7 +325,7 @@ pub struct SearchResults {
     size: Rc<Cell<CardSize>>,
     debouncer: Debouncer,
     children: Vec<Box<dyn EventListener>>,
-    registrar: HeaderRegistrar,
+    header: PageHeader,
 }
 
 impl SearchResults {
@@ -334,7 +334,7 @@ impl SearchResults {
         layout: Rc<Cell<CardLayout>>,
         size: Rc<Cell<CardSize>>,
         dispatcher: Dispatcher,
-        registrar: HeaderRegistrar,
+        header: PageHeader,
     ) -> Self {
         display_add_css_provider(resource!("/components/search.css"));
 
@@ -344,7 +344,7 @@ impl SearchResults {
         // Move the search bar into the shared header as this screen's title.
         let search_bar = widget.imp().search_bar.get();
         widget.remove(&search_bar);
-        registrar.add_title("search", &search_bar);
+        header.set_title_widget(&search_bar);
 
         // --- Combined ("all") view: Tracks / Artists / Albums sections ---
         let all_box = gtk::Box::new(gtk::Orientation::Vertical, SECTION_SPACING);
@@ -513,7 +513,7 @@ impl SearchResults {
             Rc::clone(&track_card_list),
             dispatcher.clone(),
         );
-        registrar.add_end("search", view_menu.widget());
+        header.add_end(view_menu.widget());
 
         widget.connect_search_updated(clone!(
             #[weak]
@@ -563,7 +563,7 @@ impl SearchResults {
             size,
             debouncer: Debouncer::new(),
             children: vec![Box::new(scope_track_list)],
-            registrar,
+            header,
         }
     }
 
@@ -667,7 +667,7 @@ impl SearchResults {
 
 impl Drop for SearchResults {
     fn drop(&mut self) {
-        self.registrar.remove("search");
+        self.header.remove();
     }
 }
 

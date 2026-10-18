@@ -10,7 +10,7 @@ use super::release_details::ReleaseDetailsDialog;
 use super::DetailsModel;
 
 use crate::app::components::{
-    Component, DetailsPageComponent, EventListener, HasHeaderBarModel, HeaderRegistrar, PageModel,
+    Component, DetailsPageComponent, EventListener, HasHeaderBarModel, PageHeader, PageModel,
 };
 use crate::app::models::AlbumExt;
 use crate::app::AppEvent;
@@ -22,9 +22,9 @@ pub struct Details {
 }
 
 impl Details {
-    pub fn new(model: Rc<DetailsModel>, registrar: HeaderRegistrar, name: String) -> Self {
+    pub fn new(model: Rc<DetailsModel>, header: PageHeader) -> Self {
         let mut component =
-            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), registrar, name);
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), header);
         component.create_track_list(None);
 
         let modal = ReleaseDetailsDialog::new();

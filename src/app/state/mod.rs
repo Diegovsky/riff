@@ -15,6 +15,7 @@ pub use app_state::*;
 pub use browser_state::*;
 pub use login_state::*;
 pub use playback_state::*;
+pub use riff_core::navigation::{Direction, Entry, EntryId, HomePage, Route, Transition};
 pub use screen_states::*;
 pub use selection_state::*;
 pub use settings_state::*;
