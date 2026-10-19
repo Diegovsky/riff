@@ -8,7 +8,7 @@ description = "Riff's API layer for music providers."
 [features]
 # Allows RIFF_ACCEPT_INVALID_CERTS to disable certificate validation in debug
 # builds. Off by default so release builds do not carry the capability.
-insecure-tls = ["isahc/tls-insecure"]
+insecure-tls = []
 
 [dependencies]
 riff-auth = { path = "../riff-auth" }
@@ -43,10 +43,6 @@ version = "1"
 # `rt` covers `spawn_blocking`, which keeps image decoding off the
 # caller's thread.
 features = ["rt", "fs", "macros", "sync", "time"]
-
-[dependencies.isahc]
-version = "2.0.1"
-features = ["json"]
 
 [dependencies.gettext-rs]
 version = "=0.7.0"

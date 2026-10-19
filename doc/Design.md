@@ -91,8 +91,8 @@ flowchart TD
 The `SpotifyPlayer` drives librespot, which decodes compressed audio into
 interleaved `f64` PCM and hands each block to a librespot `Sink`. Rather than
 writing those samples straight to the audio backend (PulseAudio / ALSA /
-GStreamer), Riff inserts a processing layer — the **audio engine**
-(`src/audio_engine/`) — between librespot and the backend.
+GStreamer), Riff inserts a processing layer, the **audio engine**
+(`crates/riff-audio-engine/`), between librespot and the backend.
 
 The audio engine is built around three pieces:
 

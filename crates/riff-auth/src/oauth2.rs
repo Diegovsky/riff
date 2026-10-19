@@ -13,15 +13,15 @@
 use crate::credentials::Credentials;
 
 use log::{error, info, trace, warn};
-use oauth2::reqwest::async_http_client;
 use oauth2::{
     basic::BasicClient, basic::BasicErrorResponseType, AuthUrl, AuthorizationCode, ClientId,
     CsrfToken, PkceCodeChallenge, RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
-use oauth2::{PkceCodeVerifier, RefreshToken, RequestTokenError};
+use oauth2::{EndpointNotSet, EndpointSet, PkceCodeVerifier, RefreshToken, RequestTokenError};
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
+use std::sync::OnceLock;
 use std::time::{Duration, SystemTime};
 use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -72,8 +72,21 @@ const REFRESH_LEAD_TIME: Duration = Duration::from_secs(60);
 // How long a connection to the login listener has to send its request.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
+pub(crate) type OauthClient =
+    BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>;
+
+fn http_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .expect("failed to build OAuth HTTP client")
+    })
+}
+
 pub struct RiffOauthClient {
-    client: BasicClient,
+    client: OauthClient,
     token_store: TokenStore,
     session_tokens: SessionTokens,
 }
@@ -95,7 +108,7 @@ struct AuthCodes {
     session_code: AuthorizationCode,
 }
 
-fn authorization(client: &BasicClient, scopes: &str) -> (Url, CsrfToken, PkceCodeVerifier) {
+fn authorization(client: &OauthClient, scopes: &str) -> (Url, CsrfToken, PkceCodeVerifier) {
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
     // Generate the full authorization URL.
@@ -121,19 +134,16 @@ impl RiffOauthClient {
         }
     }
 
-    pub(crate) fn build_client(client_id: &str) -> BasicClient {
+    pub(crate) fn build_client(client_id: &str) -> OauthClient {
         let auth_url = AuthUrl::new("https://accounts.spotify.com/authorize".to_string())
             .expect("Malformed URL");
         let token_url = TokenUrl::new("https://accounts.spotify.com/api/token".to_string())
             .expect("Malformed URL");
         let redirect_url = RedirectUrl::new(REDIRECT_URI.to_string()).expect("Malformed URL");
-        BasicClient::new(
-            ClientId::new(client_id.to_string()),
-            None,
-            auth_url,
-            Some(token_url),
-        )
-        .set_redirect_uri(redirect_url)
+        BasicClient::new(ClientId::new(client_id.to_string()))
+            .set_auth_uri(auth_url)
+            .set_token_uri(token_url)
+            .set_redirect_uri(redirect_url)
     }
 
     pub async fn spawn_authcode_listener(
@@ -180,14 +190,14 @@ impl RiffOauthClient {
     }
 
     async fn exchange(
-        client: &BasicClient,
+        client: &OauthClient,
         code: AuthorizationCode,
         pkce_verifier: PkceCodeVerifier,
     ) -> Result<Credentials, OAuthError> {
         let token = client
             .exchange_code(code)
             .set_pkce_verifier(pkce_verifier)
-            .request_async(async_http_client)
+            .request_async(http_client())
             .await
             .map_err(|e| match e {
                 RequestTokenError::ServerResponse(res) => {
@@ -244,7 +254,7 @@ impl RiffOauthClient {
     }
 
     pub(crate) async fn valid_token(
-        client: &BasicClient,
+        client: &OauthClient,
         token_store: &TokenStore,
     ) -> Result<Credentials, OAuthError> {
         let token = token_store.get().await.ok_or(OAuthError::LoggedOut)?;
@@ -276,7 +286,7 @@ impl RiffOauthClient {
     }
 
     async fn refresh(
-        client: &BasicClient,
+        client: &OauthClient,
         token_store: &TokenStore,
         old_token: Credentials,
     ) -> Result<Credentials, OAuthError> {
@@ -284,7 +294,7 @@ impl RiffOauthClient {
 
         match client
             .exchange_refresh_token(&RefreshToken::new(refresh_token.clone()))
-            .request_async(async_http_client)
+            .request_async(http_client())
             .await
         {
             Ok(token) => {
@@ -337,7 +347,7 @@ impl RiffOauthClient {
     }
 
     pub(crate) async fn refresh_at_expiry(
-        client: &BasicClient,
+        client: &OauthClient,
         token_store: &TokenStore,
     ) -> Result<Credentials, OAuthError> {
         let Some(old_token) = token_store.get_cached().await.take() else {

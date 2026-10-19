@@ -10,7 +10,7 @@ pub const DEFAULT_CHANNELS: u16 = 2;
 ///
 /// Samples are 64-bit floats, interleaved by channel (for stereo:
 /// `[L0, R0, L1, R1, ...]`). Carrying `channels` and `sample_rate` alongside
-/// the samples keeps each [`Processor`](crate::audio_engine::Processor)
+/// the samples keeps each [`Processor`](crate::Processor)
 /// self-describing: processors that need the sample rate (e.g. pitch
 /// correction) or channel layout (e.g. mono mixing) can read it explicitly
 /// instead of assuming a fixed format.

@@ -6,3 +6,8 @@ license = "MIT"
 description = "Riff's app logic between the UI and the API layer, free of UI dependencies."
 
 [dependencies]
+riff-api = { path = "../riff-api" }
+
+[dependencies.rand]
+version = "0.8.5"
+features = ["small_rng"]

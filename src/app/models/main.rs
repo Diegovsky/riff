@@ -2,11 +2,11 @@
 // catalog entities (`Track`, `Album`, `Playlist`, `Artist`, ...) are
 // re-exported from `riff_api::models` so the rest of the app can refer to them
 // as `crate::app::models::*`.
-pub use crate::play_queue::{PageRequest, SongsSource};
 pub use riff_api::models::{
     Album, AlbumType, Artist, ArtistRef, ContentRating, Device, DeviceKind, ImageSet, Page,
     PlayerState, Playlist, RepeatMode, ResourceId, SearchResults, Track, User,
 };
+pub use riff_core::play_queue::{PageRequest, SongsSource};
 
 // Only the `#[cfg(test)]` fixtures below name `Provider`; keep its import
 // test-scoped so non-test builds don't see an unused re-export.

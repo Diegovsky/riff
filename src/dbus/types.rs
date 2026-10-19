@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use std::convert::{Into, TryFrom};
 use std::time::Instant;
-use zvariant::Type;
-use zvariant::{Dict, Signature, Str, Value};
+use zbus::zvariant::Type;
+use zbus::zvariant::{Dict, Signature, Str, Value};
 
 fn boxed_value<'a, V: Into<Value<'a>>>(v: V) -> Value<'a> {
     Value::new(v.into())
@@ -15,9 +16,7 @@ pub enum LoopStatus {
 }
 
 impl Type for LoopStatus {
-    fn signature() -> Signature<'static> {
-        Str::signature()
-    }
+    const SIGNATURE: &'static Signature = Str::SIGNATURE;
 }
 
 impl From<Value<'_>> for LoopStatus {
@@ -50,9 +49,7 @@ pub enum PlaybackStatus {
 }
 
 impl Type for PlaybackStatus {
-    fn signature() -> Signature<'static> {
-        Str::signature()
-    }
+    const SIGNATURE: &'static Signature = Str::SIGNATURE;
 }
 
 impl From<PlaybackStatus> for Value<'_> {
@@ -115,14 +112,12 @@ pub struct TrackMetadata {
 }
 
 impl Type for TrackMetadata {
-    fn signature() -> Signature<'static> {
-        Signature::from_str_unchecked("a{sv}")
-    }
+    const SIGNATURE: &'static Signature = <HashMap<&str, Value<'_>>>::SIGNATURE;
 }
 
 impl From<TrackMetadata> for Value<'_> {
     fn from(meta: TrackMetadata) -> Self {
-        let mut d = Dict::new(Str::signature(), Value::signature());
+        let mut d = Dict::new(Str::SIGNATURE, Value::SIGNATURE);
         d.append("mpris:trackid".into(), boxed_value(meta.id))
             .unwrap();
         d.append("mpris:length".into(), boxed_value(meta.length))

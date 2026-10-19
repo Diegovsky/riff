@@ -14,9 +14,9 @@ use crate::app::models::{CardModel, PlaylistSummary};
 use crate::app::playlist_actions::unfollow_and_unpin_playlist;
 use crate::app::state::{load_context, start_actions, PlaybackAction, Route};
 use crate::app::{AppAction, AppModel, BrowserAction, Dispatcher, PaginationTarget, SongsSource};
-use crate::play_queue::CONTEXT_PAGE_SIZE;
 use crate::settings;
 use riff_config::feature_flags::{is_enabled, FeatureFlag};
+use riff_core::play_queue::CONTEXT_PAGE_SIZE;
 
 // Nothing for an empty context
 fn start_context(
