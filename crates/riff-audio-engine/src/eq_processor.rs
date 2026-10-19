@@ -1,7 +1,7 @@
 //! 10-band parametric equalizer using biquad peaking EQ filters.
 //!
 //! Filter coefficients are derived from the Audio EQ Cookbook:
-//! https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
+//! <https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html>
 //!
 //! This module provides [`EqProcessor`], a [`Processor`] that applies per-sample
 //! EQ to an [`AudioBuffer`]. Configuration can be changed live while audio is

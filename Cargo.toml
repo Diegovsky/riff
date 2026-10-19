@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/riff-auth", "crates/riff-api", "crates/riff-config", "crates/riff-core", "generated/spotify-api"]
+members = ["crates/riff-auth", "crates/riff-api", "crates/riff-audio-engine", "crates/riff-config", "crates/riff-core", "generated/spotify-api"]
 resolver = "2"
 
 [package]
@@ -10,22 +10,20 @@ license = "MIT"
 
 [dependencies]
 riff-api = { path = "crates/riff-api" }
+riff-audio-engine = { path = "crates/riff-audio-engine" }
 riff-auth = { path = "crates/riff-auth" }
 riff-config = { path = "crates/riff-config" }
 riff-core = { path = "crates/riff-core" }
-serde_json = "1.0.96"
-serde = { version = "1.0", features = ["derive"] }
 gio = "0.22"
 glib = "0.22.9"
 futures = "0.3.18"
 libc = "0.2"
 ref_filter_map = "1.0.1"
-zbus = "4.4.0"
-zvariant = "4.2.0"
+zbus = { version = "5.12", default-features = false, features = ["tokio"] }
 int-enum = "1.2.0"
 lazy_static = "1.4.0"
 log = "0.4.17"
-env_logger = "0.10.0"
+env_logger = "0.11"
 percent-encoding = "2.2.0"
 url = "2.4.1"
 open = "5.3.0"
@@ -46,15 +44,13 @@ package = "gdk4"
 
 [dependencies.librespot]
 version = "0.8.0"
-features = ["alsa-backend", "pulseaudio-backend"]
+
+default-features = false
+features = ["alsa-backend", "pulseaudio-backend", "native-tls", "with-libmdns"]
 
 [dependencies.tokio]
 version = "1"
 features = ["rt", "fs", "macros", "sync"]
-
-[dependencies.rand]
-version = "0.8.5"
-features = ["small_rng"]
 
 [dependencies.gettext-rs]
 version = "=0.7.0"

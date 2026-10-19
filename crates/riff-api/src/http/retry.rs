@@ -1,8 +1,6 @@
 use std::time::Duration;
 
-use isahc::error::ErrorKind;
-use isahc::http::StatusCode;
-use isahc::{AsyncReadResponseExt, HttpClient, Request};
+use http::{Request, StatusCode};
 use thiserror::Error;
 
 #[derive(Clone)]
@@ -35,7 +33,7 @@ impl HttpError {
 }
 
 pub struct ServiceClient {
-    inner: HttpClient,
+    inner: reqwest::Client,
     retry: RetryPolicy,
     timeout: Duration,
 }
@@ -47,7 +45,7 @@ enum Step {
 }
 
 impl ServiceClient {
-    pub fn new(inner: HttpClient, retry: RetryPolicy, timeout: Duration) -> Self {
+    pub fn new(inner: reqwest::Client, retry: RetryPolicy, timeout: Duration) -> Self {
         Self {
             inner,
             retry,
@@ -157,9 +155,9 @@ impl ServiceClient {
         Err(HttpError::RetriesExhausted { last_error })
     }
 
-    async fn send_once(&self, request: Request<Vec<u8>>) -> Result<HttpResponse, isahc::Error> {
+    async fn send_once(&self, request: Request<Vec<u8>>) -> Result<HttpResponse, reqwest::Error> {
         let uri = request.uri().to_string();
-        let mut resp = self.inner.send_async(request).await?;
+        let resp = self.inner.execute(request.try_into()?).await?;
         let status = resp.status();
         let headers = resp
             .headers()
@@ -182,10 +180,10 @@ impl ServiceClient {
              content-length {content_length:?}"
         );
         let body = match resp.bytes().await {
-            Ok(body) => body,
+            Ok(body) => body.to_vec(),
             Err(e) => {
                 warn!("http: {uri} body read failed after status {status}: {e}");
-                return Err(e.into());
+                return Err(e);
             }
         };
         // Detect truncated downloads (body shorter than Content-Length).
@@ -255,9 +253,8 @@ fn unix_now_secs() -> i64 {
         .unwrap_or(0)
 }
 
-fn is_transient(e: &isahc::Error) -> bool {
-    // ProtocolViolation (malformed HTTP response) is transient
-    e.is_network() || e.is_timeout() || e.kind() == ErrorKind::ProtocolViolation
+fn is_transient(e: &reqwest::Error) -> bool {
+    e.is_connect() || e.is_timeout() || e.is_request() || e.is_body() || e.is_decode()
 }
 
 #[cfg(test)]
@@ -309,28 +306,27 @@ mod tests {
         assert!(!HttpError::is_retryable(StatusCode::NOT_FOUND));
     }
 
-    #[test]
-    fn protocol_violation_is_transient() {
-        let err = isahc::Error::from(ErrorKind::ProtocolViolation);
-        assert!(!err.is_network());
-        assert!(!err.is_timeout());
+    fn get(url: &str) -> Request<Vec<u8>> {
+        Request::builder().uri(url).body(Vec::new()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn connection_refused_is_transient() {
+        // Bind then drop a listener, so the port is known to be closed.
+        let addr = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap();
+        let err = reqwest::Client::new()
+            .execute(get(&format!("http://{addr}/")).try_into().unwrap())
+            .await
+            .unwrap_err();
         assert!(is_transient(&err));
     }
 
     #[test]
-    fn network_and_timeout_errors_are_transient() {
-        assert!(is_transient(&isahc::Error::from(
-            ErrorKind::ConnectionFailed
-        )));
-        assert!(is_transient(&isahc::Error::from(ErrorKind::Io)));
-        assert!(is_transient(&isahc::Error::from(ErrorKind::NameResolution)));
-        assert!(is_transient(&isahc::Error::from(ErrorKind::Timeout)));
-    }
-
-    #[test]
-    fn non_transient_errors_are_not_retried() {
-        assert!(!is_transient(&isahc::Error::from(
-            ErrorKind::InvalidRequest
-        )));
+    fn invalid_request_is_not_transient() {
+        let err = reqwest::Request::try_from(get("/relative")).unwrap_err();
+        assert!(!is_transient(&err));
     }
 }

@@ -41,7 +41,7 @@ async fn dbus_server(
                 .await
             {
                 let mut player = player_ref.get_mut().await;
-                let ctxt = player_ref.signal_context();
+                let ctxt = player_ref.signal_emitter();
                 let res: zbus::Result<()> = match update {
                     MprisStateUpdate::SetVolume(volume) => {
                         player.state_mut().set_volume(volume);

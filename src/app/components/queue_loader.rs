@@ -9,7 +9,7 @@ use crate::app::components::{dispatch_api_read, EventListener};
 use crate::app::models::{PageRequest, SongsSource};
 use crate::app::state::{PlaybackAction, PlaybackEvent};
 use crate::app::{AppAction, AppEvent, AppModel, Dispatcher};
-use crate::play_queue::CONTEXT_PAGE_SIZE;
+use riff_core::play_queue::CONTEXT_PAGE_SIZE;
 
 // An unanswered request is retried after this
 const RETRY_AFTER: Duration = Duration::from_secs(10);

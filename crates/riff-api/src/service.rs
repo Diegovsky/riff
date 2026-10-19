@@ -1268,7 +1268,7 @@ impl ApiService {
             return Some(texture);
         }
 
-        let request = match isahc::http::Request::builder()
+        let request = match ::http::Request::builder()
             .method("GET")
             .uri(url)
             .body(Vec::new())

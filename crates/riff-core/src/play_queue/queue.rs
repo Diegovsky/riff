@@ -725,7 +725,31 @@ impl PlayQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::models::make_track;
+    use riff_api::models::{ContentRating, ImageSet, ResourceId};
+
+    fn make_track(id: &str) -> Track {
+        Track {
+            rri: ResourceId {
+                provider: Default::default(),
+                id: id.to_string(),
+                uri: None,
+            },
+            title: "Title".to_string(),
+            artists: vec![],
+            album: None,
+            duration_ms: 1000,
+            track_number: None,
+            disc_number: None,
+            content_rating: ContentRating::None,
+            isrc: None,
+            art: ImageSet::default(),
+            playable: true,
+            popularity: None,
+            saved: None,
+            preview_url: None,
+            url: None,
+        }
+    }
 
     fn queue() -> PlayQueue {
         PlayQueue::with_rng(SmallRng::seed_from_u64(0))

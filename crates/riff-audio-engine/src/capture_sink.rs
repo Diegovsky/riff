@@ -5,9 +5,9 @@
 //! backend, wraps it in an [`AudioBuffer`], runs it through a [`ProcessorChain`],
 //! and forwards the processed audio to the real backend sink.
 
-use librespot::playback::audio_backend::{Sink, SinkResult};
-use librespot::playback::convert::Converter;
-use librespot::playback::decoder::AudioPacket;
+use librespot_playback::audio_backend::{Sink, SinkResult};
+use librespot_playback::convert::Converter;
+use librespot_playback::decoder::AudioPacket;
 
 use super::{AudioBuffer, ProcessorChain};
 
@@ -64,9 +64,7 @@ impl Sink for CaptureSink {
 mod tests {
     use super::super::eq_processor::NUM_BANDS;
     use super::*;
-    use crate::audio_engine::{
-        EqController, EqProcessor, MonoController, MonoProcessor, Processor,
-    };
+    use crate::{EqController, EqProcessor, MonoController, MonoProcessor, Processor};
     use std::sync::{Arc, Mutex};
 
     /// A backend sink stand-in that records everything written to it.

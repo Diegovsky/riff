@@ -10,7 +10,7 @@ use crate::app::models::Device as ConnectDevice;
 
 use crate::app::components::labels;
 use crate::app::state::{AppAction, AppEvent, UpdatableState};
-use crate::play_queue::{EntryKey, PlayQueue, CONTEXT_PAGE_SIZE};
+use riff_core::play_queue::{EntryKey, PlayQueue, CONTEXT_PAGE_SIZE};
 
 // Volume restored by `ToggleMute` when there is no pre-mute volume to go back to
 const UNMUTE_FALLBACK_VOLUME: f64 = 0.5;

@@ -17,12 +17,10 @@ use gtk::prelude::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 mod app;
-mod audio_engine;
 mod config;
 mod connect;
 mod dbus;
 mod inhibitor;
-mod play_queue;
 mod player;
 mod settings;
 

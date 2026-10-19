@@ -6,9 +6,11 @@ license = "MIT"
 description = "Riff's Authentication crate."
 
 [dependencies]
-oauth2 = "4.4"
+
+oauth2 = { version = "5.0", default-features = false, features = ["reqwest"] }
+reqwest = "0.12"
 url = "2.4.1"
-thiserror = "1.0.40"
+thiserror = "2.0.20"
 log = "0.4.17"
 serde_json = "1.0.96"
 anyhow = "1.0.102"

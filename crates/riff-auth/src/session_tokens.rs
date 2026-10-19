@@ -1,14 +1,13 @@
 use std::sync::{Arc, Mutex};
 
-use oauth2::basic::BasicClient;
 use tokio::task::JoinHandle;
 
 use crate::credentials::Credentials;
-use crate::oauth2::{RiffOauthClient, SESSION_CLIENT_ID};
+use crate::oauth2::{OauthClient, RiffOauthClient, SESSION_CLIENT_ID};
 use crate::token_store::TokenStore;
 
 struct InnerSessionTokens {
-    client: BasicClient,
+    client: OauthClient,
     store: TokenStore,
     refresh_task: Mutex<Option<JoinHandle<()>>>,
 }
@@ -31,7 +30,7 @@ impl SessionTokens {
         }))
     }
 
-    pub(crate) fn client(&self) -> &BasicClient {
+    pub(crate) fn client(&self) -> &OauthClient {
         &self.0.client
     }
 

@@ -44,6 +44,8 @@ See [`Design.md`](Design.md) for the full data flow explanation.
 | `crates/riff-api/src/providers/` | Provider-neutral music service trait and per-vendor implementations. |
 | `crates/riff-api/src/providers/spotify/` | Spotify provider: domain types and Spotify-to-provider-neutral conversion. |
 | `crates/riff-api/src/http/` | Shared HTTP connection pool and retry logic. |
+| `crates/riff-core/` | App logic between the UI and the API layer, free of UI dependencies: navigation history and the play queue. |
+| `crates/riff-audio-engine/` | Audio engine: DSP chain between librespot and the audio backend (EQ, pitch, pan, mono, mix). |
 | `crates/riff-api/src/cache/` | Caching layer: disk TTL cache, texture LRU, domain object LRU. |
 | `src/` | Rust source code and bundled UI assets. |
 | `src/app/` | Core application logic and state. |
@@ -51,7 +53,6 @@ See [`Design.md`](Design.md) for the full data flow explanation.
 | `src/app/models/` | Presentation models binding state to UI. |
 | `src/app/components/` | GTK widget wrappers and event listeners. |
 | `src/app/dev_tools/` | Dev menu (debug builds only). |
-| `src/audio_engine/` | DSP chain between librespot and the audio backend (EQ, pitch, pan, mono, mix). |
 | `src/connect/` | Spotify Connect device support. |
 | `src/player/` | librespot session and local playback management. |
 | `src/dbus/` | MPRIS / D-Bus integration. |

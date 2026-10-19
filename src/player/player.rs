@@ -19,11 +19,11 @@ use librespot::playback::config::{
 use librespot::playback::player::{Player, PlayerEvent, PlayerEventChannel};
 
 use crate::app::models::RepeatMode;
-use crate::audio_engine::{
+use crate::player::AppPlayerDelegate;
+use riff_audio_engine::{
     CaptureSink, EqController, EqProcessor, MixController, MixProcessor, MonoController,
     MonoProcessor, PanController, PanProcessor, PitchController, PitchProcessor, ProcessorChain,
 };
-use crate::player::AppPlayerDelegate;
 
 use riff_auth::{
     AuthcodeChallenge, OAuthError, RiffOauthClient, SessionTokens, TokenStore, SESSION_CLIENT_ID,

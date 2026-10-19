@@ -23,12 +23,13 @@ pub const STALE_IF_ERROR_TTL: Duration = Duration::from_secs(60);
 
 // Requests
 //
-// Transport-level limits. Two clients: an isahc pool for the image CDN and a
-// reqwest client for the JSON API. Configured separately, but neither is
-// allowed to go untimed.
+// Transport-level limits. Two reqwest clients: a pool for the image CDN and
+// one for the JSON API. Configured separately, but neither is allowed to go
+// untimed.
 
-/// Max simultaneous connections the shared HTTP pool opens to a single host.
-/// Every concurrency cap under "Scheduling" is sized against this.
+/// Max idle connections the shared HTTP pool keeps open to a single host.
+/// The pool does not cap open connections, so every concurrency cap under
+/// "Scheduling" is sized against this instead.
 pub const CDN_MAX_CONNECTIONS_PER_HOST: usize = 32;
 
 /// Long enough to reuse across a burst of image loads.
