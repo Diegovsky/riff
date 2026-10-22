@@ -108,54 +108,34 @@ lazy_static! {
 }
 
 pub fn added_to_playlist_label(playlist: &str) -> String {
-    // this is just to fool xgettext, it doesn't like macros (or rust for that matter) :(
-    if cfg!(debug_assertions) {
-        // translators: This notification is shown when a track was added to a playlist; {} is the name of the playlist.
-        gettext("Added to {}");
-    }
-    gettext!("Added to {}", playlist)
+    // translators: This notification is shown when a track was added to a playlist; {} is the name of the playlist.
+    fill(gettext("Added to {}"), &[playlist])
 }
 
 pub fn already_in_playlist_label(playlist: &str) -> String {
-    // this is just to fool xgettext, it doesn't like macros (or rust for that matter) :(
-    if cfg!(debug_assertions) {
-        // translators: This notification is shown when nothing was added to a playlist, as it already lists the tracks; {} is the name of the playlist.
-        gettext("Already in {}");
-    }
-    gettext!("Already in {}", playlist)
+    // translators: This notification is shown when nothing was added to a playlist, as it already lists the tracks; {} is the name of the playlist.
+    fill(gettext("Already in {}"), &[playlist])
 }
 
 pub fn added_to_playlist_skipping_label(playlist: &str, skipped: usize) -> String {
-    // this is just to fool xgettext, it doesn't like macros (or rust for that matter) :(
-    if cfg!(debug_assertions) {
+    let text = ngettext(
         // translators: This notification is shown when tracks were added to a playlist, except those it already lists; the first {} is the name of the playlist, the second {} is how many tracks were left out.
-        ngettext(
-            "Added to {}, skipping {} track already in it",
-            "Added to {}, skipping {} tracks already in it",
-            1,
-        );
-    }
-    ngettext!(
         "Added to {}, skipping {} track already in it",
         "Added to {}, skipping {} tracks already in it",
         skipped as u32,
-        playlist,
-        skipped
-    )
+    );
+    fill(text, &[playlist, &skipped.to_string()])
 }
 
 pub fn n_tracks_selected_label(n: usize) -> String {
-    // this is just to fool xgettext, it doesn't like macros (or rust for that matter) :(
-    if cfg!(debug_assertions) {
-        // translators: This shows up when in selection mode. This text should be as short as possible.
-        ngettext("{} track selected", "{} tracks selected", n as u32);
-    }
-    ngettext!("{} track selected", "{} tracks selected", n as u32, n)
+    // translators: This shows up when in selection mode. This text should be as short as possible.
+    let text = ngettext("{} track selected", "{} tracks selected", n as u32);
+    fill(text, &[&n.to_string()])
 }
 
-// Fills the `{}` of a translated text. Unlike `gettext!`, xgettext finds the
-// literal passed to `gettext`.
-fn fill(text: String, args: &[&str]) -> String {
+// Fills the `{}` of a translated text in order. xgettext only finds the
+// literal passed straight to `gettext`, so format with this instead of a macro.
+pub fn fill(text: String, args: &[&str]) -> String {
     let mut parts = text.split("{}");
     let mut filled = parts.next().unwrap_or_default().to_string();
     for (i, part) in parts.enumerate() {
@@ -205,21 +185,13 @@ pub fn shuffle_separation_label(n: u32) -> String {
 }
 
 pub fn more_from_label(artist: &str) -> String {
-    // this is just to fool xgettext, it doesn't like macros (or rust for that matter) :(
-    if cfg!(debug_assertions) {
-        // translators: This is part of a contextual menu attached to a single track; the full text is "More from <artist>".
-        gettext("More from {}");
-    }
-    gettext!("More from {}", artist)
+    // translators: This is part of a contextual menu attached to a single track; the full text is "More from <artist>".
+    fill(gettext("More from {}"), &[artist])
 }
 
 pub fn album_by_artist_label(album: &str, artist: &str) -> String {
-    // this is just to fool xgettext, it doesn't like macros (or rust for that matter) :(
-    if cfg!(debug_assertions) {
-        // translators: This is part of a larger label that reads "<Album> by <Artist>"
-        gettext("{} by {}");
-    }
-    gettext!("{} by {}", album, artist)
+    // translators: This is part of a larger label that reads "<Album> by <Artist>"
+    fill(gettext("{} by {}"), &[album, artist])
 }
 
 pub fn route_label(route: &Route) -> String {

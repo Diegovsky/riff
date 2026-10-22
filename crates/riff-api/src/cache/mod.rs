@@ -1,5 +1,6 @@
 //! Caching layer: disk TTL, texture LRU, domain object LRU.
 
+use gdk::prelude::*;
 use gdk_pixbuf::prelude::PixbufLoaderExt;
 use serde::{Deserialize, Serialize};
 
@@ -56,5 +57,17 @@ pub fn decode_texture(data: &[u8], width: i32, height: i32) -> Option<gdk::Textu
     loader.write(data).ok()?;
     loader.close().ok()?;
     let pixbuf = loader.pixbuf()?;
-    Some(gdk::Texture::for_pixbuf(&pixbuf))
+    let format = if pixbuf.has_alpha() {
+        gdk::MemoryFormat::R8g8b8a8
+    } else {
+        gdk::MemoryFormat::R8g8b8
+    };
+    let texture = gdk::MemoryTexture::new(
+        pixbuf.width(),
+        pixbuf.height(),
+        format,
+        &pixbuf.read_pixel_bytes(),
+        pixbuf.rowstride() as usize,
+    );
+    Some(texture.upcast())
 }

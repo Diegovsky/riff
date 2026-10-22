@@ -138,7 +138,8 @@ impl PageModel for PlaylistDetailsModel {
 
     fn get_subtitle_detail(&self) -> Option<String> {
         let count = self.get_playlist_info()?.total_tracks?;
-        Some(gettextrs::ngettext!("{} Track", "{} Tracks", count, count))
+        let text = gettextrs::ngettext("{} Track", "{} Tracks", count);
+        Some(labels::fill(text, &[&count.to_string()]))
     }
 
     fn get_artwork(&self) -> Option<ImageSet> {
