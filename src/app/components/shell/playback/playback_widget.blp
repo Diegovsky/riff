@@ -62,6 +62,7 @@ template $PlaybackWidget : Box {
         now_playing_button_box.visible: true;
         volume_box.visible: false;
         volume_button.visible: true;
+        queue_button.visible: false;
         playback_center.margin-start: 16;
         playback_center.margin-end: 16;
         // Narrow: drop equal thirds. The transport controls need more than a
@@ -149,28 +150,26 @@ template $PlaybackWidget : Box {
         halign: end;
         valign: center;
 
-        // Together, the queue button and the slider are as wide as the slider alone
+        ToggleButton queue_button {
+          width-request: 40;
+          margin-end: 6;
+          icon-name: "queue-symbolic";
+          /* Translators: Tooltip of the playback bar button that shows or hides the queue. */
+          tooltip-text: _("Queue");
+          action-name: "win.utility-panel";
+          halign: end;
+          valign: center;
+          focus-on-click: false;
+          can-focus: false;
+
+          styles [
+            "flat"
+          ]
+        }
+
+        // With the queue button, 250 wide
         Box volume_box {
-          width-request: 250;
-
-
-          ToggleButton queue_button {
-            visible: false;
-            width-request: 40;
-            margin-end: 6;
-            icon-name: "queue-symbolic";
-            /* Translators: Tooltip of the header bar button that shows or hides the utility panel with the queue. */
-            tooltip-text: _("Queue");
-            action-name: "win.utility-panel";
-            halign: end;
-            valign: center;
-            focus-on-click: false;
-            can-focus: false;
-
-            styles [
-              "flat"
-            ]
-          }
+          width-request: 204;
 
           Box {
             hexpand: true;

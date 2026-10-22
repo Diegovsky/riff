@@ -5,6 +5,9 @@ pub const NARROW_WIDTH_SP: f64 = 764.0;
 /// Under this window width, the side panels fill the window when open.
 pub const MOBILE_WIDTH_SP: f64 = 550.0;
 
+/// At this width or less, the header collapses its buttons.
+pub const HEADER_COMPACT_WIDTH_PX: f64 = 400.0;
+
 /// The least the content panel keeps beside the side panels.
 pub const CONTENT_PANEL_MIN_WIDTH_SP: f64 = 350.0;
 
@@ -14,8 +17,8 @@ pub const PANEL_COLLAPSE_SLACK: i32 = 90;
 pub const BOTTOM_SHEET_MAX_WIDTH: i32 = 1280;
 
 pub const NAVIGATION_PANEL: PanelSize = PanelSize {
-    min_width: 212,
-    max_width: 400,
+    min_width: 120,
+    max_width: 300,
     max_fraction: 1.0 / 3.0,
     default_width: 280,
 };

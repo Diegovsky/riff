@@ -56,7 +56,7 @@ impl Panels {
     fn sync_header(&self) {
         let side = self.placement.get() == Some(Placement::Side);
         self.app_header
-            .set_utility_panel_state(side && self.is_open(), side);
+            .set_utility_panel_beside(side && self.is_open());
     }
 
     fn place(&self, placement: Placement) {

@@ -29,14 +29,6 @@ template $UtilityPanelWidget : Adw.Bin {
 
         // Set with the content (see UtilityPanel::set_content)
         title-widget: Adw.WindowTitle title {};
-
-        [start]
-        ToggleButton utility_panel_button {
-          icon-name: "queue-symbolic";
-          action-name: "win.utility-panel";
-          focus-on-click: false;
-          can-focus: false;
-        }
       }
 
       Adw.HeaderBar selection_header {
