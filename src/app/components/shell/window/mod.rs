@@ -1,3 +1,4 @@
+mod close_dialog;
 mod shell_box;
 pub use shell_box::expose_widgets;
 
@@ -56,7 +57,7 @@ impl MainWindow {
                     }
                     CloseWindowBehavior::StopAndQuit => glib::Propagation::Proceed,
                     CloseWindowBehavior::Ask => {
-                        Self::show_close_dialog(window);
+                        close_dialog::show(window);
                         glib::Propagation::Stop
                     }
                 }
@@ -77,62 +78,6 @@ impl MainWindow {
             window,
             logged_in: Cell::new(false),
         }
-    }
-
-    fn show_close_dialog(window: &libadwaita::ApplicationWindow) {
-        let dialog = libadwaita::AlertDialog::new(
-            Some(&gettext("Riff is still playing")),
-            Some(&gettext(
-                "What should Riff do if you close it while audio is playing?",
-            )),
-        );
-
-        dialog.add_response("background", &gettext("Continue in Background"));
-        dialog.add_response("quit", &gettext("Stop Audio and Quit"));
-
-        dialog.set_response_appearance("quit", libadwaita::ResponseAppearance::Destructive);
-        dialog.set_default_response(Some("background"));
-        dialog.set_close_response("background");
-        dialog.set_prefer_wide_layout(true);
-
-        let remember_check = gtk::CheckButton::with_label(&gettext("Remember my choice"));
-        remember_check.set_halign(gtk::Align::Center);
-        dialog.set_extra_child(Some(&remember_check));
-
-        dialog.choose(
-            Some(window),
-            None::<&gio::Cancellable>,
-            clone!(
-                #[weak]
-                window,
-                move |response| {
-                    let settings = gio::Settings::new(SETTINGS);
-                    match response.as_str() {
-                        "quit" => {
-                            if remember_check.is_active() {
-                                let _ = settings.set_enum(
-                                    "close-window-behavior",
-                                    CloseWindowBehavior::StopAndQuit as i32,
-                                );
-                            }
-                            if let Some(app) = window.application() {
-                                app.quit();
-                            }
-                        }
-                        _ => {
-                            // "background" or dialog dismissed
-                            if remember_check.is_active() {
-                                let _ = settings.set_enum(
-                                    "close-window-behavior",
-                                    CloseWindowBehavior::MinimizeToBackground as i32,
-                                );
-                            }
-                            window.set_visible(false);
-                        }
-                    }
-                }
-            ),
-        );
     }
 
     fn show_drm_blocked_dialog(&self) {

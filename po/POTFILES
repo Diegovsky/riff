@@ -27,6 +27,7 @@ src/app/components/shell/navigation_panel/model.rs
 src/app/components/shell/navigation_panel/navigation_panel_item.rs
 src/app/components/shell/navigation_panel/navigation_panel.rs
 src/app/components/shell/user_menu/user_menu.rs
+src/app/components/shell/window/close_dialog.rs
 src/app/components/shell/window/mod.rs
 src/app/components/widgets/card_list/component.rs
 src/app/components/widgets/details_page/component.rs

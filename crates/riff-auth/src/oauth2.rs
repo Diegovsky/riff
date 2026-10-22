@@ -478,7 +478,7 @@ async fn accept_authcodes(
             continue;
         }
         let Some(code) = code else {
-            let _ = respond(&mut stream, "200 OK", "", REFUSED_MESSAGE).await;
+            let _ = respond(&mut stream, "200 OK", HTML, &refused_page()).await;
             return Err(OAuthError::AuthCodeNotFound);
         };
 
@@ -489,7 +489,7 @@ async fn accept_authcodes(
                 respond(&mut stream, "302 Found", &location, "").await?;
             }
             Some(first_code) => {
-                let _ = respond(&mut stream, "200 OK", "", include_str!("./login.html")).await;
+                let _ = respond(&mut stream, "200 OK", HTML, &success_page()).await;
                 return Ok(AuthCodes {
                     code: first_code,
                     session_code: code,
@@ -499,7 +499,25 @@ async fn accept_authcodes(
     }
 }
 
+const HTML: &str = "content-type: text/html; charset=utf-8\r\n";
 const REFUSED_MESSAGE: &str = "Login cancelled. You can close this tab.";
+
+fn page(title: &str, message: &str) -> String {
+    include_str!("./page.html")
+        .replace("{{title}}", title)
+        .replace("{{message}}", message)
+}
+
+fn success_page() -> String {
+    page(
+        "Riff Connected",
+        "Logged in successfully! You may close this window.",
+    )
+}
+
+fn refused_page() -> String {
+    page("Login Cancelled", REFUSED_MESSAGE)
+}
 
 async fn turn_away(stream: &mut tokio::net::TcpStream) {
     let _ = respond(stream, "404 Not Found", "", "").await;
@@ -687,7 +705,8 @@ mod test {
         let (addr, codes) = listen().await;
         let refused = get(addr, "/login?error=access_denied&state=first").await;
         assert!(refused.starts_with("HTTP/1.1 200"));
-        assert!(refused.ends_with(REFUSED_MESSAGE));
+        assert!(refused.contains("content-type: text/html"));
+        assert!(refused.contains(REFUSED_MESSAGE));
         assert!(matches!(
             codes.await.unwrap(),
             Err(OAuthError::AuthCodeNotFound)
