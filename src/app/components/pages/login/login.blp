@@ -125,8 +125,10 @@ template $LoginWindow : Adw.Window {
                 }
 
                 Label {
-                  /* Translators: This error is shown when login fails due to a network or API error. */
-                  label: _("Login failed. Please check your connection and try again.");
+                  /* Translators: This error is shown when login fails. Browser extensions such as ad or privacy blockers can break the login page. */
+                  label: _("Login failed. Please check your connection and browser extensions before trying again.");
+                  wrap: true;
+                  wrap-mode: word_char;
                   styles ["caption", "error"]
                 }
               };

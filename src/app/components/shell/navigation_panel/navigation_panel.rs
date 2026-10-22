@@ -61,9 +61,15 @@ impl NavigationPanel {
         listbox.connect_row_activated(clone!(
             #[weak]
             model,
-            move |_, row| {
+            move |listbox, row| {
                 if let Some(row) = row.downcast_ref::<NavigationPanelRow>() {
                     if let Some(dest) = row.item().destination() {
+                        let split = listbox
+                            .ancestor(libadwaita::OverlaySplitView::static_type())
+                            .and_downcast::<libadwaita::OverlaySplitView>();
+                        if let Some(split) = split.filter(|s| s.is_collapsed()) {
+                            split.set_show_sidebar(false);
+                        }
                         model.navigate(dest);
                     }
                 }
