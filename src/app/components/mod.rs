@@ -46,6 +46,7 @@ pub use clipboard_link::{copy_link_to_clipboard, is_app_copied_link};
 pub fn expose_custom_widgets() {
     shell::playback::expose_widgets();
     widgets::selection::expose_widgets();
+    widgets::drawer::expose_widgets();
     shell::headerbar::expose_widgets();
     shell::device_selector::expose_widgets();
     widgets::details_page::expose_widgets();

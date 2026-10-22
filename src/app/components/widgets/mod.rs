@@ -13,6 +13,9 @@ pub use playlist_dialog::*;
 pub mod details_page;
 pub use details_page::*;
 
+pub mod drawer;
+pub use drawer::Drawer;
+
 pub mod playlist_picker;
 pub use playlist_picker::*;
 

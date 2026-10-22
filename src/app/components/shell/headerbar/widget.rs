@@ -6,22 +6,32 @@ use libadwaita::prelude::BinExt;
 use libadwaita::subclass::prelude::BinImpl;
 
 use super::HistoryMenuRow;
-use crate::app::components::labels;
+use crate::app::components::shell::layout::HEADER_COMPACT_WIDTH_PX;
+use crate::app::components::{labels, Drawer};
 
 mod imp {
 
     use super::*;
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::collections::HashMap;
 
     #[derive(Debug, Default, CompositeTemplate)]
     #[template(resource = "/dev/diegovsky/Riff/components/headerbar.ui")]
     pub struct AppHeaderBar {
         #[template_child]
+        pub breakpoint_bin: TemplateChild<libadwaita::BreakpointBin>,
+
+        #[template_child]
+        pub compact_breakpoint: TemplateChild<libadwaita::Breakpoint>,
+
+        #[template_child]
         pub main_header: TemplateChild<libadwaita::HeaderBar>,
 
         #[template_child]
-        pub utility_panel_button: TemplateChild<gtk::ToggleButton>,
+        pub start_drawer: TemplateChild<Drawer>,
+
+        #[template_child]
+        pub drawer_buttons: TemplateChild<gtk::Box>,
 
         #[template_child]
         pub navigation_panel_toggle: TemplateChild<gtk::ToggleButton>,
@@ -66,11 +76,23 @@ mod imp {
         pub custom_title: TemplateChild<libadwaita::Bin>,
 
         #[template_child]
-        pub end_box: TemplateChild<gtk::Box>,
+        pub page_buttons: TemplateChild<gtk::Box>,
 
         pub pages: RefCell<HashMap<String, PageState>>,
 
+        pub page_handlers: RefCell<Vec<(gtk::Widget, glib::SignalHandlerId)>>,
+
+        pub leaving: RefCell<Vec<(gtk::Widget, glib::SourceId)>>,
+
+        pub title_leaving: RefCell<Option<glib::SourceId>>,
+
         pub active: RefCell<Option<String>>,
+
+        pub narrow: Cell<bool>,
+        pub compact_allowed: Cell<bool>,
+        pub compact: Cell<bool>,
+        pub started: Cell<bool>,
+        pub wide_width: Cell<i32>,
 
         #[template_child]
         pub selection_header: TemplateChild<libadwaita::HeaderBar>,
@@ -103,8 +125,50 @@ mod imp {
     impl ObjectImpl for AppHeaderBar {
         fn constructed(&self) {
             self.parent_constructed();
+            self.obj().set_layout_manager(None::<gtk::LayoutManager>);
+            self.compact_allowed.set(true);
             self.back_history.set_parent(&*self.go_back);
             self.forward_history.set_parent(&*self.go_forward);
+
+            self.compact_breakpoint.set_condition(Some(
+                &libadwaita::BreakpointCondition::new_length(
+                    libadwaita::BreakpointConditionLengthType::MaxWidth,
+                    HEADER_COMPACT_WIDTH_PX,
+                    libadwaita::LengthUnit::Px,
+                ),
+            ));
+
+            let obj = self.obj();
+            self.compact_breakpoint.connect_apply(clone!(
+                #[weak]
+                obj,
+                move |_| obj.set_narrow(true)
+            ));
+            self.compact_breakpoint.connect_unapply(clone!(
+                #[weak]
+                obj,
+                move |_| obj.set_narrow(false)
+            ));
+            obj.connect_map(|header| {
+                if header.imp().started.get() {
+                    return;
+                }
+                glib::timeout_add_local_once(
+                    STARTUP_DELAY,
+                    clone!(
+                        #[weak]
+                        header,
+                        move || header.imp().started.set(true)
+                    ),
+                );
+            });
+            self.start_drawer.set_open_check(clone!(
+                #[weak]
+                obj,
+                #[upgrade_or]
+                false,
+                move |drawer| obj.min_width() + drawer.content_width() <= obj.width()
+            ));
         }
 
         fn dispose(&self) {
@@ -112,8 +176,44 @@ mod imp {
             self.forward_history.unparent();
         }
     }
-    impl WidgetImpl for AppHeaderBar {}
+    impl WidgetImpl for AppHeaderBar {
+        fn measure(&self, orientation: gtk::Orientation, for_size: i32) -> (i32, i32, i32, i32) {
+            let (min, natural, min_baseline, natural_baseline) =
+                self.breakpoint_bin.measure(orientation, for_size);
+            match orientation {
+                gtk::Orientation::Horizontal => (min, natural, min_baseline, natural_baseline),
+                _ => (natural, natural, natural_baseline, natural_baseline),
+            }
+        }
+
+        fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
+            let obj = self.obj();
+            if self.compact.get() && self.start_drawer.is_showing() && obj.min_width() > width {
+                obj.collapse_now();
+            }
+            self.breakpoint_bin.allocate(width, height, baseline, None);
+        }
+    }
     impl BinImpl for AppHeaderBar {}
+}
+
+/// Until then, the header switches without animating
+const STARTUP_DELAY: std::time::Duration = std::time::Duration::from_secs(1);
+
+const ADDED_CLASS: &str = "header-button--added";
+const REMOVED_CLASS: &str = "header-button--removed";
+const ANIMATION_DURATION: std::time::Duration = std::time::Duration::from_millis(250);
+
+fn animate_in(widget: &gtk::Widget) {
+    widget.add_css_class(ADDED_CLASS);
+    glib::timeout_add_local_once(
+        ANIMATION_DURATION,
+        clone!(
+            #[weak]
+            widget,
+            move || widget.remove_css_class(ADDED_CLASS)
+        ),
+    );
 }
 
 #[derive(Debug)]
@@ -185,6 +285,7 @@ impl AppHeaderBar {
     }
 
     pub fn set_active(&self, name: &str) {
+        self.finish_title_leaving();
         self.imp().active.replace(Some(name.to_string()));
         self.render();
     }
@@ -215,25 +316,227 @@ impl AppHeaderBar {
                     .unwrap_or_default();
                 imp.window_title.set_title(title);
                 imp.window_title.set_subtitle(subtitle);
+                let leaving = imp.title_leaving.borrow().is_some();
                 imp.window_title
-                    .set_opacity(if revealed { 1.0 } else { 0.0 });
+                    .set_opacity(if revealed || leaving { 1.0 } else { 0.0 });
                 imp.title_stack.set_visible_child(&*imp.window_title);
             }
         }
 
-        while let Some(child) = imp.end_box.first_child() {
-            imp.end_box.remove(&child);
-        }
         let end = page.map(|page| page.end.as_slice()).unwrap_or_default();
-        for widget in end {
-            imp.end_box.append(widget);
+        let unchanged = imp
+            .page_handlers
+            .borrow()
+            .iter()
+            .map(|(widget, _)| widget)
+            .eq(end);
+        if unchanged {
+            self.sync_optional_buttons();
+            return;
         }
-        imp.end_box.set_visible(!end.is_empty());
+        self.finish_buttons_leaving();
+        for (widget, handler) in imp.page_handlers.take() {
+            widget.disconnect(handler);
+            imp.page_buttons.remove(&widget);
+        }
+        for widget in end {
+            imp.page_buttons.append(widget);
+            let handler = widget.connect_visible_notify(clone!(
+                #[weak(rename_to = header)]
+                self,
+                move |_| header.sync_optional_buttons()
+            ));
+            imp.page_handlers
+                .borrow_mut()
+                .push((widget.clone(), handler));
+        }
+        self.sync_optional_buttons();
+    }
+
+    pub fn wide_width(&self) -> i32 {
+        let imp = self.imp();
+        if !imp.compact.get() {
+            imp.wide_width.set(self.min_width());
+        }
+        imp.wide_width.get()
+    }
+
+    fn set_narrow(&self, narrow: bool) {
+        self.imp().narrow.set(narrow);
+        self.update_compact();
+    }
+
+    pub fn set_compact_allowed(&self, allowed: bool) {
+        self.imp().compact_allowed.set(allowed);
+        self.update_compact();
+    }
+
+    fn update_compact(&self) {
+        let imp = self.imp();
+        let compact = imp.narrow.get() && imp.compact_allowed.get();
+        if imp.compact.replace(compact) == compact {
+            return;
+        }
+        imp.main_header
+            .set_decoration_layout(compact.then_some(":close"));
+        self.place_page_buttons(compact);
+        self.sync_optional_buttons();
+
+        if !imp.started.get() || (compact && self.min_width() > self.width()) {
+            imp.start_drawer.snap_revealed(!compact);
+            return;
+        }
+
+        let frames = std::cell::Cell::new(0);
+        self.add_tick_callback(move |header, _| {
+            frames.set(frames.get() + 1);
+            if frames.get() < 2 {
+                return glib::ControlFlow::Continue;
+            }
+            let imp = header.imp();
+            imp.start_drawer.set_revealed(!imp.compact.get());
+            glib::ControlFlow::Break
+        });
+    }
+
+    fn place_page_buttons(&self, compact: bool) {
+        let imp = self.imp();
+        let buttons = imp.page_buttons.get();
+        if compact {
+            imp.main_header.remove(&buttons);
+            imp.drawer_buttons.append(&buttons);
+        } else {
+            imp.drawer_buttons.remove(&buttons);
+            imp.main_header.pack_end(&buttons);
+        }
+    }
+
+    fn collapse_now(&self) {
+        self.imp().start_drawer.snap_revealed(false);
+    }
+
+    fn min_width(&self) -> i32 {
+        self.imp()
+            .main_header
+            .measure(gtk::Orientation::Horizontal, -1)
+            .0
+    }
+
+    fn sync_optional_buttons(&self) {
+        let imp = self.imp();
+        let any = imp
+            .page_handlers
+            .borrow()
+            .iter()
+            .any(|(widget, _)| widget.get_visible())
+            || !imp.leaving.borrow().is_empty();
+        imp.page_buttons.set_visible(any);
+        imp.start_drawer.set_collapsible(imp.compact.get());
+    }
+
+    pub(super) fn animate_added(&self, widget: &gtk::Widget) {
+        let imp = self.imp();
+        if widget.parent().as_ref() != Some(imp.page_buttons.upcast_ref()) {
+            return;
+        }
+        if imp.start_drawer.is_collapsed() {
+            animate_in(imp.start_drawer.handle().upcast_ref());
+        } else {
+            animate_in(widget);
+        }
+    }
+
+    fn title_showing(&self, name: &str) -> bool {
+        let imp = self.imp();
+        imp.active.borrow().as_deref() == Some(name)
+            && imp.title_stack.visible_child().as_ref() == Some(imp.window_title.upcast_ref())
+    }
+
+    pub(super) fn animate_title_shown(&self, name: &str) {
+        self.finish_title_leaving();
+        if self.title_showing(name) {
+            animate_in(self.imp().window_title.upcast_ref());
+        }
+    }
+
+    pub(super) fn animate_title_hidden(&self, name: &str) {
+        let imp = self.imp();
+        if !self.title_showing(name) || imp.title_leaving.borrow().is_some() {
+            return;
+        }
+        imp.window_title.set_opacity(1.0);
+        imp.window_title.add_css_class(REMOVED_CLASS);
+        let source = glib::timeout_add_local_once(
+            ANIMATION_DURATION,
+            clone!(
+                #[weak(rename_to = header)]
+                self,
+                move || {
+                    let imp = header.imp();
+                    imp.title_leaving.take();
+                    imp.window_title.remove_css_class(REMOVED_CLASS);
+                    header.render();
+                }
+            ),
+        );
+        imp.title_leaving.replace(Some(source));
+    }
+
+    fn finish_title_leaving(&self) {
+        let imp = self.imp();
+        if let Some(source) = imp.title_leaving.take() {
+            source.remove();
+            imp.window_title.remove_css_class(REMOVED_CLASS);
+        }
     }
 
     pub(super) fn detach_end(&self, widget: &gtk::Widget) {
-        if widget.parent().as_ref() == Some(self.imp().end_box.upcast_ref()) {
-            self.imp().end_box.remove(widget);
+        let imp = self.imp();
+        let detached = {
+            let mut handlers = imp.page_handlers.borrow_mut();
+            let index = handlers.iter().position(|(w, _)| w == widget);
+            index.map(|index| handlers.remove(index))
+        };
+        if let Some((widget, handler)) = detached {
+            widget.disconnect(handler);
+            if !imp.start_drawer.is_collapsed() && widget.is_drawable() {
+                let picture = gtk::WidgetPaintable::new(Some(&widget)).current_image();
+                let picture = gtk::Picture::for_paintable(&picture);
+                picture.set_can_target(false);
+                imp.page_buttons
+                    .insert_child_after(&picture, widget.prev_sibling().as_ref());
+                self.animate_removed(picture.upcast());
+            }
+            imp.page_buttons.remove(&widget);
+        }
+        self.sync_optional_buttons();
+    }
+
+    fn animate_removed(&self, picture: gtk::Widget) {
+        picture.add_css_class(REMOVED_CLASS);
+        let source = glib::timeout_add_local_once(
+            ANIMATION_DURATION,
+            clone!(
+                #[weak(rename_to = header)]
+                self,
+                #[strong]
+                picture,
+                move || {
+                    let imp = header.imp();
+                    imp.leaving.borrow_mut().retain(|(w, _)| w != &picture);
+                    imp.page_buttons.remove(&picture);
+                    header.sync_optional_buttons();
+                }
+            ),
+        );
+        self.imp().leaving.borrow_mut().push((picture, source));
+    }
+
+    fn finish_buttons_leaving(&self) {
+        let imp = self.imp();
+        for (picture, source) in imp.leaving.take() {
+            source.remove();
+            imp.page_buttons.remove(&picture);
         }
     }
 
@@ -319,13 +622,10 @@ impl AppHeaderBar {
 
     // --- Fixed control state ---
 
-    pub fn set_utility_panel_state(&self, open_beside: bool, side_panel: bool) {
+    pub fn set_utility_panel_beside(&self, open_beside: bool) {
         self.imp()
             .main_header
             .set_show_end_title_buttons(!open_beside);
-        self.imp()
-            .utility_panel_button
-            .set_visible(side_panel && !open_beside);
     }
 
     pub fn set_can_go_back(&self, can_go_back: bool) {

@@ -29,8 +29,6 @@ mod imp {
         pub selection_cancel: TemplateChild<gtk::Button>,
         #[template_child]
         pub select_all: TemplateChild<gtk::Button>,
-        #[template_child]
-        pub utility_panel_button: TemplateChild<gtk::ToggleButton>,
     }
 
     #[glib::object_subclass]
@@ -69,7 +67,6 @@ impl UtilityPanelWidget {
         let imp = self.imp();
         imp.content.set_child(content);
         imp.title.set_title(title);
-        imp.utility_panel_button.set_tooltip_text(Some(title));
     }
 
     pub fn connect_selection_cancel<F: Fn() + 'static>(&self, f: F) {

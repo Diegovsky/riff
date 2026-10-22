@@ -44,8 +44,16 @@ impl PageHeader {
     }
 
     pub fn set_title_revealed(&self, revealed: bool) {
-        self.widget
-            .update_page(&self.name, |page| page.title_revealed = revealed);
+        let mut changed = false;
+        self.widget.update_page(&self.name, |page| {
+            changed = revealed != page.title_revealed;
+            page.title_revealed = revealed;
+        });
+        if changed && revealed {
+            self.widget.animate_title_shown(&self.name);
+        } else if changed {
+            self.widget.animate_title_hidden(&self.name);
+        }
     }
 
     pub fn set_title_widget(&self, widget: &impl IsA<gtk::Widget>) {
@@ -55,12 +63,17 @@ impl PageHeader {
     }
 
     pub fn add_end(&self, widget: &impl IsA<gtk::Widget>) {
-        let widget = widget.clone().upcast();
+        let widget = widget.upcast_ref::<gtk::Widget>();
+        let mut added = false;
         self.widget.update_page(&self.name, |page| {
-            if !page.end.contains(&widget) {
-                page.end.push(widget);
+            added = !page.end.contains(widget);
+            if added {
+                page.end.push(widget.clone());
             }
         });
+        if added {
+            self.widget.animate_added(widget);
+        }
     }
 
     pub fn remove_end(&self, widget: &impl IsA<gtk::Widget>) {

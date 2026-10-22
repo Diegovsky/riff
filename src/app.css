@@ -47,6 +47,38 @@
   color: color-mix(in srgb, currentColor 55%, transparent);
 }
 
+@keyframes header-button-added {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.6);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+headerbar .header-button--added {
+  animation: header-button-added 250ms ease-out;
+}
+
+@keyframes header-button-removed {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.6);
+  }
+}
+
+headerbar .header-button--removed {
+  animation: header-button-removed 250ms ease-in forwards;
+}
+
 /* History menus hang off header bar buttons, whose bold label weight they would inherit */
 popover.history-menu {
   font-weight: normal;

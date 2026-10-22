@@ -67,12 +67,16 @@
     <!-- segmented button -->
     <file alias="components/segmented_button.css">app/components/widgets/segmented_button/style.css</file>
     <file alias="components/segmented_button.ui">app/components/widgets/segmented_button/segmented_button.ui</file>
+    <!-- drawer -->
+    <file alias="components/drawer.css">app/components/widgets/drawer/style.css</file>
+    <file alias="components/drawer.ui">app/components/widgets/drawer/drawer.ui</file>
     <!-- navigation panel -->
     <file alias="navigation_panel/navigation_panel_row.ui">app/components/shell/navigation_panel/navigation_panel_row.ui</file>
   </gresource>
   <gresource prefix="/dev/diegovsky/Riff/icons/scalable/actions/">
     <file compressed="true" preprocess="xml-stripblanks" alias="now-playing-symbolic.svg">../data/hicolor/symbolic/actions/now-playing-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="queue-symbolic.svg">../data/hicolor/symbolic/actions/queue-symbolic.svg</file>
+    <file compressed="true" preprocess="xml-stripblanks" alias="drawer-handle-symbolic.svg">../data/hicolor/symbolic/actions/drawer-handle-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="playlist2-symbolic.svg">../data/hicolor/symbolic/actions/playlist2-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="library-music-symbolic.svg">../data/hicolor/symbolic/actions/library-music-symbolic.svg</file>
     <file compressed="true" preprocess="xml-stripblanks" alias="search-filters-symbolic.svg">../data/hicolor/symbolic/actions/search-filters-symbolic.svg</file>

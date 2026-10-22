@@ -24,7 +24,7 @@ use libadwaita::{Breakpoint, BreakpointCondition, BreakpointConditionLengthType,
 use std::cell::Cell;
 use std::rc::Rc;
 
-use crate::app::components::UtilityPanelWidget;
+use crate::app::components::{AppHeaderBar, UtilityPanelWidget};
 
 const NAVIGATION_ACTION: &str = "show-navigation-panel";
 
@@ -40,11 +40,15 @@ enum Which {
 }
 
 pub struct WindowLayout {
+    window: libadwaita::ApplicationWindow,
     navigation: Panel,
     utility: Panel,
+    header: AppHeaderBar,
     closed_to_fit: Cell<bool>,
     hid_navigation: Cell<bool>,
+    collapsing_navigation: Rc<Cell<bool>>,
     fitted_width: Cell<i32>,
+    fitted_header_width: Cell<i32>,
 }
 
 impl WindowLayout {
@@ -57,17 +61,28 @@ impl WindowLayout {
         let navigation_handle: gtk::Widget = builder.object("navigation_resize_handle").unwrap();
         let utility_widget: UtilityPanelWidget = builder.object("utility_panel").unwrap();
         let utility_handle: gtk::Widget = utility_widget.resize_handle().clone().upcast();
+        let header: AppHeaderBar = builder.object("app_header").unwrap();
+        let window: libadwaita::ApplicationWindow = builder.object("window").unwrap();
 
         let navigation = Panel::new(NAVIGATION_PANEL, navigation_split.clone(), Edge::Start);
         let utility = Panel::new(UTILITY_PANEL, utility_split.clone(), Edge::End);
         let layout = Rc::new(Self {
+            window: window.clone(),
             navigation,
             utility,
+            header,
             closed_to_fit: Cell::new(false),
             hid_navigation: Cell::new(false),
+            collapsing_navigation: Rc::new(Cell::new(false)),
             fitted_width: Cell::new(0),
+            fitted_header_width: Cell::new(0),
         });
         layout.fit();
+        window.connect_realize(clone!(
+            #[weak]
+            layout,
+            move |_| layout.fit()
+        ));
 
         utility_split.add_tick_callback(clone!(
             #[weak]
@@ -76,7 +91,10 @@ impl WindowLayout {
             glib::ControlFlow::Break,
             move |_, _| {
                 let width = layout.window_width();
-                if layout.fitted_width.replace(width) != width {
+                let header_width = layout.header.wide_width();
+                if layout.fitted_width.replace(width) != width
+                    || layout.fitted_header_width.replace(header_width) != header_width
+                {
                     layout.fit();
                 }
                 glib::ControlFlow::Continue
@@ -144,12 +162,23 @@ impl WindowLayout {
         }
     }
 
+    /// Until it's allocated, the size it's about to show at
     fn window_width(&self) -> i32 {
-        self.utility.split.width()
+        let width = self.utility.split.width();
+        if width > 0 || self.window.is_maximized() {
+            width
+        } else {
+            self.window.default_width().max(0)
+        }
     }
 
     fn navigation_shown(&self) -> bool {
         self.navigation.split.shows_sidebar()
+    }
+
+    fn utility_beside(&self) -> bool {
+        let split = &self.utility.split;
+        split.shows_sidebar() && !split.is_collapsed()
     }
 
     // Through its action, so the toggle button follows
@@ -174,14 +203,88 @@ impl WindowLayout {
                 .navigation
                 .size
                 .shown_width(navigation_width, window_width)
-            >= sp_to_px(CONTENT_PANEL_MIN_WIDTH_SP)
+                .max(self.navigation.least_width())
+            >= self.content_min_width()
     }
 
     fn room_for_navigation(&self) -> bool {
         self.room_for_both(self.navigation.width(), self.utility.width())
     }
 
+    fn room_for_utility(&self) -> bool {
+        let window_width = self.window_width();
+        window_width
+            - self
+                .utility
+                .size
+                .shown_width(self.utility.width(), window_width)
+            >= self.content_min_width()
+    }
+
+    fn content_min_width(&self) -> i32 {
+        sp_to_px(CONTENT_PANEL_MIN_WIDTH_SP)
+            .max(self.header.wide_width())
+            .max(HEADER_COMPACT_WIDTH_PX as i32 + 1)
+    }
+
+    fn collapse_utility_to_fit(&self) {
+        let window_width = self.window_width();
+        if window_width <= 0 {
+            return;
+        }
+        let collapse = window_width <= sp_to_px(MOBILE_WIDTH_SP);
+        if self.utility.split.is_collapsed() != collapse {
+            self.utility.split.set_collapsed(collapse);
+        }
+    }
+
+    fn collapse_navigation_to_fit(&self) {
+        let window_width = self.window_width();
+        if window_width <= 0 {
+            return;
+        }
+        let collapse = window_width <= sp_to_px(MOBILE_WIDTH_SP)
+            || window_width - self.navigation.least_width() < self.content_min_width();
+        let split = &self.navigation.split;
+        let collapsing = &self.collapsing_navigation;
+        if !collapse {
+            if collapsing.replace(false) {
+                split.set_show_sidebar(true);
+            }
+            if split.is_collapsed() {
+                split.set_collapsed(false);
+            }
+            return;
+        }
+        if split.is_collapsed() || collapsing.get() {
+            return;
+        }
+        if !split.shows_sidebar() {
+            split.set_collapsed(true);
+            return;
+        }
+        collapsing.set(true);
+        split.set_show_sidebar(false);
+        let collapsing = Rc::clone(collapsing);
+        split.add_tick_callback(move |split, _| {
+            if !collapsing.get() {
+                return glib::ControlFlow::Break;
+            }
+            let slid_out = split
+                .sidebar()
+                .and_then(|sidebar| sidebar.parent())
+                .is_none_or(|parent| !parent.is_child_visible());
+            if !slid_out {
+                return glib::ControlFlow::Continue;
+            }
+            collapsing.set(false);
+            split.set_collapsed(true);
+            glib::ControlFlow::Break
+        });
+    }
+
     fn fit(&self) {
+        self.collapse_utility_to_fit();
         let split = &self.utility.split;
         if !split.is_collapsed() {
             let open = split.shows_sidebar();
@@ -190,7 +293,10 @@ impl WindowLayout {
             if open && !room && navigation_shown {
                 self.closed_to_fit.set(true);
                 split.set_show_sidebar(false);
-            } else if !open && self.closed_to_fit.get() && (room || !navigation_shown) {
+            } else if !open
+                && self.closed_to_fit.get()
+                && (room || (!navigation_shown && self.room_for_utility()))
+            {
                 self.closed_to_fit.set(false);
                 split.set_show_sidebar(true);
             } else if self.hid_navigation.get() && (room || !open) {
@@ -198,11 +304,20 @@ impl WindowLayout {
                 self.show_navigation(true);
             }
         }
+        self.collapse_navigation_to_fit();
         self.apply();
     }
 
     fn apply(&self) {
         let window_width = self.window_width();
+        self.navigation.set_capped(self.utility_beside());
+        self.navigation
+            .set_content_min_width(self.content_min_width());
+        let navigation = &self.navigation.split;
+        self.header.set_compact_allowed(
+            (navigation.is_collapsed() || !navigation.shows_sidebar())
+                && !self.collapsing_navigation.get(),
+        );
         self.utility.apply(window_width);
         self.navigation.apply(window_width);
     }
@@ -286,7 +401,7 @@ impl WindowLayout {
                 let width = panel.dragged_width(start_width.get(), offset_x);
                 match panel.size.resized_width(width) {
                     Some(width) => {
-                        let width = panel.size.shown_width(width, layout.window_width());
+                        let width = panel.shown_width_for(width, layout.window_width());
                         let fits = match which {
                             Which::Utility => {
                                 layout.make_room_for_utility(width);
@@ -298,7 +413,7 @@ impl WindowLayout {
                             }
                         };
                         if fits {
-                            panel.set_width(width);
+                            panel.set_width(width, layout.window_width());
                         }
                         layout.fit();
                     }
@@ -315,8 +430,6 @@ impl WindowLayout {
 
 fn add_window_breakpoints(builder: &gtk::Builder) {
     let window: libadwaita::ApplicationWindow = builder.object("window").unwrap();
-    let utility_split: gtk::Widget = builder.object("utility_split").unwrap();
-    let navigation_split: gtk::Widget = builder.object("navigation_split").unwrap();
     let bottom_sheet: gtk::Widget = builder.object("bottom_sheet").unwrap();
 
     // Full width, so without the side margins of its style class
@@ -333,14 +446,6 @@ fn add_window_breakpoints(builder: &gtk::Builder) {
     narrow.add_setter(&bottom_sheet, "full-width", Some(&true.to_value()));
     narrow.add_setter(&bottom_sheet, "css-classes", Some(&no_classes));
     window.add_breakpoint(narrow);
-
-    let mobile = max_width_breakpoint(MOBILE_WIDTH_SP);
-    mobile.add_setter(&bottom_sheet, "reveal-bottom-bar", Some(&true.to_value()));
-    mobile.add_setter(&bottom_sheet, "full-width", Some(&true.to_value()));
-    mobile.add_setter(&bottom_sheet, "css-classes", Some(&no_classes));
-    mobile.add_setter(&utility_split, "collapsed", Some(&true.to_value()));
-    mobile.add_setter(&navigation_split, "collapsed", Some(&true.to_value()));
-    window.add_breakpoint(mobile);
 }
 
 fn max_width_breakpoint(width_sp: f64) -> Breakpoint {
