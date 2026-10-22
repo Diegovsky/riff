@@ -11,7 +11,7 @@ jobs:
     name: "Rustfmt"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -37,9 +37,9 @@ jobs:
     name: "Blueprint Lint"
     runs-on: ubuntu-latest
     container:
-      image: fedora:43
+      image: fedora:44
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install dependencies
         run: dnf install -y blueprint-compiler gtk4-devel libadwaita-devel libxml2 python3
@@ -51,7 +51,7 @@ jobs:
     name: "ShellCheck"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install shellcheck
         run: sudo apt-get -y update && sudo apt-get -y install shellcheck
@@ -65,7 +65,7 @@ jobs:
     container:
       image: fedora:44
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install dependencies
         run: dnf install -y gtk4 libadwaita glib2-devel findutils

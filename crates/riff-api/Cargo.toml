@@ -24,7 +24,7 @@ http = "1.3"
 
 reqwest = { version = "0.12", features = ["gzip"] }
 reqwest-middleware = "0.4"
-glib = "0.22.9"
+glib = "0.22.10"
 gdk-pixbuf = "0.22.0"
 futures = "0.3.18"
 uuid = { version = "1.18", features = ["v5"] }
@@ -35,7 +35,7 @@ version = "1.0.136"
 features = ["derive"]
 
 [dependencies.gdk]
-version = "0.11.4"
+version = "0.11.5"
 package = "gdk4"
 
 [dependencies.tokio]
@@ -45,7 +45,7 @@ version = "1"
 features = ["rt", "fs", "macros", "sync", "time"]
 
 [dependencies.gettext-rs]
-version = "=0.7.0"
+version = "0.8.0"
 features = ["gettext-system"]
 
 [dev-dependencies.tokio]

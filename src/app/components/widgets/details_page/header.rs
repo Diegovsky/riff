@@ -168,10 +168,6 @@ impl DetailsHeader {
         Self { widget, like_pin }
     }
 
-    pub fn widget(&self) -> &gtk::Widget {
-        self.widget.upcast_ref()
-    }
-
     // Text content
     //
     // Caption/subtitle use `visible` (not opacity) so empty values take no space.

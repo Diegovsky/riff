@@ -2,17 +2,17 @@
 // Implements PageModel, TrackListModel, and SimpleHeaderBarModel to drive
 // track listing, pagination, playback, and selection.
 
-use gettextrs::gettext;
+use gettextrs::{gettext, ngettext};
 use std::ops::Deref;
 use std::rc::Rc;
 
 use crate::{impl_source_page, impl_source_track_list, impl_track_list_model_base};
 
-use crate::app::components::DetailsPageModel;
 use crate::app::components::{
     dispatch_api_read, HasHeaderBarModel, HeaderImageShape, PageModel, PinnedPageModel,
     TrackListModel,
 };
+use crate::app::components::{labels, DetailsPageModel};
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
 use crate::app::state::SelectionState;
@@ -68,12 +68,8 @@ impl PageModel for SavedTracksModel {
             .home_state()
             .and_then(|s| s.saved_tracks_total)
             .map_or(loaded, |total| total.max(loaded));
-        Some(gettextrs::ngettext!(
-            "{} Track",
-            "{} Tracks",
-            count as u32,
-            count
-        ))
+        let text = ngettext("{} Track", "{} Tracks", count as u32);
+        Some(labels::fill(text, &[&count.to_string()]))
     }
 
     fn header_image_shape(&self) -> HeaderImageShape {

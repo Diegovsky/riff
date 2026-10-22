@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use rand::rngs::SmallRng;
-use rand::seq::SliceRandom;
-use rand::{Rng, SeedableRng};
+use rand::seq::{IndexedRandom, SliceRandom};
+use rand::RngExt;
 use riff_api::models::{Page, RepeatMode, Track};
 
 use super::context::{Context, CONTEXT_PAGE_SIZE};
@@ -101,7 +101,7 @@ pub struct PlayQueue {
 
 impl Default for PlayQueue {
     fn default() -> Self {
-        Self::with_rng(SmallRng::from_entropy())
+        Self::with_rng(rand::make_rng::<SmallRng>())
     }
 }
 
@@ -262,9 +262,11 @@ impl PlayQueue {
     fn integrate(&mut self, added: Vec<usize>) {
         for i in added {
             let pos = if self.shuffled {
-                let pos = self.rng.gen_range(self.upcoming_start()..=self.order.len());
+                let pos = self
+                    .rng
+                    .random_range(self.upcoming_start()..=self.order.len());
                 let from = self.separation.min(self.next_order.len());
-                let at = self.rng.gen_range(from..=self.next_order.len());
+                let at = self.rng.random_range(from..=self.next_order.len());
                 self.next_order.insert(at, i);
                 pos
             } else {
@@ -725,6 +727,7 @@ impl PlayQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
     use riff_api::models::{ContentRating, ImageSet, ResourceId};
 
     fn make_track(id: &str) -> Track {

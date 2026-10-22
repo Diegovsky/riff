@@ -321,9 +321,9 @@ fn should_load_more(
 }
 
 fn disc_header_text(disc: u32) -> String {
-    // translators: Header shown above the tracks of disc {0} in a
+    // translators: Header shown above the tracks of disc {} in a
     // multi-disc album.
-    gettextrs::gettext!("Disc {}", disc)
+    labels::fill(gettextrs::gettext("Disc {}"), &[&disc.to_string()])
 }
 
 /// Disc edges (rounded card corners) are part of the entry so a change in

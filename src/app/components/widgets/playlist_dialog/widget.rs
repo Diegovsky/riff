@@ -228,7 +228,8 @@ impl PlaylistDialog {
         let filter = gtk::FileFilter::new();
         // translators: Name of the file filter of the dialog picking a playlist's cover.
         filter.set_name(Some(&gettext("Images")));
-        filter.add_pixbuf_formats();
+        filter.add_mime_type("image/png");
+        filter.add_mime_type("image/jpeg");
         let filters = gio::ListStore::new::<gtk::FileFilter>();
         filters.append(&filter);
 
