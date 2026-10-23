@@ -99,8 +99,19 @@ row:hover .song--playing .song__play-hover,
 .song--unplayable label.title,
 .song--unplayable label.subtitle,
 .song--unplayable .song__index,
-.song--unplayable .song__cover {
+.song--unplayable .song__cover,
+row:hover .song--unplayable .song__index,
+row:hover .song--unplayable .song__cover {
   opacity: 0.4;
+}
+
+/* Unplayable: no play icon on hover; the index/cover stays. */
+row:hover .song--unplayable .song__play-hover,
+.playlist--selectable .song--unplayable .song__index,
+.playlist--selectable .song--unplayable .song__cover,
+.playlist--selectable row:hover .song--unplayable .song__index,
+.playlist--selectable row:hover .song--unplayable .song__cover {
+  opacity: 0;
 }
 
 

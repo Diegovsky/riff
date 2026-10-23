@@ -394,16 +394,7 @@ impl MusicProvider for SpotifyDomain {
             None,
         )
         .await?;
-        let items = page
-            .items
-            .iter()
-            .filter_map(|pt| {
-                pt.track.as_ref().and_then(|t| match t.as_ref() {
-                    sp::PlaylistTrackObjectTrack::Track(track) => track_from_object(track),
-                    _ => None,
-                })
-            })
-            .collect();
+        let items = page.items.iter().map(track_from_playlist_item).collect();
         Ok(Page::offset_paged(
             items,
             page.offset as usize,

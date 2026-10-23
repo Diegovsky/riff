@@ -564,7 +564,9 @@ where
                     return;
                 };
                 if !model.is_selection_enabled() {
-                    model.play_song_at(index, &song.get_id());
+                    if song.description().playable {
+                        model.play_song_at(index, &song.get_id());
+                    }
                     return;
                 }
                 let key = song.row_key();

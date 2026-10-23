@@ -81,13 +81,13 @@ fn copyright_text(copyrights: &[sp::CopyrightObject]) -> String {
 pub(super) fn album_from_object(a: &sp::AlbumObject) -> Album {
     let copyright = copyright_text(&a.copyrights);
     Album {
-        rri: rid(a.id.clone()),
+        rri: rid(a.id.clone().unwrap_or_default()),
         title: text_or(a.name.clone(), defaults::album_title),
         artists: ensure_artists(a.artists.iter().map(to_artist_ref).collect()),
         art: images_to_set(&a.images).unwrap_or_else(|| defaults::image_set_for(EntityKind::Album)),
-        album_type: release_type_from(&a.album_type, a.total_tracks as u32),
-        release_date: parse_release_date(&a.release_date),
-        total_tracks: Some(a.total_tracks as u32),
+        album_type: release_type_from(&a.album_type, a.total_tracks.unwrap_or(0) as u32),
+        release_date: a.release_date.as_deref().and_then(parse_release_date),
+        total_tracks: a.total_tracks.map(|n| n as u32),
         label: Some(a.label.clone()),
         copyright: Some(copyright),
         upc: None,
@@ -102,13 +102,13 @@ pub(super) fn album_from_object(a: &sp::AlbumObject) -> Album {
 
 pub(super) fn album_from_discography(a: &sp::ArtistDiscographyAlbumObject) -> Album {
     Album {
-        rri: rid(a.id.clone()),
+        rri: rid(a.id.clone().unwrap_or_default()),
         title: text_or(a.name.clone(), defaults::album_title),
         artists: ensure_artists(a.artists.iter().map(to_artist_ref).collect()),
         art: images_to_set(&a.images).unwrap_or_else(|| defaults::image_set_for(EntityKind::Album)),
-        album_type: release_type_from(&a.album_type, a.total_tracks as u32),
-        release_date: parse_release_date(&a.release_date),
-        total_tracks: Some(a.total_tracks as u32),
+        album_type: release_type_from(&a.album_type, a.total_tracks.unwrap_or(0) as u32),
+        release_date: a.release_date.as_deref().and_then(parse_release_date),
+        total_tracks: a.total_tracks.map(|n| n as u32),
         label: None,
         copyright: None,
         upc: None,
@@ -123,13 +123,13 @@ pub(super) fn album_from_discography(a: &sp::ArtistDiscographyAlbumObject) -> Al
 
 pub(super) fn album_from_simplified(a: &sp::SimplifiedAlbumObject) -> Album {
     Album {
-        rri: rid(a.id.clone()),
+        rri: rid(a.id.clone().unwrap_or_default()),
         title: text_or(a.name.clone(), defaults::album_title),
         artists: ensure_artists(a.artists.iter().map(to_artist_ref).collect()),
         art: images_to_set(&a.images).unwrap_or_else(|| defaults::image_set_for(EntityKind::Album)),
-        album_type: release_type_from(&a.album_type, a.total_tracks as u32),
-        release_date: parse_release_date(&a.release_date),
-        total_tracks: Some(a.total_tracks as u32),
+        album_type: release_type_from(&a.album_type, a.total_tracks.unwrap_or(0) as u32),
+        release_date: a.release_date.as_deref().and_then(parse_release_date),
+        total_tracks: a.total_tracks.map(|n| n as u32),
         label: None,
         copyright: None,
         upc: None,
@@ -161,9 +161,11 @@ pub(super) fn track_from_object(t: &sp::TrackObject) -> Option<Track> {
                 .map(|a| a.iter().map(to_artist_ref).collect())
                 .unwrap_or_default(),
         ),
-        album: t.album.as_ref().map(|a| AlbumRef {
-            rri: rid(a.id.clone()),
-            name: a.name.clone(),
+        album: t.album.as_ref().and_then(|a| {
+            Some(AlbumRef {
+                rri: rid(a.id.clone()?),
+                name: a.name.clone(),
+            })
         }),
         duration_ms: t.duration_ms.unwrap_or(0) as u32,
         track_number: t.track_number.map(|n| n as u32),
@@ -181,6 +183,57 @@ pub(super) fn track_from_object(t: &sp::TrackObject) -> Option<Track> {
         preview_url: None,
         url: None,
     })
+}
+
+pub(super) fn track_from_playlist_item(item: &sp::PlaylistTrackObject) -> Track {
+    match item.track.as_deref() {
+        Some(sp::PlaylistTrackObjectTrack::Track(t)) => {
+            track_from_object(t).unwrap_or_else(|| Track {
+                artists: ensure_artists(
+                    t.artists
+                        .as_ref()
+                        .map(|a| a.iter().map(to_artist_ref).collect())
+                        .unwrap_or_default(),
+                ),
+                album: None,
+                ..unplayable_track(
+                    t.name.clone().unwrap_or_default(),
+                    t.duration_ms.unwrap_or(0),
+                    t.uri.clone(),
+                )
+            })
+        }
+        Some(sp::PlaylistTrackObjectTrack::Episode(e)) => Track {
+            art: images_to_set(&e.images)
+                .unwrap_or_else(|| defaults::image_set_for(EntityKind::Track)),
+            ..unplayable_track(e.name.clone(), e.duration_ms, Some(e.uri.clone()))
+        },
+        None => unplayable_track(String::new(), 0, None),
+    }
+}
+
+fn unplayable_track(title: String, duration_ms: i32, uri: Option<String>) -> Track {
+    Track {
+        rri: ResourceId {
+            provider: Provider::Spotify,
+            id: String::new(),
+            uri,
+        },
+        title: text_or(title, defaults::track_title),
+        artists: ensure_artists(Vec::new()),
+        album: None,
+        duration_ms: duration_ms.max(0) as u32,
+        track_number: None,
+        disc_number: None,
+        content_rating: ContentRating::None,
+        isrc: None,
+        art: defaults::image_set_for(EntityKind::Track),
+        playable: false,
+        popularity: None,
+        saved: None,
+        preview_url: None,
+        url: None,
+    }
 }
 
 fn unescape_html(text: &str) -> String {
@@ -550,8 +603,8 @@ mod tests {
         total_tracks: i32,
     ) -> Album {
         album_from_discography(&sp::ArtistDiscographyAlbumObject {
-            album_type,
-            total_tracks,
+            album_type: Some(album_type),
+            total_tracks: Some(total_tracks),
             ..Default::default()
         })
     }
@@ -572,5 +625,28 @@ mod tests {
             discography_album(SpType::Album, 4).album_type,
             AlbumType::Album
         );
+    }
+
+    #[test]
+    fn local_files_in_a_playlist_page_become_unplayable_rows() {
+        // A local file's placeholder album, as the playlist items endpoint
+        // returns it: no id, type, release date or track count.
+        let page = r#"{"href":"","limit":50,"next":null,"offset":0,"previous":null,"total":1,
+            "items":[{"added_at":"2020-01-01T00:00:00Z","is_local":true,"track":{"type":"track",
+            "album":{"album_type":null,"artists":[],"available_markets":[],"external_urls":{},
+            "href":null,"id":null,"images":[],"name":"","release_date":null,
+            "release_date_precision":null,"type":"album","uri":null},
+            "artists":[],"id":null,"is_local":true,"name":"Checkpoint","uri":"spotify:local:::Checkpoint:200"}}]}"#;
+        let page: sp::PagingPlaylistTrackObject = serde_json::from_str(page).unwrap();
+        let track = track_from_playlist_item(&page.items[0]);
+        assert_eq!(track.title, "Checkpoint");
+        assert!(track.rri.id.is_empty());
+        assert!(!track.playable);
+    }
+
+    #[test]
+    fn removed_playlist_items_keep_their_position() {
+        let item = sp::PlaylistTrackObject::new();
+        assert!(!track_from_playlist_item(&item).playable);
     }
 }
