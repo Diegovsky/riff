@@ -6911,7 +6911,6 @@ components:
       type: object
       required:
         - album_type
-        - total_tracks
         - external_urls
         - href
         - id
@@ -6924,6 +6923,7 @@ components:
       properties:
         album_type:
           type: string
+          nullable: true
           description: |
             The type of the album.
           enum: [album, single, compilation]
@@ -6947,10 +6947,12 @@ components:
             Known external URLs for this album.
         href:
           type: string
+          nullable: true
           description: |
             A link to the Web API endpoint providing full details of the album.
         id:
           type: string
+          nullable: true
           description: |
             The [Spotify ID](/documentation/web-api/concepts/spotify-uris-ids) for the album.
           example: 2up3OPMp9Tb4dAKM2erWXQ
@@ -6966,11 +6968,13 @@ components:
             The name of the album. In case of an album takedown, the value may be an empty string.
         release_date:
           type: string
+          nullable: true
           example: '1981-12'
           description: |
             The date the album was first released.
         release_date_precision:
           type: string
+          nullable: true
           enum: ['year', 'month', 'day']
           example: 'year'
           description: |
@@ -6987,6 +6991,7 @@ components:
             The object type.
         uri:
           type: string
+          nullable: true
           example: 'spotify:album:2up3OPMp9Tb4dAKM2erWXQ'
           description: |
             The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the album.
