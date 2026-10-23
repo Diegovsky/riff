@@ -15,6 +15,28 @@ fn aligned_x(column: i32, columns: i32, width: i32, cell: i32) -> i32 {
     column * (width - cell) / (columns - 1)
 }
 
+fn columns_in_rows(positions: &[(f32, f32)]) -> Vec<i32> {
+    let mut order: Vec<usize> = (0..positions.len()).collect();
+    order.sort_by(|&a, &b| {
+        let (ax, ay) = positions[a];
+        let (bx, by) = positions[b];
+        ay.total_cmp(&by).then(ax.total_cmp(&bx))
+    });
+    let mut columns = vec![0; positions.len()];
+    let mut row_y = None;
+    let mut column = 0;
+    for i in order {
+        let y = positions[i].1;
+        if row_y != Some(y) {
+            row_y = Some(y);
+            column = 0;
+        }
+        columns[i] = column;
+        column += 1;
+    }
+    columns
+}
+
 mod imp {
     use super::*;
     use std::cell::Cell;
@@ -87,18 +109,24 @@ mod imp {
                 return;
             }
 
-            let stride = (width + spacing) as f32 / columns as f32;
+            let mut cells = Vec::new();
             let mut child = grid.first_child();
             while let Some(c) = child {
                 child = c.next_sibling();
                 if !c.should_layout() {
                     continue;
                 }
-                let Some(bounds) = c.compute_bounds(grid) else {
-                    continue;
-                };
-                let column = ((bounds.x() / stride).round() as i32).clamp(0, columns - 1);
-                let x = aligned_x(column, columns, width, cell);
+                if let Some(bounds) = c.compute_bounds(grid) {
+                    cells.push((c, bounds));
+                }
+            }
+
+            let positions: Vec<_> = cells
+                .iter()
+                .map(|(_, b)| (b.x().round(), b.y().round()))
+                .collect();
+            for ((c, bounds), column) in cells.iter().zip(columns_in_rows(&positions)) {
+                let x = aligned_x(column.min(columns - 1), columns, width, cell);
                 let transform = gtk::gsk::Transform::new()
                     .translate(&gtk::graphene::Point::new(x as f32, bounds.y()));
                 c.allocate(cell, bounds.height().round() as i32, -1, Some(transform));
@@ -160,5 +188,30 @@ mod tests {
             aligned_x(2, 3, NARROWEST_GRID, SMALL_CELL),
             NARROWEST_GRID - SMALL_CELL
         );
+    }
+
+    #[test]
+    fn a_short_row_spread_across_the_width_fills_columns_in_order() {
+        // Five cells stretched over a row that fits seven.
+        let positions = [
+            (0.0, 0.0),
+            (200.0, 0.0),
+            (400.0, 0.0),
+            (600.0, 0.0),
+            (800.0, 0.0),
+        ];
+        assert_eq!(columns_in_rows(&positions), vec![0, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn columns_restart_on_each_row() {
+        let positions = [
+            (150.0, 0.0),
+            (0.0, 0.0),
+            (0.0, 250.0),
+            (300.0, 0.0),
+            (150.0, 250.0),
+        ];
+        assert_eq!(columns_in_rows(&positions), vec![1, 0, 0, 2, 1]);
     }
 }
