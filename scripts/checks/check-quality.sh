@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # Runs the same quality checks as the riff-quality CI workflow.
-# Usage: ./scripts/check-quality.sh
+# Usage: ./scripts/checks/check-quality.sh
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 FAILED=0
 
 echo "=== Rustfmt ==="

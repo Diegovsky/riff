@@ -3,11 +3,11 @@
 #
 # Requirements: Java (for openapi-generator-cli)
 #
-# Usage: ./scripts/generate-spotify-api.sh
+# Usage: ./scripts/api/generate-spotify-api.sh
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 SPEC_FILE="spotify-openapi.yaml"
@@ -17,7 +17,7 @@ OUTPUT_DIR="generated/spotify-api"
 
 if [[ ! -f "$SPEC_FILE" ]]; then
     echo "Error: $SPEC_FILE not found in repository root." >&2
-    echo "Run ./scripts/fetch-spotify-spec.sh to download the spec first." >&2
+    echo "Run ./scripts/api/fetch-spotify-spec.sh to download the spec first." >&2
     exit 1
 fi
 

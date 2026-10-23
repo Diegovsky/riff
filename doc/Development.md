@@ -11,7 +11,7 @@ Get a development build running in four steps. Run these from the repository roo
 ./scripts/setup-dev.sh
 
 # 2. Generate the Spotify API client crate (requires Java)
-./scripts/generate-spotify-api.sh
+./scripts/api/generate-spotify-api.sh
 
 # 3. Build a debug build and install to ~/.local
 ./scripts/build.sh dev --install
@@ -58,7 +58,11 @@ See [`Design.md`](Design.md) for the full data flow explanation.
 | `src/dbus/` | MPRIS / D-Bus integration. |
 | `data/` | Application data installed on the system (icons, desktop file, appstream, GSchema). |
 | `po/` | Translations (gettext). |
-| `scripts/` | Developer and tooling scripts. |
+| `scripts/` | Dependency setup and build helpers (`setup-dev.sh`, `build.sh`), plus the subfolders below. |
+| `scripts/checks/` | Quality checks run in CI (formatting, ShellCheck, blueprints, icons). |
+| `scripts/api/` | Web API spec fetching, crate generation and the terminal API client. |
+| `scripts/packaging/` | Flatpak packaging helpers. |
+| `scripts/perf/` | Resource measurement and scripts that drive a running Riff (browsing, resizing). |
 | `flatpak/` | Flatpak packaging manifests and cargo sources. |
 | `doc/` | Developer documentation. |
 | `subprojects/` | Meson subproject wrap files. |
@@ -154,7 +158,7 @@ cargo test --workspace
 Run the static checks before committing:
 
 ```sh
-./scripts/check-quality.sh
+./scripts/checks/check-quality.sh
 ```
 
 ### Debug Tools (Dev Menu)
@@ -230,7 +234,7 @@ To install manually, you need:
 
 ## Generated Code
 
-`./scripts/generate-spotify-api.sh` will generate the Spotify crate found in `./generated`.
+`./scripts/api/generate-spotify-api.sh` will generate the Spotify crate found in `./generated`.
 
 
 ## Building
@@ -298,7 +302,7 @@ poeditor pull                   # pull translations from POEditor
 
 ## Spotify CLI
 
-`scripts/spotify-cli.py` is an authenticated Spotify Web API client for the terminal. It shares credentials with Riff through the system keyring, so once you have logged in to the app you can hit the API directly to inspect responses while developing.
+`scripts/api/spotify-cli.py` is an authenticated Spotify Web API client for the terminal. It shares credentials with Riff through the system keyring, so once you have logged in to the app you can hit the API directly to inspect responses while developing.
 
 ```sh
 spotify-cli v1/me                     # GET the current user

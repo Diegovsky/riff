@@ -8,8 +8,8 @@ are opened.
 Pair it with measure-resources.py to see how memory and CPU behave while pages
 are opened and closed:
 
-    scripts/measure-resources.py -d 300 -i 5 -o report.md &
-    scripts/simulate-browsing.py --rounds 3
+    scripts/perf/measure-resources.py -d 300 -i 5 -o report.md &
+    scripts/perf/simulate-browsing.py --rounds 3
 """
 
 import argparse

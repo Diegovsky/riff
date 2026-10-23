@@ -10,9 +10,9 @@ set -euo pipefail
 # 3. Children of GtkBox/GtkBoxLayout do not use Grid layout properties
 #    (causes "GtkBoxLayout does not create GtkLayoutChild instances").
 #
-# Usage: ./scripts/lint-blueprints.sh [path-to-search]
+# Usage: ./scripts/checks/lint-blueprints.sh [path-to-search]
 
-SEARCH_DIR="${1:-$(cd "$(dirname "$0")/.." && pwd)/src}"
+SEARCH_DIR="${1:-$(cd "$(dirname "$0")/../.." && pwd)/src}"
 FAILED=0
 
 if ! command -v blueprint-compiler &>/dev/null; then

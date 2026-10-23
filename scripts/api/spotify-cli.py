@@ -431,8 +431,8 @@ def generate_bash_completion():
                 script_name,
                 script_path,
                 f"./{script_name}",
-                f"./scripts/{script_name}",
-                f"scripts/{script_name}",
+                f"./scripts/api/{script_name}",
+                f"scripts/api/{script_name}",
             ]
         )
     )
