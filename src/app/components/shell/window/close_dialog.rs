@@ -9,14 +9,12 @@ use riff_config::settings::SETTINGS;
 
 pub fn show(window: &libadwaita::ApplicationWindow) {
     let dialog = libadwaita::AlertDialog::new(
-        Some(&gettext("Riff is still playing")),
-        Some(&gettext(
-            "What should Riff do if you close it while audio is playing?",
-        )),
+        Some(&gettext("Riff is Still Playing")),
+        Some(&gettext("How should Riff close while audio is playing?")),
     );
 
-    dialog.add_response("background", &gettext("Continue in Background"));
-    dialog.add_response("quit", &gettext("Stop Audio and Quit"));
+    dialog.add_response("background", &gettext("Run in Background"));
+    dialog.add_response("quit", &gettext("Quit"));
 
     dialog.set_response_appearance("quit", libadwaita::ResponseAppearance::Destructive);
     dialog.set_default_response(Some("background"));
@@ -36,29 +34,22 @@ pub fn show(window: &libadwaita::ApplicationWindow) {
             #[weak]
             window,
             move |response| {
-                let settings = gio::Settings::new(SETTINGS);
-                match response.as_str() {
-                    "quit" => {
-                        if remember_check.is_active() {
-                            let _ = settings.set_enum(
-                                "close-window-behavior",
-                                CloseWindowBehavior::StopAndQuit as i32,
-                            );
-                        }
+                let behavior = match response.as_str() {
+                    "quit" => CloseWindowBehavior::StopAndQuit,
+                    "background" => CloseWindowBehavior::MinimizeToBackground,
+                    _ => return,
+                };
+                if remember_check.is_active() {
+                    let settings = gio::Settings::new(SETTINGS);
+                    let _ = settings.set_enum("close-window-behavior", behavior as i32);
+                }
+                match behavior {
+                    CloseWindowBehavior::StopAndQuit => {
                         if let Some(app) = window.application() {
                             app.quit();
                         }
                     }
-                    "background" => {
-                        if remember_check.is_active() {
-                            let _ = settings.set_enum(
-                                "close-window-behavior",
-                                CloseWindowBehavior::MinimizeToBackground as i32,
-                            );
-                        }
-                        window.set_visible(false);
-                    }
-                    _ => {}
+                    _ => window.set_visible(false),
                 }
             }
         ),

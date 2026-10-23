@@ -40,12 +40,12 @@ template $SettingsWindow : Adw.PreferencesDialog {
 
         /* Translators: Description for the close window behavior preference */
 
-        subtitle: _("What should Riff do if you close it while audio is playing?");
+        subtitle: _("Riff's behavior when closing the main window");
         model: StringList {
           strings [
             _("Ask"),
-            _("Continue in Background"),
-            _("Stop and Quit")
+            _("Run in Background"),
+            _("Quit")
           ]
         };
       }
