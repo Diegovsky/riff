@@ -4,7 +4,7 @@ set -euo pipefail
 # Check that every symbolic icon referenced in the source tree is bundled in
 # riff.gresource.xml
 
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 SRC_DIR="${1:-$ROOT_DIR/src}"
 DATA_DIR="$(dirname "$SRC_DIR")/data"
 GRESOURCE="$SRC_DIR/riff.gresource.xml"

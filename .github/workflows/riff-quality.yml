@@ -45,7 +45,7 @@ jobs:
         run: dnf install -y blueprint-compiler gtk4-devel libadwaita-devel libxml2 python3
 
       - name: Run blueprint lint
-        run: ./scripts/lint-blueprints.sh
+        run: ./scripts/checks/lint-blueprints.sh
 
   shellcheck:
     name: "ShellCheck"
@@ -71,4 +71,4 @@ jobs:
         run: dnf install -y gtk4 libadwaita glib2-devel findutils
 
       - name: Check every referenced icon is bundled
-        run: ./scripts/check-icons.sh
+        run: ./scripts/checks/check-icons.sh

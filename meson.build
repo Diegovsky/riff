@@ -12,7 +12,7 @@ if not fs.is_dir(generated_spotify_api) or not fs.is_file(generated_spotify_api 
   error(
     'Generated Spotify API crate not found at @0@\n\n'.format(generated_spotify_api) +
     'Run the following to generate it (requires Java):\n' +
-    '  ./scripts/generate-spotify-api.sh\n' +
+    '  ./scripts/api/generate-spotify-api.sh\n' +
     'or:\n' +
     '  just generate-spotify-api\n'
   )
@@ -22,7 +22,7 @@ subdir('data')
 subdir('po')
 subdir('src')
 
-flatpak_cargo_generator = find_program(meson.project_source_root() / 'scripts/flatpak-cargo-generator.py')
+flatpak_cargo_generator = find_program(meson.project_source_root() / 'scripts/packaging/flatpak-cargo-generator.py')
 
 cargo_sources = custom_target(
   'cargo-update-sources',

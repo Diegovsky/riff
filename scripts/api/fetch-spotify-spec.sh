@@ -3,7 +3,7 @@
 #
 # Requirements: Java (for openapi-generator-cli)
 #
-# Usage: ./scripts/fetch-spotify-spec.sh
+# Usage: ./scripts/api/fetch-spotify-spec.sh
 #
 # NOTE: Spotify's official spec (developer.spotify.com/reference/web-api/open-api-schema.yaml)
 # has long-standing schema errors that break code generators. We are using a modified version
@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 SPEC_URL="https://raw.githubusercontent.com/sonallux/spotify-web-api/39207c4ba600deb34b0913975d01983ba60be583/fixed-spotify-open-api.yml"

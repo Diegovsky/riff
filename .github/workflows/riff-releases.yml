@@ -21,7 +21,7 @@ jobs:
           java-version: '17'
 
       - name: Generate Spotify API crate
-        run: ./scripts/generate-spotify-api.sh
+        run: ./scripts/api/generate-spotify-api.sh
 
       - name: Upload generated crate
         uses: actions/upload-artifact@v7

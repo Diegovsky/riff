@@ -60,10 +60,10 @@ flatpak install --user Riff-x86_64.flatpak
 **Build from source**
 
 ```sh
-./scripts/setup-dev.sh                # install dependencies
-./scripts/generate-spotify-api.sh     # generate Spotify API crate (requires Java)
-./scripts/build.sh release --install  # build and install to ~/.local
-~/.local/bin/riff                     # run Riff
+./scripts/setup-dev.sh                 # install dependencies
+./scripts/api/generate-spotify-api.sh  # generate Spotify API crate (requires Java)
+./scripts/build.sh release --install   # build and install to ~/.local
+~/.local/bin/riff                      # run Riff
 ```
 
 See the [Development Guide](doc/Development.md) for full build instructions, project structure, and troubleshooting.

@@ -4,8 +4,8 @@
 Both apps must already be running. For a fair comparison put them in the same
 state first (e.g. both idle, or both playing a track).
 
-    scripts/measure-resources.py                      # 60s, report on stdout
-    scripts/measure-resources.py -d 300 -o report.md  # 5 minutes, write to file
+    scripts/perf/measure-resources.py                      # 60s, report on stdout
+    scripts/perf/measure-resources.py -d 300 -o report.md  # 5 minutes, write to file
 
 """
 
