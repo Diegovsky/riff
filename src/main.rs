@@ -198,6 +198,23 @@ fn register_actions(app: &gtk::Application, sender: UnboundedSender<AppAction>) 
     ));
     app.add_action(&restart);
 
+    let resize_window =
+        SimpleAction::new("resize_window", Some(glib::VariantTy::new("(ii)").unwrap()));
+    resize_window.connect_activate(clone!(
+        #[weak]
+        app,
+        move |_, parameter| {
+            let Some((width, height)) = parameter.and_then(|p| p.get::<(i32, i32)>()) else {
+                return;
+            };
+            if let Some(window) = app.active_window() {
+                window.unmaximize();
+                window.set_default_size(width, height);
+            }
+        }
+    ));
+    app.add_action(&resize_window);
+
     app.add_action(&make_action(
         "toggle_playback",
         PlaybackAction::TogglePlay.into(),

@@ -5,6 +5,8 @@ use crate::app::components::{Component, EventListener, ScreenFactory};
 use crate::app::state::{HomePage, Route, Transition};
 use crate::app::{AppEvent, BrowserEvent};
 
+use super::page_stack::{hide_pages_not_showing, show_page};
+
 pub struct HomePane {
     stack: gtk::Stack,
     components: Vec<Box<dyn EventListener>>,
@@ -32,6 +34,7 @@ impl HomePane {
             let title = NavigationPanelDestination::from_home_page(page).title();
             stack.add_titled(widget, Some(page.id()), &title);
         }
+        hide_pages_not_showing(&stack);
 
         Self {
             stack,
@@ -64,7 +67,7 @@ impl EventListener for HomePane {
             ..
         })) = event
         {
-            self.stack.set_visible_child_name(page.id());
+            show_page(&self.stack, page.id());
         }
         self.broadcast_event(event);
     }

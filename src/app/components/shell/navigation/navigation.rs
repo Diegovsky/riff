@@ -10,6 +10,7 @@ use crate::app::components::{EventListener, ListenerComponent};
 use crate::app::state::{Direction, Route, Transition};
 use crate::app::{AppEvent, BrowserEvent};
 
+use super::page_stack::{hide_pages_not_showing, show_page};
 use super::{factory::ScreenFactory, home::HomePane, NavigationModel};
 
 /// Horizontal touchpad travel, in pixels, that counts as a back/forward swipe.
@@ -98,6 +99,7 @@ impl Navigation {
         });
 
         connect_back_forward_input(&model, &window, &content_stack);
+        hide_pages_not_showing(&content_stack);
 
         Self {
             model,
@@ -153,8 +155,7 @@ impl Navigation {
 
     fn show_screen(&mut self, route: &Route) {
         self.ensure_screen(route);
-        self.content_stack
-            .set_visible_child_name(&route.screen_key());
+        show_page(&self.content_stack, &route.screen_key());
     }
 
     fn save_scroll(&self, transition: &Transition) {
