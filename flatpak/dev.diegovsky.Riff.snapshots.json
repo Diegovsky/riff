@@ -4,7 +4,8 @@
   "runtime-version": "50",
   "sdk": "org.gnome.Sdk",
   "sdk-extensions": [
-    "org.freedesktop.Sdk.Extension.rust-stable"
+    "org.freedesktop.Sdk.Extension.rust-stable",
+    "org.freedesktop.Sdk.Extension.openjdk25"
   ],
   "command": "riff",
   "finish-args": [
@@ -18,9 +19,10 @@
   ],
   "separate-locales": false,
   "build-options": {
-    "append-path": "/usr/lib/sdk/rust-stable/bin",
+    "append-path": "/usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/openjdk25/bin",
     "env": {
       "CARGO_HOME": "/run/build/riff/cargo",
+      "OPENAPI_GENERATOR_JAR": "/run/build/riff/openapi-generator-cli-7.12.0.jar",
       "RUST_BACKTRACE": "full",
       "RUST_LOG": "riff=debug"
     },
@@ -40,6 +42,11 @@
         {
           "type": "dir",
           "path": ".."
+        },
+        {
+          "type": "file",
+          "url": "https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/7.12.0/openapi-generator-cli-7.12.0.jar",
+          "sha256": "33e7dfa7a1f04d58405ee12ae19e2c6fc2a91497cf2e56fa68f1875a95cbf220"
         },
         "cargo-sources.json"
       ]
