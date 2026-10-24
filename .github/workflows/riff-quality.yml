@@ -72,3 +72,17 @@ jobs:
 
       - name: Check every referenced icon is bundled
         run: ./scripts/checks/check-icons.sh
+
+  translations:
+    name: "Translations"
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:44
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install gettext
+        run: dnf install -y gettext
+
+      - name: Check POTFILES, pot and po files are up to date
+        run: ./scripts/checks/check-translations.sh
