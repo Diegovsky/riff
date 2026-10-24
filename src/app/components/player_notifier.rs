@@ -11,11 +11,11 @@ use crate::app::state::{
     Device, LoginAction, LoginEvent, LoginStartedEvent, PlaybackAction, PlaybackEvent,
     SettingsEvent,
 };
-use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, SongsSource};
+use crate::app::{AppAction, AppEvent, AppModel, Dispatcher, SongsSource};
 use crate::connect::ConnectCommand;
 use crate::player::Command;
 
-const SETTINGS: &str = "dev.diegovsky.Riff";
+use riff_config::settings::SETTINGS;
 
 enum CurrentlyPlaying {
     WithSource {
@@ -40,7 +40,7 @@ impl CurrentlyPlaying {
 
 pub struct PlayerNotifier {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
     command_sender: UnboundedSender<Command>,
     connect_command_sender: UnboundedSender<ConnectCommand>,
     // Kept alive so its `changed` signals keep firing for live DSP updates.
@@ -50,12 +50,13 @@ pub struct PlayerNotifier {
 impl PlayerNotifier {
     pub fn new(
         app_model: Rc<AppModel>,
-        dispatcher: Box<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
         command_sender: UnboundedSender<Command>,
         connect_command_sender: UnboundedSender<ConnectCommand>,
     ) -> Self {
         let dsp_settings = Self::watch_dsp_settings(command_sender.clone());
-        Self::watch_skip_explicit_setting(&dsp_settings, dispatcher.as_ref());
+        Self::watch_skip_explicit_setting(&dsp_settings, &dispatcher);
+        Self::watch_shuffle_separation_setting(&dsp_settings, &dispatcher);
         Self {
             app_model,
             dispatcher,
@@ -68,11 +69,19 @@ impl PlayerNotifier {
     /// Watch the skip-explicit GSettings key (the preferences toggle) and
     /// dispatch a PlaybackAction whenever it changes, so the playback state
     /// stays in sync with the user's local preference.
-    fn watch_skip_explicit_setting(settings: &gio::Settings, dispatcher: &dyn ActionDispatcher) {
-        let d = dispatcher.box_clone();
+    fn watch_skip_explicit_setting(settings: &gio::Settings, dispatcher: &Dispatcher) {
+        let d = dispatcher.clone();
         settings.connect_changed(Some("skip-explicit"), move |settings, _| {
             let skip = settings.boolean("skip-explicit");
             d.dispatch(PlaybackAction::SetSkipExplicit(skip).into());
+        });
+    }
+
+    fn watch_shuffle_separation_setting(settings: &gio::Settings, dispatcher: &Dispatcher) {
+        let d = dispatcher.clone();
+        settings.connect_changed(Some("shuffle-separation"), move |settings, _| {
+            let separation = settings.uint("shuffle-separation");
+            d.dispatch(PlaybackAction::SetShuffleSeparation(separation).into());
         });
     }
 
@@ -144,17 +153,19 @@ impl PlayerNotifier {
     fn currently_playing(&self) -> Option<CurrentlyPlaying> {
         let state = self.app_model.get_state();
         let song = state.playback.current_song_id()?;
-        let offset = state.playback.current_song_index()?;
         let source = state.playback.current_source().cloned();
-        let result = match source {
-            Some(source) if source.has_spotify_uri() => CurrentlyPlaying::WithSource {
-                source,
-                offset,
-                song,
-            },
+        let context_offset = state.playback.current_context_index();
+        let result = match (source, context_offset) {
+            (Some(source), Some(offset)) if source.has_spotify_uri() => {
+                CurrentlyPlaying::WithSource {
+                    source,
+                    offset,
+                    song,
+                }
+            }
             _ => CurrentlyPlaying::Songs {
-                songs: state.playback.songs().map_collect(|s| s.id),
-                offset,
+                songs: state.playback.upcoming_ids(),
+                offset: 0,
             },
         };
         Some(result)
@@ -169,10 +180,6 @@ impl PlayerNotifier {
         let command = match event {
             LoginEvent::LoginStarted(LoginStartedEvent::Restore) => Some(Command::Restore),
             LoginEvent::LoginStarted(LoginStartedEvent::InitLogin) => Some(Command::InitLogin),
-            LoginEvent::LoginStarted(LoginStartedEvent::CompleteLogin) => {
-                Some(Command::CompleteLogin)
-            }
-            LoginEvent::FreshTokenRequested => Some(Command::RefreshToken),
             LoginEvent::LogoutCompleted => Some(Command::Logout),
             _ => None,
         };

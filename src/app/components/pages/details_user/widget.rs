@@ -9,9 +9,9 @@ use super::UserDetailsModel;
 
 use crate::app::components::{
     CardLayout, CardSize, Component, DetailsPageComponent, EventListener, HasHeaderBarModel,
-    HeaderRegistrar, SortOrder,
+    PageHeader, SortOrder,
 };
-use crate::app::{ActionDispatcher, AppEvent, Worker};
+use crate::app::{AppEvent, Dispatcher};
 
 /// GTK widget for the user profile detail page.
 pub struct UserDetails {
@@ -21,22 +21,15 @@ pub struct UserDetails {
 impl UserDetails {
     pub fn new(
         model: UserDetailsModel,
-        worker: Worker,
         shared_layout: Rc<Cell<CardLayout>>,
         shared_size: Rc<Cell<CardSize>>,
-        dispatcher: Rc<dyn ActionDispatcher>,
-        registrar: HeaderRegistrar,
-        name: String,
+        dispatcher: Dispatcher,
+        header: PageHeader,
     ) -> Self {
         let model = Rc::new(model);
 
-        let mut component = DetailsPageComponent::new(
-            model.clone(),
-            model.to_headerbar_model(),
-            worker,
-            registrar,
-            name,
-        );
+        let mut component =
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), header);
         component.create_embedded_card_list(
             Some(&gettext("Public Playlists")),
             "user_playlists",

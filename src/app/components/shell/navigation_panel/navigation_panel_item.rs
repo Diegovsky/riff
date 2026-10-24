@@ -1,0 +1,214 @@
+use gettextrs::gettext;
+use glib::Properties;
+use gtk::prelude::*;
+use gtk::subclass::prelude::*;
+
+use crate::app::models::PlaylistSummary;
+use crate::app::state::HomePage;
+
+const LIBRARY: &str = "library";
+const SAVED_TRACKS: &str = "saved_tracks";
+const NOW_PLAYING: &str = "now_playing";
+const SAVED_PLAYLISTS: &str = "saved_playlists";
+const SAVED_ARTISTS: &str = "saved_artists";
+const PLAYLIST: &str = "playlist";
+const ALBUM: &str = "album";
+const ARTIST: &str = "artist";
+const TRACK: &str = "track";
+pub const SAVED_PLAYLISTS_SECTION: &str = "saved_playlists_section";
+pub const PINNED_SECTION: &str = "pinned_section";
+pub const LIBRARY_SECTION: &str = "library_section";
+
+#[derive(Debug)]
+pub enum NavigationPanelDestination {
+    Library,
+    SavedTracks,
+    NowPlaying,
+    SavedPlaylists,
+    SavedArtists,
+    Playlist(PlaylistSummary),
+    Album { id: String, title: String },
+    Artist { id: String, title: String },
+    Track { id: String, title: String },
+}
+
+impl NavigationPanelDestination {
+    pub fn home_page(&self) -> Option<HomePage> {
+        match self {
+            Self::Library => Some(HomePage::Library),
+            Self::SavedTracks => Some(HomePage::SavedTracks),
+            Self::NowPlaying => Some(HomePage::NowPlaying),
+            Self::SavedPlaylists => Some(HomePage::SavedPlaylists),
+            Self::SavedArtists => Some(HomePage::SavedArtists),
+            Self::Playlist(_) | Self::Album { .. } | Self::Artist { .. } | Self::Track { .. } => {
+                None
+            }
+        }
+    }
+
+    pub fn from_home_page(page: HomePage) -> Self {
+        match page {
+            HomePage::Library => Self::Library,
+            HomePage::SavedTracks => Self::SavedTracks,
+            HomePage::NowPlaying => Self::NowPlaying,
+            HomePage::SavedPlaylists => Self::SavedPlaylists,
+            HomePage::SavedArtists => Self::SavedArtists,
+        }
+    }
+
+    pub fn id(&self) -> &'static str {
+        match self {
+            Self::Library => LIBRARY,
+            Self::SavedTracks => SAVED_TRACKS,
+            Self::NowPlaying => NOW_PLAYING,
+            Self::SavedPlaylists => SAVED_PLAYLISTS,
+            Self::SavedArtists => SAVED_ARTISTS,
+            Self::Playlist(_) => PLAYLIST,
+            Self::Album { .. } => ALBUM,
+            Self::Artist { .. } => ARTIST,
+            Self::Track { .. } => TRACK,
+        }
+    }
+
+    pub fn title(&self) -> String {
+        match self {
+            // translators: This is a navigation panel entry to browse to saved albums.
+            Self::Library => gettext("Library"),
+            // translators: This is a navigation panel entry to browse to saved tracks.
+            Self::SavedTracks => gettext("Saved Tracks"),
+            // translators: This is a navigation panel entry to browse to saved playlists.
+            Self::NowPlaying => gettext("Now Playing"),
+            // translators: This is a navigation panel entry that marks that the entries below are playlists.
+            Self::SavedPlaylists => gettext("Playlists"),
+            // translators: This is a navigation panel entry to browse to followed artists.
+            Self::SavedArtists => gettext("Artists"),
+            Self::Playlist(PlaylistSummary { title, .. })
+            | Self::Album { title, .. }
+            | Self::Artist { title, .. }
+            | Self::Track { title, .. } => title.clone(),
+        }
+    }
+
+    pub fn icon(&self) -> &'static str {
+        match self {
+            Self::Library => "library-music-symbolic",
+            Self::SavedTracks => "audio-x-generic-symbolic",
+            Self::NowPlaying => "now-playing-symbolic",
+            Self::SavedPlaylists => "playlist2-symbolic",
+            Self::SavedArtists => "avatar-default-symbolic",
+            Self::Playlist(_) => "playlist2-symbolic",
+            Self::Album { .. } => "library-music-symbolic",
+            Self::Artist { .. } => "avatar-default-symbolic",
+            Self::Track { .. } => "audio-x-generic-symbolic",
+        }
+    }
+}
+
+impl NavigationPanelItem {
+    pub fn from_destination(dest: NavigationPanelDestination) -> Self {
+        let (id, data, title) = match dest {
+            NavigationPanelDestination::Playlist(PlaylistSummary { id, title }) => {
+                (PLAYLIST, Some(id), title)
+            }
+            NavigationPanelDestination::Album { id, title } => (ALBUM, Some(id), title),
+            NavigationPanelDestination::Artist { id, title } => (ARTIST, Some(id), title),
+            NavigationPanelDestination::Track { id, title } => (TRACK, Some(id), title),
+            _ => (dest.id(), None, dest.title()),
+        };
+        glib::Object::builder()
+            .property("id", id)
+            .property("data", data.unwrap_or_default())
+            .property("title", &title)
+            .property("navigatable", true)
+            .build()
+    }
+
+    pub fn playlists_section() -> Self {
+        glib::Object::builder()
+            .property("id", SAVED_PLAYLISTS_SECTION)
+            .property("data", String::new())
+            .property("title", gettext("All Playlists"))
+            .property("navigatable", false)
+            .build()
+    }
+
+    pub fn pinned_section() -> Self {
+        glib::Object::builder()
+            .property("id", PINNED_SECTION)
+            .property("data", String::new())
+            .property("title", gettext("Pinned"))
+            .property("navigatable", false)
+            .build()
+    }
+
+    pub fn library_section() -> Self {
+        glib::Object::builder()
+            .property("id", LIBRARY_SECTION)
+            .property("data", String::new())
+            .property("title", gettext("Library"))
+            .property("navigatable", false)
+            .build()
+    }
+
+    pub fn destination(&self) -> Option<NavigationPanelDestination> {
+        let navigatable = self.property::<bool>("navigatable");
+        if navigatable {
+            let id = self.id();
+            let data = self.property::<String>("data");
+            let title = self.title();
+            match id.as_str() {
+                LIBRARY => Some(NavigationPanelDestination::Library),
+                SAVED_TRACKS => Some(NavigationPanelDestination::SavedTracks),
+                NOW_PLAYING => Some(NavigationPanelDestination::NowPlaying),
+                SAVED_PLAYLISTS => Some(NavigationPanelDestination::SavedPlaylists),
+                SAVED_ARTISTS => Some(NavigationPanelDestination::SavedArtists),
+                PLAYLIST => Some(NavigationPanelDestination::Playlist(PlaylistSummary {
+                    id: data,
+                    title,
+                })),
+                ALBUM => Some(NavigationPanelDestination::Album { id: data, title }),
+                ARTIST => Some(NavigationPanelDestination::Artist { id: data, title }),
+                TRACK => Some(NavigationPanelDestination::Track { id: data, title }),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn icon(&self) -> Option<&str> {
+        self.destination().map(|d| d.icon())
+    }
+}
+
+mod imp {
+    use super::*;
+    use std::cell::{Cell, RefCell};
+
+    #[derive(Debug, Default, Properties)]
+    #[properties(wrapper_type = super::NavigationPanelItem)]
+    pub struct NavigationPanelItem {
+        #[property(get, set)]
+        pub id: RefCell<String>,
+        #[property(get, set)]
+        pub data: RefCell<String>,
+        #[property(get, set)]
+        pub title: RefCell<String>,
+        #[property(get, set)]
+        pub navigatable: Cell<bool>,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for NavigationPanelItem {
+        const NAME: &'static str = "NavigationPanelItem";
+        type Type = super::NavigationPanelItem;
+        type ParentType = glib::Object;
+    }
+
+    #[glib::derived_properties]
+    impl ObjectImpl for NavigationPanelItem {}
+}
+
+glib::wrapper! {
+    pub struct NavigationPanelItem(ObjectSubclass<imp::NavigationPanelItem>);
+}

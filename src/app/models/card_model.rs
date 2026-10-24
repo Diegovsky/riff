@@ -1,6 +1,5 @@
 #![allow(clippy::all)]
 
-use gettextrs::gettext;
 use gio::prelude::*;
 use glib::subclass::prelude::*;
 use glib::Properties;
@@ -25,15 +24,10 @@ impl CardModel {
         insertion_position: Option<i64>,
         category: Option<&str>,
     ) -> CardModel {
-        let title = if title.is_empty() && !id.is_empty() {
-            gettext("Untitled")
-        } else {
-            title.to_string()
-        };
         let mut builder = glib::Object::builder()
             .property("id", id)
             .property("image", &image)
-            .property("title", &title)
+            .property("title", title)
             .property("subtitle", subtitle);
         if let Some(rd) = release_date {
             builder = builder.property("release-date", rd);
@@ -48,6 +42,19 @@ impl CardModel {
             builder = builder.property("category", cat);
         }
         builder.build()
+    }
+
+    pub fn duplicate(&self) -> CardModel {
+        let mut builder = glib::Object::builder();
+        for property in self.list_properties() {
+            let name = property.name();
+            builder = builder.property(name, self.property_value(name));
+        }
+        builder.build()
+    }
+
+    pub fn set_image_url(&self, image: Option<&str>) {
+        self.set_property("image", image);
     }
 
     pub fn with_data<T: Any>(self, data: T) -> Self {
@@ -88,6 +95,8 @@ mod imp {
         insertion_position: Cell<i64>,
         #[property(get, set)]
         category: RefCell<String>,
+        #[property(get, set)]
+        owner: RefCell<String>,
 
         pub data: RefCell<Option<Box<dyn Any + 'static>>>,
     }
@@ -106,10 +115,8 @@ mod imp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::models::{
-        AlbumDescription, ArtistRef, ArtistSummary, ImageSet, PlaylistDescription, SongBatch,
-        UserRef,
-    };
+    use crate::app::models::{make_album, make_artist, make_playlist};
+    use riff_api::models::{ArtistRef, Image, ImageSet, Provider, ResourceId, UserRef};
 
     #[test]
     fn test_new_with_all_fields() {
@@ -128,6 +135,33 @@ mod tests {
         assert_eq!(card.image(), Some(img));
         assert_eq!(card.title(), "My Title");
         assert_eq!(card.subtitle(), "My Subtitle");
+    }
+
+    #[test]
+    fn test_duplicate_copies_every_property() {
+        let img = "https://example.com/img.jpg".to_string();
+        let card = CardModel::new(
+            "id",
+            Some(&img),
+            "Title",
+            "Sub",
+            Some("2023-05-01"),
+            Some(42),
+            Some(7),
+            Some("album"),
+        );
+        card.set_owner("someone".to_string());
+        let copy = card.duplicate();
+        assert_ne!(card, copy);
+        for property in card.list_properties() {
+            let name = property.name();
+            assert_eq!(
+                format!("{:?}", card.property_value(name)),
+                format!("{:?}", copy.property_value(name)),
+                "{name}"
+            );
+        }
+        assert_eq!(copy.owner(), "someone");
     }
 
     #[test]
@@ -169,25 +203,25 @@ mod tests {
 
     #[test]
     fn test_from_album_description() {
-        let album = AlbumDescription {
-            id: "album1".to_string(),
-            title: "Album Title".to_string(),
-            artists: vec![
-                ArtistRef {
-                    id: "a1".to_string(),
-                    name: "Artist A".to_string(),
-                },
-                ArtistRef {
-                    id: "a2".to_string(),
-                    name: "Artist B".to_string(),
-                },
-            ],
-            release_date: Some("2023-05-01".to_string()),
-            art: ImageSet::from_images(vec![(Some(300), "https://img.com/cover.jpg".to_string())]),
-            songs: SongBatch::empty(),
-            is_liked: false,
-            popularity: 72,
-            album_type: Some("album".to_string()),
+        let mut album = make_album("album1");
+        album.title = "Album Title".to_string();
+        album.artists = vec![
+            ArtistRef {
+                rri: ResourceId::new(Provider::Spotify, "a1"),
+                name: "Artist A".to_string(),
+            },
+            ArtistRef {
+                rri: ResourceId::new(Provider::Spotify, "a2"),
+                name: "Artist B".to_string(),
+            },
+        ];
+        album.art = ImageSet {
+            images: vec![Image {
+                url: "https://img.com/cover.jpg".to_string(),
+                width: Some(300),
+                height: Some(300),
+            }],
+            template: None,
         };
         let card = CardModel::from(&album);
         assert_eq!(card.id(), "album1");
@@ -198,16 +232,11 @@ mod tests {
 
     #[test]
     fn test_from_playlist_description() {
-        let playlist = PlaylistDescription {
-            id: "pl1".to_string(),
-            title: "My Playlist".to_string(),
-            art: None,
-            songs: SongBatch::empty(),
-            owner: UserRef {
-                id: "user1".to_string(),
-                display_name: "John".to_string(),
-            },
-        };
+        let mut playlist = make_playlist("pl1", "My Playlist");
+        playlist.owner = Some(UserRef {
+            rri: ResourceId::new(Provider::Spotify, "user1"),
+            display_name: "John".to_string(),
+        });
         let card = CardModel::from(&playlist);
         assert_eq!(card.id(), "pl1");
         assert_eq!(card.title(), "My Playlist");
@@ -217,14 +246,14 @@ mod tests {
 
     #[test]
     fn test_from_artist_summary() {
-        let artist = ArtistSummary {
-            id: "art1".to_string(),
-            name: "Cool Artist".to_string(),
-            photo: ImageSet::from_images(vec![(
-                Some(300),
-                "https://img.com/photo.jpg".to_string(),
-            )]),
-            popularity: 85,
+        let mut artist = make_artist("art1", "Cool Artist");
+        artist.art = ImageSet {
+            images: vec![Image {
+                url: "https://img.com/photo.jpg".to_string(),
+                width: Some(300),
+                height: Some(300),
+            }],
+            template: None,
         };
         let card = CardModel::from(&artist);
         assert_eq!(card.id(), "art1");
@@ -235,12 +264,7 @@ mod tests {
 
     #[test]
     fn test_from_artist_summary_no_photo() {
-        let artist = ArtistSummary {
-            id: "art2".to_string(),
-            name: "No Photo".to_string(),
-            photo: None,
-            popularity: 0,
-        };
+        let artist = make_artist("art2", "No Photo");
         let card = CardModel::from(&artist);
         assert_eq!(card.image(), None);
     }

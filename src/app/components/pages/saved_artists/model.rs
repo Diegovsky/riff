@@ -5,24 +5,23 @@ use std::rc::Rc;
 use gettextrs::gettext;
 
 use crate::app::components::{
-    CardLayout, CardListComponent, CardListModel, CardListPageModel, CardSize, ImageShape,
-    SortOrder,
+    dispatch_api_read, playing_card, CardLayout, CardListComponent, CardListModel,
+    CardListPageModel, CardSize, ImageShape, PlayingCard, SortOrder,
 };
-use crate::app::dispatch::Worker;
 use crate::app::models::*;
 use crate::app::state::HomeState;
 use crate::app::{
-    ActionDispatcher, AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, ListStore,
+    AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Dispatcher, ListStore,
     PaginationTarget,
 };
 
 pub struct SavedArtistsModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl SavedArtistsModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,
@@ -35,17 +34,20 @@ impl SavedArtistsModel {
 }
 
 impl CardListModel for SavedArtistsModel {
+    fn playing_card(&self) -> PlayingCard {
+        playing_card(&self.app_model.get_state().playback)
+    }
+
     fn get_store(&self) -> Option<impl Deref<Target = ListStore<CardModel>> + '_> {
         Some(Ref::map(self.state()?, |s| &s.artists))
     }
 
     fn refresh(&self) {
-        let api = self.app_model.get_spotify();
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                let (artists, cursor) = api.get_followed_artists(None, 30).await?;
-                Ok(BrowserAction::SetSavedArtists(artists, cursor).into())
-            });
+        let api = self.app_model.api();
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            let (artists, cursor) = api.get_followed_artists(None, 30, tag).await?;
+            Ok(BrowserAction::SetSavedArtists(artists, cursor).into())
+        });
     }
 
     fn has_items(&self) -> bool {
@@ -75,12 +77,11 @@ impl CardListModel for SavedArtistsModel {
         self.app_model
             .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SavedArtists).into());
 
-        let api = self.app_model.get_spotify();
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                let (artists, cursor) = api.get_followed_artists(after, 30).await?;
-                Ok(BrowserAction::AppendSavedArtists(artists, cursor).into())
-            });
+        let api = self.app_model.api();
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            let (artists, cursor) = api.get_followed_artists(after.as_deref(), 30, tag).await?;
+            Ok(BrowserAction::AppendSavedArtists(artists, cursor).into())
+        });
     }
 
     fn open_item(&self, id: String) {
@@ -125,17 +126,16 @@ impl CardListPageModel for SavedArtistsModel {
 pub type SavedArtists = CardListComponent<SavedArtistsModel>;
 
 pub fn make_saved_artists(
-    worker: Worker,
     model: SavedArtistsModel,
     shared_layout: Rc<Cell<CardLayout>>,
     shared_size: Rc<Cell<CardSize>>,
-    dispatcher: Rc<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 ) -> SavedArtists {
-    CardListComponent::new(
-        Rc::new(model),
-        worker,
-        shared_layout,
-        shared_size,
-        dispatcher,
-    )
+    CardListComponent::new(Rc::new(model), shared_layout, shared_size, dispatcher)
+}
+
+impl crate::app::ProvidesApi for SavedArtistsModel {
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.app_model.api()
+    }
 }

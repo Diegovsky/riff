@@ -1,16 +1,18 @@
-use crate::api::clear_user_cache;
+use crate::app::components::dispatch_api_read;
 use crate::app::state::{LoginAction, PlaybackAction};
-use crate::app::{ActionDispatcher, AppModel};
+use crate::app::{AppModel, Dispatcher};
 use std::ops::Deref;
 use std::rc::Rc;
 
+const USER_PLAYLISTS_PAGE: usize = 50;
+
 pub struct UserMenuModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl UserMenuModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,
@@ -24,23 +26,44 @@ impl UserMenuModel {
 
     pub fn logout(&self) {
         self.dispatcher.dispatch(PlaybackAction::Stop.into());
-        self.dispatcher.dispatch_async(Box::pin(async {
-            // let _ = self.app_model.key.await;
-            let _ = clear_user_cache().await;
-            Some(LoginAction::Logout.into())
-        }));
+        let api = self.app_model.api();
+        let dispatcher = self.dispatcher.clone();
+        tokio::spawn(async move {
+            api.clear_user_cache().await;
+            dispatcher.dispatch(LoginAction::Logout.into());
+        });
     }
 
     pub fn fetch_user_playlists(&self) {
-        let api = self.app_model.get_spotify();
-        if self.username().is_some() {
-            self.dispatcher
-                .call_spotify_and_dispatch(move || async move {
-                    api.get_saved_playlists(0, 30).await.map(|playlists| {
-                        let summaries = playlists.into_iter().map(|p| p.into()).collect();
-                        LoginAction::SetUserPlaylists(summaries).into()
-                    })
-                });
-        }
+        let api = self.app_model.api();
+        let Some(user) = self.username().map(|user| user.clone()) else {
+            return;
+        };
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            let mut playlists = Vec::new();
+            let mut offset = 0;
+            loop {
+                let page = api
+                    .get_saved_playlists(offset, USER_PLAYLISTS_PAGE, tag)
+                    .await?;
+                offset += USER_PLAYLISTS_PAGE;
+                let last = match page.total {
+                    Some(total) => offset >= total,
+                    None => page.items.len() < USER_PLAYLISTS_PAGE,
+                };
+                let empty = page.items.is_empty();
+                playlists.extend(page.items);
+                if last || empty {
+                    break;
+                }
+            }
+            let owned = playlists
+                .iter()
+                .filter(|p| p.owner.as_ref().is_some_and(|o| o.rri.id == user))
+                .map(|p| p.rri.id.clone())
+                .collect();
+            let summaries = playlists.into_iter().map(|p| p.into()).collect();
+            Ok(LoginAction::SetUserPlaylists(summaries, owned).into())
+        });
     }
 }

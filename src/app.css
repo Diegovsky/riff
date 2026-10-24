@@ -17,6 +17,139 @@
   transition: background-color 0.3s ease;
 }
 
+.missing-art {
+  box-shadow: none;
+  background-color: color-mix(in srgb, currentColor 10%, transparent);
+  background-image: -gtk-icontheme("audio-x-generic-symbolic");
+  background-size: 45%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
 .playlist__title-entry--ro {
   background: none;
+}
+
+.navigation-sidebar > row.navigation-section,
+.navigation-sidebar > row.navigation-section:hover,
+.navigation-sidebar > row.navigation-section:active {
+  margin-top: 12px;
+  background: none;
+}
+
+.navigation-sidebar > row.navigation-section > box > label:disabled {
+  filter: none;
+}
+
+.navigation-sidebar > row.navigation-section > box > label {
+  font-size: 10pt;
+  font-weight: 700;
+  color: color-mix(in srgb, currentColor 55%, transparent);
+}
+
+@keyframes header-button-added {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.6);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+headerbar .header-button--added {
+  animation: header-button-added 250ms ease-out;
+}
+
+@keyframes header-button-removed {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.6);
+  }
+}
+
+headerbar .header-button--removed {
+  animation: header-button-removed 250ms ease-in forwards;
+}
+
+/* History menus hang off header bar buttons, whose bold label weight they would inherit */
+popover.history-menu {
+  font-weight: normal;
+}
+
+/* Hide scrollbars while the navigation stack's page transition is running */
+stack.transitioning scrollbar {
+  opacity: 0;
+}
+
+.playback-indicator {
+  opacity: 1;
+  min-width: 16px;
+  min-height: 16px;
+  color: @accent_bg_color;
+  -gtk-icon-source: -gtk-icontheme("playback-0-symbolic");
+  animation: playing 1s steps(17) infinite;
+}
+
+.now-playing__idle,
+.now-playing--idle .now-playing__playing {
+  opacity: 0;
+  -gtk-icon-transform: scale(0.6);
+  transition: opacity 500ms ease-in-out, -gtk-icon-transform 500ms ease-in-out;
+}
+
+.now-playing__playing,
+.now-playing--idle .now-playing__idle {
+  transition: opacity 500ms ease-in-out 200ms, -gtk-icon-transform 500ms ease-in-out 200ms;
+}
+
+.now-playing--idle .now-playing__idle {
+  opacity: 1;
+  -gtk-icon-transform: none;
+}
+
+.now-playing--idle .now-playing__playing {
+  animation: none;
+  -gtk-icon-source: -gtk-icontheme("playback-paused-symbolic");
+}
+
+@keyframes playing {
+  0% { -gtk-icon-source: -gtk-icontheme("playback-0-symbolic"); }
+  5.88% { -gtk-icon-source: -gtk-icontheme("playback-1-symbolic"); }
+  11.76% { -gtk-icon-source: -gtk-icontheme("playback-2-symbolic"); }
+  17.65% { -gtk-icon-source: -gtk-icontheme("playback-3-symbolic"); }
+  23.53% { -gtk-icon-source: -gtk-icontheme("playback-4-symbolic"); }
+  29.41% { -gtk-icon-source: -gtk-icontheme("playback-5-symbolic"); }
+  35.29% { -gtk-icon-source: -gtk-icontheme("playback-6-symbolic"); }
+  41.18% { -gtk-icon-source: -gtk-icontheme("playback-7-symbolic"); }
+  47.06% { -gtk-icon-source: -gtk-icontheme("playback-8-symbolic"); }
+  52.94% { -gtk-icon-source: -gtk-icontheme("playback-9-symbolic"); }
+  58.82% { -gtk-icon-source: -gtk-icontheme("playback-10-symbolic"); }
+  64.71% { -gtk-icon-source: -gtk-icontheme("playback-11-symbolic"); }
+  70.59% { -gtk-icon-source: -gtk-icontheme("playback-12-symbolic"); }
+  76.47% { -gtk-icon-source: -gtk-icontheme("playback-13-symbolic"); }
+  82.35% { -gtk-icon-source: -gtk-icontheme("playback-14-symbolic"); }
+  88.24% { -gtk-icon-source: -gtk-icontheme("playback-15-symbolic"); }
+  94.12% { -gtk-icon-source: -gtk-icontheme("playback-16-symbolic"); }
+  100% { -gtk-icon-source: -gtk-icontheme("playback-0-symbolic"); }
+}
+
+bottom-sheet.bottom-sheet--padded > sheet {
+  margin-left: 32px;
+  margin-right: 32px;
+}
+
+.utility-panel__header {
+  padding-bottom: 6px;
+}
+
+.queue-page__selection-bar {
+  padding-bottom: 11px;
 }

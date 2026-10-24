@@ -23,6 +23,16 @@ template $SettingsWindow : Adw.PreferencesDialog {
         };
       }
 
+      Adw.SwitchRow queue_side_panel_switch {
+        /* Translators: Title for an item in preferences */
+
+        title: _("Queue Side Panel");
+
+        /* Translators: Description for the queue side panel preference */
+
+        subtitle: _("Show the queue in a panel at the side of the window");
+      }
+
       Adw.ComboRow close_behavior {
         /* Translators: Title for an item in preferences */
 
@@ -30,12 +40,12 @@ template $SettingsWindow : Adw.PreferencesDialog {
 
         /* Translators: Description for the close window behavior preference */
 
-        subtitle: _("What should Riff do if you close it while audio is playing?");
+        subtitle: _("Riff's behavior when closing the main window");
         model: StringList {
           strings [
             _("Ask"),
-            _("Continue in Background"),
-            _("Stop and Quit")
+            _("Run in Background"),
+            _("Quit")
           ]
         };
       }
@@ -58,6 +68,21 @@ template $SettingsWindow : Adw.PreferencesDialog {
         /* Translators: Description for the skip explicit tracks toggle */
 
         subtitle: _("Automatically skip tracks marked as explicit");
+      }
+
+      Adw.SpinRow shuffle_separation {
+        /* Translators: Title for the shuffle separation preference */
+
+        title: _("Shuffle Separation");
+
+        // The subtitle is set from the code: it includes the value
+        adjustment: Adjustment {
+          lower: 1;
+          upper: 10;
+          value: 2;
+          step-increment: 1;
+          page-increment: 1;
+        };
       }
     }
 
@@ -122,19 +147,11 @@ template $SettingsWindow : Adw.PreferencesDialog {
         };
       }
 
-      Adw.ActionRow gapless_playback {
+      Adw.SwitchRow gapless_playback {
         /* Translators: Title for an item in preferences */
 
         title: _("Gapless Playback");
         subtitle: _("Eliminates silence between consecutive tracks");
-        name: "gapless_playback_row";
-        activatable-widget: gapless_playback_switch;
-        visible: true;
-
-        Switch gapless_playback_switch {
-          margin-top: 12;
-          margin-bottom: 12;
-        }
       }
 
       Adw.ComboRow volume_curve {
@@ -278,6 +295,88 @@ template $SettingsWindow : Adw.PreferencesDialog {
 
         Entry ap_port {
           valign: center;
+        }
+      }
+    }
+
+    Adw.PreferencesGroup {
+      /* Translators: Header for a group of preference items regarding data caching */
+
+      title: _("Caching");
+
+      /* Translators: Description under the Caching preferences header */
+
+      description: _("Control how Riff caches data locally.");
+
+      Adw.SpinRow memory_cache_size {
+        /* Translators: Title for the in-memory cache size preference */
+
+        title: _("Memory Cache Size (MB)");
+
+        /* Translators: Description for the in-memory cache size preference */
+
+        subtitle: _("Maximum memory allocated for caching data while Riff is running.");
+        adjustment: Adjustment {
+          lower: 1;
+          upper: 1024;
+          value: 32;
+          step-increment: 8;
+          page-increment: 32;
+        };
+      }
+
+      Adw.SpinRow disk_cache_size {
+        /* Translators: Title for the on-disk image cache size preference */
+
+        title: _("Disk Cache Size (MB)");
+
+        /* Translators: Description for the on-disk image cache size preference */
+
+        subtitle: _("Maximum disk space allocated for caching data between sessions.");
+        adjustment: Adjustment {
+          lower: 16;
+          upper: 4096;
+          value: 256;
+          step-increment: 16;
+          page-increment: 64;
+        };
+      }
+
+      Adw.SpinRow audio_cache_size {
+        /* Translators: Title for the disk audio cache size preference */
+
+        title: _("Audio Cache Size (MB)");
+
+        /* Translators: Description for the disk audio cache size preference */
+
+        subtitle: _("Maximum disk space allocated for caching downloaded audio.");
+        adjustment: Adjustment {
+          lower: 64;
+          upper: 16384;
+          value: 1024;
+          step-increment: 64;
+          page-increment: 256;
+        };
+      }
+
+      Adw.ActionRow {
+        /* Translators: Title for the clear cache action row */
+
+        title: _("Clear Cache");
+
+        /* Translators: Description for the clear cache action row */
+
+        subtitle: _("Remove all cached data and images stored on disk");
+
+        Button clear_cache_button {
+          /* Translators: Label for the button that clears the cache */
+
+          label: _("Clear");
+          valign: center;
+
+          styles [
+            "destructive-action",
+          ]
         }
       }
     }

@@ -9,22 +9,20 @@ use crate::app::state::{AppAction, AppEvent, UpdatableState};
 pub enum TryLoginAction {
     Restore,
     InitLogin,
-    CompleteLogin,
 }
 
 #[derive(Clone, Debug)]
 pub enum LoginAction {
-    ShowLogin,
     OpenLoginUrl(Url),
     TryLogin(TryLoginAction),
     SetLoginSuccess(String),
-    SetUserPlaylists(Vec<PlaylistSummary>),
+    SetUserPlaylists(Vec<PlaylistSummary>, HashSet<String>),
     UpdateUserPlaylist(PlaylistSummary),
     PrependUserPlaylist(Vec<PlaylistSummary>),
+    PrependOwnedPlaylist(PlaylistSummary),
     RemoveUserPlaylist(String),
     SetLoginFailure,
     SetNotPremium,
-    RefreshToken,
     TokenRefreshed,
     Logout,
 }
@@ -39,19 +37,16 @@ impl From<LoginAction> for AppAction {
 pub enum LoginStartedEvent {
     Restore,
     InitLogin,
-    CompleteLogin,
     OpenUrl(Url),
 }
 
 #[derive(Clone, Debug)]
 pub enum LoginEvent {
-    LoginShown,
     LoginStarted(LoginStartedEvent),
     LoginCompleted,
     UserPlaylistsLoaded,
     LoginFailed,
     NotPremium,
-    FreshTokenRequested,
     RefreshTokenCompleted,
     LogoutCompleted,
 }
@@ -66,10 +61,22 @@ impl From<LoginEvent> for AppEvent {
 pub struct LoginState {
     // Username
     pub user: Option<String>,
-    // Playlists owned by the logged in user
+    // Playlists saved by the logged in user: their own and those they follow
     pub playlists: Vec<PlaylistSummary>,
-    // Playlist IDs for O(1) ownership checks
+    // Playlist IDs for O(1) saved checks
     pub playlist_ids: HashSet<String>,
+    // IDs of the saved playlists the user owns
+    pub owned_playlist_ids: HashSet<String>,
+}
+
+impl LoginState {
+    pub fn owned_playlists(&self) -> Vec<PlaylistSummary> {
+        self.playlists
+            .iter()
+            .filter(|p| self.owned_playlist_ids.contains(&p.id))
+            .cloned()
+            .collect()
+    }
 }
 
 impl UpdatableState for LoginState {
@@ -80,15 +87,11 @@ impl UpdatableState for LoginState {
     fn update_with(&mut self, action: Cow<Self::Action>) -> Vec<Self::Event> {
         info!("update_with({:?})", action);
         match action.into_owned() {
-            LoginAction::ShowLogin => vec![LoginEvent::LoginShown.into()],
             LoginAction::OpenLoginUrl(url) => {
                 vec![LoginEvent::LoginStarted(LoginStartedEvent::OpenUrl(url)).into()]
             }
             LoginAction::TryLogin(TryLoginAction::Restore) => {
                 vec![LoginEvent::LoginStarted(LoginStartedEvent::Restore).into()]
-            }
-            LoginAction::TryLogin(TryLoginAction::CompleteLogin) => {
-                vec![LoginEvent::LoginStarted(LoginStartedEvent::CompleteLogin).into()]
             }
             LoginAction::SetLoginSuccess(username) => {
                 self.user = Some(username);
@@ -96,7 +99,6 @@ impl UpdatableState for LoginState {
             }
             LoginAction::SetLoginFailure => vec![LoginEvent::LoginFailed.into()],
             LoginAction::SetNotPremium => vec![LoginEvent::NotPremium.into()],
-            LoginAction::RefreshToken => vec![LoginEvent::FreshTokenRequested.into()],
             LoginAction::TokenRefreshed => {
                 vec![LoginEvent::RefreshTokenCompleted.into()]
             }
@@ -104,9 +106,10 @@ impl UpdatableState for LoginState {
                 self.user = None;
                 vec![LoginEvent::LogoutCompleted.into()]
             }
-            LoginAction::SetUserPlaylists(playlists) => {
+            LoginAction::SetUserPlaylists(playlists, owned) => {
                 self.playlist_ids = playlists.iter().map(|p| p.id.clone()).collect();
                 self.playlists = playlists;
+                self.owned_playlist_ids = owned;
                 vec![LoginEvent::UserPlaylistsLoaded.into()]
             }
             LoginAction::UpdateUserPlaylist(PlaylistSummary { id, title }) => {
@@ -123,9 +126,16 @@ impl UpdatableState for LoginState {
                 self.playlists = summaries;
                 vec![LoginEvent::UserPlaylistsLoaded.into()]
             }
+            LoginAction::PrependOwnedPlaylist(summary) => {
+                self.playlist_ids.insert(summary.id.clone());
+                self.owned_playlist_ids.insert(summary.id.clone());
+                self.playlists.insert(0, summary);
+                vec![LoginEvent::UserPlaylistsLoaded.into()]
+            }
             LoginAction::RemoveUserPlaylist(id) => {
                 self.playlists.retain(|p| p.id != id);
                 self.playlist_ids.remove(&id);
+                self.owned_playlist_ids.remove(&id);
                 vec![LoginEvent::UserPlaylistsLoaded.into()]
             }
             LoginAction::TryLogin(TryLoginAction::InitLogin) => {

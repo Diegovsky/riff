@@ -1,15 +1,16 @@
 use crate::app::state::{PlaybackAction, SettingsAction};
-use crate::app::{ActionDispatcher, AppModel};
+use crate::app::{AppAction, AppModel, Dispatcher};
 use crate::settings::RiffSettings;
+use gettextrs::gettext;
 use std::rc::Rc;
 
 pub struct SettingsModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl SettingsModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,
@@ -23,6 +24,23 @@ impl SettingsModel {
     pub fn set_settings(&self) {
         self.dispatcher
             .dispatch(SettingsAction::ChangeSettings.into());
+    }
+
+    pub fn show_restart_required(&self) {
+        self.dispatcher.dispatch(AppAction::ShowRestartRequired);
+    }
+
+    /// Clear the on-disk and in-memory data caches, plus librespot's
+    /// downloaded audio cache, then notify the user.
+    pub fn clear_cache(&self) {
+        let api = self.app_model.api();
+        let dispatcher = self.dispatcher.clone();
+        tokio::spawn(async move {
+            api.clear_user_cache().await;
+            crate::player::clear_audio_cache();
+            // Translators: Toast shown after the user clears the cache in settings.
+            dispatcher.dispatch(AppAction::ShowNotification(gettext("Cache cleared")));
+        });
     }
 
     pub fn settings(&self) -> RiffSettings {

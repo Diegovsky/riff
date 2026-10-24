@@ -1,13 +1,15 @@
 #![allow(non_snake_case)]
 #![allow(unused_variables)]
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::TryInto;
 
 use futures::channel::mpsc::UnboundedSender;
 use zbus::fdo::{Error, Result};
-use zbus::{interface, Interface, SignalContext};
-use zvariant::{ObjectPath, Value};
+use zbus::interface;
+use zbus::object_server::{Interface, SignalEmitter};
+use zbus::zvariant::{ObjectPath, Value};
 
 use super::types::*;
 use crate::app::models::RepeatMode;
@@ -90,7 +92,7 @@ impl RiffMprisPlayer {
         &mut self.state
     }
 
-    pub async fn notify_current_track_changed(&self, ctxt: &SignalContext<'_>) -> zbus::Result<()> {
+    pub async fn notify_current_track_changed(&self, ctxt: &SignalEmitter<'_>) -> zbus::Result<()> {
         let metadata = Value::from(self.metadata());
         let can_go_next = Value::from(self.can_go_next());
         let can_go_previous = Value::from(self.can_go_previous());
@@ -98,17 +100,17 @@ impl RiffMprisPlayer {
         zbus::fdo::Properties::properties_changed(
             ctxt,
             Self::name(),
-            &HashMap::from([
-                ("Metadata", &metadata),
-                ("CanGoNext", &can_go_next),
-                ("CanGoPrevious", &can_go_previous),
+            HashMap::from([
+                ("Metadata", metadata),
+                ("CanGoNext", can_go_next),
+                ("CanGoPrevious", can_go_previous),
             ]),
-            &[],
+            Cow::Borrowed(&[]),
         )
         .await
     }
 
-    pub async fn notify_loop_status(&self, ctxt: &SignalContext<'_>) -> zbus::Result<()> {
+    pub async fn notify_loop_status(&self, ctxt: &SignalEmitter<'_>) -> zbus::Result<()> {
         let loop_status = Value::from(self.loop_status());
         let can_go_next = Value::from(self.can_go_next());
         let can_go_previous = Value::from(self.can_go_previous());
@@ -116,12 +118,12 @@ impl RiffMprisPlayer {
         zbus::fdo::Properties::properties_changed(
             ctxt,
             Self::name(),
-            &HashMap::from([
-                ("LoopStatus", &loop_status),
-                ("CanGoNext", &can_go_next),
-                ("CanGoPrevious", &can_go_previous),
+            HashMap::from([
+                ("LoopStatus", loop_status),
+                ("CanGoNext", can_go_next),
+                ("CanGoPrevious", can_go_previous),
             ]),
-            &[],
+            Cow::Borrowed(&[]),
         )
         .await
     }
@@ -224,7 +226,7 @@ impl RiffMprisPlayer {
     }
 
     #[zbus(signal)]
-    pub async fn seeked(ctxt: &SignalContext<'_>, Position: i64) -> zbus::Result<()>;
+    pub async fn seeked(ctxt: &SignalEmitter<'_>, Position: i64) -> zbus::Result<()>;
 
     #[zbus(property)]
     pub fn can_control(&self) -> bool {
@@ -294,9 +296,9 @@ impl RiffMprisPlayer {
     #[zbus(property)]
     pub fn set_loop_status(&self, value: LoopStatus) -> zbus::Result<()> {
         let mode = match value {
-            LoopStatus::None => RepeatMode::None,
-            LoopStatus::Track => RepeatMode::Song,
-            LoopStatus::Playlist => RepeatMode::Playlist,
+            LoopStatus::None => RepeatMode::Off,
+            LoopStatus::Track => RepeatMode::Track,
+            LoopStatus::Playlist => RepeatMode::Context,
         };
         self.sender
             .unbounded_send(PlaybackAction::SetRepeatMode(mode).into())

@@ -2,101 +2,168 @@ using Gtk 4.0;
 using Adw 1;
 
 template $AppHeaderBar : Adw.Bin {
-  Overlay overlay {
+  // A 1px minimum, so the breakpoint applies before the header overflows
+  Adw.BreakpointBin breakpoint_bin {
+    width-request: 1;
+    height-request: 1;
     hexpand: true;
 
-    Adw.HeaderBar main_header {
-      show-end-title-buttons: true;
-      show-back-button: false;
+    Adw.Breakpoint compact_breakpoint {}
 
-      // Flat: no background or separator, so the header blends into the content.
-      styles [
-        "flat",
-      ]
+    child: Overlay overlay {
+      hexpand: true;
 
-      ToggleButton sidebar_toggle {
-        halign: start;
-        valign: center;
-        icon-name: "sidebar-show-symbolic";
-        action-name: "win.show-sidebar";
-        focus-on-click: false;
-        can-focus: false;
+      Adw.HeaderBar main_header {
+        show-end-title-buttons: true;
+        show-back-button: false;
 
-        /* Translators: Tooltip for the button that shows/hides the sidebar. */
+        styles [
+          "flat",
+        ]
 
-        tooltip-text: _("Toggle Sidebar");
+        ToggleButton navigation_panel_toggle {
+          visible: bind navigation_panel_toggle.active inverted;
+          halign: start;
+          valign: center;
+          icon-name: "sidebar-show-symbolic";
+          action-name: "win.show-navigation-panel";
+          focus-on-click: false;
+          can-focus: false;
+
+          /* Translators: Tooltip for the button that shows/hides the navigation panel. */
+          tooltip-text: _("Toggle Sidebar");
+        }
+
+        $Drawer start_drawer {
+          content: Box drawer_buttons {
+            spacing: 6;
+
+            Button go_back {
+              receives-default: true;
+              halign: start;
+              valign: center;
+              icon-name: "go-previous-symbolic";
+              has-frame: false;
+              focus-on-click: false;
+              can-focus: false;
+              sensitive: false;
+
+              /* Translators: Tooltip for the header bar button that navigates back. */
+              tooltip-text: _("Back");
+
+              GestureClick back_right_click {
+                button: 3;
+              }
+
+              GestureLongPress back_long_press {}
+            }
+
+            Button go_forward {
+              receives-default: true;
+              halign: start;
+              valign: center;
+              icon-name: "go-next-symbolic";
+              has-frame: false;
+              focus-on-click: false;
+              can-focus: false;
+              sensitive: false;
+
+              /* Translators: Tooltip for the header bar button that navigates forward. */
+              tooltip-text: _("Forward");
+
+              GestureClick forward_right_click {
+                button: 3;
+              }
+
+              GestureLongPress forward_long_press {}
+            }
+          };
+        }
+
+        [title]
+        Stack title_stack {
+          hexpand: true;
+          hhomogeneous: false;
+
+          Adw.WindowTitle window_title {}
+
+
+          $ClipBin custom_title {}
+        }
+
+        [end]
+        Box page_buttons {
+          spacing: 6;
+        }
       }
 
-      Button go_back {
-        receives-default: true;
-        halign: start;
-        valign: center;
-        icon-name: "go-previous-symbolic";
-        has-frame: false;
-        focus-on-click: false;
-        can-focus: false;
+      [overlay]
+      Adw.HeaderBar selection_header {
+        show-end-title-buttons: false;
+        show-start-title-buttons: false;
         visible: false;
 
-        /* Translators: Tooltip for the header bar button that navigates back. */
+        styles [
+          "selection-mode",
+        ]
 
-        tooltip-text: _("Back");
+        Button cancel {
+          receives-default: true;
+          halign: start;
+          valign: center;
+
+          /* Translators: Button label. Exits selection mode. */
+          label: _("Cancel");
+        }
+
+        [title]
+        Adw.WindowTitle selection_title {
+          title: "";
+        }
+
+        [end]
+        Button select_all {
+          valign: center;
+
+          /* Translators: Button label. Selects all visible songs. */
+          label: _("Select All");
+        }
       }
+    };
+  }
+}
 
-      [title]
-      Stack title_stack {
-        hexpand: true;
-        hhomogeneous: false;
-      }
+// History menus, parented to go_back and go_forward in code
+Popover back_history {
+  has-arrow: false;
 
-      [end]
-      Button start_selection {
-        icon-name: "object-select-symbolic";
-        /* Translators: Tooltip for the button that enters track selection mode. */
-        tooltip-text: _("Select");
-        focus-on-click: false;
-        can-focus: false;
-        visible: false;
-      }
+  styles [
+    "menu",
+    "history-menu",
+  ]
 
-      [end]
-      Stack end_stack {
-        hhomogeneous: false;
-      }
-    }
+  ListBox back_history_list {
+    selection-mode: none;
 
-    [overlay]
-    Adw.HeaderBar selection_header {
-      show-end-title-buttons: false;
-      show-start-title-buttons: false;
-      visible: false;
+    styles [
+      "navigation-sidebar",
+    ]
+  }
+}
 
-      styles [
-        "selection-mode",
-      ]
+Popover forward_history {
+  has-arrow: false;
 
-      Button cancel {
-        receives-default: true;
-        halign: start;
-        valign: center;
+  styles [
+    "menu",
+    "history-menu",
+  ]
 
-        /* Translators: Button label. Exits selection mode. */
+  ListBox forward_history_list {
+    selection-mode: none;
 
-        label: _("Cancel");
-      }
-
-      [title]
-      Adw.WindowTitle selection_title {
-        title: "";
-      }
-
-      [end]
-      Button select_all {
-        valign: center;
-
-        /* Translators: Button label. Selects all visible songs. */
-
-        label: _("Select All");
-      }
-    }
+    styles [
+      "navigation-sidebar",
+    ]
   }
 }

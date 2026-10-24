@@ -1,24 +1,21 @@
 use std::ops::Deref;
 use std::rc::Rc;
 
-use gtk::prelude::*;
-
-use crate::app::components::sidebar::SidebarDestination;
 use crate::app::components::EventListener;
 use crate::app::models::*;
-use crate::app::state::{PlaybackAction, PlaybackEvent, ScreenName, SelectionEvent};
-use crate::app::{ActionDispatcher, AppEvent, AppModel, AppState, BrowserAction, Worker};
+use crate::app::state::{HomePage, PlaybackAction, PlaybackEvent, Route, SelectionEvent};
+use crate::app::{AppEvent, AppModel, AppState, BrowserAction, Dispatcher};
 
 use super::playback_widget::PlaybackWidget;
-use super::PlaybackInfoMobileWidget;
+use super::{BarTrack, QueueBarWidget};
 
 pub struct PlaybackModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl PlaybackModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,
@@ -29,13 +26,13 @@ impl PlaybackModel {
         self.app_model.get_state()
     }
 
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.app_model.api()
+    }
+
     fn go_home(&self) {
-        // Reach now-playing like the sidebar does: pop to home and select its
-        // now-playing sub-page, reusing the home sub-page switch path.
-        self.dispatcher.dispatch_many(vec![
-            BrowserAction::NavigationPopTo(ScreenName::Home).into(),
-            BrowserAction::SetHomeVisiblePage(SidebarDestination::NowPlaying.id()).into(),
-        ]);
+        self.dispatcher
+            .dispatch(BrowserAction::Navigate(Route::Home(HomePage::NowPlaying)).into());
     }
 
     fn is_playing(&self) -> bool {
@@ -46,8 +43,12 @@ impl PlaybackModel {
         self.state().playback.is_shuffled()
     }
 
-    fn current_song(&self) -> Option<SongDescription> {
+    fn current_song(&self) -> Option<Track> {
         self.app_model.get_state().playback.current_song()
+    }
+
+    fn next_song(&self) -> Option<Track> {
+        self.app_model.get_state().playback.next_song()
     }
 
     fn play_next_song(&self) {
@@ -86,17 +87,11 @@ impl PlaybackModel {
 pub struct PlaybackControl {
     model: Rc<PlaybackModel>,
     widget: PlaybackWidget,
-    mobile_now_playing: PlaybackInfoMobileWidget,
-    worker: Worker,
+    queue_bar: QueueBarWidget,
 }
 
 impl PlaybackControl {
-    pub fn new(
-        model: PlaybackModel,
-        widget: PlaybackWidget,
-        mobile_now_playing: PlaybackInfoMobileWidget,
-        worker: Worker,
-    ) -> Self {
+    pub fn new(model: PlaybackModel, widget: PlaybackWidget, queue_bar: QueueBarWidget) -> Self {
         let model = Rc::new(model);
 
         widget.connect_play_pause(clone!(
@@ -143,9 +138,18 @@ impl PlaybackControl {
         Self {
             model,
             widget,
-            mobile_now_playing,
-            worker,
+            queue_bar,
         }
+    }
+
+    fn update_queue_bar(&self) {
+        let bar_track = |song: Track| BarTrack {
+            artist: song.artists_name(),
+            title: song.title,
+        };
+        let now_playing = self.model.current_song().map(bar_track);
+        let up_next = self.model.next_song().map(bar_track);
+        self.queue_bar.set_tracks(now_playing, up_next);
     }
 
     fn update_repeat(&self, mode: &RepeatMode) {
@@ -159,24 +163,20 @@ impl PlaybackControl {
     fn update_playing(&self) {
         let is_playing = self.model.is_playing();
         self.widget.set_playing(is_playing);
+        self.queue_bar.set_paused(!is_playing);
     }
 
     fn update_current_info(&self) {
         if let Some(song) = self.model.current_song() {
             self.widget
                 .set_title_and_artist(&song.title, &song.artists_name());
-            self.mobile_now_playing
-                .set_title_and_artist(&song.title, &song.artists_name());
-            self.mobile_now_playing.set_visible(true);
             self.widget.set_song_duration(Some(song.duration_ms as f64));
-            if let Some(url) = song.art.as_ref().and_then(|s| s.best_for_width(120)) {
+            if let Some(url) = song.art.best_for_width(120) {
                 self.widget
-                    .set_artwork_from_url(url.to_owned(), &self.worker);
+                    .set_artwork_from_url(url.to_owned(), self.model.api_service());
             }
         } else {
             self.widget.reset_info();
-            self.mobile_now_playing.reset_info();
-            self.mobile_now_playing.set_visible(false);
         }
     }
 
@@ -210,17 +210,24 @@ impl EventListener for PlaybackControl {
             }
             AppEvent::PlaybackEvent(PlaybackEvent::RepeatModeChanged(mode)) => {
                 self.update_repeat(mode);
+                self.update_queue_bar();
             }
             AppEvent::PlaybackEvent(PlaybackEvent::ShuffleChanged(_)) => {
                 self.update_shuffled();
+                self.update_queue_bar();
             }
             AppEvent::PlaybackEvent(PlaybackEvent::TrackChanged(_)) => {
                 self.update_playing();
                 self.update_current_info();
+                self.update_queue_bar();
             }
             AppEvent::PlaybackEvent(PlaybackEvent::PlaybackStopped) => {
                 self.update_playing();
                 self.update_current_info();
+                self.update_queue_bar();
+            }
+            AppEvent::PlaybackEvent(PlaybackEvent::PlaylistChanged) => {
+                self.update_queue_bar();
             }
             AppEvent::PlaybackEvent(PlaybackEvent::SeekSynced(pos))
             | AppEvent::PlaybackEvent(PlaybackEvent::TrackSeeked(pos)) => {

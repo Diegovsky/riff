@@ -55,6 +55,18 @@ impl Clock {
 #[derive(Clone)]
 pub struct Debouncer(Rc<Cell<Option<glib::source::SourceId>>>);
 
+impl std::fmt::Debug for Debouncer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Debouncer").finish_non_exhaustive()
+    }
+}
+
+impl Default for Debouncer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Debouncer {
     pub fn new() -> Self {
         Self(Rc::new(Cell::new(None)))
@@ -71,6 +83,13 @@ impl Debouncer {
                 glib::ControlFlow::Break
             });
         if let Some(previous_source) = self.0.replace(Some(new_source)) {
+            previous_source.remove();
+        }
+    }
+
+    /// Cancel a pending debounced call, if any, without running it.
+    pub fn stop(&self) {
+        if let Some(previous_source) = self.0.replace(None) {
             previous_source.remove();
         }
     }
@@ -141,6 +160,33 @@ where
     })
 }
 
+pub fn add_hover_class(widget: &impl IsA<gtk::Widget>, class: &'static str) {
+    let motion = gtk::EventControllerMotion::new();
+    motion.connect_enter(move |motion, _, _| {
+        if let Some(widget) = motion.widget() {
+            widget.add_css_class(class);
+        }
+    });
+    motion.connect_leave(move |motion| {
+        if let Some(widget) = motion.widget() {
+            widget.remove_css_class(class);
+        }
+    });
+    widget.add_controller(motion);
+}
+
+pub fn set_css_class(widget: &impl IsA<gtk::Widget>, class: &str, on: bool) {
+    if on {
+        widget.add_css_class(class);
+    } else {
+        widget.remove_css_class(class);
+    }
+}
+
+pub fn set_missing_art(widget: &impl IsA<gtk::Widget>, missing: bool) {
+    set_css_class(widget, "missing-art", missing);
+}
+
 pub fn format_duration(duration: f64) -> String {
     let seconds = (duration / 1000.0) as i32;
     let hours = seconds.div_euclid(3600);
@@ -151,4 +197,64 @@ pub fn format_duration(duration: f64) -> String {
     } else {
         format!("{minutes}∶{seconds:02}")
     }
+}
+
+/// Device pixels for `logical` px of artwork. Read from the display rather than
+/// a widget, so every caller lands under the same texture cache keys.
+pub fn decode_px(logical: i32) -> i32 {
+    let scale = gdk::Display::default()
+        .and_then(|display| display.monitors().item(0))
+        .and_then(|monitor| monitor.downcast::<gdk::Monitor>().ok())
+        .map(|monitor| monitor.scale_factor())
+        .unwrap_or(1)
+        .clamp(1, 3);
+    logical * scale
+}
+
+pub fn confirm_destructive(
+    parent: Option<&gtk::Widget>,
+    heading: &str,
+    body: &str,
+    confirm: &str,
+    on_confirmed: impl FnOnce() + 'static,
+) {
+    use gettextrs::gettext;
+    use libadwaita::prelude::*;
+
+    let dialog = libadwaita::AlertDialog::new(Some(heading), Some(body));
+    // translators: Button of a dialog asking to confirm something that cannot be undone: leaves things as they are.
+    dialog.add_response("cancel", &gettext("Cancel"));
+    dialog.add_response("confirm", confirm);
+    dialog.set_response_appearance("confirm", libadwaita::ResponseAppearance::Destructive);
+    dialog.set_default_response(Some("cancel"));
+    dialog.set_close_response("cancel");
+
+    let window = gio::Application::default()
+        .and_downcast::<gtk::Application>()
+        .and_then(|app| app.active_window())
+        .map(|window| window.upcast::<gtk::Widget>());
+    let parent = parent.cloned().or(window);
+    dialog.choose(parent.as_ref(), gio::Cancellable::NONE, move |response| {
+        if response.as_str() == "confirm" {
+            on_confirmed();
+        }
+    });
+}
+
+pub fn confirm_delete_playlist(
+    parent: Option<&gtk::Widget>,
+    on_confirmed: impl FnOnce() + 'static,
+) {
+    use gettextrs::gettext;
+
+    confirm_destructive(
+        parent,
+        // translators: Title of the dialog asking to confirm deleting a playlist.
+        &gettext("Delete Playlist?"),
+        // translators: Body of the dialog asking to confirm deleting a playlist.
+        &gettext("The playlist will be removed from your library."),
+        // translators: Button of the dialog asking to confirm deleting a playlist: deletes it.
+        &gettext("Delete"),
+        on_confirmed,
+    );
 }

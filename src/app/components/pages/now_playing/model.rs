@@ -1,29 +1,23 @@
-// Model for the now-playing/queue page.
-// Provides current song info, queue track list, device selection,
-// like/unlike for the current track, and artist navigation.
-
 use gettextrs::gettext;
-use gio::prelude::*;
-use gio::SimpleActionGroup;
 use std::ops::Deref;
 use std::rc::Rc;
 
 use crate::app::components::{
-    labels, DetailsPageModel, DeviceSelectorModel, HasHeaderBarModel, HeaderImageShape, PageModel,
-    PlaylistModel, SimpleHeaderBarModel,
+    dispatch_api_call, labels, DetailsPageModel, DeviceSelectorModel, HasHeaderBarModel,
+    HeaderImageShape, PageModel, PinnedPageModel, QueueListModel, SimpleHeaderBarModel,
+    TrackListModel,
 };
-use crate::app::models::{ArtistRef, ImageSet, SongDescription, SongListModel};
-use crate::app::state::Device;
-use crate::app::state::{
-    PlaybackAction, PlaybackEvent, PlaybackState, SelectionAction, SelectionContext, SelectionState,
-};
-use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent};
-use crate::feature_flags::{self, FeatureFlag};
-use crate::impl_toggle_play;
+use crate::app::models::{ArtistRef, ImageSet, Track, TrackExt};
+use crate::app::state::{PlaybackAction, PlaybackEvent};
+use crate::app::{AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Dispatcher};
+use crate::settings;
+
+const VIEW_ALBUM: &str = "view_album";
 
 /// Data model for the now-playing page. Composes `DetailsPageModel` via Deref.
 pub struct NowPlayingModel {
     base: DetailsPageModel,
+    queue_list: Rc<QueueListModel>,
 }
 
 impl Deref for NowPlayingModel {
@@ -36,29 +30,31 @@ impl Deref for NowPlayingModel {
 impl HasHeaderBarModel for NowPlayingModel {}
 
 impl NowPlayingModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
+            queue_list: Rc::new(QueueListModel::new(
+                app_model.clone(),
+                dispatcher.clone(),
+                false,
+            )),
             base: DetailsPageModel::new_without_id(app_model, dispatcher),
         }
     }
 
-    fn queue(&self) -> impl Deref<Target = PlaybackState> + '_ {
-        self.app_model.map_state(|s| &s.playback)
+    pub fn queue_list_model(&self) -> Rc<QueueListModel> {
+        self.queue_list.clone()
     }
 
-    fn current_song(&self) -> Option<SongDescription> {
-        self.app_model.get_state().playback.current_song()
+    fn current_song(&self) -> Option<Track> {
+        self.app_model.get_state().playback.header_track()
     }
 
-    fn current_selection_context(&self) -> SelectionContext {
-        match self.app_model.get_state().playback.current_device() {
-            Device::Local => SelectionContext::Queue,
-            Device::Connect(_) => SelectionContext::ReadOnlyQueue,
-        }
+    pub fn has_queue(&self) -> bool {
+        self.queue_list.has_queue()
     }
 
     pub fn device_selector_model(&self) -> DeviceSelectorModel {
-        DeviceSelectorModel::new(self.app_model.clone(), self.dispatcher.box_clone())
+        DeviceSelectorModel::new(self.app_model.clone(), self.dispatcher.clone())
     }
 }
 
@@ -76,7 +72,7 @@ impl PageModel for NowPlayingModel {
     }
 
     fn get_artwork(&self) -> Option<ImageSet> {
-        self.current_song()?.art.clone()
+        Some(self.current_song()?.art.clone())
     }
 
     fn header_image_shape(&self) -> HeaderImageShape {
@@ -84,19 +80,7 @@ impl PageModel for NowPlayingModel {
     }
 
     fn load_more(&self) {
-        let queue = self.queue();
-        let loader = self.app_model.get_batch_loader();
-        let Some(query) = queue.next_query() else {
-            return;
-        };
-        debug!("next_query = {:?}", &query);
-        self.dispatcher.dispatch_async(Box::pin(async move {
-            loader
-                .query(query, |source, song_batch| {
-                    PlaybackAction::LoadPagedSongs(source, song_batch).into()
-                })
-                .await
-        }));
+        self.queue_list.load_more();
     }
 
     fn is_loaded(&self) -> bool {
@@ -106,21 +90,60 @@ impl PageModel for NowPlayingModel {
     fn has_play_button(&self) -> bool {
         true
     }
+
     fn source_is_playing(&self) -> bool {
         true
     }
 
-    impl_toggle_play!();
+    fn start_play(&self, id: &str) {
+        self.queue_list.play_id(id);
+    }
+
+    fn toggle_play(&self) {
+        self.queue_list.toggle_play();
+    }
+
+    // Unlike other pages, this doesn't replace the queue
+    fn shuffle_play(&self) {
+        self.dispatcher
+            .dispatch(PlaybackAction::ToggleShuffle.into());
+    }
+
+    fn header_menu_entries(&self) -> Vec<(String, String)> {
+        vec![(VIEW_ALBUM.to_string(), labels::VIEW_ALBUM.clone())]
+    }
+
+    fn on_header_menu(&self, id: &str) {
+        if id != VIEW_ALBUM {
+            return;
+        }
+        let album = self
+            .current_song()
+            .and_then(|song| song.album)
+            .map(|album| album.rri.id)
+            .filter(|id| !id.is_empty());
+        if let Some(album) = album {
+            self.dispatcher.dispatch(AppAction::ViewAlbum(album));
+        }
+    }
 
     fn has_like_button(&self) -> bool {
         true
+    }
+
+    fn like_tooltip(&self, is_liked: bool) -> Option<String> {
+        Some(if is_liked {
+            labels::UNLIKE.clone()
+        } else {
+            labels::LIKE.clone()
+        })
     }
 
     fn is_liked(&self) -> bool {
         if let Some(song) = self.current_song() {
             let state = self.app_model.get_state();
             if let Some(home) = state.browser.home_state() {
-                return home.saved_tracks.get(&song.id).is_some();
+                return home.is_track_liked(&song.rri.id);
             }
         }
         false
@@ -130,23 +153,21 @@ impl PageModel for NowPlayingModel {
         let Some(song) = self.current_song() else {
             return;
         };
-        let id = song.id.clone();
-        let api = self.app_model.get_spotify();
+        let id = song.rri.id.clone();
+        let api = self.app_model.api();
         let is_liked = self.is_liked();
 
         if is_liked {
-            self.dispatcher
-                .call_spotify_and_dispatch(move || async move {
-                    api.remove_saved_tracks(vec![id.clone()]).await?;
-                    Ok(BrowserAction::RemoveSavedTracks(vec![id]).into())
-                });
+            dispatch_api_call(&self.dispatcher, move || async move {
+                api.remove_tracks(vec![id.clone()]).await?;
+                Ok(BrowserAction::RemoveSavedTracks(vec![id]).into())
+            });
         } else {
             let song_desc = song.clone();
-            self.dispatcher
-                .call_spotify_and_dispatch(move || async move {
-                    api.save_tracks(vec![id]).await?;
-                    Ok(BrowserAction::SaveTracks(vec![song_desc]).into())
-                });
+            dispatch_api_call(&self.dispatcher, move || async move {
+                api.save_tracks(vec![id]).await?;
+                Ok(BrowserAction::SaveTracks(vec![song_desc]).into())
+            });
         }
     }
 
@@ -168,14 +189,19 @@ impl PageModel for NowPlayingModel {
     fn on_share_clicked(&self) {
         if let Some(song) = self.current_song() {
             self.base
-                .share_link(&format!("https://open.spotify.com/track/{}", song.id));
+                .share_link(&format!("https://open.spotify.com/track/{}", song.rri.id));
         }
     }
 
+    // The header shows the next queued track when nothing plays
     fn should_refresh_details(&self, event: &AppEvent) -> bool {
         matches!(
             event,
-            AppEvent::PlaybackEvent(PlaybackEvent::TrackChanged(_))
+            AppEvent::PlaybackEvent(
+                PlaybackEvent::TrackChanged(_)
+                    | PlaybackEvent::PlaybackStopped
+                    | PlaybackEvent::PlaylistChanged
+            )
         )
     }
 
@@ -187,97 +213,98 @@ impl PageModel for NowPlayingModel {
     }
 }
 
-impl PlaylistModel for NowPlayingModel {
-    fn song_list_model(&self) -> SongListModel {
-        self.queue().songs().clone()
+impl PinnedPageModel for NowPlayingModel {
+    fn pin_kind(&self) -> settings::PinnedKind {
+        settings::PinnedKind::Track
     }
 
-    fn is_paused(&self) -> bool {
-        self.base.is_paused()
-    }
-    fn current_song_id(&self) -> Option<String> {
-        self.queue().current_song_id()
-    }
-    fn autoscroll_to_playing(&self) -> bool {
-        false
-    }
-    fn deselect_song(&self, id: &str) {
-        self.base.deselect_song(id);
-    }
-    fn selection(&self) -> Option<Box<dyn Deref<Target = SelectionState> + '_>> {
-        self.base.selection()
+    fn pinned_object_id(&self) -> Option<String> {
+        self.current_song().map(|song| song.rri.id)
     }
 
-    fn play_song_at(&self, _pos: usize, id: &str) {
-        self.dispatcher
-            .dispatch(PlaybackAction::Load(id.to_string()).into());
-    }
-
-    fn select_song(&self, id: &str) {
-        let queue = self.queue();
-        if let Some(song) = queue.songs().get(id) {
-            self.dispatcher
-                .dispatch(SelectionAction::Select(vec![song.description().clone()]).into());
-        }
-    }
-
-    fn enable_selection(&self) -> bool {
-        if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
-            return false;
-        }
-        self.enable_selection_with_context(self.current_selection_context())
-    }
-
-    fn is_song_liked(&self, id: &str) -> bool {
-        self.base.is_song_liked(id)
-    }
-
-    fn toggle_song_like(&self, id: &str) {
-        let songs = PlaylistModel::song_list_model(self);
-        self.base.toggle_song_like(&songs, id);
-    }
-
-    fn skip_explicit(&self) -> bool {
-        self.base.skip_explicit()
-    }
-
-    fn actions_for(&self, song: &SongDescription) -> Option<gio::ActionGroup> {
-        let group = SimpleActionGroup::new();
-        for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
-            group.add_action(&a);
-        }
-        group.add_action(&song.make_album_action(self.dispatcher.box_clone(), None));
-        group.add_action(&song.make_link_action(None));
-        group.add_action(&song.make_dequeue_action(self.dispatcher.box_clone(), None));
-        Some(group.upcast())
-    }
-
-    fn menu_for(&self, song: &SongDescription) -> Option<gio::MenuModel> {
-        let menu = gio::Menu::new();
-        menu.append(Some(&*labels::VIEW_ALBUM), Some("song.view_album"));
-        for artist in song.artists.iter() {
-            menu.append(
-                Some(&labels::more_from_label(&artist.name)),
-                Some(&format!("song.view_artist_{}", artist.id)),
-            );
-        }
-        menu.append(Some(&*labels::COPY_LINK), Some("song.copy_link"));
-        menu.append(Some(&*labels::REMOVE_FROM_QUEUE), Some("song.dequeue"));
-        Some(menu.upcast())
+    fn supports_pin_button(&self) -> bool {
+        true
     }
 }
 
 impl SimpleHeaderBarModel for NowPlayingModel {
-    fn selection_context(&self) -> Option<SelectionContext> {
-        if !feature_flags::is_enabled(FeatureFlag::SelectMode) {
-            return None;
-        }
-        Some(self.current_selection_context())
+    fn select_all(&self) {
+        self.queue_list.select_all();
     }
 
-    fn select_all(&self) {
-        let songs: Vec<SongDescription> = self.queue().songs().collect();
-        self.dispatcher
-            .dispatch(SelectionAction::Select(songs).into());
+    fn selectable_keys(&self) -> Vec<String> {
+        self.queue_list.selectable_keys()
+    }
+
+    fn selects_queue(&self) -> bool {
+        true
+    }
+}
+
+impl crate::app::ProvidesApi for NowPlayingModel {
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.app_model.api()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::models::make_track;
+    use crate::app::state::AppState;
+    use crate::app::SongsSource;
+    use std::sync::Arc;
+
+    #[test]
+    fn test_header_follows_playback() {
+        let token_provider: Arc<dyn riff_api::TokenProvider> = Arc::new(|| None::<String>);
+        let api = Arc::new(riff_api::spotify_service(
+            Arc::clone(&token_provider),
+            token_provider,
+            1024 * 1024,
+            1024 * 1024,
+        ));
+        let (sender, mut receiver) = futures::channel::mpsc::unbounded();
+        let app_model = Rc::new(AppModel::new(AppState::new(), api));
+        let model = NowPlayingModel::new(app_model.clone(), Dispatcher::new(sender));
+        assert_eq!(
+            model.header_menu_entries(),
+            [(VIEW_ALBUM.to_string(), labels::VIEW_ALBUM.clone())]
+        );
+
+        let mut track = make_track("1");
+        track.album = Some(riff_api::models::AlbumRef {
+            rri: riff_api::models::ResourceId {
+                provider: riff_api::models::Provider::Spotify,
+                id: "album1".to_string(),
+                uri: None,
+            },
+            name: "An Album".to_string(),
+        });
+        app_model.update_state(
+            PlaybackAction::LoadContextSongs(
+                SongsSource::Album("album1".into()),
+                vec![track, make_track("2")],
+            )
+            .into(),
+        );
+        app_model.update_state(PlaybackAction::Load("1".to_string()).into());
+        assert!(model.source_is_playing() && model.is_playing());
+
+        model.on_header_menu(VIEW_ALBUM);
+        let action = receiver.try_next().ok().flatten().expect("an action");
+        assert!(matches!(
+            action,
+            AppAction::BrowserAction(BrowserAction::Navigate(
+                crate::app::state::Route::Album(ref id)
+            )) if id == "album1"
+        ));
+
+        let events = app_model.update_state(PlaybackAction::Stop.into());
+        assert!(events
+            .iter()
+            .any(|e| matches!(crate::app::components::is_playback_event(e), Some(false))));
+        assert!(model.source_is_playing());
+        assert!(!model.is_playing());
     }
 }

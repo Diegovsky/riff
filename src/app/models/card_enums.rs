@@ -166,4 +166,14 @@ impl FilterOption {
             category: String::new(),
         }
     }
+
+    pub fn release_types() -> Vec<Self> {
+        vec![
+            Self::all(gettext("All")),
+            Self::new(gettext("Albums"), "album"),
+            Self::new(gettext("Singles"), "single"),
+            Self::new(gettext("EPs"), "ep"),
+            Self::new(gettext("Compilations"), "compilation"),
+        ]
+    }
 }

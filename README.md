@@ -8,7 +8,7 @@
     Riff is a Spotify client that puts your music library front and center. It features a clean, minimal design that lets you listen distraction-free.
 </p>
 
-![Riff Dark](data/appstream/overview-dark.png#gh-dark-mode-only)![Riff Light](data/appstream/overview-light.png#gh-light-mode-only)
+![Riff Dark](data/appstream/albums-image-only-dark.png#gh-dark-mode-only)![Riff Light](data/appstream/albums-image-only-light.png#gh-light-mode-only)
 
 <p align="center">
     <a href="https://flathub.org/apps/details/dev.diegovsky.Riff"><img width="130" alt="Download on Flathub" src="https://flathub.org/api/badge?svg&locale=en"/></a>
@@ -41,6 +41,14 @@
 flatpak install flathub dev.diegovsky.Riff
 ```
 
+**Arch User Repository (AUR)**
+
+```sh
+yay -S riff-client
+```
+
+_Note: The AUR package is not maintained by us and may be out of date._
+
 **From a GitHub release**
 
 Pre-built bundles are available on the [Releases page](https://github.com/Diegovsky/riff/releases). Download the latest full release or development build Flatpak bundle and install it with:
@@ -52,9 +60,10 @@ flatpak install --user Riff-x86_64.flatpak
 **Build from source**
 
 ```sh
-./scripts/setup-dev.sh                # install dependencies
-./scripts/build.sh release --install  # build and install to ~/.local
-~/.local/bin/riff                     # run Riff
+./scripts/setup-dev.sh                 # install dependencies
+./scripts/api/generate-spotify-api.sh  # generate Spotify API crate (requires Java)
+./scripts/build.sh release --install   # build and install to ~/.local
+~/.local/bin/riff                      # run Riff
 ```
 
 See the [Development Guide](doc/Development.md) for full build instructions, project structure, and troubleshooting.

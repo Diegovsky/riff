@@ -122,7 +122,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct ShellBox(ObjectSubclass<imp::ShellBox>) @extends gtk::Widget;
+    pub struct ShellBox(ObjectSubclass<imp::ShellBox>) @extends gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 /// Ensure the GObject type is registered so the builder can instantiate it.

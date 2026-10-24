@@ -4,8 +4,10 @@ use crate::app::components::{
     HeaderBarModel, HeaderImageShape, SimpleHeaderBarModel, SimpleHeaderBarModelWrapper,
 };
 use crate::app::models::{ArtistRef, ImageSet};
-use crate::app::state::PlaybackEvent;
-use crate::app::AppEvent;
+use crate::app::state::{BrowserAction, PlaybackEvent};
+use crate::app::ProvidesApi;
+use crate::app::{AppEvent, SongsSource};
+use crate::settings;
 
 use super::DetailsPageModel;
 
@@ -19,7 +21,7 @@ pub trait HasHeaderBarModel:
     fn to_headerbar_model(self: &Rc<Self>) -> Rc<impl HeaderBarModel + 'static> {
         Rc::new(SimpleHeaderBarModelWrapper::new(
             self.clone(),
-            self.dispatcher.box_clone(),
+            self.dispatcher.clone(),
         ))
     }
 }
@@ -29,11 +31,14 @@ pub trait HasHeaderBarModel:
 /// The generic `DetailsPageComponent` uses this trait to wire all standard
 /// behavior (header, buttons, events) automatically. Pages only need to
 /// implement the methods relevant to them; everything else has sensible defaults.
-pub trait PageModel {
+pub trait PageModel: ProvidesApi {
     // Page identity
 
     fn get_title(&self) -> Option<String>;
     fn get_subtitle(&self) -> Option<String> {
+        None
+    }
+    fn get_subtitle_detail(&self) -> Option<String> {
         None
     }
     fn get_artwork(&self) -> Option<ImageSet> {
@@ -55,10 +60,21 @@ pub trait PageModel {
         false
     }
 
+    // The tracks it lists
+
+    /// A page with a source gets play, queue and share buttons (see
+    /// `impl_source_page!` and `impl_source_track_list!`).
+    fn songs_source(&self) -> Option<SongsSource> {
+        None
+    }
+    fn context_name(&self) -> Option<String> {
+        self.get_title()
+    }
+
     // Playback
 
     fn has_play_button(&self) -> bool {
-        false
+        self.songs_source().is_some()
     }
     fn source_is_playing(&self) -> bool {
         false
@@ -66,6 +82,19 @@ pub trait PageModel {
     fn start_play(&self, _id: &str) {}
     fn toggle_play(&self) {}
     fn shuffle_play(&self) {}
+
+    fn has_queue_menu(&self) -> bool {
+        self.songs_source().is_some()
+    }
+    fn queue_all(&self) {}
+
+    // Header menu
+
+    /// Entries of the header's "⋮" menu besides "Add to Queue": (id, label).
+    fn header_menu_entries(&self) -> Vec<(String, String)> {
+        vec![]
+    }
+    fn on_header_menu(&self, _id: &str) {}
 
     // Like/Save
 
@@ -79,18 +108,14 @@ pub trait PageModel {
     fn like_visible(&self) -> bool {
         self.has_like_button()
     }
-
-    // Info button
-
-    fn has_info_button(&self) -> bool {
-        false
+    fn like_tooltip(&self, _is_liked: bool) -> Option<String> {
+        None
     }
-    fn on_info_clicked(&self) {}
 
     // Share button
 
     fn has_share_button(&self) -> bool {
-        false
+        self.songs_source().and_then(|s| s.spotify_url()).is_some()
     }
     fn on_share_clicked(&self) {}
 
@@ -116,11 +141,70 @@ pub trait PageModel {
     }
 }
 
+/// Provides pin/unpin behavior for detail pages, alongside the like button.
+///
+/// Like [`HasHeaderBarModel`], providing defaults here avoids duplicating the
+/// same pin wiring (reading and writing the shared pin store, then notifying
+/// listeners) in every concrete model. Pages only opt in via
+/// [`Self::supports_pin_button`] and describe which object they pin.
+pub trait PinnedPageModel: PageModel + std::ops::Deref<Target = DetailsPageModel> {
+    fn pin_kind(&self) -> settings::PinnedKind {
+        settings::PinnedKind::Playlist
+    }
+
+    /// The store id of the object this page pins. Defaults to the page's own
+    /// id; override for pages whose target is dynamic (e.g. the currently
+    /// playing song on the now-playing page).
+    fn pinned_object_id(&self) -> Option<String> {
+        Some(self.id.clone())
+    }
+
+    /// Whether this page type supports a pin control (independent of feature flag).
+    fn supports_pin_button(&self) -> bool {
+        false
+    }
+
+    fn is_pinned(&self) -> bool {
+        let Some(id) = self.pinned_object_id() else {
+            return false;
+        };
+        let state = self.app_model.get_state();
+        let Some(user_id) = state.logged_user.user.as_ref() else {
+            return false;
+        };
+        settings::is_object_pinned(user_id, &id, self.pin_kind())
+    }
+
+    fn toggle_pin(&self) {
+        let Some(id) = self.pinned_object_id() else {
+            return;
+        };
+        let Some(user_id) = self.app_model.get_state().logged_user.user.clone() else {
+            return;
+        };
+        let changed = if self.is_pinned() {
+            settings::unpin_object(&user_id, self.pin_kind(), &id)
+        } else if !self.is_liked() {
+            // Only liked items can be pinned.
+            return;
+        } else {
+            settings::pin_object(&user_id, self.pin_kind(), &id, self.get_title())
+        };
+        if changed {
+            self.dispatcher
+                .dispatch(BrowserAction::NotifyPinnedPlaylistsUpdated.into());
+        }
+    }
+}
+
 /// Check if a playback event means we should update the play button.
-/// Returns `Some(true)` for resumed/track changed, `Some(false)` for paused, `None` otherwise.
+/// Returns `Some(true)` for resumed/track changed, `Some(false)` for paused or
+/// stopped, `None` otherwise.
 pub fn is_playback_event(event: &AppEvent) -> Option<bool> {
     match event {
-        AppEvent::PlaybackEvent(PlaybackEvent::PlaybackPaused) => Some(false),
+        AppEvent::PlaybackEvent(PlaybackEvent::PlaybackPaused | PlaybackEvent::PlaybackStopped) => {
+            Some(false)
+        }
         AppEvent::PlaybackEvent(PlaybackEvent::PlaybackResumed)
         | AppEvent::PlaybackEvent(PlaybackEvent::TrackChanged(_)) => Some(true),
         _ => None,

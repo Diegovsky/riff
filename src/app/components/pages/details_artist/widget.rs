@@ -3,16 +3,17 @@
 // releases as a card grid.
 
 use gettextrs::gettext;
+use gtk::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
 
 use super::ArtistDetailsModel;
 
 use crate::app::components::{
-    CardLayout, CardSize, Component, DetailsPageComponent, EventListener, HasHeaderBarModel,
-    HeaderRegistrar, SortOrder,
+    align_cards_to_edges, CardLayout, CardSize, Component, DetailsPageComponent, EventListener,
+    HasHeaderBarModel, PageHeader, SortOrder,
 };
-use crate::app::{ActionDispatcher, AppEvent, Worker};
+use crate::app::{AppEvent, Dispatcher};
 
 /// GTK widget for the artist detail page.
 pub struct ArtistDetails {
@@ -22,22 +23,15 @@ pub struct ArtistDetails {
 impl ArtistDetails {
     pub fn new(
         model: Rc<ArtistDetailsModel>,
-        worker: Worker,
         shared_layout: Rc<Cell<CardLayout>>,
         shared_size: Rc<Cell<CardSize>>,
-        dispatcher: Rc<dyn ActionDispatcher>,
-        registrar: HeaderRegistrar,
-        name: String,
+        dispatcher: Dispatcher,
+        header: PageHeader,
     ) -> Self {
-        let mut component = DetailsPageComponent::new(
-            model.clone(),
-            model.to_headerbar_model(),
-            worker,
-            registrar,
-            name,
-        );
-        component.create_playlist(Some(&gettext("Top Tracks")));
-        component.create_embedded_card_list(
+        let mut component =
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), header);
+        component.create_track_list(Some(&gettext("Top Tracks")));
+        let releases = component.create_embedded_card_list(
             Some(&gettext("Releases")),
             "artist_releases",
             &[SortOrder::DateReleased, SortOrder::Alphabetic],
@@ -45,6 +39,8 @@ impl ArtistDetails {
             shared_size,
             dispatcher,
         );
+        releases.add_css_class("artist-releases");
+        align_cards_to_edges(&releases);
 
         Self { component }
     }

@@ -13,6 +13,7 @@
 mod component;
 mod header;
 mod model;
+mod section;
 mod subtitle_links;
 mod traits;
 mod widget;
@@ -20,6 +21,7 @@ mod widget;
 pub use component::*;
 pub use header::*;
 pub use model::*;
+pub use section::*;
 pub use subtitle_links::*;
 pub use traits::*;
 pub use widget::*;

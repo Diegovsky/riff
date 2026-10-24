@@ -5,10 +5,14 @@ use std::cmp::Ordering;
 use std::ops::Deref;
 use std::rc::Rc;
 
+use super::card_grid::CardGrid;
+use crate::app::components::details_page::is_playback_event;
 use crate::app::components::{CardLayout, CardSize, CardWidget, ImageShape, SortOrder};
-use crate::app::dispatch::Worker;
 use crate::app::models::{CardModel, FilterOption};
-use crate::app::ListStore;
+use crate::app::state::{EntryKey, PlaybackEvent, PlaybackState};
+use crate::app::{AppEvent, ListStore, ProvidesApi, SongsSource};
+use riff_api::ApiService;
+use std::sync::Arc;
 
 // Constants
 
@@ -27,6 +31,34 @@ const HORIZONTAL_LABEL_WIDTH_SCALE: f32 = 1.8;
 /// Key used to attach a CardModel to a FlowBoxChild via GObject unsafe data.
 const MODEL_DATA_KEY: &str = "card-model";
 
+pub type PlayingCard = Option<(String, bool)>;
+
+pub fn playing_card(playback: &PlaybackState) -> PlayingCard {
+    let queued = matches!(playback.current_key(), Some(EntryKey::Queued(_)));
+    let id = match playback.current_source() {
+        Some(SongsSource::Album(id) | SongsSource::Playlist(id) | SongsSource::Artist(id))
+            if !queued =>
+        {
+            id.clone()
+        }
+        Some(_) if !queued => return None,
+        _ => playback.current_song()?.album?.rri.id,
+    };
+    Some((id, playback.is_playing()))
+}
+
+pub fn changes_playing_card(event: &AppEvent) -> bool {
+    is_playback_event(event).is_some()
+        || matches!(event, AppEvent::PlaybackEvent(PlaybackEvent::SourceChanged))
+}
+
+fn playing_state(card_id: &str, playing: &PlayingCard) -> Option<bool> {
+    playing
+        .as_ref()
+        .filter(|(id, _)| id == card_id)
+        .map(|(_, is_playing)| *is_playing)
+}
+
 /// Trait that abstracts the data/API layer for a card list.
 pub trait CardListModel {
     fn get_store(&self) -> Option<impl Deref<Target = ListStore<CardModel>> + '_>;
@@ -38,10 +70,42 @@ pub trait CardListModel {
     }
     fn open_item(&self, id: String);
     fn image_shape(&self) -> ImageShape;
-
-    /// Returns filter options for this card list. Empty = no filter UI.
     fn filter_options(&self) -> Vec<FilterOption> {
         vec![]
+    }
+    fn resolve_filter(&self, _category: &str) -> Option<CardFilter> {
+        None
+    }
+    fn playing_card(&self) -> PlayingCard {
+        None
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum CardFilter {
+    #[default]
+    All,
+    Category(String),
+    OwnedBy(String),
+    NotOwnedBy(String),
+}
+
+impl CardFilter {
+    fn for_category(category: &str) -> Self {
+        if category.is_empty() {
+            Self::All
+        } else {
+            Self::Category(category.to_string())
+        }
+    }
+
+    fn matches(&self, card: &CardModel) -> bool {
+        match self {
+            Self::All => true,
+            Self::Category(category) => card.category() == *category,
+            Self::OwnedBy(user) => card.owner() == *user,
+            Self::NotOwnedBy(user) => card.owner() != *user,
+        }
     }
 }
 
@@ -50,11 +114,13 @@ pub trait CardListModel {
 /// Manually manages FlowBox children and uses `set_sort_func` + `invalidate_sort`
 /// for flash-free reordering (no widget destruction/recreation on sort changes).
 pub struct CardList {
+    grid: CardGrid,
     flowbox: gtk::FlowBox,
     current_layout: Rc<Cell<CardLayout>>,
     current_size: Rc<Cell<CardSize>>,
     current_sort: Rc<Cell<SortOrder>>,
-    current_filter: Rc<RefCell<String>>,
+    current_filter: Rc<RefCell<CardFilter>>,
+    playing: Rc<RefCell<PlayingCard>>,
     next_position: Rc<Cell<i64>>,
     /// Lowest insertion position assigned so far. Freshly added (prepended)
     /// items are given positions below this so they rank as the most recently
@@ -72,19 +138,20 @@ pub struct CardList {
 
 impl CardList {
     pub fn new() -> Self {
-        let flowbox = gtk::FlowBox::new();
+        let grid = CardGrid::new();
+        grid.set_valign(gtk::Align::Start);
+        let flowbox = grid.flowbox().clone();
         flowbox.set_min_children_per_line(MIN_CHILDREN_PER_LINE);
         flowbox.set_max_children_per_line(MAX_CHILDREN_PER_LINE);
         flowbox.set_row_spacing(ROW_SPACING);
         flowbox.set_column_spacing(COLUMN_SPACING);
         flowbox.set_selection_mode(gtk::SelectionMode::None);
         flowbox.set_activate_on_single_click(true);
-        flowbox.set_valign(gtk::Align::Start);
 
         let max_rows = Rc::new(Cell::new(None));
         let current_size = Rc::new(Cell::new(CardSize::Large));
         let current_layout = Rc::new(Cell::new(CardLayout::Vertical));
-        let current_filter = Rc::new(RefCell::new(String::new()));
+        let current_filter = Rc::new(RefCell::new(CardFilter::All));
 
         // Re-apply the row limit every frame using the FlowBox's actual
         // laid-out geometry. GTK4 FlowBox doesn't emit a resize signal, and the
@@ -112,11 +179,13 @@ impl CardList {
         });
 
         Self {
+            grid,
             flowbox,
             current_layout,
             current_size,
             current_sort: Rc::new(Cell::new(SortOrder::RecentlyAdded)),
             current_filter,
+            playing: Default::default(),
             next_position: Rc::new(Cell::new(0)),
             min_position: Rc::new(Cell::new(0)),
             max_rows,
@@ -126,14 +195,17 @@ impl CardList {
         }
     }
 
-    pub fn widget(&self) -> &gtk::FlowBox {
+    pub fn widget(&self) -> &gtk::Widget {
+        self.grid.upcast_ref()
+    }
+
+    pub fn flowbox(&self) -> &gtk::FlowBox {
         &self.flowbox
     }
 
-    pub fn bind<M: CardListModel + 'static>(
+    pub fn bind<M: CardListModel + ProvidesApi + 'static>(
         &self,
         model: &Rc<M>,
-        worker: Worker,
         layout: CardLayout,
         size: CardSize,
     ) {
@@ -154,6 +226,7 @@ impl CardList {
 
         if let Some(store) = model.get_store() {
             let shape = model.image_shape();
+            let api_service = model.api_service();
             let inner = store.inner().clone();
 
             // Install sort function
@@ -164,12 +237,8 @@ impl CardList {
             // Install filter function
             let filter_ref = Rc::clone(&self.current_filter);
             self.flowbox.set_filter_func(move |child| {
-                let filter = filter_ref.borrow();
-                if filter.is_empty() {
-                    return true; // "All" - show everything
-                }
                 match get_model(child) {
-                    Some(card) => card.category() == *filter,
+                    Some(card) => filter_ref.borrow().matches(&card),
                     None => true, // Show placeholders
                 }
             });
@@ -181,7 +250,7 @@ impl CardList {
                     if let Some(card) = obj.downcast_ref::<CardModel>() {
                         card.set_insertion_position(counter);
                         counter += 1;
-                        self.add_child(card, &worker, shape, layout, size);
+                        self.add_child(card, &api_service, shape, layout, size);
                     }
                 }
             }
@@ -196,7 +265,8 @@ impl CardList {
             let placeholder_count = Rc::clone(&self.placeholder_count);
             let constraint = Rc::clone(&self.max_rows);
             let current_filter = Rc::clone(&self.current_filter);
-            let worker_clone = worker.clone();
+            let playing = Rc::clone(&self.playing);
+            let api_service_clone = api_service.clone();
             let handler_id =
                 inner.connect_items_changed(move |source, position, removed, added| {
                     let Some(flowbox) = flowbox_weak.upgrade() else {
@@ -212,16 +282,18 @@ impl CardList {
 
                     // Handle removals: find children that no longer exist in the source store.
                     if removed > 0 {
-                        let source_ids: std::collections::HashSet<String> = (0..source.n_items())
+                        let source_cards: std::collections::HashSet<glib::Object> = (0..source
+                            .n_items())
                             .filter_map(|i| source.item(i))
-                            .filter_map(|o| o.downcast_ref::<CardModel>().map(|c| c.id()))
                             .collect();
                         let mut child = flowbox.first_child();
                         while let Some(c) = child {
                             let next = c.next_sibling();
                             if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
                                 if let Some(card_model) = get_model(fb_child) {
-                                    if !source_ids.contains(&card_model.id()) {
+                                    if !source_cards
+                                        .contains(card_model.upcast_ref::<glib::Object>())
+                                    {
                                         flowbox.remove(fb_child);
                                     }
                                 }
@@ -252,8 +324,14 @@ impl CardList {
                                         // gets the smallest position.
                                         let pos = min - (added as i64 - offset as i64);
                                         card.set_insertion_position(pos);
-                                        let child =
-                                            create_child(card, &worker_clone, shape, layout, size);
+                                        let child = create_child(
+                                            card,
+                                            &api_service_clone,
+                                            shape,
+                                            layout,
+                                            size,
+                                            &playing.borrow(),
+                                        );
                                         flowbox.insert(&child, -1);
                                     }
                                 }
@@ -268,8 +346,14 @@ impl CardList {
                                             card.set_insertion_position(ctr);
                                             ctr += 1;
                                         }
-                                        let child =
-                                            create_child(card, &worker_clone, shape, layout, size);
+                                        let child = create_child(
+                                            card,
+                                            &api_service_clone,
+                                            shape,
+                                            layout,
+                                            size,
+                                            &playing.borrow(),
+                                        );
                                         flowbox.insert(&child, -1);
                                     }
                                 }
@@ -312,47 +396,54 @@ impl CardList {
     fn add_child(
         &self,
         card: &CardModel,
-        worker: &Worker,
+        api_service: &Arc<ApiService>,
         shape: ImageShape,
         layout: CardLayout,
         size: CardSize,
     ) {
-        let child = create_child(card, worker, shape, layout, size);
+        let child = create_child(
+            card,
+            api_service,
+            shape,
+            layout,
+            size,
+            &self.playing.borrow(),
+        );
         self.flowbox.insert(&child, -1);
+    }
+
+    fn for_each_card(&self, f: impl Fn(&CardWidget)) {
+        let mut child = self.flowbox.first_child();
+        while let Some(c) = child {
+            if let Some(card) = c
+                .downcast_ref::<gtk::FlowBoxChild>()
+                .and_then(|fb_child| fb_child.child())
+                .and_downcast::<CardWidget>()
+            {
+                f(&card);
+            }
+            child = c.next_sibling();
+        }
     }
 
     pub fn update_size(&self, size: CardSize) {
         self.current_size.set(size);
-        let mut child = self.flowbox.first_child();
-        while let Some(c) = child {
-            if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
-                if let Some(card) = fb_child
-                    .child()
-                    .and_then(|w| w.downcast::<CardWidget>().ok())
-                {
-                    card.set_image_size(size);
-                }
-            }
-            child = c.next_sibling();
-        }
+        self.for_each_card(|card| card.set_image_size(size));
         self.apply_constraint();
     }
 
     pub fn update_layout(&self, layout: CardLayout) {
         self.current_layout.set(layout);
-        let mut child = self.flowbox.first_child();
-        while let Some(c) = child {
-            if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
-                if let Some(card) = fb_child
-                    .child()
-                    .and_then(|w| w.downcast::<CardWidget>().ok())
-                {
-                    card.set_layout(layout);
-                }
-            }
-            child = c.next_sibling();
-        }
+        self.for_each_card(|card| card.set_layout(layout));
         self.apply_constraint();
+    }
+
+    pub fn set_playing(&self, playing: PlayingCard) {
+        if *self.playing.borrow() == playing {
+            return; // e.g. the next track of the same album
+        }
+        self.for_each_card(|card| card.set_playing(playing_state(&card.card_id(), &playing)));
+        *self.playing.borrow_mut() = playing;
     }
 
     /// Change the sort order. Reorders existing children in-place (no flash).
@@ -369,7 +460,11 @@ impl CardList {
     /// what's on screen. The constraint is released when the filter is cleared
     /// (showing all items).
     pub fn set_filter(&self, category: &str) {
-        if category.is_empty() {
+        self.set_card_filter(CardFilter::for_category(category));
+    }
+
+    pub fn set_card_filter(&self, filter: CardFilter) {
+        if filter == CardFilter::All {
             // Showing all - remove height constraint
             self.flowbox.set_height_request(-1);
         } else {
@@ -388,8 +483,16 @@ impl CardList {
                     .set_height_request(self.flowbox.height_request().max(locked));
             }
         }
-        *self.current_filter.borrow_mut() = category.to_string();
+        *self.current_filter.borrow_mut() = filter;
         self.flowbox.invalidate_filter();
+    }
+
+    pub fn is_filtered(&self) -> bool {
+        *self.current_filter.borrow() != CardFilter::All
+    }
+
+    pub fn has_placeholders(&self) -> bool {
+        self.placeholder_count.get() > 0
     }
 
     /// Count the number of visible (non-placeholder) children after filtering.
@@ -511,12 +614,14 @@ impl Drop for CardList {
 /// Create a FlowBoxChild for a real card model.
 fn create_child(
     card: &CardModel,
-    worker: &Worker,
+    api_service: &Arc<ApiService>,
     shape: ImageShape,
     layout: CardLayout,
     size: CardSize,
+    playing: &PlayingCard,
 ) -> gtk::FlowBoxChild {
-    let widget = CardWidget::for_model(card, worker.clone(), shape, layout, size);
+    let widget = CardWidget::for_model(card, api_service.clone(), shape, layout, size);
+    widget.set_playing(playing_state(&card.id(), playing));
     let child = gtk::FlowBoxChild::new();
     child.set_halign(gtk::Align::Fill);
     child.set_hexpand(true);
@@ -706,7 +811,7 @@ fn apply_grid_constraint(
     max_rows: u32,
     size: CardSize,
     layout: CardLayout,
-    filter: &str,
+    filter: &CardFilter,
 ) {
     let cols =
         measured_columns(flowbox).unwrap_or_else(|| estimated_columns(flowbox, size, layout));
@@ -719,7 +824,7 @@ fn apply_grid_constraint(
         if let Some(fb_child) = c.downcast_ref::<gtk::FlowBoxChild>() {
             match get_model(fb_child) {
                 Some(card) => {
-                    let passes_filter = filter.is_empty() || card.category() == *filter;
+                    let passes_filter = filter.matches(&card);
                     if passes_filter {
                         fb_child.set_visible(visible_index < max_visible);
                         visible_index += 1;
@@ -735,5 +840,24 @@ fn apply_grid_constraint(
             }
         }
         child = c.next_sibling();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn filter_shows_a_category_or_an_owner() {
+        let card = CardModel::new("id", None, "T", "S", None, None, None, Some("album"));
+        card.set_owner("me".to_string());
+
+        assert!(CardFilter::for_category("").matches(&card));
+        assert!(CardFilter::for_category("album").matches(&card));
+        assert!(!CardFilter::for_category("single").matches(&card));
+        assert!(CardFilter::OwnedBy("me".to_string()).matches(&card));
+        assert!(!CardFilter::OwnedBy("you".to_string()).matches(&card));
+        assert!(CardFilter::NotOwnedBy("you".to_string()).matches(&card));
+        assert!(!CardFilter::NotOwnedBy("me".to_string()).matches(&card));
     }
 }

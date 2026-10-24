@@ -7,7 +7,7 @@ use gettextrs::gettext;
 
 use crate::app::state::{LoginAction, PlaybackAction};
 use crate::app::AppAction;
-use crate::auth::TokenStore;
+use riff_auth::{SessionTokens, TokenStore};
 #[allow(clippy::module_inception)]
 mod player;
 pub use player::*;
@@ -17,8 +17,6 @@ pub enum Command {
     Restore,
     InitLogin,
     CompleteLogin,
-    CompleteSessionLogin,
-    RefreshToken,
     Logout,
     PlayerLoad {
         track: SpotifyUri,
@@ -104,6 +102,10 @@ impl AppPlayerDelegate {
     }
 
     fn end_of_track_reached(&self) {
+        self.send(PlaybackAction::TrackEnded.into())
+    }
+
+    fn skip_track(&self) {
         self.send(PlaybackAction::Next.into())
     }
 
@@ -162,12 +164,19 @@ async fn player_main(
     player_settings: SpotifyPlayerSettings,
     appaction_sender: UnboundedSender<AppAction>,
     token_store: TokenStore,
+    session_tokens: SessionTokens,
     sender: UnboundedSender<Command>,
     receiver: UnboundedReceiver<Command>,
 ) {
     task::spawn(async move {
         let delegate = AppPlayerDelegate::new(appaction_sender.clone());
-        let player = SpotifyPlayer::new(player_settings, delegate, token_store, sender);
+        let player = SpotifyPlayer::new(
+            player_settings,
+            delegate,
+            token_store,
+            session_tokens,
+            sender,
+        );
         player.start(receiver).await.unwrap();
     })
     .await
@@ -178,6 +187,7 @@ pub fn start_player_service(
     player_settings: SpotifyPlayerSettings,
     appaction_sender: UnboundedSender<AppAction>,
     token_store: TokenStore,
+    session_tokens: SessionTokens,
 ) -> UnboundedSender<Command> {
     let (sender, receiver) = unbounded::<Command>();
     let sender_clone = sender.clone();
@@ -186,6 +196,7 @@ pub fn start_player_service(
             player_settings,
             appaction_sender,
             token_store,
+            session_tokens,
             sender_clone,
             receiver,
         )

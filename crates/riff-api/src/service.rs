@@ -1,0 +1,1553 @@
+//! ApiService - orchestrates caching around domain calls.
+//!
+//! Tier order: memory LRU -> disk cache -> network.
+
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use serde::{de::DeserializeOwned, Serialize};
+
+use riff_config::api::{
+    API_QUEUE_CAP, API_READ_CONCURRENCY, API_TTL, IMAGE_EXT, IMAGE_LOAD_CONCURRENCY,
+    IMAGE_QUEUE_CAP, IMAGE_TTL, STALE_IF_ERROR_TTL,
+};
+
+use futures::future::join_all;
+use gdk::prelude::TextureExt;
+
+use crate::cache::{CacheKey, DiskCache, Store, TextureCache};
+use crate::error::DomainError;
+use crate::http;
+use crate::models::*;
+use crate::providers::MusicProvider;
+use crate::scheduler::{Admission, AdmissionQueue, Lane, Load, Slot};
+
+const PLAYLIST_ITEMS_PAGE: usize = 50;
+fn unlisted_uris(items: &[Option<String>], uris: Vec<String>) -> Vec<String> {
+    let mut seen: HashSet<&str> = items.iter().flatten().map(String::as_str).collect();
+    let unlisted: Vec<bool> = uris.iter().map(|uri| seen.insert(uri)).collect();
+    drop(seen);
+    uris.into_iter()
+        .zip(unlisted)
+        .filter_map(|(uri, unlisted)| unlisted.then_some(uri))
+        .collect()
+}
+
+fn cover_url(art: &ImageSet) -> Option<String> {
+    art.images.first().map(|image| image.url.clone())
+}
+
+const COVER_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const COVER_POLL_ATTEMPTS: u32 = 8;
+
+#[derive(Serialize, serde::Deserialize)]
+struct PersistedPage {
+    pages: Vec<(usize, Vec<serde_json::Value>)>,
+    total: usize,
+}
+
+pub struct ApiService {
+    provider: Arc<dyn MusicProvider>,
+    texture_cache: Arc<TextureCache>,
+    json_cache: Arc<Store>,
+    cdn_client: http::ServiceClient,
+    image_disk: DiskCache,
+    api_disk: DiskCache,
+    inflight: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    image_queue: AdmissionQueue,
+    read_queue: AdmissionQueue,
+    write_lane: Lane,
+    player_lane: Lane,
+}
+
+impl ApiService {
+    /// Build a service around a provider implementation. Crate-private: services
+    /// are constructed through a vendor factory (e.g. `spotify_service`).
+    pub(crate) fn new(
+        provider: Arc<dyn MusicProvider>,
+        memory_cache_bytes: usize,
+        disk_cache_bytes: usize,
+    ) -> Self {
+        let pool = http::build_shared_pool();
+        Self {
+            provider,
+            texture_cache: Arc::new(TextureCache::new(memory_cache_bytes)),
+            json_cache: Arc::new(Store::new(memory_cache_bytes)),
+            cdn_client: http::cdn_service(pool),
+            image_disk: DiskCache::new("riff/img", disk_cache_bytes, IMAGE_TTL),
+            api_disk: DiskCache::new("riff/net", disk_cache_bytes, API_TTL),
+            inflight: Mutex::new(HashMap::new()),
+            image_queue: AdmissionQueue::new(
+                "image queue",
+                IMAGE_LOAD_CONCURRENCY,
+                IMAGE_QUEUE_CAP,
+            ),
+            read_queue: AdmissionQueue::new("api read queue", API_READ_CONCURRENCY, API_QUEUE_CAP),
+            // A dropped caller leaves the cache stale and the change unsent,
+            // but no caller cancels today.
+            write_lane: Lane::new(1),
+            player_lane: Lane::new(1),
+        }
+    }
+
+    async fn admit_read(&self, load: Load) -> Result<Option<Slot>, DomainError> {
+        match self.read_queue.admit(load).await {
+            Admission::Granted(slot) => Ok(Some(slot)),
+            Admission::Unslotted => Ok(None),
+            Admission::Denied => Err(DomainError::Shed),
+        }
+    }
+
+    /// Evict both disk caches to their budgets. Call on shutdown.
+    pub async fn run_cache_maintenance(&self) {
+        self.api_disk.evict_to_budget().await;
+        self.image_disk.evict_to_budget().await;
+    }
+
+    pub fn set_memory_cache_bytes(&self, max_bytes: usize) {
+        self.json_cache.set_max_bytes(max_bytes);
+        self.texture_cache.set_max_bytes(max_bytes);
+    }
+
+    pub async fn set_disk_cache_bytes(&self, max_bytes: usize) {
+        self.api_disk.set_max_bytes(max_bytes);
+        self.image_disk.set_max_bytes(max_bytes);
+        self.run_cache_maintenance().await;
+    }
+
+    /// Clear all cached data, on disk (API responses + images) and in memory
+    /// (API response cache + decoded textures).
+    pub async fn clear_user_cache(&self) {
+        self.json_cache.clear();
+        self.texture_cache.clear();
+        self.api_disk.clear().await;
+        self.image_disk.clear().await;
+    }
+
+    fn handle_auth_error(&self, err: &DomainError) {
+        if matches!(err, DomainError::AuthExpired) {
+            self.provider.invalidate_config();
+        }
+    }
+
+    fn inflight_lock(&self, id: &str) -> Arc<tokio::sync::Mutex<()>> {
+        let mut map = self.inflight.lock().unwrap();
+        map.entry(id.to_string())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone()
+    }
+
+    fn release_inflight(&self, id: &str, lock: Arc<tokio::sync::Mutex<()>>) {
+        let mut map = self.inflight.lock().unwrap();
+        if Arc::strong_count(&lock) <= 2 {
+            map.remove(id);
+        }
+    }
+
+    /// Single-resource fetch: memory -> disk -> queue -> network, with
+    /// single-flight.
+    async fn cached_or_fetch<T, F>(
+        &self,
+        cache_key: CacheKey,
+        load: Load,
+        fetch: F,
+    ) -> Result<T, DomainError>
+    where
+        T: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
+        F: std::future::Future<Output = Result<T, DomainError>> + Send,
+    {
+        // Tier 1: Memory
+        if let Some(val) = self.json_cache.get_single::<T>(&cache_key) {
+            return Ok(val);
+        }
+
+        let disk_key = cache_key.disk_key();
+        let flight = self.inflight_lock(&disk_key);
+
+        let outcome: Result<T, DomainError> = 'resolved: {
+            // Tier 2: Disk, one caller at a time per key.
+            let mut stale: Option<(T, Option<String>)> = None;
+            {
+                let _guard = flight.lock().await;
+
+                if let Some(val) = self.json_cache.get_single::<T>(&cache_key) {
+                    break 'resolved Ok(val);
+                }
+
+                if let Some(entry) = self.api_disk.read(&disk_key).await {
+                    if let Ok(val) = serde_json::from_slice::<T>(&entry.data) {
+                        match entry.state {
+                            crate::cache::disk::EntryState::Fresh => {
+                                debug!("api: {disk_key} served from disk, no request made");
+                                self.json_cache.insert_single(&cache_key, val.clone());
+                                break 'resolved Ok(val);
+                            }
+                            crate::cache::disk::EntryState::Stale { etag } => {
+                                debug!("api: {disk_key} disk copy is stale, refetching");
+                                stale = Some((val, etag));
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Tier 3: Network.
+            let mut slot = match self.admit_read(load).await {
+                Ok(slot) => slot,
+                Err(err) => break 'resolved Err(err),
+            };
+            let _guard = match flight.try_lock() {
+                Ok(guard) => guard,
+                Err(_) => {
+                    drop(slot);
+                    let guard = flight.lock().await;
+                    slot = match self.admit_read(load).await {
+                        Ok(slot) => slot,
+                        Err(err) => break 'resolved Err(err),
+                    };
+                    guard
+                }
+            };
+            let _slot = slot;
+
+            // Another caller may have fetched this while we waited.
+            if let Some(val) = self.json_cache.get_single::<T>(&cache_key) {
+                break 'resolved Ok(val);
+            }
+
+            match fetch.await {
+                Ok(val) => {
+                    self.json_cache.insert_single(&cache_key, val.clone());
+                    if let Ok(bytes) = serde_json::to_vec(&val) {
+                        let disk = self.api_disk.clone();
+                        let dk = disk_key.clone();
+                        tokio::spawn(async move {
+                            disk.write_default(&dk, &bytes, None).await;
+                        });
+                    }
+                    Ok(val)
+                }
+                Err(err) => {
+                    self.handle_auth_error(&err);
+                    // Stale-if-error: serve stale copy on transient failure.
+                    let serving_stale = stale.is_some() && err.is_transient();
+                    log_fetch_failure(&disk_key, &err, serving_stale);
+                    if let (Some((val, etag)), true) = (stale, err.is_transient()) {
+                        self.json_cache.insert_single(&cache_key, val.clone());
+                        let disk = self.api_disk.clone();
+                        let dk = disk_key.clone();
+                        tokio::spawn(async move {
+                            disk.refresh_ttl(&dk, STALE_IF_ERROR_TTL, etag.as_deref())
+                                .await;
+                        });
+                        Ok(val)
+                    } else {
+                        Err(err)
+                    }
+                }
+            }
+        };
+
+        self.release_inflight(&disk_key, flight);
+        outcome
+    }
+
+    /// One page of `lim` items at `off`, if memory already holds it.
+    fn cached_page<T>(&self, cache_key: &CacheKey, off: usize, lim: usize) -> Option<Page<T>>
+    where
+        T: Clone + Send + Sync + 'static,
+    {
+        let mut items = self.json_cache.get_paginated::<T>(cache_key, off)?;
+        items.truncate(lim);
+        Some(Page {
+            items,
+            offset: Some(off),
+            total: Some(self.json_cache.get_total(cache_key).unwrap_or(0)),
+            next_cursor: None,
+        })
+    }
+
+    /// Paginated fetch: memory -> disk -> network, with single-flight.
+    async fn cached_paginated<T, F>(
+        &self,
+        cache_key: CacheKey,
+        off: usize,
+        lim: usize,
+        load: Load,
+        fetch: F,
+    ) -> Result<Page<T>, DomainError>
+    where
+        T: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
+        F: std::future::Future<Output = Result<Page<T>, DomainError>> + Send,
+    {
+        // Tier 1: Memory.
+        if let Some(page) = self.cached_page::<T>(&cache_key, off, lim) {
+            return Ok(page);
+        }
+
+        let disk_key = cache_key.disk_key();
+        let flight_id = format!("{disk_key}#{off}#{lim}");
+        let flight = self.inflight_lock(&flight_id);
+
+        let outcome: Result<Page<T>, DomainError> = 'resolved: {
+            // Tier 2: Disk. See `cached_or_fetch` for the lock dance.
+            {
+                let _guard = flight.lock().await;
+
+                if let Some(page) = self.cached_page::<T>(&cache_key, off, lim) {
+                    break 'resolved Ok(page);
+                }
+
+                if let Some(entry) = self.api_disk.read(&disk_key).await {
+                    if matches!(entry.state, crate::cache::disk::EntryState::Fresh) {
+                        if let Ok(persisted) = serde_json::from_slice::<PersistedPage>(&entry.data)
+                        {
+                            let total = persisted.total;
+                            for (page_offset, values) in persisted.pages {
+                                let items: Vec<T> = values
+                                    .iter()
+                                    .filter_map(|v| serde_json::from_value::<T>(v.clone()).ok())
+                                    .collect();
+                                if items.len() == values.len() {
+                                    self.json_cache.append_paginated(
+                                        &cache_key,
+                                        page_offset,
+                                        items,
+                                        total,
+                                    );
+                                }
+                            }
+                            if let Some(page) = self.cached_page::<T>(&cache_key, off, lim) {
+                                debug!("api: {disk_key} served from disk, no request made");
+                                break 'resolved Ok(page);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Tier 3: Network.
+            let mut slot = match self.admit_read(load).await {
+                Ok(slot) => slot,
+                Err(err) => break 'resolved Err(err),
+            };
+            let _guard = match flight.try_lock() {
+                Ok(guard) => guard,
+                Err(_) => {
+                    drop(slot);
+                    let guard = flight.lock().await;
+                    slot = match self.admit_read(load).await {
+                        Ok(slot) => slot,
+                        Err(err) => break 'resolved Err(err),
+                    };
+                    guard
+                }
+            };
+            let _slot = slot;
+
+            // Another caller may have filled this page while we waited.
+            if let Some(page) = self.cached_page::<T>(&cache_key, off, lim) {
+                break 'resolved Ok(page);
+            }
+
+            let page = match fetch.await {
+                Ok(p) => p,
+                Err(err) => {
+                    self.handle_auth_error(&err);
+                    log_fetch_failure(&flight_id, &err, false);
+                    break 'resolved Err(err);
+                }
+            };
+
+            let result = Page {
+                items: page.items.clone(),
+                offset: Some(off),
+                total: Some(page.total.unwrap_or(0)),
+                next_cursor: None,
+            };
+
+            // Deferred: update memory.
+            self.json_cache.append_paginated(
+                &cache_key,
+                page.offset.unwrap_or(0),
+                page.items.clone(),
+                page.total.unwrap_or(0),
+            );
+
+            // Deferred: merge this page into the on-disk record.
+            let disk = self.api_disk.clone();
+            let dk = disk_key.clone();
+            let page_items = page.items;
+            let page_offset = page.offset.unwrap_or(0);
+            let page_total = page.total.unwrap_or(0);
+            tokio::spawn(async move {
+                let mut pages: BTreeMap<usize, Vec<serde_json::Value>> = BTreeMap::new();
+                if let Some(raw) = disk.read_raw(&dk).await {
+                    if let Ok(prev) = serde_json::from_slice::<PersistedPage>(&raw) {
+                        pages.extend(prev.pages);
+                    }
+                }
+                let values: Vec<serde_json::Value> = page_items
+                    .iter()
+                    .filter_map(|item| serde_json::to_value(item).ok())
+                    .collect();
+                pages.insert(page_offset, values);
+                let persisted = PersistedPage {
+                    pages: pages.into_iter().collect(),
+                    total: page_total,
+                };
+                if let Ok(bytes) = serde_json::to_vec(&persisted) {
+                    disk.write(&dk, &bytes, API_TTL, None).await;
+                }
+            });
+
+            Ok(result)
+        };
+
+        self.release_inflight(&flight_id, flight);
+        outcome
+    }
+
+    pub async fn get_album(&self, id: &str, load: Load) -> Result<Album, DomainError> {
+        let d = Arc::clone(&self.provider);
+        let id = id.to_string();
+        self.cached_or_fetch(CacheKey::Album(id.clone()), load, async move {
+            d.get_album(&id).await
+        })
+        .await
+    }
+
+    pub async fn get_album_tracks(
+        &self,
+        id: &str,
+        offset: usize,
+        limit: usize,
+        load: Load,
+    ) -> Result<Page<Track>, DomainError> {
+        let d = Arc::clone(&self.provider);
+        let id = id.to_string();
+        let id2 = id.clone();
+        let mut result = self
+            .cached_paginated(
+                CacheKey::AlbumTracks(id.clone()),
+                offset,
+                limit,
+                load,
+                async move { d.get_album_tracks(&id, offset, limit).await },
+            )
+            .await?;
+
+        let needs_art = |t: &Track| t.art.is_resource();
+        let needs_name = |t: &Track| t.album.as_ref().is_some_and(|a| a.name.is_empty());
+        if result.items.iter().any(|t| needs_art(t) || needs_name(t)) {
+            let album = match self
+                .json_cache
+                .get_single::<Album>(&CacheKey::Album(id2.clone()))
+            {
+                Some(album) => Some(album),
+                None => self.get_album(&id2, load).await.ok(),
+            };
+            if let Some(album) = album {
+                backfill_album_tracks(&mut result.items, &album);
+            }
+        }
+        self.annotate_saved(result.items.iter_mut().collect(), load)
+            .await;
+        Ok(result)
+    }
+
+    pub async fn get_saved_albums(
+        &self,
+        offset: usize,
+        limit: usize,
+        load: Load,
+    ) -> Result<Page<Album>, DomainError> {
+        let d = Arc::clone(&self.provider);
+        self.cached_paginated(CacheKey::SavedAlbums, offset, limit, load, async move {
+            d.get_saved_albums(offset, limit).await
+        })
+        .await
+    }
+
+    pub async fn get_saved_tracks(
+        &self,
+        offset: usize,
+        limit: usize,
+        load: Load,
+    ) -> Result<Page<Track>, DomainError> {
+        let d = Arc::clone(&self.provider);
+        let mut page = self
+            .cached_paginated(CacheKey::SavedTracks, offset, limit, load, async move {
+                d.get_saved_tracks(offset, limit).await
+            })
+            .await?;
+        for track in &mut page.items {
+            track.saved = Some(true);
+        }
+        Ok(page)
+    }
+
+    pub async fn get_saved_playlists(
+        &self,
+        offset: usize,
+        limit: usize,
+        load: Load,
+    ) -> Result<Page<Playlist>, DomainError> {
+        let d = Arc::clone(&self.provider);
+        self.cached_paginated(CacheKey::SavedPlaylists, offset, limit, load, async move {
+            d.get_saved_playlists(offset, limit).await
+        })
+        .await
+    }
+
+    pub async fn get_playlist(&self, id: &str, load: Load) -> Result<Playlist, DomainError> {
+        let d = Arc::clone(&self.provider);
+        let id = id.to_string();
+        self.cached_or_fetch(CacheKey::Playlist(id.clone()), load, async move {
+            d.get_playlist(&id).await
+        })
+        .await
+    }
+
+    pub async fn get_playlist_tracks(
+        &self,
+        id: &str,
+        offset: usize,
+        limit: usize,
+        load: Load,
+    ) -> Result<Page<Track>, DomainError> {
+        let d = Arc::clone(&self.provider);
+        let id = id.to_string();
+        let mut page = self
+            .cached_paginated(
+                CacheKey::PlaylistTracks(id.clone()),
+                offset,
+                limit,
+                load,
+                async move { d.get_playlist_tracks(&id, offset, limit).await },
+            )
+            .await?;
+        self.annotate_saved(page.items.iter_mut().collect(), load)
+            .await;
+        Ok(page)
+    }
+
+    pub async fn get_artist(&self, id: &str, load: Load) -> Result<Artist, DomainError> {
+        let d = Arc::clone(&self.provider);
+        let id = id.to_string();
+        self.cached_or_fetch(CacheKey::Artist(id.clone()), load, async move {
+            d.get_artist(&id).await
+        })
+        .await
+    }
+
+    pub async fn get_artist_albums(
+        &self,
+        id: &str,
+        offset: usize,
+        limit: usize,
+        load: Load,
+    ) -> Result<Page<Album>, DomainError> {
+        let d = Arc::clone(&self.provider);
+        let id = id.to_string();
+        self.cached_paginated(
+            CacheKey::ArtistAlbums(id.clone()),
+            offset,
+            limit,
+            load,
+            async move { d.get_artist_albums(&id, offset, limit).await },
+        )
+        .await
+    }
+
+    pub async fn get_artist_top_tracks(
+        &self,
+        id: &str,
+        load: Load,
+    ) -> Result<Vec<Track>, DomainError> {
+        let d = Arc::clone(&self.provider);
+        let id = id.to_string();
+        let mut tracks: Vec<Track> = self
+            .cached_or_fetch(CacheKey::ArtistTopTracks(id.clone()), load, async move {
+                d.get_artist_top_tracks(&id).await
+            })
+            .await?;
+        self.annotate_saved(tracks.iter_mut().collect(), load).await;
+        Ok(tracks)
+    }
+
+    pub async fn search(
+        &self,
+        query: &str,
+        offset: usize,
+        limit: usize,
+        load: Load,
+    ) -> Result<SearchResults, DomainError> {
+        let query = query.trim();
+        if query.is_empty() {
+            return Ok(SearchResults::default());
+        }
+        let mut results = {
+            let _slot = self.admit_read(load).await?;
+            self.provider.search(query, offset, limit).await?
+        };
+        self.annotate_saved(results.tracks.items.iter_mut().collect(), load)
+            .await;
+        Ok(results)
+    }
+
+    pub async fn search_scoped(
+        &self,
+        query: &str,
+        kind: SearchType,
+        offset: usize,
+        limit: usize,
+        load: Load,
+    ) -> Result<SearchResults, DomainError> {
+        let query = query.trim();
+        if query.is_empty() {
+            return Ok(SearchResults::default());
+        }
+        let mut results = {
+            let _slot = self.admit_read(load).await?;
+            self.provider
+                .search_scoped(query, kind, offset, limit)
+                .await?
+        };
+        self.annotate_saved(results.tracks.items.iter_mut().collect(), load)
+            .await;
+        Ok(results)
+    }
+
+    pub async fn get_user(&self, id: &str, load: Load) -> Result<User, DomainError> {
+        let d = Arc::clone(&self.provider);
+        let id = id.to_string();
+        self.cached_or_fetch(CacheKey::User(id.clone()), load, async move {
+            d.get_user(&id).await
+        })
+        .await
+    }
+
+    pub async fn get_current_user(&self, load: Load) -> Result<User, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_current_user().await
+    }
+
+    pub async fn get_track(&self, id: &str, load: Load) -> Result<Track, DomainError> {
+        let mut track = {
+            let _slot = self.admit_read(load).await?;
+            self.provider.get_track(id).await?
+        };
+        self.annotate_saved(vec![&mut track], load).await;
+        Ok(track)
+    }
+
+    pub async fn get_user_playlists(
+        &self,
+        id: &str,
+        offset: usize,
+        limit: usize,
+        load: Load,
+    ) -> Result<Page<Playlist>, DomainError> {
+        let d = Arc::clone(&self.provider);
+        let id = id.to_string();
+        self.cached_paginated(
+            CacheKey::UserPlaylists(id.clone()),
+            offset,
+            limit,
+            load,
+            async move { d.get_user_playlists(&id, offset, limit).await },
+        )
+        .await
+    }
+
+    async fn invalidate_albums(&self, ids: &str) {
+        for id in ids.split(',').filter(|s| !s.is_empty()) {
+            self.json_cache.remove(&CacheKey::Album(id.to_string()));
+            self.api_disk
+                .invalidate(&CacheKey::Album(id.to_string()).disk_key())
+                .await;
+        }
+    }
+
+    pub async fn save_albums(&self, ids: &str) -> Result<(), DomainError> {
+        self.json_cache.remove(&CacheKey::SavedAlbums);
+        self.api_disk
+            .invalidate(&CacheKey::SavedAlbums.disk_key())
+            .await;
+        self.invalidate_albums(ids).await;
+        let _lane = self.write_lane.enter().await;
+        self.provider.save_albums(ids).await
+    }
+
+    pub async fn remove_albums(&self, ids: &str) -> Result<(), DomainError> {
+        self.json_cache.remove(&CacheKey::SavedAlbums);
+        self.api_disk
+            .invalidate(&CacheKey::SavedAlbums.disk_key())
+            .await;
+        self.invalidate_albums(ids).await;
+        let _lane = self.write_lane.enter().await;
+        self.provider.remove_albums(ids).await
+    }
+
+    async fn cached_saved(&self, id: &str) -> Option<bool> {
+        let key = CacheKey::TrackSaved(id.to_string());
+        if let Some(saved) = self.json_cache.get_single::<bool>(&key) {
+            return Some(saved);
+        }
+        let entry = self.api_disk.read(&key.disk_key()).await?;
+        if !matches!(entry.state, crate::cache::disk::EntryState::Fresh) {
+            return None;
+        }
+        let saved = serde_json::from_slice::<bool>(&entry.data).ok()?;
+        self.json_cache.insert_single(&key, saved);
+        Some(saved)
+    }
+
+    async fn store_saved(&self, id: &str, saved: bool) {
+        let key = CacheKey::TrackSaved(id.to_string());
+        self.json_cache.insert_single(&key, saved);
+        if let Ok(bytes) = serde_json::to_vec(&saved) {
+            self.api_disk
+                .write_default(&key.disk_key(), &bytes, None)
+                .await;
+        }
+    }
+
+    async fn set_saved(&self, ids: &[String], saved: bool) {
+        join_all(ids.iter().map(|id| self.store_saved(id, saved))).await;
+    }
+
+    async fn forget_saved(&self, ids: &[String]) {
+        join_all(ids.iter().map(|id| async move {
+            let key = CacheKey::TrackSaved(id.clone());
+            self.json_cache.remove(&key);
+            self.api_disk.invalidate(&key.disk_key()).await;
+        }))
+        .await;
+    }
+
+    async fn annotate_saved(&self, mut tracks: Vec<&mut Track>, load: Load) {
+        let mut ids: Vec<String> = tracks
+            .iter()
+            .map(|t| t.rri.id.clone())
+            .filter(|id| !id.is_empty())
+            .collect();
+        ids.sort_unstable();
+        ids.dedup();
+        if ids.is_empty() {
+            return;
+        }
+
+        let cached = join_all(ids.iter().map(|id| self.cached_saved(id))).await;
+        let unknown: Vec<String> = ids
+            .iter()
+            .zip(&cached)
+            .filter(|(_, cached)| cached.is_none())
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        let mut checked: HashMap<String, bool> = HashMap::new();
+        if !unknown.is_empty() {
+            match self.check_saved_tracks(unknown.clone(), load).await {
+                Ok(saved) => checked = unknown.into_iter().zip(saved).collect(),
+                Err(DomainError::Shed) => {}
+                Err(err) => {
+                    self.handle_auth_error(&err);
+                    warn!("api: checking saved tracks failed: {err}");
+                }
+            }
+        }
+
+        let mut known: HashMap<String, bool> = HashMap::new();
+        let mut fresh: Vec<(String, bool)> = Vec::new();
+        for id in ids {
+            let key = CacheKey::TrackSaved(id.clone());
+            if let Some(saved) = self.json_cache.get_single::<bool>(&key) {
+                known.insert(id, saved);
+            } else if let Some(saved) = checked.get(&id) {
+                fresh.push((id, *saved));
+            }
+        }
+        join_all(fresh.iter().map(|(id, saved)| self.store_saved(id, *saved))).await;
+        known.extend(fresh);
+
+        for track in tracks.iter_mut() {
+            if let Some(saved) = known.get(&track.rri.id) {
+                track.saved = Some(*saved);
+            }
+        }
+    }
+
+    async fn check_saved_tracks(
+        &self,
+        ids: Vec<String>,
+        load: Load,
+    ) -> Result<Vec<bool>, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.check_saved_tracks(ids).await
+    }
+
+    pub async fn save_tracks(&self, ids: Vec<String>) -> Result<(), DomainError> {
+        self.json_cache.remove(&CacheKey::SavedTracks);
+        self.api_disk
+            .invalidate(&CacheKey::SavedTracks.disk_key())
+            .await;
+        self.set_saved(&ids, true).await;
+        let result = {
+            let _lane = self.write_lane.enter().await;
+            self.provider.save_tracks(ids.clone()).await
+        };
+        if result.is_err() {
+            self.forget_saved(&ids).await;
+        }
+        result
+    }
+
+    pub async fn remove_tracks(&self, ids: Vec<String>) -> Result<(), DomainError> {
+        self.json_cache.remove(&CacheKey::SavedTracks);
+        self.api_disk
+            .invalidate(&CacheKey::SavedTracks.disk_key())
+            .await;
+        self.set_saved(&ids, false).await;
+        let result = {
+            let _lane = self.write_lane.enter().await;
+            self.provider.remove_tracks(ids.clone()).await
+        };
+        if result.is_err() {
+            self.forget_saved(&ids).await;
+        }
+        result
+    }
+
+    pub async fn add_to_playlist(
+        &self,
+        id: &str,
+        uris: Vec<String>,
+        load: Load,
+    ) -> Result<Vec<String>, DomainError> {
+        let _lane = self.write_lane.enter().await;
+        let items = self.playlist_item_uris(id, load).await?;
+        let uris = unlisted_uris(&items, uris);
+        if uris.is_empty() {
+            return Ok(uris);
+        }
+        self.invalidate_playlist(id).await;
+        self.provider
+            .add_to_playlist(id, uris.clone(), None)
+            .await?;
+        Ok(uris)
+    }
+
+    async fn invalidate_playlist(&self, id: &str) {
+        for key in [
+            CacheKey::Playlist(id.to_string()),
+            CacheKey::PlaylistTracks(id.to_string()),
+        ] {
+            self.json_cache.remove(&key);
+            self.api_disk.invalidate(&key.disk_key()).await;
+        }
+    }
+
+    async fn fresh_playlist(&self, id: &str, load: Load) -> Result<Playlist, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_playlist(id).await
+    }
+
+    async fn playlist_item_uris(
+        &self,
+        id: &str,
+        load: Load,
+    ) -> Result<Vec<Option<String>>, DomainError> {
+        let mut items = Vec::new();
+        loop {
+            let (mut page, total) = {
+                let _slot = self.admit_read(load).await?;
+                self.provider
+                    .get_playlist_item_uris(id, items.len(), PLAYLIST_ITEMS_PAGE)
+                    .await?
+            };
+            let last = page.is_empty();
+            items.append(&mut page);
+            if last || items.len() >= total {
+                return Ok(items);
+            }
+        }
+    }
+
+    pub async fn remove_from_playlist(
+        &self,
+        id: &str,
+        uris: Vec<String>,
+    ) -> Result<(), DomainError> {
+        self.invalidate_playlist(id).await;
+        let _lane = self.write_lane.enter().await;
+        self.provider.remove_from_playlist(id, uris, None).await
+    }
+
+    pub async fn create_playlist(
+        &self,
+        user_id: &str,
+        name: &str,
+        description: Option<&str>,
+        public: bool,
+    ) -> Result<Playlist, DomainError> {
+        self.json_cache.remove(&CacheKey::SavedPlaylists);
+        self.api_disk
+            .invalidate(&CacheKey::SavedPlaylists.disk_key())
+            .await;
+        let _lane = self.write_lane.enter().await;
+        let mut playlist = self
+            .provider
+            .create_playlist(user_id, name, None, None, description)
+            .await?;
+        if !public {
+            let id = &playlist.rri.id;
+            if let Err(e) = self.provider.set_playlist_public(id, false).await {
+                warn!("playlist {id}: could not be made private, removing it: {e}");
+                if let Err(e) = self.provider.unfollow_playlist(id).await {
+                    warn!("playlist {id}: could not be removed: {e}");
+                }
+                return Err(e);
+            }
+        }
+        playlist.public = Some(public);
+        Ok(playlist)
+    }
+
+    pub async fn upload_playlist_cover(
+        &self,
+        id: &str,
+        image: Vec<u8>,
+        load: Load,
+    ) -> Result<Option<ImageSet>, DomainError> {
+        let encoded = tokio::task::spawn_blocking(move || crate::image::encode_cover(&image))
+            .await
+            .ok()
+            .flatten()
+            .ok_or_else(|| DomainError::Parse("could not encode the playlist cover".into()))?;
+        let previous = match self.fresh_playlist(id, load).await {
+            Ok(playlist) => cover_url(&playlist.art),
+            Err(e) => {
+                warn!("playlist {id}: could not read its cover before replacing it: {e}");
+                None
+            }
+        };
+        {
+            let _lane = self.write_lane.enter().await;
+            self.provider.upload_playlist_cover(id, encoded).await?;
+        }
+        Ok(self
+            .await_playlist_cover(id, previous.as_deref(), true, load)
+            .await)
+    }
+
+    pub async fn refreshed_playlist_cover(
+        &self,
+        id: &str,
+        poll: bool,
+        load: Load,
+    ) -> Option<ImageSet> {
+        self.await_playlist_cover(id, None, poll, load).await
+    }
+
+    async fn await_playlist_cover(
+        &self,
+        id: &str,
+        previous: Option<&str>,
+        poll: bool,
+        load: Load,
+    ) -> Option<ImageSet> {
+        let attempts = if poll { COVER_POLL_ATTEMPTS } else { 1 };
+        let mut cover = None;
+        for _ in 0..attempts {
+            if poll {
+                tokio::time::sleep(COVER_POLL_INTERVAL).await;
+            }
+            match self.fresh_playlist(id, load).await {
+                Ok(playlist) => {
+                    let url = cover_url(&playlist.art);
+                    if url.as_deref() != previous && url.is_some_and(|url| !is_resource_url(&url)) {
+                        cover = Some(playlist.art);
+                        break;
+                    }
+                }
+                Err(e) => {
+                    warn!("playlist {id}: could not check for its cover: {e}");
+                    break;
+                }
+            }
+        }
+        if cover.is_none() {
+            debug!("playlist {id}: no new cover showed up in time");
+            return None;
+        }
+
+        self.invalidate_playlist(id).await;
+        self.json_cache.remove(&CacheKey::SavedPlaylists);
+        self.api_disk
+            .invalidate(&CacheKey::SavedPlaylists.disk_key())
+            .await;
+        cover
+    }
+
+    pub async fn follow_playlist(&self, id: &str) -> Result<(), DomainError> {
+        self.json_cache.remove(&CacheKey::SavedPlaylists);
+        self.api_disk
+            .invalidate(&CacheKey::SavedPlaylists.disk_key())
+            .await;
+        let _lane = self.write_lane.enter().await;
+        self.provider.follow_playlist(id).await
+    }
+
+    pub async fn unfollow_playlist(&self, id: &str) -> Result<(), DomainError> {
+        self.json_cache.remove(&CacheKey::SavedPlaylists);
+        self.json_cache
+            .remove(&CacheKey::PlaylistTracks(id.to_string()));
+        self.api_disk
+            .invalidate(&CacheKey::SavedPlaylists.disk_key())
+            .await;
+        self.api_disk
+            .invalidate(&CacheKey::Playlist(id.to_string()).disk_key())
+            .await;
+        self.api_disk
+            .invalidate(&CacheKey::PlaylistTracks(id.to_string()).disk_key())
+            .await;
+        let _lane = self.write_lane.enter().await;
+        self.provider.unfollow_playlist(id).await
+    }
+
+    pub async fn update_playlist_details(
+        &self,
+        id: &str,
+        name: &str,
+        description: Option<&str>,
+        public: Option<bool>,
+    ) -> Result<(), DomainError> {
+        self.invalidate_playlist(id).await;
+        let _lane = self.write_lane.enter().await;
+        if let Some(public) = public {
+            self.provider.set_playlist_public(id, public).await?;
+        }
+        let updated = self
+            .provider
+            .update_playlist_details(id, Some(name), None, None, description)
+            .await;
+        if let (Err(_), Some(public)) = (&updated, public) {
+            if let Err(e) = self.provider.set_playlist_public(id, !public).await {
+                warn!(
+                    "playlist {id}: could not be set back to public = {}: {e}",
+                    !public
+                );
+            }
+        }
+        updated
+    }
+
+    pub async fn get_devices(&self, load: Load) -> Result<Vec<Device>, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_devices().await
+    }
+
+    pub async fn get_player_queue(&self, load: Load) -> Result<Queue, DomainError> {
+        let mut queue = {
+            let _slot = self.admit_read(load).await?;
+            self.provider.get_player_queue().await?
+        };
+        let tracks = queue.currently_playing.iter_mut().chain(&mut queue.items);
+        self.annotate_saved(tracks.collect(), load).await;
+        Ok(queue)
+    }
+
+    pub async fn get_player_state(&self, load: Load) -> Result<PlayerState, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_player_state().await
+    }
+
+    pub async fn player_resume(&self, device_id: &str) -> Result<(), DomainError> {
+        let _lane = self.player_lane.enter().await;
+        self.provider.player_resume(device_id).await
+    }
+
+    pub async fn player_play_in_context(
+        &self,
+        device_id: &str,
+        context_uri: &str,
+        offset: usize,
+    ) -> Result<(), DomainError> {
+        let _lane = self.player_lane.enter().await;
+        self.provider
+            .player_play_in_context(device_id, context_uri, offset)
+            .await
+    }
+
+    pub async fn player_play_uris(
+        &self,
+        device_id: &str,
+        uris: Vec<String>,
+        offset: usize,
+    ) -> Result<(), DomainError> {
+        let _lane = self.player_lane.enter().await;
+        self.provider
+            .player_play_uris(device_id, uris, offset)
+            .await
+    }
+
+    pub async fn player_pause(&self, device_id: &str) -> Result<(), DomainError> {
+        let _lane = self.player_lane.enter().await;
+        self.provider.player_pause(device_id).await
+    }
+
+    pub async fn player_seek(&self, device_id: &str, position_ms: u32) -> Result<(), DomainError> {
+        let _lane = self.player_lane.enter().await;
+        self.provider.player_seek(device_id, position_ms).await
+    }
+
+    pub async fn player_repeat(
+        &self,
+        device_id: &str,
+        mode: RepeatMode,
+    ) -> Result<(), DomainError> {
+        let _lane = self.player_lane.enter().await;
+        self.provider.player_repeat(device_id, mode).await
+    }
+
+    pub async fn player_shuffle(&self, device_id: &str, state: bool) -> Result<(), DomainError> {
+        let _lane = self.player_lane.enter().await;
+        self.provider.player_shuffle(device_id, state).await
+    }
+
+    pub async fn player_volume(
+        &self,
+        device_id: &str,
+        volume_percent: u8,
+    ) -> Result<(), DomainError> {
+        let _lane = self.player_lane.enter().await;
+        self.provider.player_volume(device_id, volume_percent).await
+    }
+
+    pub async fn get_followed_artists(
+        &self,
+        after: Option<&str>,
+        limit: usize,
+        load: Load,
+    ) -> Result<(Vec<Artist>, Option<String>), DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.get_followed_artists(after, limit).await
+    }
+
+    pub async fn follow_artists(&self, ids: &str) -> Result<(), DomainError> {
+        let _lane = self.write_lane.enter().await;
+        self.provider.follow_artists(ids).await
+    }
+
+    pub async fn unfollow_artists(&self, ids: &str) -> Result<(), DomainError> {
+        let _lane = self.write_lane.enter().await;
+        self.provider.unfollow_artists(ids).await
+    }
+
+    pub async fn check_following_artists(
+        &self,
+        ids: &str,
+        load: Load,
+    ) -> Result<Vec<bool>, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.check_following_artists(ids).await
+    }
+
+    pub async fn check_saved_albums(
+        &self,
+        ids: &str,
+        load: Load,
+    ) -> Result<Vec<bool>, DomainError> {
+        let _slot = self.admit_read(load).await?;
+        self.provider.check_saved_albums(ids).await
+    }
+
+    pub async fn check_following_artist(&self, id: &str, load: Load) -> Result<bool, DomainError> {
+        Ok(self
+            .check_following_artists(id, load)
+            .await?
+            .first()
+            .copied()
+            .unwrap_or(false))
+    }
+
+    pub async fn check_saved_album(&self, id: &str, load: Load) -> Result<bool, DomainError> {
+        Ok(self
+            .check_saved_albums(id, load)
+            .await?
+            .first()
+            .copied()
+            .unwrap_or(false))
+    }
+
+    fn image_key(url: &str) -> String {
+        format!("{url}.{IMAGE_EXT}")
+    }
+
+    /// Load an image: memory LRU -> disk -> CDN, with single-flight per image
+    /// so concurrent callers share one download.
+    ///
+    /// `load` carries the epoch from when the caller decided it needed this
+    /// image, since reading it later would stamp a deferred off-screen cover
+    /// with whatever view is current by then.
+    pub async fn load_image(
+        &self,
+        url: &str,
+        width: i32,
+        height: i32,
+        load: Load,
+    ) -> Option<gdk::Texture> {
+        // Missing-artwork marker: the frontend draws its own stand-in.
+        if is_resource_url(url) {
+            return None;
+        }
+
+        let disk_key = Self::image_key(url);
+        let tex_key = format!("{disk_key}:{width}x{height}");
+
+        // Tier 1: Memory LRU
+        if let Some(texture) = self.texture_cache.get(&tex_key) {
+            return Some(texture);
+        }
+
+        let flight = self.inflight_lock(&disk_key);
+        let texture = self
+            .load_image_flight(url, &disk_key, &tex_key, width, height, load, &flight)
+            .await;
+        self.release_inflight(&disk_key, flight);
+        texture
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn load_image_flight(
+        &self,
+        url: &str,
+        disk_key: &str,
+        tex_key: &str,
+        width: i32,
+        height: i32,
+        load: Load,
+        flight: &tokio::sync::Mutex<()>,
+    ) -> Option<gdk::Texture> {
+        // Tier 2: Disk, one caller at a time per image.
+        {
+            let _guard = flight.lock().await;
+            if let Some(texture) = self
+                .cached_image(url, disk_key, tex_key, width, height)
+                .await
+            {
+                return Some(texture);
+            }
+        }
+
+        // Tier 3: Network, gated so interactive loads preempt background ones.
+        let mut slot = self.admit_image(url, load).await?;
+        let _guard = match flight.try_lock() {
+            Ok(guard) => guard,
+            Err(_) => {
+                drop(slot);
+                let guard = flight.lock().await;
+                // Whoever held the flight has most likely fetched this image.
+                if let Some(texture) = self
+                    .cached_image(url, disk_key, tex_key, width, height)
+                    .await
+                {
+                    return Some(texture);
+                }
+                slot = self.admit_image(url, load).await?;
+                guard
+            }
+        };
+        let _slot = slot;
+
+        // Another caller may have fetched this while we waited.
+        if let Some(texture) = self.texture_cache.get(tex_key) {
+            return Some(texture);
+        }
+
+        let request = match ::http::Request::builder()
+            .method("GET")
+            .uri(url)
+            .body(Vec::new())
+        {
+            Ok(request) => request,
+            Err(e) => {
+                warn!("cdn: failed to build request for {url}: {e}");
+                return None;
+            }
+        };
+        let response = match self.cdn_client.execute(request).await {
+            Ok(response) => response,
+            Err(e) => {
+                warn!("cdn: request for {url} failed: {e}");
+                return None;
+            }
+        };
+        if !response.status.is_success() {
+            warn!(
+                "cdn: {url} returned non-success status {} ({} bytes); no image",
+                response.status,
+                response.body.len()
+            );
+            return None;
+        }
+        let buf = response.body;
+        if buf.is_empty() {
+            warn!(
+                "cdn: {url} returned success status {} but an EMPTY body; \
+                 no image will be produced",
+                response.status
+            );
+            return None;
+        }
+
+        let disk = self.image_disk.clone();
+        let write_key = disk_key.to_string();
+        let disk_buf = buf.clone();
+        let write = tokio::spawn(async move {
+            disk.write(&write_key, &disk_buf, IMAGE_TTL, None).await;
+        });
+
+        let (texture, _) = tokio::join!(
+            self.decode_image(url, tex_key, buf.into_boxed_slice(), width, height),
+            write
+        );
+        texture
+    }
+
+    async fn admit_image(&self, url: &str, load: Load) -> Option<Option<Slot>> {
+        match self.image_queue.admit(load).await {
+            Admission::Granted(slot) => Some(Some(slot)),
+            Admission::Unslotted => Some(None),
+            Admission::Denied => {
+                debug!("cdn: image queue is full, skipping {url}");
+                None
+            }
+        }
+    }
+
+    async fn cached_image(
+        &self,
+        url: &str,
+        disk_key: &str,
+        tex_key: &str,
+        width: i32,
+        height: i32,
+    ) -> Option<gdk::Texture> {
+        if let Some(texture) = self.texture_cache.get(tex_key) {
+            return Some(texture);
+        }
+        let entry = self.image_disk.read(disk_key).await?;
+        self.decode_image(url, tex_key, entry.data, width, height)
+            .await
+    }
+
+    async fn decode_image(
+        &self,
+        url: &str,
+        tex_key: &str,
+        bytes: Box<[u8]>,
+        width: i32,
+        height: i32,
+    ) -> Option<gdk::Texture> {
+        // Decode on a blocking thread so it does not stall the frame clock.
+        let byte_len = bytes.len();
+        let decoded = tokio::task::spawn_blocking(move || {
+            crate::cache::decode_texture(&bytes, width, height)
+        })
+        .await;
+
+        let texture = match decoded {
+            Ok(Some(texture)) => texture,
+            Ok(None) => {
+                warn!(
+                    "cdn: failed to decode texture for {url} from {byte_len} bytes \
+                     ({width}x{height}); no image"
+                );
+                return None;
+            }
+            Err(e) => {
+                warn!("cdn: decode task for {url} failed: {e}");
+                return None;
+            }
+        };
+
+        let tex_w = texture.width().max(0) as usize;
+        let tex_h = texture.height().max(0) as usize;
+        let byte_size = tex_w * tex_h * 4;
+        self.texture_cache
+            .insert(tex_key.to_string(), texture.clone(), byte_size);
+        Some(texture)
+    }
+}
+
+fn backfill_album_tracks(tracks: &mut [Track], album: &Album) {
+    for track in tracks.iter_mut() {
+        if track.art.is_resource() && !album.art.is_resource() {
+            track.art = album.art.clone();
+        }
+        if let Some(album_ref) = track.album.as_mut() {
+            if album_ref.name.is_empty() {
+                album_ref.name = album.title.clone();
+            }
+        }
+    }
+}
+
+/// Log a network fetch that failed.
+fn log_fetch_failure(key: &str, err: &DomainError, serving_stale: bool) {
+    if matches!(
+        err,
+        DomainError::NoToken | DomainError::AuthExpired | DomainError::Shed
+    ) {
+        return;
+    }
+    #[cfg(debug_assertions)]
+    if crate::dev::is_simulate_offline() {
+        return;
+    }
+    if serving_stale {
+        warn!(
+            "api: {key} fetch failed, serving the stale cached copy for {}s: {err}",
+            STALE_IF_ERROR_TTL.as_secs()
+        );
+    } else if err.is_transient() {
+        warn!("api: {key} fetch failed with no cached copy to fall back on: {err}");
+    } else {
+        error!("api: {key} fetch failed with no cached copy to fall back on: {err}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn uris(items: &[&str]) -> Vec<Option<String>> {
+        items
+            .iter()
+            .map(|uri| (!uri.is_empty()).then(|| uri.to_string()))
+            .collect()
+    }
+
+    fn strings(items: &[&str]) -> Vec<String> {
+        items.iter().map(|uri| uri.to_string()).collect()
+    }
+
+    #[test]
+    fn unlisted_uris_leaves_out_what_the_playlist_lists() {
+        let items = uris(&["a", "", "b"]);
+        assert_eq!(
+            unlisted_uris(&items, strings(&["b", "c", "a", "d"])),
+            strings(&["c", "d"])
+        );
+        assert!(unlisted_uris(&items, strings(&["a", "b"])).is_empty());
+    }
+
+    #[test]
+    fn unlisted_uris_keeps_each_uri_once() {
+        assert_eq!(
+            unlisted_uris(&[], strings(&["a", "b", "a", "a"])),
+            strings(&["a", "b"])
+        );
+    }
+
+    fn image_set(url: &str) -> ImageSet {
+        ImageSet {
+            images: vec![Image {
+                url: url.to_string(),
+                width: None,
+                height: None,
+            }],
+            template: None,
+        }
+    }
+
+    fn album(title: &str, art: ImageSet) -> Album {
+        Album {
+            rri: ResourceId::default(),
+            title: title.to_string(),
+            artists: vec![],
+            art,
+            album_type: AlbumType::Album,
+            release_date: None,
+            total_tracks: None,
+            label: None,
+            copyright: None,
+            upc: None,
+            genres: vec![],
+            popularity: None,
+            content_rating: ContentRating::None,
+            saved: None,
+            tracks: None,
+            url: None,
+        }
+    }
+
+    fn track(album_name: Option<&str>, art: ImageSet) -> Track {
+        Track {
+            rri: ResourceId::default(),
+            title: "Track".to_string(),
+            artists: vec![],
+            album: album_name.map(|name| AlbumRef {
+                rri: ResourceId::default(),
+                name: name.to_string(),
+            }),
+            duration_ms: 0,
+            track_number: None,
+            disc_number: None,
+            content_rating: ContentRating::None,
+            isrc: None,
+            art,
+            playable: true,
+            popularity: None,
+            saved: None,
+            preview_url: None,
+            url: None,
+        }
+    }
+
+    const PLACEHOLDER: &str = "resource:///dev/diegovsky/Riff/defaults/track-default.svg";
+    const REAL: &str = "https://i.scdn.co/image/album";
+
+    #[test]
+    fn backfill_fills_empty_album_name() {
+        let mut tracks = vec![track(Some(""), image_set(PLACEHOLDER))];
+        backfill_album_tracks(&mut tracks, &album("Kind of Blue", image_set(REAL)));
+        assert_eq!(tracks[0].album.as_ref().unwrap().name, "Kind of Blue");
+    }
+
+    #[test]
+    fn backfill_keeps_existing_album_name() {
+        let mut tracks = vec![track(Some("Original"), image_set(PLACEHOLDER))];
+        backfill_album_tracks(&mut tracks, &album("Other", image_set(REAL)));
+        assert_eq!(tracks[0].album.as_ref().unwrap().name, "Original");
+    }
+
+    #[test]
+    fn backfill_leaves_missing_album_ref_alone() {
+        let mut tracks = vec![track(None, image_set(PLACEHOLDER))];
+        backfill_album_tracks(&mut tracks, &album("Kind of Blue", image_set(REAL)));
+        assert!(tracks[0].album.is_none());
+    }
+
+    #[test]
+    fn backfill_replaces_placeholder_art_only_with_real_art() {
+        let mut tracks = vec![track(Some(""), image_set(PLACEHOLDER))];
+        backfill_album_tracks(&mut tracks, &album("A", image_set(PLACEHOLDER)));
+        assert!(tracks[0].art.is_resource());
+
+        backfill_album_tracks(&mut tracks, &album("A", image_set(REAL)));
+        assert_eq!(tracks[0].art, image_set(REAL));
+    }
+
+    #[test]
+    fn backfill_keeps_existing_real_art() {
+        let own = "https://i.scdn.co/image/track";
+        let mut tracks = vec![track(Some("A"), image_set(own))];
+        backfill_album_tracks(&mut tracks, &album("A", image_set(REAL)));
+        assert_eq!(tracks[0].art, image_set(own));
+    }
+}

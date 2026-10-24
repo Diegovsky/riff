@@ -125,32 +125,33 @@ impl ListRangeUpdate {
 //
 // Note: the mutated ranges are given in terms of LOADED tracks. The theoretical size of the list is not accounted for.
 // This is to ease the work of updating the UI: we want to know what loaded/visible elements have moved around.
-//
-// Some operations are not very efficient. It might have been smarter to have different structures for our two use cases:
-// - fixed, batched sources (an album, a playlist)
-// - editable lists (queue)
 #[derive(Clone, Debug)]
 pub struct SongList {
-    total: usize,
     total_loaded: usize,
+    total: Option<usize>,
     batch_size: usize,
     last_batch_key: usize,
-    // Here a batch has an index (key) and a list of associated song ids
+    complete: bool,
     // Why not a Vec? We could have batch 1, 2, NOT 3, then 4
-    batches: HashMap<usize, Vec<String>>,
+    batches: HashMap<usize, Vec<SongModel>>,
     indexed_songs: HashMap<String, SongModel>,
 }
 
 impl SongList {
     pub fn new_sized(batch_size: usize) -> Self {
         Self {
-            total: 0,
             total_loaded: 0,
+            total: None,
             batch_size,
             last_batch_key: 0,
+            complete: false,
             batches: Default::default(),
             indexed_songs: Default::default(),
         }
+    }
+
+    pub fn is_complete(&self) -> bool {
+        self.complete && !self.has_gap()
     }
 
     pub fn batch_size(&self) -> usize {
@@ -158,9 +159,7 @@ impl SongList {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &SongModel> {
-        let indexed_songs = &self.indexed_songs;
-        self.iter_ids_from(0)
-            .filter_map(move |(_, id)| indexed_songs.get(id))
+        self.iter_from(0).map(|(_, song)| song)
     }
 
     // How many songs we actually have at the moment
@@ -178,12 +177,17 @@ impl SongList {
         batch_size * batch_count
     }
 
-    // The theoretical len of the playlist, if we had all songs
+    // The theoretical len of the collection if we had all track
     pub fn len(&self) -> usize {
-        self.total
+        self.total.unwrap_or(self.total_loaded)
     }
 
-    fn iter_ids_from(&self, i: usize) -> impl Iterator<Item = (usize, &'_ String)> {
+    // True if any batch request is still loading.
+    pub fn has_gap(&self) -> bool {
+        (0..self.last_batch_key).any(|i| !self.batches.contains_key(&i))
+    }
+
+    fn iter_from(&self, i: usize) -> impl Iterator<Item = (usize, &'_ SongModel)> {
         let batch_size = self.batch_size;
         let index = i / batch_size;
         self.iter_range(index, self.last_batch_key)
@@ -192,13 +196,12 @@ impl SongList {
 
     // Find the position of a song in the list
     pub fn find_index(&self, song_id: &str) -> Option<usize> {
-        self.iter_ids_from(0)
-            .find(|(_, id)| &id[..] == song_id)
+        self.iter_from(0)
+            .find(|(_, song)| song.description().rri.id == song_id)
             .map(|(pos, _)| pos)
     }
 
-    // Iterate over batches (in a given batch range), returning a tuple with the index of a song and its id
-    fn iter_range(&self, a: usize, b: usize) -> impl Iterator<Item = (usize, &'_ String)> {
+    fn iter_range(&self, a: usize, b: usize) -> impl Iterator<Item = (usize, &'_ SongModel)> {
         let batch_size = self.batch_size;
         let batches = &self.batches;
         (a..=b)
@@ -206,12 +209,15 @@ impl SongList {
             .flat_map(move |(k, b)| {
                 b.iter()
                     .enumerate()
-                    .map(move |(i, id)| (i + *k * batch_size, id))
+                    .map(move |(i, song)| (i + *k * batch_size, song))
             })
     }
 
-    // Add an id to our batches
-    fn batches_add(batches: &mut HashMap<usize, Vec<String>>, batch_size: usize, id: &str) {
+    fn batches_add(
+        batches: &mut HashMap<usize, Vec<SongModel>>,
+        batch_size: usize,
+        song: SongModel,
+    ) {
         let index = batches.len().saturating_sub(1);
         let count = batches
             .get(&index)
@@ -219,10 +225,35 @@ impl SongList {
             .unwrap_or(0);
         // If there's no space in the last batch, we insert a new one
         if count == 0 {
-            batches.insert(batches.len(), vec![id.to_string()]);
+            batches.insert(batches.len(), vec![song]);
         } else {
-            batches.get_mut(&index).unwrap().push(id.to_string());
+            batches.get_mut(&index).unwrap().push(song);
         }
+    }
+
+    fn index_song(&mut self, song: &SongModel) {
+        self.indexed_songs
+            .entry(song.get_id())
+            .or_insert_with(|| song.clone());
+    }
+
+    fn reindex(&mut self) {
+        self.indexed_songs.clear();
+        let songs: Vec<SongModel> = self.iter().cloned().collect();
+        for song in &songs {
+            self.index_song(song);
+        }
+    }
+
+    fn repack(&mut self, songs: Vec<SongModel>) {
+        let mut batches = HashMap::<usize, Vec<SongModel>>::default();
+        self.total_loaded = songs.len();
+        for song in songs {
+            Self::batches_add(&mut batches, self.batch_size, song);
+        }
+        self.last_batch_key = batches.len().saturating_sub(1);
+        self.batches = batches;
+        self.reindex();
     }
 
     pub fn clear(&mut self) -> ListRangeUpdate {
@@ -233,113 +264,109 @@ impl SongList {
 
     pub fn remove(&mut self, ids: &[String]) -> ListRangeUpdate {
         let len = self.total_loaded;
-        let mut batches = HashMap::<usize, Vec<String>>::default();
-        self.iter_ids_from(0)
-            .filter(|(_, s)| !ids.contains(s))
-            // Removing is expensive, we have to recreate all batches
-            .for_each(|(_, next)| {
-                Self::batches_add(&mut batches, self.batch_size, next);
-            });
-        self.last_batch_key = batches.len().saturating_sub(1);
-        self.batches = batches;
-        // Drop the removed songs from the id->model lookup as well, otherwise
-        // `get()` would keep returning stale entries after removal.
-        let removed = ids
+        let kept: Vec<SongModel> = self
             .iter()
-            .filter(|id| self.indexed_songs.remove(*id).is_some())
-            .count();
-        self.total = self.total.saturating_sub(removed);
-        self.total_loaded = self.total_loaded.saturating_sub(removed);
+            .filter(|song| !ids.contains(&song.description().rri.id))
+            .cloned()
+            .collect();
+        self.repack(kept);
         // Lazy computation of the affected range, basically assume everything has changed
         ListRangeUpdate(0, len as i32, self.total_loaded as i32)
     }
 
-    pub fn append(&mut self, songs: Vec<SongDescription>) -> ListRangeUpdate {
+    pub fn append(&mut self, songs: Vec<Track>) -> ListRangeUpdate {
+        self.append_models(songs.into_iter().map(SongModel::new).collect())
+    }
+
+    pub fn append_models(&mut self, songs: Vec<SongModel>) -> ListRangeUpdate {
         let songs_len = songs.len();
         // How many loaded/visible songs so far
-        let insertion_start = self.estimated_len(self.last_batch_key + 1);
-        self.total = self.total.saturating_add(songs_len);
+        let insertion_start = self.total_loaded;
+        // Close any gap first
+        if self.has_gap() || self.last_batch_key + 1 != self.batches.len() {
+            let existing: Vec<SongModel> = self.iter().cloned().collect();
+            self.repack(existing);
+        }
         self.total_loaded = self.total_loaded.saturating_add(songs_len);
+        // A directly-appended list is a fully-known, non-paginated collection.
+        self.complete = true;
         for song in songs {
-            Self::batches_add(&mut self.batches, self.batch_size, &song.id);
-            self.indexed_songs
-                .insert(song.id.clone(), SongModel::new(song));
+            self.index_song(&song);
+            Self::batches_add(&mut self.batches, self.batch_size, song);
         }
         self.last_batch_key = self.batches.len().saturating_sub(1);
         ListRangeUpdate::inserted(insertion_start, songs_len)
     }
 
-    pub fn prepend(&mut self, songs: Vec<SongDescription>) -> ListRangeUpdate {
+    pub fn replace_models(&mut self, songs: Vec<SongModel>) -> ListRangeUpdate {
+        let len = self.total_loaded;
+        *self = Self::new_sized(self.batch_size);
+        self.complete = true;
+        self.repack(songs);
+        ListRangeUpdate(0, len as i32, self.total_loaded as i32)
+    }
+
+    pub fn prepend(&mut self, songs: Vec<Track>) -> ListRangeUpdate {
         let songs_len = songs.len();
         let insertion_start = 0;
 
         // Prepending also requires redoing all the batches
-        let mut batches = HashMap::<usize, Vec<String>>::default();
-        for song in songs {
-            Self::batches_add(&mut batches, self.batch_size, &song.id);
-            self.indexed_songs
-                .insert(song.id.clone(), SongModel::new(song));
-        }
-        self.iter_ids_from(0).for_each(|(_, next)| {
-            Self::batches_add(&mut batches, self.batch_size, next);
-        });
-
-        self.total = self.total.saturating_add(songs_len);
-        self.total_loaded = self.total_loaded.saturating_add(songs_len);
-        self.last_batch_key = batches.len().saturating_sub(1);
-        self.batches = batches;
+        let mut all: Vec<SongModel> = songs.into_iter().map(SongModel::new).collect();
+        all.extend(self.iter().cloned());
+        self.repack(all);
 
         // But it's a bit easier to computer the visibly affected range :)
         ListRangeUpdate::inserted(insertion_start, songs_len)
     }
 
     // Adding a batch is easy, might only require a resize
-    pub fn add(&mut self, song_batch: SongBatch) -> Option<ListRangeUpdate> {
-        if song_batch.batch.batch_size != self.batch_size {
-            song_batch
-                .resize(self.batch_size)
-                .into_iter()
-                .map(|new_batch| {
-                    debug!("adding batch {:?}", &new_batch.batch);
-                    self.add_one(new_batch)
-                })
-                .reduce(|acc, cur| {
-                    // If we have added more than one batch we just merge the affected ranges
-                    let merged = acc?.merge(cur?);
-                    Some(merged).or(acc).or(cur)
-                })
-                .unwrap_or(None)
-        } else {
-            self.add_one(song_batch)
-        }
-    }
-
-    fn add_one(&mut self, SongBatch { songs, batch }: SongBatch) -> Option<ListRangeUpdate> {
-        assert_eq!(batch.batch_size, self.batch_size);
-
-        let index = batch.offset / batch.batch_size;
+    // Add a loaded page. Pages are assumed aligned to this list's batch size
+    // (every fetch uses the same limit), so the page drops in at
+    // `offset / batch_size`.
+    pub fn add(&mut self, batch: Page<Track>) -> Option<ListRangeUpdate> {
+        let Page {
+            items,
+            offset,
+            total,
+            ..
+        } = batch;
+        let index = offset.unwrap_or(0) / self.batch_size;
 
         let insertion_start = self.estimated_len(index);
-        let len = songs.len();
-        let ids = songs
-            .into_iter()
-            .map(|song| {
-                let song_id = song.id.clone();
-                self.indexed_songs
-                    .insert(song_id.clone(), SongModel::new(song));
-                song_id
-            })
-            .collect();
+        let len = items.len();
+        // A page shorter than the batch size (including an empty trailing page)
+        // means we've reached the end of the collection.
+        if len < self.batch_size {
+            self.complete = true;
+        }
+        if let Some(total) = total {
+            self.total = Some(self.total.map_or(total, |t| t.max(total)));
+        }
+        let songs: Vec<SongModel> = items.into_iter().map(SongModel::new).collect();
+        for song in &songs {
+            self.index_song(song);
+        }
 
-        self.batches.insert(index, ids);
-        self.total = batch.total;
+        // The same page loaded twice: its rows are replaced, not added to
+        let replaced = match self.batches.insert(index, songs) {
+            Some(old) => {
+                self.total_loaded -= old.len();
+                self.reindex();
+                old.len()
+            }
+            None => 0,
+        };
         self.total_loaded += len;
         self.last_batch_key = usize::max(self.last_batch_key, index);
 
-        Some(ListRangeUpdate::inserted(insertion_start, len))
+        Some(ListRangeUpdate(
+            insertion_start as i32,
+            replaced as i32,
+            len as i32,
+        ))
     }
 
-    fn index_mut(&mut self, i: usize) -> Option<&mut String> {
+    fn index_mut(&mut self, i: usize) -> Option<&mut SongModel> {
         let batch_size = self.batch_size;
         let i_batch = i / batch_size;
         self.batches
@@ -351,16 +378,11 @@ impl SongList {
         if a == b {
             return None;
         }
-        let a_value = self.index_mut(a).map(std::mem::take);
-        let a_value = a_value.as_ref();
-        let new_a_value = self
-            .index_mut(b)
-            .and_then(|v| Some(std::mem::replace(v, a_value?.clone())))
-            .or_else(|| a_value.cloned());
-        let a_mut = self.index_mut(a);
-        if let (Some(a_mut), Some(a_value)) = (a_mut, new_a_value) {
-            *a_mut = a_value;
-        }
+        let a_value = self.index(a).cloned()?;
+        let b_value = self.index(b).cloned()?;
+        *self.index_mut(a)? = b_value;
+        *self.index_mut(b)? = a_value;
+        self.reindex();
         Some(ListRangeUpdate::updated(a).merge(ListRangeUpdate::updated(b)))
     }
 
@@ -368,11 +390,9 @@ impl SongList {
     pub fn index(&self, i: usize) -> Option<&SongModel> {
         let batch_size = self.batch_size;
         let batch_id = i / batch_size;
-        let indexed_songs = &self.indexed_songs;
         self.batches
             .get(&batch_id)
             .and_then(|batch| batch.get(i % batch_size))
-            .and_then(move |id| indexed_songs.get(id))
     }
 
     // Get the i-th loaded song. VERY different!
@@ -383,57 +403,33 @@ impl SongList {
             // Skip missing/not loaded batches
             .filter_map(move |i| self.batches.get(&i))
             .nth(bi)?;
-        batch
-            .get(i % batch_size)
-            .and_then(move |id| self.indexed_songs.get(id))
+        batch.get(i % batch_size)
     }
 
-    // Return the batch needed to access the song at index i (if it's not loaded yet)
-    pub fn needed_batch_for(&self, i: usize) -> Option<Batch> {
-        let total = self.total;
+    // Return the request needed to load the song at index i (if not loaded yet)
+    pub fn needed_batch_for(&self, i: usize) -> Option<PageRequest> {
         let batch_size = self.batch_size;
         let batch_id = i / batch_size;
         if self.batches.contains_key(&batch_id) {
             None
         } else {
-            Some(Batch {
-                batch_size,
-                total,
+            Some(PageRequest {
                 offset: batch_id * batch_size,
+                batch_size,
             })
         }
     }
 
     // Get the full song batch that contains i
-    pub fn song_batch_for(&self, i: usize) -> Option<SongBatch> {
-        let total = self.total;
+    pub fn song_batch_for(&self, i: usize) -> Option<Page<Track>> {
         let batch_size = self.batch_size;
         let batch_id = i / batch_size;
-        let indexed_songs = &self.indexed_songs;
-        self.batches.get(&batch_id).map(|songs| SongBatch {
-            songs: songs
-                .iter()
-                .filter_map(move |id| Some(indexed_songs.get(id)?.into_description()))
-                .collect(),
-            batch: Batch {
-                batch_size,
-                total,
-                offset: batch_id * batch_size,
-            },
+        self.batches.get(&batch_id).map(|songs| Page {
+            items: songs.iter().map(|song| song.into_description()).collect(),
+            offset: Some(batch_id * batch_size),
+            total: None,
+            next_cursor: None,
         })
-    }
-
-    // The last loaded batch
-    pub fn last_batch(&self) -> Option<Batch> {
-        if self.total_loaded == 0 {
-            None
-        } else {
-            Some(Batch {
-                batch_size: self.batch_size,
-                total: self.total,
-                offset: self.last_batch_key * self.batch_size,
-            })
-        }
     }
 
     pub fn get(&self, id: &str) -> Option<&SongModel> {
@@ -449,43 +445,27 @@ mod tests {
     const NO_CHANGE: ListRangeUpdate = ListRangeUpdate(0, 0, 0);
 
     impl SongList {
-        fn new_from_initial_batch(initial: SongBatch) -> Self {
-            let mut s = Self::new_sized(initial.batch.batch_size);
+        fn new_from_initial_batch(initial: Page<Track>) -> Self {
+            let mut s = Self::new_sized(2);
             s.add(initial);
             s
         }
     }
 
-    fn song(id: &str) -> SongDescription {
-        SongDescription {
-            id: id.to_string(),
-            uri: "".to_string(),
-            title: "Title".to_string(),
-            artists: vec![],
-            album: AlbumRef {
-                id: "".to_string(),
-                name: "".to_string(),
-            },
-            duration_ms: 1000,
-            art: None,
-            track_number: None,
-            explicit: false,
-            playable: true,
-        }
+    fn song(id: &str) -> Track {
+        make_track(id)
     }
 
-    fn batch(id: usize) -> SongBatch {
+    fn batch(id: usize) -> Page<Track> {
         let offset = id * 2;
-        SongBatch {
-            batch: Batch {
-                offset,
-                batch_size: 2,
-                total: 10,
-            },
-            songs: vec![
+        Page {
+            items: vec![
                 song(&format!("song{offset}")),
                 song(&format!("song{}", offset + 1)),
             ],
+            offset: Some(offset),
+            total: None,
+            next_cursor: None,
         }
     }
 
@@ -549,8 +529,8 @@ mod tests {
         let list = SongList::new_from_initial_batch(batch(0));
 
         let mut list_iter = list.iter();
-        assert_eq!(list_iter.next().unwrap().description().id, "song0");
-        assert_eq!(list_iter.next().unwrap().description().id, "song1");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song0");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song1");
         assert!(list_iter.next().is_none());
     }
 
@@ -594,6 +574,18 @@ mod tests {
     }
 
     #[test]
+    fn test_add_same_page_twice_reports_its_rows_replaced() {
+        let mut list = SongList::new_from_initial_batch(batch(0));
+        let mut short = batch(1);
+        short.items.truncate(1);
+        list.add(short);
+
+        let range = list.add(batch(1));
+        assert_eq!(range, Some(ListRangeUpdate(2, 1, 2)));
+        assert_eq!(list.partial_len(), 4);
+    }
+
+    #[test]
     fn test_find_non_contiguous() {
         let mut list = SongList::new_from_initial_batch(batch(0));
         list.add(batch(3));
@@ -611,10 +603,10 @@ mod tests {
         assert_eq!(list.partial_len(), 4);
 
         let mut list_iter = list.iter();
-        assert_eq!(list_iter.next().unwrap().description().id, "song0");
-        assert_eq!(list_iter.next().unwrap().description().id, "song1");
-        assert_eq!(list_iter.next().unwrap().description().id, "song4");
-        assert_eq!(list_iter.next().unwrap().description().id, "song5");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song0");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song1");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song4");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song5");
         assert!(list_iter.next().is_none());
     }
 
@@ -628,9 +620,9 @@ mod tests {
         assert_eq!(list.partial_len(), 3);
 
         let mut list_iter = list.iter();
-        assert_eq!(list_iter.next().unwrap().description().id, "song1");
-        assert_eq!(list_iter.next().unwrap().description().id, "song2");
-        assert_eq!(list_iter.next().unwrap().description().id, "song3");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song1");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song2");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song3");
         assert!(list_iter.next().is_none());
     }
 
@@ -659,7 +651,7 @@ mod tests {
         assert_eq!(list.partial_len(), 8);
 
         let batch = list.song_batch_for(3);
-        assert_eq!(batch.unwrap().batch.offset, 2);
+        assert_eq!(batch.unwrap().offset, Some(2));
     }
 
     #[test]
@@ -670,11 +662,11 @@ mod tests {
         list.append(vec![song("song4")]);
 
         let mut list_iter = list.iter();
-        assert_eq!(list_iter.next().unwrap().description().id, "song0");
-        assert_eq!(list_iter.next().unwrap().description().id, "song1");
-        assert_eq!(list_iter.next().unwrap().description().id, "song2");
-        assert_eq!(list_iter.next().unwrap().description().id, "song3");
-        assert_eq!(list_iter.next().unwrap().description().id, "song4");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song0");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song1");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song2");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song3");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song4");
         assert!(list_iter.next().is_none());
     }
 
@@ -691,9 +683,140 @@ mod tests {
         list.swap(2, 3); // should be no-op
 
         let mut list_iter = list.iter();
-        assert_eq!(list_iter.next().unwrap().description().id, "song1");
-        assert_eq!(list_iter.next().unwrap().description().id, "song2");
-        assert_eq!(list_iter.next().unwrap().description().id, "song0");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song1");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song2");
+        assert_eq!(list_iter.next().unwrap().description().rri.id, "song0");
         assert!(list_iter.next().is_none());
+    }
+
+    #[test]
+    fn test_len_reports_api_total_when_known() {
+        let mut list = SongList::new_sized(50);
+        list.add(Page {
+            items: (0..50).map(|i| song(&format!("song{i}"))).collect(),
+            offset: Some(0),
+            total: Some(1000),
+            next_cursor: None,
+        });
+
+        assert_eq!(list.partial_len(), 50);
+        assert_eq!(list.len(), 1000);
+    }
+
+    #[test]
+    fn test_len_falls_back_to_loaded_count_when_total_unknown() {
+        let mut list = SongList::new_sized(50);
+        list.add(Page {
+            items: (0..50).map(|i| song(&format!("song{i}"))).collect(),
+            offset: Some(0),
+            total: None,
+            next_cursor: None,
+        });
+
+        assert_eq!(list.len(), 50);
+    }
+
+    #[test]
+    fn test_len_keeps_max_total_seen() {
+        let mut list = SongList::new_sized(50);
+        list.add(Page {
+            items: (0..50).map(|i| song(&format!("song{i}"))).collect(),
+            offset: Some(0),
+            total: Some(1000),
+            next_cursor: None,
+        });
+        // A stale/racing response reporting a smaller total must not shrink len().
+        list.add(Page {
+            items: (50..100).map(|i| song(&format!("song{i}"))).collect(),
+            offset: Some(50),
+            total: Some(900),
+            next_cursor: None,
+        });
+
+        assert_eq!(list.len(), 1000);
+    }
+
+    #[test]
+    fn test_has_gap_detects_missing_batch() {
+        let mut list = SongList::new_sized(2);
+        list.add(batch(0));
+        list.add(batch(2)); // batch 1 never arrived
+
+        assert!(list.has_gap());
+    }
+
+    #[test]
+    fn test_has_gap_false_when_contiguous() {
+        let mut list = SongList::new_sized(2);
+        list.add(batch(0));
+        list.add(batch(1));
+
+        assert!(!list.has_gap());
+    }
+
+    #[test]
+    fn test_is_complete_false_while_gap_exists() {
+        let mut list = SongList::new_sized(2);
+        list.add(batch(0));
+        // Short page at the tail marks `complete`, but a gap remains behind it.
+        list.add(Page {
+            items: vec![song("song4")],
+            offset: Some(4),
+            total: None,
+            next_cursor: None,
+        });
+
+        assert!(!list.is_complete());
+    }
+
+    #[test]
+    fn test_is_complete_true_once_gap_filled() {
+        let mut list = SongList::new_sized(2);
+        list.add(batch(0));
+        list.add(Page {
+            items: vec![song("song4")],
+            offset: Some(4),
+            total: None,
+            next_cursor: None,
+        });
+        list.add(batch(1)); // fills the gap
+
+        assert!(list.is_complete());
+    }
+
+    #[test]
+    fn test_duplicates_get_their_own_models() {
+        let mut list = SongList::new_sized(10);
+        list.append(vec![song("a"), song("b"), song("a"), song("c")]);
+        let first = list.index(0).unwrap().clone();
+        let second = list.index(2).unwrap().clone();
+        assert_ne!(first, second);
+        assert_eq!(second.get_id(), "a");
+        assert_eq!(list.get("a"), Some(&first));
+
+        list.remove(&["a".to_string()]);
+        let ids: Vec<String> = list.iter().map(|s| s.get_id()).collect();
+        assert_eq!(ids, ["b", "c"]);
+        assert_eq!(list.partial_len(), 2);
+    }
+
+    #[test]
+    fn test_append_and_replace_models() {
+        let mut list = SongList::new_sized(2);
+        list.add(batch(3));
+        list.append(vec![song("x")]);
+        let ids: Vec<String> = list.iter().map(|s| s.get_id()).collect();
+        assert_eq!(ids, ["song6", "song7", "x"]);
+        assert_eq!(list.partial_len(), 3);
+
+        let mut list = SongList::new_sized(2);
+        let a = SongModel::new(song("a"));
+        let b = SongModel::new(song("b"));
+        list.replace_models(vec![a.clone(), b.clone()]);
+        let range = list.replace_models(vec![b.clone(), a.clone(), b.clone()]);
+        assert_eq!(range, ListRangeUpdate(0, 2, 3));
+        assert_eq!(list.index_continuous(0), Some(&b));
+        assert_eq!(list.index_continuous(1), Some(&a));
+        assert_eq!(list.index_continuous(2), Some(&b));
     }
 }

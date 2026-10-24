@@ -20,11 +20,11 @@
 }
 
 /* Shape variants */
-navigation-split-view .card--square .card {
+overlay-split-view .card--square .card {
   border-radius: 6px;
 }
 
-navigation-split-view .card--round .card {
+overlay-split-view .card--round .card {
   border-radius: 50%;
 }
 
@@ -34,6 +34,11 @@ navigation-split-view .card--round .card {
   background-color: transparent;
 }
 
+/* Missing art keeps its backdrop (see .missing-art in app.css) */
+.container--loaded .card.missing-art {
+  background-color: color-mix(in srgb, currentColor 10%, transparent);
+}
+
 .container--loaded .title-4,
 .container--loaded .body {
   animation: none;
@@ -41,4 +46,29 @@ navigation-split-view .card--round .card {
   color: inherit;
   min-width: unset;
   min-height: unset;
+}
+
+.card__playing {
+  margin: 6px;
+  padding: 4px;
+  border-radius: 9999px;
+  background-color: @window_bg_color;
+  box-shadow: 0 1px 3px alpha(black, 0.3);
+}
+
+.card--round.card--small .card__playing {
+  margin: 1px;
+}
+
+.card--round.card--medium .card__playing {
+  margin: 8px;
+}
+
+.card--round.card--large .card__playing {
+  margin: 17px;
+}
+
+.card--paused .card__playing {
+  animation: none;
+  -gtk-icon-source: -gtk-icontheme("playback-paused-symbolic");
 }

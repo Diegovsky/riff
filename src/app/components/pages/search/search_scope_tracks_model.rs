@@ -1,20 +1,19 @@
 // Playlist adapter for the search page's scoped track view (Songs filter).
 // Reads the single `SearchState`: the query and scoped track results.
 
-use gio::prelude::*;
 use gio::SimpleActionGroup;
 use std::cell::Ref;
 use std::ops::Deref;
 use std::rc::Rc;
 
-use crate::impl_playlist_model_base;
+use crate::impl_track_list_model_base;
 
 use crate::app::components::DetailsPageModel;
-use crate::app::components::{labels, PlaylistModel};
+use crate::app::components::{source_context_actions, track_menu, TrackListModel};
 use crate::app::models::*;
 use crate::app::state::SelectionContext;
-use crate::app::state::{PlaybackAction, SearchState, SelectionState, CARD_BATCH_SIZE};
-use crate::app::{ActionDispatcher, AppModel, SongsSource};
+use crate::app::state::{SearchState, SelectionState, CARD_BATCH_SIZE};
+use crate::app::{AppAction, AppModel, Dispatcher, SongsSource};
 
 use super::load_more_scope;
 
@@ -30,7 +29,7 @@ impl Deref for SearchScopeTracksModel {
 }
 
 impl SearchScopeTracksModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             base: DetailsPageModel::new_without_id(app_model, dispatcher),
         }
@@ -45,15 +44,11 @@ impl SearchScopeTracksModel {
     }
 
     pub fn load_more(&self) {
-        load_more_scope(
-            &self.app_model,
-            self.dispatcher.as_ref(),
-            SearchType::Tracks,
-        );
+        load_more_scope(&self.app_model, &self.dispatcher, SearchType::Tracks);
     }
 }
 
-impl PlaylistModel for SearchScopeTracksModel {
+impl TrackListModel for SearchScopeTracksModel {
     fn song_list_model(&self) -> SongListModel {
         self.search_state()
             .map(|s| s.scope_tracks.clone())
@@ -64,50 +59,51 @@ impl PlaylistModel for SearchScopeTracksModel {
         false
     }
 
-    impl_playlist_model_base!();
+    fn show_album_column(&self) -> bool {
+        true
+    }
+
+    fn load_more(&self) {
+        SearchScopeTracksModel::load_more(self);
+    }
+
+    impl_track_list_model_base!();
 
     fn enable_selection(&self) -> bool {
         self.enable_selection_with_context(SelectionContext::Default)
     }
 
-    fn play_song_at(&self, _pos: usize, id: &str) {
-        let tracks: Vec<SongDescription> = PlaylistModel::song_list_model(self).collect();
-        let total = tracks.len();
+    fn play_song_at(&self, pos: usize, id: &str) {
+        self.play_in_context(TrackListModel::context_actions(self, pos), id);
+    }
+
+    fn context_actions(&self, pos: usize) -> Option<Vec<AppAction>> {
         let query = self.get_query().unwrap_or_default();
-        let batch = SongBatch {
-            songs: tracks,
-            batch: Batch {
-                offset: 0,
-                batch_size: total,
-                total,
-            },
-        };
-        self.dispatcher
-            .dispatch(PlaybackAction::LoadPagedSongs(SongsSource::Search(query), batch).into());
-        self.dispatcher
-            .dispatch(PlaybackAction::Load(id.to_string()).into());
+        let songs = TrackListModel::song_list_model(self);
+        source_context_actions(SongsSource::Search(query.clone()), Some(query), &songs, pos)
     }
 
-    fn actions_for(&self, song: &SongDescription) -> Option<gio::ActionGroup> {
-        let group = SimpleActionGroup::new();
-        for a in song.make_artist_actions(self.dispatcher.box_clone(), None) {
-            group.add_action(&a);
-        }
-        group.add_action(&song.make_album_action(self.dispatcher.box_clone(), None));
-        group.add_action(&song.make_link_action(None));
-        Some(group.upcast())
+    fn actions_for(&self, _row: &SongModel, song: &Track) -> Option<SimpleActionGroup> {
+        Some(self.base.track_actions(song, None))
     }
 
-    fn menu_for(&self, song: &SongDescription) -> Option<gio::MenuModel> {
-        let menu = gio::Menu::new();
-        menu.append(Some(&*labels::VIEW_ALBUM), Some("song.view_album"));
-        for artist in song.artists.iter() {
-            menu.append(
-                Some(&labels::more_from_label(&artist.name)),
-                Some(&format!("song.view_artist_{}", artist.id)),
-            );
-        }
-        menu.append(Some(&*labels::COPY_LINK), Some("song.copy_link"));
-        Some(menu.upcast())
+    fn playlist_picker(&self, song: &Track) -> Option<gtk::Widget> {
+        self.base.playlist_picker(song)
+    }
+
+    fn menu_for(
+        &self,
+        _row: &SongModel,
+        song: &Track,
+        liked: bool,
+        pinned: Option<bool>,
+    ) -> Option<gio::MenuModel> {
+        Some(track_menu(song, None, liked, pinned))
+    }
+}
+
+impl crate::app::ProvidesApi for SearchScopeTracksModel {
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.app_model.api()
     }
 }

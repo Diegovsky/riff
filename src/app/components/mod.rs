@@ -9,9 +9,13 @@ use gettextrs::*;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::future::Future;
+use std::sync::Arc;
 
-use crate::api::SpotifyApiError;
-use crate::app::{ActionDispatcher, AppAction, AppEvent};
+use crate::app::models::Track;
+use crate::app::{
+    load, playlist_actions, AppAction, AppEvent, AppModel, BrowserAction, Dispatcher,
+};
+use riff_api::{ApiService, DomainError, Load, LoadPriority};
 
 mod pages;
 pub use pages::*;
@@ -24,6 +28,9 @@ pub use shell::*;
 
 mod player_notifier;
 pub use player_notifier::PlayerNotifier;
+
+mod queue_loader;
+pub use queue_loader::{fetch_queue_page, queue_source_tracks, QueueLoader};
 
 mod constants;
 pub use constants::*;
@@ -39,56 +46,206 @@ pub use clipboard_link::{copy_link_to_clipboard, is_app_copied_link};
 pub fn expose_custom_widgets() {
     shell::playback::expose_widgets();
     widgets::selection::expose_widgets();
+    widgets::drawer::expose_widgets();
     shell::headerbar::expose_widgets();
     shell::device_selector::expose_widgets();
     widgets::details_page::expose_widgets();
+    widgets::segmented_button::expose_widgets();
     shell::window::expose_widgets();
+    shell::utility_panel::expose_widgets();
+    shell::layout::expose_widgets();
 }
 
-impl dyn ActionDispatcher {
-    fn call_spotify_and_dispatch<F, C>(&self, call: C)
-    where
-        C: 'static + Send + Clone + FnOnce() -> F,
-        F: Send + Future<Output = Result<AppAction, SpotifyApiError>>,
-    {
-        self.call_spotify_and_dispatch_many(move || async { call().await.map(|a| vec![a]) })
-    }
+/// Run an api call that needs no scheduling tag (a mutation).
+pub fn dispatch_api_call<F, C>(dispatcher: &Dispatcher, call: C)
+where
+    C: 'static + Send + Clone + FnOnce() -> F,
+    F: Send + Future<Output = Result<AppAction, DomainError>>,
+{
+    dispatch_api_call_many(dispatcher, move || async { call().await.map(|a| vec![a]) })
+}
 
-    fn call_spotify_and_dispatch_many<F, C>(&self, call: C)
-    where
-        C: 'static + Send + Clone + FnOnce() -> F,
-        F: Send + Future<Output = Result<Vec<AppAction>, SpotifyApiError>>,
-    {
-        self.dispatch_many_async(Box::pin(async move {
-            let first_call = call.clone();
-            let result = first_call().await;
-            match result {
-                Ok(actions) => actions,
-                Err(SpotifyApiError::NoToken) => vec![],
-                Err(SpotifyApiError::InvalidToken) => call().await.unwrap_or_else(|_| Vec::new()),
-                Err(SpotifyApiError::TooManyRequests) => {
-                    error!("Spotify API error: rate limited");
-                    vec![AppAction::ShowNotification(gettext(
-                        // translators: This notification is shown when Spotify throttles requests.
-                        "Rate limited by Spotify. Please wait a moment and try again.",
-                    ))]
-                }
-                // Raised only by the dev "Simulate Offline" switch, which also
-                // kills the librespot session. The connection-lost banner is
-                // driven entirely by the player's session-health path (see
-                // SpotifyPlayer::set_connection_lost), so here we only suppress
-                // the generic error toast rather than touching the banner.
-                #[cfg(debug_assertions)]
-                Err(SpotifyApiError::Offline) => vec![],
-                Err(err) => {
-                    error!("Spotify API error: {}", err);
-                    vec![AppAction::ShowNotification(gettext(
-                        // translators: This notification is the default message for unhandled errors. Logs refer to console output.
-                        "An error occured. Check logs for details!",
-                    ))]
-                }
+/// As [`dispatch_api_call`], for several actions.
+pub fn dispatch_api_call_many<F, C>(dispatcher: &Dispatcher, call: C)
+where
+    C: 'static + Send + Clone + FnOnce() -> F,
+    F: 'static + Send + Future<Output = Result<Vec<AppAction>, DomainError>>,
+{
+    spawn_api_call(dispatcher, call)
+}
+
+pub fn add_tracks_to_playlist(
+    app_model: &AppModel,
+    dispatcher: &Dispatcher,
+    id: String,
+    tracks: Vec<Track>,
+    then: Option<AppAction>,
+) {
+    let api = app_model.api();
+    let state = app_model.get_state();
+    let lacks_cover = playlist_actions::playlist_lacks_cover(&state, &id);
+    let title = playlist_actions::playlist_title(&state, &id).unwrap_or_default();
+    drop(state);
+    let cover_dispatcher = dispatcher.clone();
+    let tag = load::visible();
+    dispatch_api_call_many(dispatcher, move || async move {
+        let added = playlist_actions::add_tracks_to_playlist(&api, &id, tracks, tag).await?;
+        let mut actions: Vec<AppAction> = then.into_iter().collect();
+        if added.tracks.is_empty() {
+            actions.push(AppAction::ShowNotification(
+                labels::already_in_playlist_label(&title),
+            ));
+            return Ok(actions);
+        }
+        if lacks_cover {
+            refresh_playlist_cover(&cover_dispatcher, api, id.clone(), true);
+        }
+        actions.push(BrowserAction::AddTracksToPlaylist(id, added.tracks).into());
+        actions.push(AppAction::ShowNotification(if added.skipped == 0 {
+            labels::added_to_playlist_label(&title)
+        } else {
+            labels::added_to_playlist_skipping_label(&title, added.skipped)
+        }));
+        Ok(actions)
+    })
+}
+
+pub fn upload_playlist_cover(
+    dispatcher: &Dispatcher,
+    api: Arc<ApiService>,
+    id: String,
+    cover: Vec<u8>,
+) {
+    let tag = load::visible();
+    dispatch_api_call_many(dispatcher, move || async move {
+        match playlist_actions::upload_playlist_cover(&api, id.clone(), cover, tag).await {
+            Ok(actions) => Ok(actions),
+            Err(e) => {
+                error!("could not upload the cover of playlist {id}: {e}");
+                Ok(vec![AppAction::ShowNotification(gettext(
+                    // translators: This notification is shown when uploading the cover of a playlist failed.
+                    "The playlist's cover could not be uploaded.",
+                ))])
             }
-        }))
+        }
+    })
+}
+
+pub fn refresh_playlist_cover(
+    dispatcher: &Dispatcher,
+    api: Arc<ApiService>,
+    id: String,
+    poll: bool,
+) {
+    dispatch_api_call_many(dispatcher, move || async move {
+        Ok(playlist_actions::refresh_playlist_cover(&api, id, poll).await)
+    })
+}
+
+/// Run an api read for the current page, tagged [`LoadPriority::Visible`].
+///
+/// Built here rather than inside the closure, so a read issued just before a
+/// navigation cannot pick up the new epoch and compete with the page the user
+/// moved to.
+pub fn dispatch_api_read<F, C>(dispatcher: &Dispatcher, call: C)
+where
+    C: 'static + Send + Clone + FnOnce(Load) -> F,
+    F: Send + Future<Output = Result<AppAction, DomainError>>,
+{
+    dispatch_api_read_many(dispatcher, move |load| async move {
+        call(load).await.map(|a| vec![a])
+    })
+}
+
+/// As [`dispatch_api_read`], for several actions.
+pub fn dispatch_api_read_many<F, C>(dispatcher: &Dispatcher, call: C)
+where
+    C: 'static + Send + Clone + FnOnce(Load) -> F,
+    F: 'static + Send + Future<Output = Result<Vec<AppAction>, DomainError>>,
+{
+    let load = load::at(LoadPriority::Visible);
+    spawn_api_call(dispatcher, move || call(load))
+}
+
+pub fn dispatch_api_read_with_fallback<F, C, OnFail>(
+    dispatcher: &Dispatcher,
+    call: C,
+    on_fail: OnFail,
+) where
+    C: 'static + Send + Clone + FnOnce(Load) -> F,
+    F: 'static + Send + Future<Output = Result<AppAction, DomainError>>,
+    OnFail: 'static + Send + FnOnce() -> AppAction,
+{
+    let load = load::at(LoadPriority::Visible);
+    let dispatcher = dispatcher.clone();
+    tokio::spawn(async move {
+        let (mut actions, succeeded) = resolve_api_call(move || {
+            let call = call.clone();
+            async move { call(load).await.map(|a| vec![a]) }
+        })
+        .await;
+        if !succeeded {
+            actions.push(on_fail());
+        }
+        dispatcher.dispatch_many(actions);
+    });
+}
+
+fn spawn_api_call<F, C>(dispatcher: &Dispatcher, call: C)
+where
+    C: 'static + Send + Clone + FnOnce() -> F,
+    F: 'static + Send + Future<Output = Result<Vec<AppAction>, DomainError>>,
+{
+    let dispatcher = dispatcher.clone();
+    tokio::spawn(async move {
+        dispatcher.dispatch_many(resolve_api_call(call).await.0);
+    });
+}
+
+/// Resolves an api call to the actions it produces, alongside whether the
+/// underlying call ultimately succeeded (after any internal auth retry).
+async fn resolve_api_call<F, C>(call: C) -> (Vec<AppAction>, bool)
+where
+    C: Clone + FnOnce() -> F,
+    F: Future<Output = Result<Vec<AppAction>, DomainError>>,
+{
+    let first_call = call.clone();
+    let result = first_call().await;
+    match result {
+        Ok(actions) => (actions, true),
+        Err(DomainError::NoToken) => (vec![], false),
+        Err(DomainError::Shed) => (vec![], false),
+        Err(DomainError::AuthExpired) => {
+            let retried = call().await;
+            let ok = retried.is_ok();
+            (retried.unwrap_or_else(|_| Vec::new()), ok)
+        }
+        Err(DomainError::RateLimited { .. }) => {
+            error!("Spotify API error: rate limited");
+            (
+                vec![AppAction::ShowNotification(gettext(
+                    // translators: This notification is shown when Spotify throttles requests.
+                    "Rate limited by Spotify. Please wait a moment and try again.",
+                ))],
+                false,
+            )
+        }
+        Err(err) => {
+            // "Simulate Offline" surfaces as a network error in debug builds;
+            // the connection-lost banner already covers it, so skip the toast.
+            #[cfg(debug_assertions)]
+            if riff_api::is_simulate_offline() {
+                return (vec![], false);
+            }
+            error!("Spotify API error: {}", err);
+            (
+                vec![AppAction::ShowNotification(gettext(
+                    // translators: This notification is the default message for unhandled errors. Logs refer to console output.
+                    "An error occured. Check logs for details!",
+                ))],
+                false,
+            )
+        }
     }
 }
 

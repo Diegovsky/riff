@@ -4,16 +4,19 @@ This guide is the starting point for developing Riff. It walks you from a clean 
 
 ## Quick Setup
 
-Get a development build running in three steps. Run these from the repository root.
+Get a development build running in four steps. Run these from the repository root.
 
 ```sh
 # 1. Install dependencies (detects dnf, apt-get, pacman, or zypper)
 ./scripts/setup-dev.sh
 
-# 2. Build a debug build and install to ~/.local
+# 2. Generate the Spotify API client crate (requires Java)
+./scripts/api/generate-spotify-api.sh
+
+# 3. Build a debug build and install to ~/.local
 ./scripts/build.sh dev --install
 
-# 3. Run with debug logging
+# 4. Run with debug logging
 RUST_LOG='riff=debug,librespot=error' ~/.local/bin/riff
 ```
 
@@ -33,23 +36,33 @@ See [`Design.md`](Design.md) for the full data flow explanation.
 ### Directory Structure
 
 | Directory | Responsibility |
-| --- | --- |
+| --- | -- |
+| `crates/` | Riff crates used by the main application - see below. |
+| `crates/riff-config/` | Shared constants and configuration values for the Riff workspace. |
+| `crates/riff-auth/` | Authentication: OAuth2 (PKCE) flow and keyring-backed credential store. |
+| `crates/riff-api/` | Data layer for Riff, replacing the legacy API and caching code. |
+| `crates/riff-api/src/providers/` | Provider-neutral music service trait and per-vendor implementations. |
+| `crates/riff-api/src/providers/spotify/` | Spotify provider: domain types and Spotify-to-provider-neutral conversion. |
+| `crates/riff-api/src/http/` | Shared HTTP connection pool and retry logic. |
+| `crates/riff-core/` | App logic between the UI and the API layer, free of UI dependencies: navigation history and the play queue. |
+| `crates/riff-audio-engine/` | Audio engine: DSP chain between librespot and the audio backend (EQ, pitch, pan, mono, mix). |
+| `crates/riff-api/src/cache/` | Caching layer: disk TTL cache, texture LRU, domain object LRU. |
 | `src/` | Rust source code and bundled UI assets. |
-| `src/api/` | Spotify Web API client with response caching. |
 | `src/app/` | Core application logic and state. |
 | `src/app/state/` | Centralized application state and reducers. |
 | `src/app/models/` | Presentation models binding state to UI. |
 | `src/app/components/` | GTK widget wrappers and event listeners. |
 | `src/app/dev_tools/` | Dev menu (debug builds only). |
-| `src/auth/` | OAuth2 login flow and secure token storage. |
-| `src/audio_engine/` | DSP chain between librespot and the audio backend (EQ, pitch, pan, mono, mix). |
 | `src/connect/` | Spotify Connect device support. |
 | `src/player/` | librespot session and local playback management. |
 | `src/dbus/` | MPRIS / D-Bus integration. |
 | `data/` | Application data installed on the system (icons, desktop file, appstream, GSchema). |
 | `po/` | Translations (gettext). |
-| `scripts/` | Developer and tooling scripts. |
-| `scripts/lint/` | HIG and style linters (Python). |
+| `scripts/` | Dependency setup and build helpers (`setup-dev.sh`, `build.sh`), plus the subfolders below. |
+| `scripts/checks/` | Quality checks run in CI (formatting, ShellCheck, blueprints, icons). |
+| `scripts/api/` | Web API spec fetching, crate generation and the terminal API client. |
+| `scripts/packaging/` | Flatpak packaging helpers. |
+| `scripts/perf/` | Resource measurement and scripts that drive a running Riff (browsing, resizing). |
 | `flatpak/` | Flatpak packaging manifests and cargo sources. |
 | `doc/` | Developer documentation. |
 | `subprojects/` | Meson subproject wrap files. |
@@ -120,7 +133,7 @@ Use `gsettings` to toggle flags without opening the Settings dialog:
 
 ```sh
 gsettings set dev.diegovsky.Riff feature-device-selector true
-gsettings set dev.diegovsky.Riff feature-select-mode false
+gsettings set dev.diegovsky.Riff feature-pinned-objects false
 ```
 
 ## Testing and Debugging
@@ -145,18 +158,18 @@ cargo test --workspace
 Run the static checks before committing:
 
 ```sh
-./scripts/check-quality.sh
+./scripts/checks/check-quality.sh
 ```
 
 ### Debug Tools (Dev Menu)
 
-Debug builds include a developer menu in the sidebar header (a wrench/gear icon). It is compiled only in debug builds and lives in `src/app/dev_tools/`. The menu provides:
+Debug builds include a developer menu in the navigation panel header (a wrench/gear icon). It is compiled only in debug builds and lives in `src/app/dev_tools/`. The menu provides:
 
 | Tool | What It Does |
 | --- | --- |
 | Force Skeleton | Adds the `force-skeleton` CSS class to the window so all skeleton/loading states render simultaneously. Useful for testing loading UI without slow network conditions. |
 | Debug CSS | Toggles an overlay stylesheet that highlights alignment and rendering issues. |
-| Panel Sizes | Overlays each major panel (sidebar, header, navigation stack, playback bar) with its current pixel dimensions in a distinct color. |
+| Panel Sizes | Overlays each major panel (navigation panel, header, content stack, playback bar, utility panel) with its current pixel dimensions in a distinct color, and shows the window's size in the center. |
 | Simulate Offline | Blocks all HTTP calls and kills the librespot session. The connection-lost banner appears naturally once requests fail, mirroring how a real network drop is detected. |
 | Kill Player | Sends `DevKillPlayer` to force-terminate the playback session. |
 | Kill Session | Sends `DevKillSession` to destroy the librespot TCP session without stopping local playback state. |
@@ -175,7 +188,7 @@ Riff uses the `env_logger` crate. Control verbosity with `RUST_LOG`:
 RUST_LOG='riff=debug,librespot=error' riff
 
 # Trace-level for the API layer
-RUST_LOG='riff::api=trace,riff=info' riff
+RUST_LOG='riff_api=trace,riff=info' riff
 
 # Everything at trace (very noisy)
 RUST_LOG=trace riff
@@ -218,6 +231,11 @@ To install manually, you need:
 - `gettext` (translations)
 - `libxml2` / `libxml2-utils`
 - `pkg-config`
+
+## Generated Code
+
+`./scripts/api/generate-spotify-api.sh` will generate the Spotify crate found in `./generated`.
+
 
 ## Building
 
@@ -284,7 +302,7 @@ poeditor pull                   # pull translations from POEditor
 
 ## Spotify CLI
 
-`scripts/spotify-cli.py` is an authenticated Spotify Web API client for the terminal. It shares credentials with Riff through the system keyring, so once you have logged in to the app you can hit the API directly to inspect responses while developing.
+`scripts/api/spotify-cli.py` is an authenticated Spotify Web API client for the terminal. It shares credentials with Riff through the system keyring, so once you have logged in to the app you can hit the API directly to inspect responses while developing.
 
 ```sh
 spotify-cli v1/me                     # GET the current user

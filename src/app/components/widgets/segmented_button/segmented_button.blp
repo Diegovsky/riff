@@ -1,0 +1,24 @@
+using Gtk 4.0;
+
+template $SegmentedButtonWidget : Box {
+  orientation: horizontal;
+  halign: start;
+  valign: center;
+  overflow: hidden;
+
+  styles [
+    "pill",
+    "segmented-button",
+    "collapsed",
+  ]
+
+  Revealer revealer {
+    transition-type: slide_right;
+    transition-duration: 200;
+    reveal-child: false;
+
+    Box extra_box {
+      orientation: horizontal;
+    }
+  }
+}

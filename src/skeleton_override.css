@@ -42,8 +42,10 @@
 .force-skeleton .details-page--loaded .play__button,
 .force-skeleton .details-page--loaded .shuffle__button,
 .force-skeleton .details-page--loaded .like__button,
-.force-skeleton .details-page--loaded .info__button,
-.force-skeleton .details-page--loaded .edit__button {
+.force-skeleton .details-page--loaded .like-pin__button > button,
+.force-skeleton .details-page--loaded .like-pin__button revealer > box > button,
+.force-skeleton .details-page--loaded .share__button,
+.force-skeleton .details-page--loaded .menu__button > button {
   background-color: @skeleton_color;
   color: transparent;
   animation: skeleton-pulse 1.5s ease-in-out infinite;
@@ -57,7 +59,7 @@
   color: transparent;
 }
 
-.force-skeleton .details-page--loaded .details-header .circular:not(.play__button):not(.like__button):not(.shuffle__button):not(.info__button) {
+.force-skeleton .details-page--loaded .details-header .circular:not(.play__button):not(.like__button):not(.shuffle__button):not(.menu__button) {
   animation: skeleton-pulse 1.5s ease-in-out infinite;
   background-color: @skeleton_color;
   color: transparent;

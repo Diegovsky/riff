@@ -19,17 +19,19 @@ use librespot::playback::config::{
 use librespot::playback::player::{Player, PlayerEvent, PlayerEventChannel};
 
 use crate::app::models::RepeatMode;
-use crate::audio_engine::{
+use crate::player::AppPlayerDelegate;
+use riff_audio_engine::{
     CaptureSink, EqController, EqProcessor, MixController, MixProcessor, MonoController,
     MonoProcessor, PanController, PanProcessor, PitchController, PitchProcessor, ProcessorChain,
 };
-use crate::player::AppPlayerDelegate;
 
-use crate::auth::{AuthcodeChallenge, OAuthError, RiffOauthClient, TokenStore, SESSION_CLIENT_ID};
+use riff_auth::{
+    AuthcodeChallenge, OAuthError, RiffOauthClient, SessionTokens, TokenStore, SESSION_CLIENT_ID,
+};
 
 use super::Command;
-use crate::app::credentials;
 use crate::settings::RiffSettings;
+use riff_auth as credentials;
 use std::env;
 use std::error::Error;
 use std::fmt;
@@ -44,11 +46,7 @@ pub enum SpotifyError {
     LoggedOut,
     PlayerNotReady,
     TechnicalError,
-    // Every track fails to decrypt (librespot "audio key error"): the signature
-    // of Spotify's PlayPlay DRM, which blocks playback entirely.
     PlaybackDrmBlocked,
-    // Many tracks failed to load in a row on an account that has already played
-    // this session, so likely transient rather than a DRM block.
     PlaybackTemporarilyUnavailable,
 }
 
@@ -116,6 +114,9 @@ pub struct SpotifyPlayerSettings {
     // playback state, not librespot, so it never requires a player reload.
     pub skip_explicit: bool,
 
+    // Songs between two plays of a song, with shuffle and repeat all
+    pub shuffle_separation: u32,
+
     // Volume curve
     pub volume_curve: VolumeCurveType,
 
@@ -150,10 +151,11 @@ impl Default for SpotifyPlayerSettings {
     fn default() -> Self {
         Self {
             volume: 0.7,
-            repeat: RepeatMode::None,
+            repeat: RepeatMode::Off,
             shuffle: false,
 
             skip_explicit: false,
+            shuffle_separation: 2,
 
             bitrate: Bitrate::Bitrate160,
             gapless: true,
@@ -185,10 +187,6 @@ impl Default for SpotifyPlayerSettings {
 }
 
 impl SpotifyPlayerSettings {
-    /// Whether a change from `self` to `other` requires recreating the librespot
-    /// player (which interrupts playback). Equalizer, mono, pan, and pitch
-    /// settings are excluded: they are applied live via their controllers and
-    /// never require a reload.
     pub fn requires_reload(&self, other: &Self) -> bool {
         /// Epsilon for comparing normalisation parameters. Values come from
         /// GtkSpinRow adjustments (step = 0.5), so a threshold well below the
@@ -250,7 +248,6 @@ pub struct SpotifyPlayer {
     // Auth related stuff
     oauth_client: Arc<RiffOauthClient>,
     auth_challenge: Option<AuthcodeChallenge>,
-    session_auth_challenge: Option<AuthcodeChallenge>,
     command_sender: UnboundedSender<Command>,
 
     // librespot sessions are single-use: once the connection to the access
@@ -328,6 +325,7 @@ impl SpotifyPlayer {
         settings: SpotifyPlayerSettings,
         delegate: AppPlayerDelegate,
         token_store: TokenStore,
+        session_tokens: SessionTokens,
         command_sender: UnboundedSender<Command>,
     ) -> Self {
         let eq_controller = EqController::new(settings.eq_bands);
@@ -345,9 +343,8 @@ impl SpotifyPlayer {
             pan_controller,
             pitch_controller,
             mix_controller,
-            oauth_client: Arc::new(RiffOauthClient::new(token_store)),
+            oauth_client: Arc::new(RiffOauthClient::new(token_store, session_tokens)),
             auth_challenge: None,
-            session_auth_challenge: None,
             command_sender,
 
             // Playback state preserved across a rebuild.
@@ -400,25 +397,21 @@ impl SpotifyPlayer {
                 Ok(())
             }
             Command::SetEqualizer { bands } => {
-                // Live update: no player/session recreation, no playback interruption.
                 self.settings.eq_bands = bands;
                 self.eq_controller.update(bands);
                 Ok(())
             }
             Command::SetMono { enabled } => {
-                // Live update: no player/session recreation, no playback interruption.
                 self.settings.mono_audio = enabled;
                 self.mono_controller.update(enabled);
                 Ok(())
             }
             Command::SetPan { pan } => {
-                // Live update: no player/session recreation, no playback interruption.
                 self.settings.pan = pan;
                 self.pan_controller.update(pan);
                 Ok(())
             }
             Command::SetPitch { cents } => {
-                // Live update: no player/session recreation, no playback interruption.
                 self.settings.pitch_cents = cents;
                 self.pitch_controller.update(cents);
                 Ok(())
@@ -443,10 +436,6 @@ impl SpotifyPlayer {
                 Ok(())
             }
             Command::PlayerSeek(position) => {
-                // Record the target first: if a rebuild has to reload the
-                // interrupted track, it picks it up directly at this position
-                // (a seek issued while the reloaded track is still loading
-                // would restart the load).
                 self.last_position_ms.store(position, Ordering::Relaxed);
                 self.ensure_session_alive().await?;
                 self.get_player()?.seek(position);
@@ -457,8 +446,6 @@ impl SpotifyPlayer {
                 self.ensure_session_alive().await?;
                 self.current_track = Some(track.clone());
                 self.is_paused = !resume;
-                // Loading a new track supersedes any pending reload or deferred
-                // advancement of the previous one.
                 self.track_needs_reload = false;
                 self.advance_after_reconnect.store(false, Ordering::Relaxed);
                 self.last_position_ms.store(0, Ordering::Relaxed);
@@ -466,40 +453,13 @@ impl SpotifyPlayer {
                 Ok(())
             }
             Command::PlayerPreload(track) => {
-                // No reconnect for preloads: they are opportunistic, and a
-                // dead session is handled when the track is actually loaded.
                 self.get_player_mut()?.preload(track);
                 Ok(())
             }
-            Command::RefreshToken => {
-                self.session.as_ref().ok_or(SpotifyError::PlayerNotReady)?;
-                // Refresh the OAuth token (used by the web API). The librespot
-                // session keeps its already-authenticated connection, so it
-                // only needs the new token if it has to be rebuilt. Sessions
-                // cannot be reconnected in place (see ensure_session_alive).
-                self.oauth_client
-                    .get_valid_token()
-                    .await
-                    .map_err(|_| SpotifyError::LoginFailed)?;
-                self.ensure_session_alive().await?;
-                self.delegate.refresh_successful();
-                Ok(())
-            }
-            Command::ReconnectSession => {
-                // Requested by the session watchdog, the token refresh loop or
-                // TrackUnavailable when the session looks dead.
-                self.try_background_reconnect().await
-            }
+            Command::ReconnectSession => self.try_background_reconnect().await,
             Command::TrackUnavailable => {
-                // The player failed to load a track. A dead session makes
-                // every load fail this way; skipping in that state would
-                // cascade through the whole queue and end in silence, so
-                // reconnect and retry instead. Only a healthy session's
-                // verdict is trusted as "this track really can't be played".
                 if self.session_needs_rebuild() {
                     warn!("Track load failed because the session died: reconnecting");
-                    // Playback of the current track really was interrupted;
-                    // the rebuild must reload it at the last known position.
                     self.track_needs_reload = true;
                     return self.try_background_reconnect().await;
                 }
@@ -571,7 +531,11 @@ impl SpotifyPlayer {
                     info!("No usable session credentials on disk; showing login");
                     return Err(SpotifyError::LoggedOut);
                 }
-                self.begin_login(credentials).await
+                if !self.oauth_client.restore_session_credentials().await {
+                    info!("No stored session token; showing login");
+                    return Err(SpotifyError::LoggedOut);
+                }
+                self.begin_login(credentials, None).await
             }
             Command::InitLogin => {
                 let auth_url = match self.auth_challenge.as_ref() {
@@ -599,8 +563,8 @@ impl SpotifyPlayer {
                     return Err(SpotifyError::LoginFailed);
                 };
 
-                info!("Exchanging auth code for token");
-                let credentials = self
+                info!("Exchanging auth codes for tokens");
+                let login = self
                     .oauth_client
                     .exchange_authcode(challenge)
                     .await
@@ -611,31 +575,9 @@ impl SpotifyPlayer {
 
                 info!(
                     "Login with OAuth2 (token expires at {:?})",
-                    credentials.token_expiry_time
+                    login.web_api.token_expiry_time
                 );
-                self.begin_login(credentials).await
-            }
-            Command::CompleteSessionLogin => {
-                let Some(challenge) = self.session_auth_challenge.take() else {
-                    error!("CompleteSessionLogin called but no session auth challenge was pending");
-                    return Err(SpotifyError::LoginFailed);
-                };
-
-                info!("Exchanging playback auth code for a session token");
-                let access_token = self
-                    .oauth_client
-                    .exchange_session_authcode(challenge)
-                    .await
-                    .map_err(|e| {
-                        error!("Session auth code exchange failed: {e:?}");
-                        SpotifyError::LoginFailed
-                    })?;
-
-                let session =
-                    connect_session_from_token(&access_token, self.settings.ap_port).await?;
-                note_session_minted();
-                self.finish_login(session);
-                Ok(())
+                self.begin_login(login.web_api, Some(login.session)).await
             }
             Command::ReloadSettings => {
                 let settings = RiffSettings::new_from_gsettings().unwrap_or_default();
@@ -662,9 +604,6 @@ impl SpotifyPlayer {
                     return Ok(());
                 }
 
-                // Run the profile lookup off the command loop so it never
-                // delays playback commands (e.g. loading the next track). The
-                // result comes back as ExplicitFilterRechecked.
                 let oauth_client = Arc::clone(&self.oauth_client);
                 let command_sender = self.command_sender.clone();
                 tokio::task::spawn(async move {
@@ -675,7 +614,7 @@ impl SpotifyPlayer {
                             return;
                         }
                     };
-                    match crate::api::check_user_profile(&token.access_token).await {
+                    match riff_api::check_user_profile(&token.access_token).await {
                         Ok(profile) => {
                             let _ =
                                 command_sender.unbounded_send(Command::ExplicitFilterRechecked {
@@ -710,11 +649,6 @@ impl SpotifyPlayer {
             #[cfg(debug_assertions)]
             Command::DevKillPlayer => {
                 warn!("[dev] Killing librespot player (session left intact)");
-                // Drop the player so the audio engine is torn down. The
-                // session is still alive but now has no player; the health
-                // watchdog detects the missing player via session_needs_rebuild
-                // and rebuilds it (matching how a genuinely dead player
-                // recovers in production).
                 if let Some(player) = self.player.take() {
                     player.stop();
                 }
@@ -723,10 +657,6 @@ impl SpotifyPlayer {
             #[cfg(debug_assertions)]
             Command::DevKillSession => {
                 warn!("[dev] Killing librespot session (player left intact)");
-                // Shut the session down so it becomes invalid. It is left in
-                // place (not taken) so session_needs_rebuild sees it as dead
-                // and the watchdog reconnects, exercising the real reconnect
-                // path.
                 if let Some(session) = self.session.as_ref() {
                     session.shutdown();
                 }
@@ -766,6 +696,7 @@ impl SpotifyPlayer {
     async fn begin_login(
         &mut self,
         credentials: credentials::Credentials,
+        session_credentials: Option<credentials::Credentials>,
     ) -> Result<(), SpotifyError> {
         // Fresh login: reset the failure run so a previous account can't trip
         // a DRM block. has_played_since_login is seeded per-account below.
@@ -774,7 +705,7 @@ impl SpotifyPlayer {
         // Check if the account is premium before connecting to librespot.
         // librespot will crash the process for free accounts, so we must
         // catch this early and report a graceful error instead.
-        let profile = match crate::api::check_user_profile(&credentials.access_token).await {
+        let profile = match riff_api::check_user_profile(&credentials.access_token).await {
             Ok(p) => p,
             Err(e) => {
                 error!("User profile check failed: {e:?}");
@@ -800,14 +731,6 @@ impl SpotifyPlayer {
         }
 
         // Sync the explicit content filter from the user's Spotify account.
-        // When filter_enabled is true, Spotify's servers will reject explicit
-        // tracks (returning Unavailable to librespot). We must enable
-        // client-side skipping so Riff never attempts to load those tracks in
-        // the first place - avoiding a cascade of Unavailable rejections that
-        // can disrupt playback of non-explicit tracks too.
-        //
-        // A locked filter (e.g. a family plan parental control) additionally
-        // prevents the user from disabling the skip in Riff's settings.
         if profile.explicit_filter_enabled {
             info!("Spotify account has explicit content filter enabled");
             self.delegate.set_skip_explicit(true);
@@ -819,36 +742,30 @@ impl SpotifyPlayer {
         self.delegate
             .set_explicit_filter_locked(profile.explicit_filter_locked);
 
-        // Only persist credentials to the keyring after confirming premium status.
-        // This prevents non-premium accounts from being saved and retried on next launch.
         self.oauth_client.save_credentials(&credentials).await;
 
-        if session_cache_usable() {
-            info!(
-                "Reusing cached session credentials (ap_port: {:?})",
-                self.settings.ap_port
-            );
-            let session = connect_session_from_cache(self.settings.ap_port).await?;
-            self.finish_login(session);
-            Ok(())
-        } else {
-            info!("No usable session credentials; starting playback login");
-            self.start_session_login().await
-        }
-    }
-
-    async fn start_session_login(&mut self) -> Result<(), SpotifyError> {
-        let cmd = self.command_sender.clone();
-        let challenge = self
-            .oauth_client
-            .spawn_session_authcode_listener(move || {
-                cmd.unbounded_send(Command::CompleteSessionLogin).unwrap();
-            })
-            .await
-            .map_err(|_| SpotifyError::LoginFailed)?;
-        let auth_url = challenge.auth_url.clone();
-        self.session_auth_challenge = Some(challenge);
-        self.delegate.login_challenge_started(auth_url);
+        let session = match session_credentials {
+            Some(session_credentials) => {
+                self.oauth_client
+                    .save_session_credentials(&session_credentials)
+                    .await;
+                let session = connect_session_from_token(
+                    &session_credentials.access_token,
+                    self.settings.ap_port,
+                )
+                .await?;
+                note_session_minted();
+                session
+            }
+            None => {
+                info!(
+                    "Reusing cached session credentials (ap_port: {:?})",
+                    self.settings.ap_port
+                );
+                connect_session_from_cache(self.settings.ap_port).await?
+            }
+        };
+        self.finish_login(session);
         Ok(())
     }
 
@@ -869,18 +786,6 @@ impl SpotifyPlayer {
         let oauth_client = Arc::clone(&self.oauth_client);
         let command_sender = self.command_sender.clone();
         let refresh_task = tokio::task::spawn(async move {
-            // Scheduling loop: wait until the token is near expiry, refresh,
-            // and repeat. The refresh itself long-polls transient failures
-            // inside refresh_token_at_expiry(), so an error surfaces here only
-            // when it is fatal. In that case there is nothing left to retry;
-            // exit and let a subsequent login spawn a fresh loop.
-            //
-            // The librespot session is deliberately not touched here: it keeps
-            // its already-authenticated connection and cannot be reconnected
-            // in place anyway (librespot sessions are single-use). Instead,
-            // nudge the command loop, which rebuilds session + player if the
-            // session happens to have died in the meantime, using the token
-            // that was just stored.
             loop {
                 match oauth_client.refresh_token_at_expiry().await {
                     Ok(_) => {
@@ -904,24 +809,7 @@ impl SpotifyPlayer {
         self.delegate.token_login_successful(username);
     }
 
-    /// Swap in a freshly connected session: apply session attributes, build (or
-    /// re-point) the player around it, and shut down the previous session (if
-    /// any). Shared between the initial login and session rebuilds after a
-    /// connection loss.
-    ///
-    /// Returns `true` when a brand new player had to be built (there was no
-    /// live player to reuse) and `false` when the existing, still-alive player
-    /// was simply re-pointed at the new session without interrupting playback.
-    /// Callers use this to decide whether the current track needs reloading.
     fn install_session(&mut self, new_session: Session) -> bool {
-        // Disable librespot's built-in explicit content filtering. When the
-        // account has filter_enabled=true, Spotify sets the session attribute
-        // "filter-explicit-content" to "1". This causes the audio key server
-        // to deny decryption keys for ALL tracks (not just explicit ones),
-        // breaking playback entirely. We override it to "0" so librespot can
-        // load any track, and enforce the explicit filter ourselves at the
-        // playback-state level where we only skip tracks actually marked
-        // explicit.
         new_session.set_user_attribute("filter-explicit-content", "0");
 
         if let Some(old_session) = self.session.take() {
@@ -944,9 +832,6 @@ impl SpotifyPlayer {
         }
     }
 
-    /// Handle a track that failed to load on a healthy session: count the
-    /// failure and, past the threshold, stop playback (DRM dialog if nothing
-    /// has played, otherwise a transient toast). Below it, skip the track.
     fn handle_unavailable_track(&mut self) {
         warn!("Track unavailable, skipping");
         let failures = self
@@ -955,7 +840,7 @@ impl SpotifyPlayer {
             + 1;
         if failures >= CONSECUTIVE_UNAVAILABLE_STOP_THRESHOLD {
             warn!("{failures} tracks failed to load back-to-back; stopping playback");
-            // Nothing has ever played: signature of PlayPlay DRM. Otherwise transient.
+            // Nothing has ever played: signature of PlayPlay DRM.
             if !self.has_played_since_login.load(Ordering::Relaxed) {
                 self.delegate.report_error(SpotifyError::PlaybackDrmBlocked);
             } else {
@@ -967,24 +852,15 @@ impl SpotifyPlayer {
             self.delegate.stop_playback();
             return;
         }
-        self.delegate.end_of_track_reached();
+        self.delegate.skip_track();
         // The account's explicit filter may have changed; re-query it.
         let _ = self
             .command_sender
             .unbounded_send(Command::RecheckExplicitFilter);
     }
 
-    /// Whether the librespot session or player died and must be recreated.
-    /// librespot invalidates the session on any connection loss (network
-    /// blip, suspend/resume, keepalive timeout) and it can never be
-    /// reconnected; the player's command thread can also exit on its own.
     fn session_needs_rebuild(&self) -> bool {
         let session_dead = self.session.as_ref().is_some_and(|s| s.is_invalid());
-        // A live session with no player is a broken state: either the player's
-        // command thread exited, or the dev "kill player" tool dropped it.
-        // Treat the missing player as dead so the watchdog rebuilds it. In
-        // normal operation install_session always pairs a session with a
-        // player, so a None player alongside a live session never occurs there.
         let player_dead = match self.player.as_ref() {
             Some(p) => p.is_invalid(),
             None => self.session.is_some(),
@@ -992,11 +868,6 @@ impl SpotifyPlayer {
         session_dead || player_dead
     }
 
-    /// Rebuild the session if it died, before executing a playback command.
-    /// When logged out this is a no-op; the command then fails with
-    /// PlayerNotReady through get_player as before. User-initiated commands
-    /// bypass the reconnect backoff on purpose; an explicit action should
-    /// always try immediately.
     async fn ensure_session_alive(&mut self) -> Result<(), SpotifyError> {
         if self.session.is_none() || !self.session_needs_rebuild() {
             return Ok(());
@@ -1006,13 +877,6 @@ impl SpotifyPlayer {
 
     /// Rebuild the librespot session in the background when it looks dead,
     /// without disrupting playback that is still healthy.
-    ///
-    /// Called by the session watchdog, the token refresh loop and
-    /// TrackUnavailable. Does nothing if the user is logged out, if a backoff
-    /// retry is already scheduled, or if the session does not actually need a
-    /// rebuild. `LoggedOut` and `NotPremium` are propagated to the caller;
-    /// other (transient) failures are swallowed so the caller can keep going
-    /// while `rebuild_session` schedules its own retry.
     async fn try_background_reconnect(&mut self) -> Result<(), SpotifyError> {
         if self.session.is_none() {
             // logged out; nothing to reconnect.
@@ -1020,8 +884,6 @@ impl SpotifyPlayer {
         }
         if let Some(at) = self.next_reconnect_at {
             if Instant::now() < at {
-                // A backoff retry is already scheduled; don't hammer the
-                // access points with parallel attempts.
                 return Ok(());
             }
         }
@@ -1043,13 +905,6 @@ impl SpotifyPlayer {
 
     /// Create a brand new session after the previous one died. On transient
     /// failure, schedules a retry with exponential back off.
-    ///
-    /// The current track is reloaded only when playback was actually interrupted:
-    /// either a load already failed on the dead session (track_needs_reload),
-    /// or the player itself died and had to be recreated. A dead session alone
-    /// does not stop audio (tracks stream from the CDN and buffered audio keeps
-    /// playing), so reloading unconditionally would yank playback backwards to a
-    /// stale position.
     async fn rebuild_session(&mut self) -> Result<(), SpotifyError> {
         info!("librespot session died; rebuilding session");
         self.connection_lost.store(true, Ordering::Relaxed);
@@ -1077,8 +932,6 @@ impl SpotifyPlayer {
 
         if self.track_needs_reload || player_recreated {
             self.track_needs_reload = false;
-            // A reload takes priority over deferred advancement: the track was
-            // interrupted mid-playback, not finished.
             self.advance_after_reconnect.store(false, Ordering::Relaxed);
             if let Some(track) = self.current_track.clone() {
                 let position_ms = self.last_position_ms.load(Ordering::Relaxed);
@@ -1087,9 +940,6 @@ impl SpotifyPlayer {
                 self.get_player_mut()?.load(track, resume, position_ms);
             }
         } else if self.advance_after_reconnect.swap(false, Ordering::Relaxed) {
-            // The previous track finished (EndOfTrack) while the session was
-            // down. Now that we have a healthy session, advance to the next
-            // track in the queue.
             info!("Advancing to next track after reconnect (track ended during outage)");
             self.current_track = None;
             self.delegate.end_of_track_reached();
@@ -1098,10 +948,6 @@ impl SpotifyPlayer {
         Ok(())
     }
 
-    /// Schedule the next reconnect attempt with a fast exponential backoff.
-    /// We retry aggressively so playback recovers quickly, and only back off
-    /// mildly (capped at a few seconds) so a long outage still doesn't hammer
-    /// Spotify's access points in a tight loop.
     fn schedule_reconnect_retry(&mut self) {
         self.reconnect_attempts = self.reconnect_attempts.saturating_add(1);
         // 250ms, 500ms, 1s, 2s, 4s, then capped at 5s.
@@ -1117,10 +963,6 @@ impl SpotifyPlayer {
         });
     }
 
-    /// Spawn a periodic task that nudges the command loop to check session
-    /// health, so playback recovers from a dead session without waiting for
-    /// user input. Spawned once for the lifetime of the player service; the
-    /// ReconnectSession handler is a cheap no-op while the session is healthy.
     fn spawn_session_watchdog(&mut self) {
         if self.watchdog_spawned {
             return;
@@ -1183,10 +1025,6 @@ impl SpotifyPlayer {
             normalisation_attack_cf,
             normalisation_release_cf,
             normalisation_knee_db: self.settings.normalisation_knee_db,
-            // Periodic PositionChanged events keep the last known playback
-            // position fresh, so that resuming after a session rebuild
-            // continues where the user actually was (audio keeps playing
-            // from the CDN buffer long after the session itself dies).
             position_update_interval: Some(std::time::Duration::from_secs(1)),
             ..Default::default()
         };
@@ -1280,13 +1118,22 @@ fn librespot_cache_root() -> std::path::PathBuf {
     glib::user_cache_dir().join("riff").join("librespot")
 }
 
+pub fn clear_audio_cache() {
+    let audio_dir = librespot_cache_root().join("audio");
+    if let Err(e) = std::fs::remove_dir_all(&audio_dir) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            warn!("Failed to clear librespot audio cache: {e}");
+        }
+    }
+}
+
 fn open_librespot_cache() -> Option<Cache> {
     let root = librespot_cache_root();
     Cache::new(
         Some(root.join("credentials")),
         Some(root.join("volume")),
         Some(root.join("audio")),
-        None,
+        Some(crate::settings::audio_cache_size_limit_bytes()),
     )
     .map_err(|e| dbg!(e))
     .ok()
@@ -1309,7 +1156,11 @@ fn session_cache_usable() -> bool {
     if cache.credentials().is_none() {
         return false;
     }
-    minted_the_session_way(std::fs::read_to_string(session_minted_by_path()).ok().as_deref())
+    minted_the_session_way(
+        std::fs::read_to_string(session_minted_by_path())
+            .ok()
+            .as_deref(),
+    )
 }
 
 fn minted_the_session_way(noted: Option<&str>) -> bool {
@@ -1343,7 +1194,10 @@ async fn create_session_with_port(
     let cache = open_librespot_cache();
     debug!("Connecting librespot session (ap_port={:?})", ap_port);
     let session = Session::new(session_config, cache);
-    match session.connect(credentials.clone(), store_credentials).await {
+    match session
+        .connect(credentials.clone(), store_credentials)
+        .await
+    {
         Ok(_) => {
             info!("librespot session connected successfully");
             Ok(session)
@@ -1373,11 +1227,8 @@ async fn create_session(
     store_credentials: bool,
 ) -> Result<Session, SpotifyError> {
     // Dev-tools: when simulating offline, block new librespot sessions too.
-    // The API client already rejects HTTP requests, but without this guard
-    // the session watchdog would happily reconnect to Spotify's access
-    // points, undermining the simulation.
     #[cfg(debug_assertions)]
-    if crate::api::is_simulate_offline() {
+    if riff_api::is_simulate_offline() {
         warn!("Blocking librespot session creation (simulate offline is active)");
         return Err(SpotifyError::TechnicalError);
     }
@@ -1416,10 +1267,6 @@ async fn player_setup_delegate(
         match event {
             PlayerEvent::EndOfTrack { .. } => {
                 if connection_lost.load(Ordering::Relaxed) {
-                    // The session is down (buffered audio just played out the
-                    // current track). Don't advance to the next song: loading
-                    // it would fail on the dead session anyway. Instead, mark
-                    // that we should advance once the session is rebuilt.
                     warn!("Track ended while disconnected; will advance after reconnect");
                     advance_after_reconnect.store(true, Ordering::Relaxed);
                 } else {
@@ -1427,17 +1274,10 @@ async fn player_setup_delegate(
                 }
             }
             PlayerEvent::Unavailable { track_id, .. } => {
-                // Defer to the command loop: whether this means "Skip the
-                // track" or "the session died, reconnect and retry" depends
-                // on the current session's health, which only the command
-                // loop knows (this task's session may already be stale).
                 warn!("Track could not be loaded: {track_id:?}");
                 let _ = command_sender.unbounded_send(Command::TrackUnavailable);
             }
             PlayerEvent::Playing { position_ms, .. } => {
-                // Audio is flowing again, so the session is definitely alive.
-                // Clear any lingering "connection lost" state, but only touch
-                // the delegate (and its UI) when the flag actually changes.
                 if connection_lost.swap(false, Ordering::Relaxed) {
                     delegate.set_connection_lost(false);
                 }
@@ -1453,10 +1293,6 @@ async fn player_setup_delegate(
             PlayerEvent::Paused { position_ms, .. } => {
                 last_position_ms.store(position_ms, Ordering::Relaxed);
             }
-            // Periodic position report during playback (enabled via
-            // PlayerConfig::position_update_interval). Keeps the resume
-            // position fresh so a rebuild after a long outage doesn't jump
-            // the track back to a stale position.
             PlayerEvent::PositionChanged { position_ms, .. } => {
                 last_position_ms.store(position_ms, Ordering::Relaxed);
             }
@@ -1473,11 +1309,6 @@ async fn player_setup_delegate(
     debug!("Player event channel closed (player was replaced or dropped)");
 }
 
-/// Maps a 0.0–1.0 volume slider value to the mixer's u16 volume.
-///
-/// The VolumeCtrl curve (configured in create_player) determines the dB mapping.
-/// The curve's db_range parameter (derived from volume_min_db/volume_max_db settings)
-/// controls how many dB of dynamic range the slider spans.
 fn mixer_set_volume(mixer: &mut dyn Mixer, volume: f64) {
     mixer.set_volume((VolumeCtrl::MAX_VOLUME as f64 * volume) as u16);
 }

@@ -1,0 +1,275 @@
+//! A pill-shaped button that holds several icon buttons in a row and can expand.
+//!
+//! Expand behavior is controlled by [`ExpandBehavior`]:
+//! - [`ExpandBehavior::OnClick`] (default) - pressing the first segment toggles
+//!   the control open and closed.
+//! - [`ExpandBehavior::OnHover`] - hovering over the container expands it;
+//!   leaving collapses it after a short delay. Clicking the first segment only
+//!   dispatches its action and does not affect the expanded state.
+//! - [`ExpandBehavior::AlwaysExpanded`] - the control is permanently open.
+//!   The first segment still dispatches its action on click but cannot collapse
+//!   the control.
+
+use std::cell::{Cell, RefCell};
+
+use gtk::glib;
+use gtk::prelude::*;
+use gtk::subclass::prelude::*;
+use gtk::CompositeTemplate;
+
+use crate::app::components::display_add_css_provider;
+use crate::app::components::utils::Debouncer;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ExpandBehavior {
+    #[default]
+    OnClick,
+    OnHover,
+    AlwaysExpanded,
+}
+
+/// Delay before a hover-triggered expansion collapses again after the pointer leaves the widget.
+const HOVER_COLLAPSE_DELAY_MS: u32 = 600;
+
+mod imp {
+    use super::*;
+
+    #[derive(Debug, Default, CompositeTemplate)]
+    #[template(resource = "/dev/diegovsky/Riff/components/segmented_button.ui")]
+    pub struct SegmentedButtonWidget {
+        #[template_child]
+        pub revealer: TemplateChild<gtk::Revealer>,
+
+        #[template_child]
+        pub extra_box: TemplateChild<gtk::Box>,
+
+        /// Whether the extra segments are currently revealed.
+        pub expanded: Cell<bool>,
+        /// Number of segments added so far.
+        pub count: Cell<usize>,
+        /// Segments in insertion order (first is the always-visible trigger).
+        pub segments: RefCell<Vec<gtk::Button>>,
+        /// Current behavior - shared with first-segment click handlers.
+        pub behavior: Cell<ExpandBehavior>,
+        /// Currently installed hover controller, kept so it can be removed.
+        pub hover_controller: RefCell<Option<gtk::EventControllerMotion>>,
+        /// Debounces the collapse triggered by leaving the widget in
+        /// [`ExpandBehavior::OnHover`].
+        pub collapse_debouncer: Debouncer,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for SegmentedButtonWidget {
+        const NAME: &'static str = "SegmentedButtonWidget";
+        type Type = super::SegmentedButtonWidget;
+        type ParentType = gtk::Box;
+
+        fn class_init(klass: &mut Self::Class) {
+            klass.bind_template();
+        }
+
+        fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
+            obj.init_template();
+        }
+    }
+
+    impl ObjectImpl for SegmentedButtonWidget {
+        fn constructed(&self) {
+            self.parent_constructed();
+            display_add_css_provider(resource!("/components/segmented_button.css"));
+        }
+
+        fn dispose(&self) {
+            while let Some(child) = self.obj().first_child() {
+                child.unparent();
+            }
+        }
+    }
+
+    impl WidgetImpl for SegmentedButtonWidget {}
+    impl BoxImpl for SegmentedButtonWidget {}
+}
+
+glib::wrapper! {
+    pub struct SegmentedButtonWidget(ObjectSubclass<imp::SegmentedButtonWidget>) @extends gtk::Widget, gtk::Box,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
+}
+
+impl SegmentedButtonWidget {
+    fn set_expanded_internal(&self, value: bool) {
+        let imp = self.imp();
+        if imp.expanded.get() == value {
+            return;
+        }
+        imp.expanded.set(value);
+        imp.revealer.set_reveal_child(value);
+        if value {
+            self.remove_css_class("collapsed");
+        } else {
+            self.add_css_class("collapsed");
+        }
+    }
+}
+
+pub struct SegmentedButton {
+    widget: SegmentedButtonWidget,
+}
+
+impl SegmentedButton {
+    /// Create a new segmented button with the given expand behavior.
+    pub fn new(behavior: ExpandBehavior) -> Self {
+        let widget: SegmentedButtonWidget = glib::Object::new();
+        let this = Self { widget };
+        this.set_expand_behavior(behavior);
+        this
+    }
+
+    /// Add a new icon segment with its own click action.
+    ///
+    /// The first call adds the always-visible segment; later calls add segments hidden until the control is expanded.
+    pub fn add_icon(
+        &self,
+        icon_name: &str,
+        tooltip: &str,
+        on_click: impl Fn() + 'static,
+    ) -> gtk::Button {
+        let button = gtk::Button::from_icon_name(icon_name);
+        button.set_tooltip_text(Some(tooltip));
+
+        let imp = self.widget.imp();
+        if imp.count.get() == 0 {
+            button.connect_clicked(clone!(
+                #[weak(rename_to = widget)]
+                self.widget,
+                move |_| {
+                    let behavior = widget.imp().behavior.get();
+                    if behavior == ExpandBehavior::AlwaysExpanded
+                        || behavior == ExpandBehavior::OnHover
+                    {
+                        return;
+                    }
+                    let next = !widget.imp().expanded.get();
+                    widget.set_expanded_internal(next);
+                }
+            ));
+            button.connect_clicked(move |_| on_click());
+            self.widget.prepend(&button);
+        } else {
+            button.connect_clicked(move |_| on_click());
+            imp.extra_box.append(&button);
+        }
+        imp.count.set(imp.count.get() + 1);
+        imp.segments.borrow_mut().push(button.clone());
+        button
+    }
+
+    /// Show or hide a segment by index (0 is the always-visible trigger).
+    ///
+    /// If the last visible extra segment is hidden while the control is
+    /// expanded, the control collapses so the revealer does not open onto an
+    /// empty slot.
+    pub fn set_icon_visible(&self, index: usize, visible: bool) {
+        let imp = self.widget.imp();
+        let Some(button) = imp.segments.borrow().get(index).cloned() else {
+            return;
+        };
+        button.set_visible(visible);
+        if !visible && index > 0 && imp.expanded.get() {
+            let any_visible = imp.segments.borrow().iter().skip(1).any(|s| s.is_visible());
+            if !any_visible {
+                self.widget.set_expanded_internal(false);
+            }
+        }
+    }
+
+    /// Switch the expand trigger. Can be called after segments have been added.
+    pub fn set_expand_behavior(&self, behavior: ExpandBehavior) {
+        let imp = self.widget.imp();
+        if let Some(ctrl) = imp.hover_controller.take() {
+            self.widget.remove_controller(&ctrl);
+        }
+        imp.collapse_debouncer.stop();
+        imp.behavior.set(behavior);
+
+        match behavior {
+            ExpandBehavior::OnHover => {
+                // Weak: the widget owns this controller, so a strong ref would leak it.
+                let ctrl = gtk::EventControllerMotion::new();
+                ctrl.connect_enter(clone!(
+                    #[weak(rename_to = widget)]
+                    self.widget,
+                    move |_, _, _| {
+                        widget.imp().collapse_debouncer.stop();
+                        widget.set_expanded_internal(true);
+                    }
+                ));
+                ctrl.connect_leave(clone!(
+                    #[weak(rename_to = widget)]
+                    self.widget,
+                    move |_| {
+                        widget.imp().collapse_debouncer.debounce(
+                            HOVER_COLLAPSE_DELAY_MS,
+                            clone!(
+                                #[weak]
+                                widget,
+                                move || {
+                                    if widget.imp().behavior.get() == ExpandBehavior::OnHover {
+                                        widget.set_expanded_internal(false);
+                                    }
+                                }
+                            ),
+                        );
+                    }
+                ));
+                self.widget.add_controller(ctrl.clone());
+                imp.hover_controller.replace(Some(ctrl));
+                self.widget.set_expanded_internal(false);
+            }
+            ExpandBehavior::AlwaysExpanded => {
+                self.widget.set_expanded_internal(true);
+            }
+            ExpandBehavior::OnClick => {
+                // No controller needed as toggle is wired in add_icon.
+            }
+        }
+    }
+
+    pub fn expand_behavior(&self) -> ExpandBehavior {
+        self.widget.imp().behavior.get()
+    }
+
+    /// Force the control open or closed.
+    #[allow(dead_code)]
+    pub fn set_expanded(&self, value: bool) {
+        if value {
+            self.widget.set_expanded_internal(true);
+        } else {
+            let widget = self.widget.clone();
+            glib::idle_add_local_once(move || {
+                widget.set_expanded_internal(false);
+            });
+        }
+    }
+
+    /// Whether the extra segments are currently revealed.
+    #[allow(dead_code)]
+    pub fn is_expanded(&self) -> bool {
+        self.widget.imp().expanded.get()
+    }
+
+    /// The root GTK widget to insert into the UI.
+    pub fn widget(&self) -> &gtk::Widget {
+        self.widget.upcast_ref()
+    }
+}
+
+impl Default for SegmentedButton {
+    fn default() -> Self {
+        Self::new(ExpandBehavior::default())
+    }
+}
+
+/// Register the GObject type at app startup.
+pub fn expose_widgets() {
+    SegmentedButtonWidget::static_type();
+}

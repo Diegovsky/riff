@@ -5,15 +5,15 @@ use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::StreamExt;
 use tokio::{task, time};
 
-use crate::api::SpotifyApiClient;
 use crate::app::AppAction;
+use riff_api::ApiService;
 
 mod player;
 pub use player::ConnectCommand;
 
 #[tokio::main]
 async fn connect_server(
-    api: Arc<dyn SpotifyApiClient + Send + Sync>,
+    api: Arc<ApiService>,
     action_sender: UnboundedSender<AppAction>,
     receiver: UnboundedReceiver<ConnectCommand>,
 ) {
@@ -36,7 +36,7 @@ async fn connect_server(
 }
 
 pub fn start_connect_server(
-    api: Arc<dyn SpotifyApiClient + Send + Sync>,
+    api: Arc<ApiService>,
     action_sender: UnboundedSender<AppAction>,
 ) -> UnboundedSender<ConnectCommand> {
     let (sender, receiver) = unbounded();

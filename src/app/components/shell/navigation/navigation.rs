@@ -1,208 +1,215 @@
-use gtk::prelude::WidgetExt;
-use std::cell::Cell;
+use gtk::prelude::*;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gio::prelude::{ActionExt, ActionMapExt};
 use glib::prelude::ToVariant;
+use glib::SignalHandlerId;
 
 use crate::app::components::{EventListener, ListenerComponent};
-use crate::app::state::ScreenName;
+use crate::app::state::{Direction, Route, Transition};
 use crate::app::{AppEvent, BrowserEvent};
 
+use super::page_stack::{hide_pages_not_showing, show_page};
 use super::{factory::ScreenFactory, home::HomePane, NavigationModel};
+
+/// Horizontal touchpad travel, in pixels, that counts as a back/forward swipe.
+const TOUCHPAD_SWIPE_DISTANCE: f64 = 200.0;
+/// Horizontal touch velocity, in pixels per second, that counts as a swipe.
+const TOUCH_SWIPE_VELOCITY: f64 = 1000.0;
 
 pub struct Navigation {
     model: Rc<NavigationModel>,
-    split_view: libadwaita::NavigationSplitView,
-    navigation_stack: gtk::Stack,
+    split_view: libadwaita::OverlaySplitView,
+    content_stack: gtk::Stack,
     home_listbox: gtk::ListBox,
     screen_factory: ScreenFactory,
-    children: Vec<Box<dyn ListenerComponent>>,
+    screens: Vec<(String, Box<dyn ListenerComponent>)>,
+    pending_restore: Option<PendingRestore>,
 }
 
 impl Navigation {
     pub fn new(
         model: NavigationModel,
-        split_view: libadwaita::NavigationSplitView,
-        navigation_stack: gtk::Stack,
+        split_view: libadwaita::OverlaySplitView,
+        content_stack: gtk::Stack,
         home_listbox: gtk::ListBox,
         screen_factory: ScreenFactory,
         window: libadwaita::ApplicationWindow,
     ) -> Self {
         let model = Rc::new(model);
-
-        // "win.show-sidebar" toggle action. NavigationSplitView has no such
-        // property, so `collapsed` handles mobile while the desktop show/hide
-        // detaches the sidebar page and zeroes its width to fill the content.
-        let sidebar_page = split_view.sidebar();
-        // Captured so hide/show can restore the split view's widths exactly.
-        let min_sidebar_width = split_view.min_sidebar_width();
-        let max_sidebar_width = split_view.max_sidebar_width();
-        // Set when the user hid the sidebar on desktop, to restore on return.
-        let desktop_hidden = Rc::new(Cell::new(false));
-
-        let show_sidebar_action = gio::SimpleAction::new_stateful(
-            "show-sidebar",
+        let show_navigation_panel_action = gio::SimpleAction::new_stateful(
+            "show-navigation-panel",
             None,
-            &sidebar_is_visible(&split_view).to_variant(),
+            &split_view.shows_sidebar().to_variant(),
         );
-        show_sidebar_action.connect_change_state(clone!(
+        // The user hid it beside the content panel
+        let desktop_hidden = Rc::new(Cell::new(false));
+        show_navigation_panel_action.connect_change_state(clone!(
             #[weak]
             split_view,
             #[strong]
-            sidebar_page,
-            #[strong]
             desktop_hidden,
-            move |action, state| {
+            move |_, state| {
                 let want_visible = state.and_then(|s| s.get::<bool>()).unwrap_or(true);
-                if split_view.is_collapsed() {
-                    // Mobile: switch between the sidebar pane and the page.
-                    split_view.set_show_content(!want_visible);
-                } else {
-                    // Desktop: hide by detaching the sidebar, show by re-attaching.
+                if !split_view.is_collapsed() {
                     desktop_hidden.set(!want_visible);
-                    set_desktop_sidebar(
-                        &split_view,
-                        &sidebar_page,
-                        !want_visible,
-                        min_sidebar_width,
-                        max_sidebar_width,
-                    );
                 }
-                action.set_state(&want_visible.to_variant());
+                split_view.set_show_sidebar(want_visible);
             }
         ));
-        window.add_action(&show_sidebar_action);
+        window.add_action(&show_navigation_panel_action);
 
-        // On mobile/desktop switch: toggle styling, keep the sidebar reachable
-        // on mobile or re-apply the desktop preference, and sync state.
         split_view.connect_collapsed_notify(clone!(
             #[weak]
             model,
-            #[weak]
-            show_sidebar_action,
-            #[strong]
-            sidebar_page,
             #[strong]
             desktop_hidden,
             move |split_view| {
-                let folded = split_view.is_collapsed();
-                if folded {
-                    // Mobile needs the sidebar attached so it can be reached.
-                    set_desktop_sidebar(
-                        split_view,
-                        &sidebar_page,
-                        false,
-                        min_sidebar_width,
-                        max_sidebar_width,
-                    );
-                    split_view.add_css_class("collapsed");
-                    split_view.set_show_content(true);
-                } else {
-                    set_desktop_sidebar(
-                        split_view,
-                        &sidebar_page,
-                        desktop_hidden.get(),
-                        min_sidebar_width,
-                        max_sidebar_width,
-                    );
-                    split_view.remove_css_class("collapsed");
-                }
-                let is_main = split_view.shows_content();
-                model.set_nav_hidden(folded && is_main);
-                sync_show_sidebar_state(&show_sidebar_action, split_view);
+                split_view.set_show_sidebar(!split_view.is_collapsed() && !desktop_hidden.get());
+                sync_navigation_hidden(&model, split_view);
             }
         ));
 
-        // On visible-pane change: keep styling, nav-hidden and toggle in sync.
-        split_view.connect_show_content_notify(clone!(
+        split_view.connect_show_sidebar_notify(clone!(
             #[weak]
             model,
             #[weak]
-            show_sidebar_action,
+            show_navigation_panel_action,
             move |split_view| {
-                let folded = split_view.is_collapsed();
-                if folded {
-                    split_view.add_css_class("collapsed");
-                } else {
-                    split_view.remove_css_class("collapsed");
+                let visible = split_view.shows_sidebar();
+                if show_navigation_panel_action
+                    .state()
+                    .and_then(|s| s.get::<bool>())
+                    != Some(visible)
+                {
+                    show_navigation_panel_action.set_state(&visible.to_variant());
                 }
-                let is_main = split_view.shows_content();
-                model.set_nav_hidden(folded && is_main);
-                sync_show_sidebar_state(&show_sidebar_action, split_view);
+                sync_navigation_hidden(&model, split_view);
             }
         ));
+
+        // Hide scrollbars on the stack's pages while the slide transition is running
+        content_stack.connect_transition_running_notify(|stack| {
+            if stack.is_transition_running() {
+                stack.add_css_class("transitioning");
+            } else {
+                stack.remove_css_class("transitioning");
+            }
+        });
+
+        connect_back_forward_input(&model, &window, &content_stack);
+        hide_pages_not_showing(&content_stack);
 
         Self {
             model,
             split_view,
-            navigation_stack,
+            content_stack,
             home_listbox,
             screen_factory,
-            children: vec![],
+            screens: vec![],
+            pending_restore: None,
         }
     }
 
-    fn make_home(&self) -> Box<dyn ListenerComponent> {
-        Box::new(HomePane::new(
-            self.home_listbox.clone(),
-            &self.screen_factory,
-        ))
-    }
-
-    fn show_navigation(&self) {
-        self.split_view.set_show_content(false);
-    }
-
-    fn push_screen(&mut self, name: &ScreenName) {
-        let component: Box<dyn ListenerComponent> = match name {
-            ScreenName::Home => self.make_home(),
-            ScreenName::AlbumDetails(id) => {
-                Box::new(self.screen_factory.make_album_details(id.to_owned()))
-            }
-            ScreenName::Search => Box::new(self.screen_factory.make_search_results()),
-            ScreenName::Artist(id) => {
-                Box::new(self.screen_factory.make_artist_details(id.to_owned()))
-            }
-            ScreenName::PlaylistDetails(id) => {
+    fn make_screen(&self, route: &Route) -> Box<dyn ListenerComponent> {
+        match route {
+            Route::Home(_) => Box::new(HomePane::new(
+                self.home_listbox.clone(),
+                &self.screen_factory,
+            )),
+            Route::Album(id) => Box::new(self.screen_factory.make_album_details(id.to_owned())),
+            Route::Search => Box::new(self.screen_factory.make_search_results()),
+            Route::Artist(id) => Box::new(self.screen_factory.make_artist_details(id.to_owned())),
+            Route::Playlist(id) => {
                 Box::new(self.screen_factory.make_playlist_details(id.to_owned()))
             }
-            ScreenName::User(id) => Box::new(self.screen_factory.make_user_details(id.to_owned())),
-        };
-
-        let widget = component.get_root_widget().clone();
-        self.children.push(component);
-
-        self.split_view.set_show_content(true);
-        self.navigation_stack
-            .add_named(&widget, Some(name.identifier().as_ref()));
-        self.navigation_stack
-            .set_visible_child_name(name.identifier().as_ref());
-
-        glib::source::idle_add_local_once(move || {
-            widget.grab_focus();
-        });
-    }
-
-    fn pop(&mut self) {
-        let children = &mut self.children;
-        let popped = children.pop();
-
-        let name = self.model.visible_child_name();
-        self.navigation_stack
-            .set_visible_child_name(name.identifier().as_ref());
-
-        if let Some(child) = popped {
-            self.navigation_stack.remove(child.get_root_widget());
+            Route::User(id) => Box::new(self.screen_factory.make_user_details(id.to_owned())),
         }
     }
 
-    fn pop_to(&mut self, screen: &ScreenName) {
-        self.navigation_stack
-            .set_visible_child_name(screen.identifier().as_ref());
-        let remainder = self.children.split_off(self.model.children_count());
-        for widget in remainder {
-            self.navigation_stack.remove(widget.get_root_widget());
+    // Only collapsed: showing it beside the content panel would undo a hide
+    fn show_navigation(&self) {
+        if self.split_view.is_collapsed() {
+            self.split_view.set_show_sidebar(true);
+        }
+    }
+
+    fn show_content(&self) {
+        if self.split_view.is_collapsed() {
+            self.split_view.set_show_sidebar(false);
+        }
+    }
+
+    fn ensure_screen(&mut self, route: &Route) -> bool {
+        let key = route.screen_key();
+        if self.screens.iter().any(|(k, _)| *k == key) {
+            return false;
+        }
+        let component = self.make_screen(route);
+        self.content_stack
+            .add_named(component.get_root_widget(), Some(&key));
+        self.screens.push((key, component));
+        true
+    }
+
+    fn show_screen(&mut self, route: &Route) {
+        self.ensure_screen(route);
+        show_page(&self.content_stack, &route.screen_key());
+    }
+
+    fn save_scroll(&self, transition: &Transition) {
+        let scroller = self
+            .content_stack
+            .visible_child()
+            .and_then(|screen| visible_scroller(&screen));
+        if let Some(scroller) = scroller {
+            self.model
+                .save_scroll(transition.from_entry, scroller.vadjustment().value());
+        }
+    }
+
+    fn go(&mut self, transition: &Transition) {
+        self.save_scroll(transition);
+        self.cancel_restore();
+
+        let transition_type = match transition.direction {
+            _ if transition.from.same_screen(&transition.to) => gtk::StackTransitionType::None,
+            Direction::Forward => gtk::StackTransitionType::SlideLeft,
+            Direction::Backward => gtk::StackTransitionType::SlideRight,
+        };
+        self.content_stack.set_transition_type(transition_type);
+        self.show_screen(&transition.to);
+        self.show_content();
+
+        for route in &transition.evicted {
+            let key = route.screen_key();
+            if let Some(i) = self.screens.iter().position(|(k, _)| *k == key) {
+                let (_, component) = self.screens.remove(i);
+                self.content_stack.remove(component.get_root_widget());
+            }
+        }
+
+        if let Some(widget) = self.content_stack.visible_child() {
+            glib::source::idle_add_local_once(move || {
+                widget.grab_focus();
+            });
+        }
+    }
+
+    fn restore_scroll(&mut self, scroll: u32) {
+        let scroller = self
+            .content_stack
+            .visible_child()
+            .and_then(|screen| visible_scroller(&screen));
+        if let Some(scroller) = scroller {
+            self.pending_restore = PendingRestore::start(scroller.vadjustment(), f64::from(scroll));
+        }
+    }
+
+    fn cancel_restore(&mut self) {
+        if let Some(pending) = self.pending_restore.take() {
+            pending.cancel();
         }
     }
 }
@@ -211,71 +218,177 @@ impl EventListener for Navigation {
     fn on_event(&mut self, event: &AppEvent) {
         match event {
             AppEvent::Started => {
-                self.push_screen(&ScreenName::Home);
+                self.show_screen(&Route::Home(Default::default()));
             }
-            AppEvent::BrowserEvent(BrowserEvent::NavigationPushed(name)) => {
-                self.push_screen(name);
+            AppEvent::BrowserEvent(BrowserEvent::NavigationChanged(transition)) => {
+                self.go(transition);
             }
             AppEvent::BrowserEvent(BrowserEvent::NavigationHidden(false)) => {
                 self.show_navigation();
             }
-            AppEvent::BrowserEvent(BrowserEvent::NavigationPopped) => {
-                self.pop();
-            }
-            AppEvent::BrowserEvent(BrowserEvent::NavigationPoppedTo(name)) => {
-                self.pop_to(name);
-            }
-            AppEvent::BrowserEvent(BrowserEvent::HomeVisiblePageChanged(_)) => {
-                self.split_view.set_show_content(true);
-            }
             _ => {}
         };
-        for child in self.children.iter_mut() {
-            child.on_event(event);
+        for (_, screen) in self.screens.iter_mut() {
+            screen.on_event(event);
+        }
+        // After the screens handled it, so the home pane shows the right page
+        if let AppEvent::BrowserEvent(BrowserEvent::NavigationChanged(Transition {
+            restore_scroll: Some(scroll),
+            ..
+        })) = event
+        {
+            self.restore_scroll(*scroll);
         }
     }
 }
 
-/// Whether the sidebar is on screen: shown pane on mobile, attached page on
-/// desktop.
-fn sidebar_is_visible(split_view: &libadwaita::NavigationSplitView) -> bool {
-    if split_view.is_collapsed() {
-        !split_view.shows_content()
-    } else {
-        split_view.sidebar().is_some()
-    }
+struct PendingRestore {
+    adjustment: gtk::Adjustment,
+    handler: Rc<RefCell<Option<SignalHandlerId>>>,
 }
 
-/// Show or hide the sidebar on the desktop layout by detaching the page and
-/// zeroing its width (showing restores it). Avoids `collapsed`/`show-content`
-/// so the mobile flow is untouched.
-fn set_desktop_sidebar(
-    split_view: &libadwaita::NavigationSplitView,
-    sidebar_page: &Option<libadwaita::NavigationPage>,
-    hidden: bool,
-    min_width: f64,
-    max_width: f64,
-) {
-    if hidden {
-        split_view.set_sidebar(libadwaita::NavigationPage::NONE);
-        split_view.set_min_sidebar_width(0.0);
-        split_view.set_max_sidebar_width(0.0);
-    } else {
-        if split_view.sidebar().is_none() {
-            split_view.set_sidebar(sidebar_page.as_ref());
+impl PendingRestore {
+    fn start(adjustment: gtk::Adjustment, target: f64) -> Option<Self> {
+        let max = |adj: &gtk::Adjustment| adj.upper() - adj.page_size();
+        adjustment.set_value(target.min(max(&adjustment)));
+        if max(&adjustment) >= target {
+            return None;
         }
-        split_view.set_min_sidebar_width(min_width);
-        split_view.set_max_sidebar_width(max_width);
+
+        let handler: Rc<RefCell<Option<SignalHandlerId>>> = Default::default();
+        let id = adjustment.connect_upper_notify(clone!(
+            #[strong]
+            handler,
+            move |adj| {
+                adj.set_value(target.min(max(adj)));
+                if max(adj) >= target {
+                    if let Some(id) = handler.borrow_mut().take() {
+                        adj.disconnect(id);
+                    }
+                }
+            }
+        ));
+        handler.replace(Some(id));
+        Some(Self {
+            adjustment,
+            handler,
+        })
+    }
+
+    fn cancel(self) {
+        if let Some(id) = self.handler.borrow_mut().take() {
+            self.adjustment.disconnect(id);
+        }
     }
 }
 
-/// Sync the "show-sidebar" action state with actual sidebar visibility.
-fn sync_show_sidebar_state(
-    action: &gio::SimpleAction,
-    split_view: &libadwaita::NavigationSplitView,
-) {
-    let visible = sidebar_is_visible(split_view);
-    if action.state().and_then(|s| s.get::<bool>()) != Some(visible) {
-        action.set_state(&visible.to_variant());
+fn visible_scroller(widget: &gtk::Widget) -> Option<gtk::ScrolledWindow> {
+    if let Some(scroller) = widget.downcast_ref::<gtk::ScrolledWindow>() {
+        return Some(scroller.clone());
     }
+    if let Some(stack) = widget.downcast_ref::<gtk::Stack>() {
+        return stack.visible_child().and_then(|c| visible_scroller(&c));
+    }
+    let mut child = widget.first_child();
+    while let Some(c) = child {
+        if c.is_visible() {
+            if let Some(scroller) = visible_scroller(&c) {
+                return Some(scroller);
+            }
+        }
+        child = c.next_sibling();
+    }
+    None
+}
+
+fn connect_back_forward_input(
+    model: &Rc<NavigationModel>,
+    window: &libadwaita::ApplicationWindow,
+    content_stack: &gtk::Stack,
+) {
+    const MOUSE_BACK: u32 = 8;
+    const MOUSE_FORWARD: u32 = 9;
+
+    let click = gtk::GestureClick::new();
+    click.set_button(0);
+    click.set_propagation_phase(gtk::PropagationPhase::Capture);
+    click.connect_pressed(clone!(
+        #[weak]
+        model,
+        move |gesture, _, _, _| {
+            match gesture.current_button() {
+                MOUSE_BACK => model.go_back(),
+                MOUSE_FORWARD => model.go_forward(),
+                _ => return,
+            }
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+        }
+    ));
+    window.add_controller(click);
+
+    let swipe = gtk::GestureSwipe::new();
+    swipe.set_touch_only(true);
+    swipe.connect_swipe(clone!(
+        #[weak]
+        model,
+        move |_, vx, vy| {
+            if vx.abs() < TOUCH_SWIPE_VELOCITY || vx.abs() < 2.0 * vy.abs() {
+                return;
+            }
+            // Content follows the finger: dragging it right reveals what came before
+            if vx > 0.0 {
+                model.go_back();
+            } else {
+                model.go_forward();
+            }
+        }
+    ));
+    content_stack.add_controller(swipe);
+
+    // Touchpad two-finger swipes arrive as horizontal scrolling in pixels
+    let travelled = Rc::new(Cell::new(0.0));
+    let fired = Rc::new(Cell::new(false));
+    let scroll = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::HORIZONTAL);
+    scroll.connect_scroll_begin(clone!(
+        #[strong]
+        travelled,
+        #[strong]
+        fired,
+        move |_| {
+            travelled.set(0.0);
+            fired.set(false);
+        }
+    ));
+    scroll.connect_scroll(clone!(
+        #[weak]
+        model,
+        #[strong]
+        travelled,
+        #[strong]
+        fired,
+        #[upgrade_or]
+        glib::Propagation::Proceed,
+        move |controller, dx, _| {
+            if controller.unit() != gdk::ScrollUnit::Surface || fired.get() {
+                return glib::Propagation::Proceed;
+            }
+            travelled.set(travelled.get() + dx);
+            if travelled.get().abs() < TOUCHPAD_SWIPE_DISTANCE {
+                return glib::Propagation::Proceed;
+            }
+            fired.set(true);
+            if travelled.get() < 0.0 {
+                model.go_back();
+            } else {
+                model.go_forward();
+            }
+            glib::Propagation::Stop
+        }
+    ));
+    content_stack.add_controller(scroll);
+}
+
+/// Collapsed with the navigation panel hidden, going back shows it.
+fn sync_navigation_hidden(model: &NavigationModel, split_view: &libadwaita::OverlaySplitView) {
+    model.set_nav_hidden(split_view.is_collapsed() && !split_view.shows_sidebar());
 }

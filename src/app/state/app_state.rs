@@ -1,13 +1,17 @@
 use std::borrow::Cow;
 
-use crate::app::models::{PlaylistDescription, PlaylistSummary};
+use gettextrs::gettext;
+
+use crate::app::components::labels;
+use crate::app::models::{ImageSet, Playlist, PlaylistSummary, Track};
 use crate::app::state::{
     browser_state::{BrowserAction, BrowserEvent, BrowserState},
     login_state::{LoginAction, LoginEvent, LoginState},
-    playback_state::{PlaybackAction, PlaybackEvent, PlaybackState},
+    playback_state::{Device, PlaybackAction, PlaybackEvent, PlaybackState},
+    screen_states::liked_statuses,
     selection_state::{SelectionAction, SelectionContext, SelectionEvent, SelectionState},
     settings_state::{SettingsAction, SettingsEvent, SettingsState},
-    ScreenName, SpotifyLink, UpdatableState,
+    EntryKey, Route, SpotifyLink, UpdatableState,
 };
 
 // It's a big one...
@@ -25,20 +29,21 @@ pub enum AppAction {
     Start,
     Raise,
     ShowNotification(String),
+    ShowRestartRequired,
     // Account is blocked by PlayPlay DRM; triggers an explanatory dialog.
     ShowDrmBlockedDialog,
     SetConnectionLost(bool),
     // Cross-state actions
     QueueSelection,
+    QueueTracks { tracks: Vec<Track> },
     DequeueSelection,
-    MoveUpSelection,
-    MoveDownSelection,
     SaveSelection,
     UnsaveSelection,
     EnableSelection(SelectionContext),
     CancelSelection,
-    CreatePlaylist(PlaylistDescription),
+    CreatePlaylist(Playlist),
     UpdatePlaylistName(PlaylistSummary),
+    UpdatePlaylistArt(String, ImageSet),
     RemovePlaylist(String),
 }
 
@@ -62,27 +67,27 @@ impl AppAction {
 
     #[allow(non_snake_case)]
     pub fn ViewAlbum(id: String) -> Self {
-        BrowserAction::NavigationPush(ScreenName::AlbumDetails(id)).into()
+        BrowserAction::Navigate(Route::Album(id)).into()
     }
 
     #[allow(non_snake_case)]
     pub fn ViewArtist(id: String) -> Self {
-        BrowserAction::NavigationPush(ScreenName::Artist(id)).into()
+        BrowserAction::Navigate(Route::Artist(id)).into()
     }
 
     #[allow(non_snake_case)]
     pub fn ViewPlaylist(id: String) -> Self {
-        BrowserAction::NavigationPush(ScreenName::PlaylistDetails(id)).into()
+        BrowserAction::Navigate(Route::Playlist(id)).into()
     }
 
     #[allow(non_snake_case)]
     pub fn ViewUser(id: String) -> Self {
-        BrowserAction::NavigationPush(ScreenName::User(id)).into()
+        BrowserAction::Navigate(Route::User(id)).into()
     }
 
     #[allow(non_snake_case)]
     pub fn ViewSearch() -> Self {
-        BrowserAction::NavigationPush(ScreenName::Search).into()
+        BrowserAction::Navigate(Route::Search).into()
     }
 }
 
@@ -97,9 +102,9 @@ pub enum AppEvent {
     Started,
     Raised,
     NotificationShown(String),
+    RestartRequiredShown,
     DrmBlockedDialogShown,
     ConnectionLostChanged(bool),
-    PlaylistCreatedNotificationShown(String),
     SettingsEvent(SettingsEvent),
 }
 
@@ -139,6 +144,7 @@ impl AppState {
             // Couple of actions that don't mutate the state (not intested in keeping track of what they change)
             // they're here just to have a consistent way of doing things (always an Action)
             AppAction::ShowNotification(c) => vec![AppEvent::NotificationShown(c)],
+            AppAction::ShowRestartRequired => vec![AppEvent::RestartRequiredShown],
             AppAction::ShowDrmBlockedDialog => vec![AppEvent::DrmBlockedDialogShown],
             AppAction::SetConnectionLost(lost) => {
                 // Real state, deduplicated: only emit the event (and move the
@@ -155,43 +161,25 @@ impl AppState {
             // Cross-state actions: multiple "substates" are affected by these actions, that's why they're handled here
             // Might need some clean-up
             AppAction::QueueSelection => {
-                self.playback.queue(self.selection.take_selection());
-                vec![
-                    SelectionEvent::SelectionModeChanged(false).into(),
-                    PlaybackEvent::PlaylistChanged.into(),
-                ]
+                let tracks = self.selection.take_selection();
+                let mut events = self.queue_tracks(tracks);
+                events.push(SelectionEvent::SelectionModeChanged(false).into());
+                events
             }
+            AppAction::QueueTracks { tracks } => self.queue_tracks(tracks),
             AppAction::DequeueSelection => {
-                let tracks: Vec<String> = self
+                let keys: Vec<EntryKey> = self
                     .selection
-                    .take_selection()
-                    .into_iter()
-                    .map(|s| s.id)
+                    .take_keyed_selection()
+                    .iter()
+                    .filter_map(|(key, _)| key.parse().ok())
                     .collect();
-                self.playback.dequeue(&tracks);
+                self.playback.dequeue(&keys);
 
                 vec![
                     SelectionEvent::SelectionModeChanged(false).into(),
                     PlaybackEvent::PlaylistChanged.into(),
                 ]
-            }
-            AppAction::MoveDownSelection => {
-                let mut selection = self.selection.peek_selection();
-                let playback = &mut self.playback;
-                selection
-                    .next()
-                    .and_then(|song| playback.move_down(&song.id))
-                    .map(|_| vec![PlaybackEvent::PlaylistChanged.into()])
-                    .unwrap_or_default()
-            }
-            AppAction::MoveUpSelection => {
-                let mut selection = self.selection.peek_selection();
-                let playback = &mut self.playback;
-                selection
-                    .next()
-                    .and_then(|song| playback.move_up(&song.id))
-                    .map(|_| vec![PlaybackEvent::PlaylistChanged.into()])
-                    .unwrap_or_default()
             }
             AppAction::SaveSelection => {
                 let tracks = self.selection.take_selection();
@@ -207,7 +195,7 @@ impl AppState {
                     .selection
                     .take_selection()
                     .into_iter()
-                    .map(|s| s.id)
+                    .map(|s| s.rri.id)
                     .collect();
                 let mut events: Vec<AppEvent> = forward_action(
                     BrowserAction::RemoveSavedTracks(tracks),
@@ -217,11 +205,15 @@ impl AppState {
                 events
             }
             AppAction::EnableSelection(context) => {
-                if let Some(active) = self.selection.set_mode(Some(context)) {
-                    vec![SelectionEvent::SelectionModeChanged(active).into()]
-                } else {
-                    vec![]
+                let had_selection = self.selection.count() > 0;
+                let Some(active) = self.selection.set_mode(Some(context)) else {
+                    return vec![];
+                };
+                let mut events = vec![SelectionEvent::SelectionModeChanged(active).into()];
+                if had_selection {
+                    events.push(SelectionEvent::SelectionChanged.into());
                 }
+                events
             }
             AppAction::CancelSelection => {
                 if let Some(active) = self.selection.set_mode(None) {
@@ -231,9 +223,8 @@ impl AppState {
                 }
             }
             AppAction::CreatePlaylist(playlist) => {
-                let id = playlist.id.clone();
                 let mut events = forward_action(
-                    LoginAction::PrependUserPlaylist(vec![playlist.clone().into()]),
+                    LoginAction::PrependOwnedPlaylist(playlist.clone().into()),
                     &mut self.logged_user,
                 );
                 let mut more_events = forward_action(
@@ -241,8 +232,10 @@ impl AppState {
                     &mut self.browser,
                 );
                 events.append(&mut more_events);
-                events.push(AppEvent::PlaylistCreatedNotificationShown(id));
                 events
+            }
+            AppAction::UpdatePlaylistArt(id, art) => {
+                forward_action(BrowserAction::UpdatePlaylistArt(id, art), &mut self.browser)
             }
             AppAction::UpdatePlaylistName(s) => {
                 let mut events = forward_action(
@@ -267,7 +260,7 @@ impl AppState {
             AppAction::BrowserAction(BrowserAction::SavePlaylist(playlist)) => {
                 let mut events = forward_action(
                     LoginAction::PrependUserPlaylist(vec![PlaylistSummary {
-                        id: playlist.id.clone(),
+                        id: playlist.rri.id.clone(),
                         title: playlist.title.clone(),
                     }]),
                     &mut self.logged_user,
@@ -287,31 +280,63 @@ impl AppState {
                 events.append(&mut more_events);
                 events
             }
-            // As for all other actions, we forward them to the substates :)
-            AppAction::PlaybackAction(a) => forward_action(a, &mut self.playback),
-            AppAction::BrowserAction(a) => forward_action(a, &mut self.browser),
-            AppAction::SelectionAction(a) => forward_action(a, &mut self.selection),
             AppAction::LoginAction(LoginAction::Logout) => {
-                let mut events = forward_action(LoginAction::Logout, &mut self.logged_user);
-                if let Some(home) = self.browser.home_state_mut() {
-                    home.albums.replace_all(std::iter::empty());
-                    home.playlists.replace_all(std::iter::empty());
-                    home.saved_tracks.clear().commit();
-                }
-                events.extend(forward_action(
-                    BrowserAction::NavigationPopTo(ScreenName::Home),
-                    &mut self.browser,
+                let mut events =
+                    forward_action(BrowserAction::ClearTracksLikedStatus, &mut self.browser);
+                events.append(&mut forward_action(
+                    LoginAction::Logout,
+                    &mut self.logged_user,
                 ));
-                self.playback = Default::default();
-                events.push(BrowserEvent::LibraryUpdated.into());
-                events.push(BrowserEvent::SavedPlaylistsUpdated.into());
-                events.push(BrowserEvent::SavedTracksUpdated.into());
                 events
             }
+            AppAction::PlaybackAction(a) => {
+                let statuses: Vec<(String, bool)> = match &a {
+                    PlaybackAction::LoadPagedSongs(_, page) => {
+                        liked_statuses(&page.items).collect()
+                    }
+                    #[allow(deprecated)]
+                    PlaybackAction::LoadSongs(tracks)
+                    | PlaybackAction::LoadContextSongs(_, tracks) => {
+                        liked_statuses(tracks).collect()
+                    }
+                    _ => vec![],
+                };
+                let mut events = if statuses.is_empty() {
+                    vec![]
+                } else {
+                    forward_action(
+                        BrowserAction::SetTracksLikedStatus(statuses),
+                        &mut self.browser,
+                    )
+                };
+                events.append(&mut forward_action(a, &mut self.playback));
+                events
+            }
+            // As for all other actions, we forward them to the substates :)
+            AppAction::BrowserAction(a) => forward_action(a, &mut self.browser),
+            AppAction::SelectionAction(a) => forward_action(a, &mut self.selection),
             AppAction::LoginAction(a) => forward_action(a, &mut self.logged_user),
             AppAction::SettingsAction(a) => forward_action(a, &mut self.settings),
             _ => vec![],
         }
+    }
+}
+
+impl AppState {
+    fn queue_tracks(&mut self, tracks: Vec<Track>) -> Vec<AppEvent> {
+        if tracks.is_empty() {
+            return vec![];
+        }
+        if matches!(self.playback.current_device(), Device::Connect(_)) {
+            return vec![AppEvent::NotificationShown(gettext(
+                "Queueing isn't available when playing on another device",
+            ))];
+        }
+        self.playback.queue(tracks);
+        vec![
+            PlaybackEvent::PlaylistChanged.into(),
+            AppEvent::NotificationShown(labels::ADDED_TO_QUEUE.clone()),
+        ]
     }
 }
 
@@ -328,4 +353,73 @@ where
         .into_iter()
         .map(|e| e.into())
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::models::make_track;
+    use crate::app::state::{load_context, start_actions};
+
+    #[test]
+    fn test_queue_and_dequeue_selection() {
+        let mut state = AppState::new();
+        let tracks = ["1", "2"].iter().map(|id| make_track(id)).collect();
+        state.update_state(
+            PlaybackAction::LoadContextSongs(crate::app::SongsSource::Album("a".into()), tracks)
+                .into(),
+        );
+        state.update_state(PlaybackAction::Load("1".to_string()).into());
+        state.update_state(AppAction::EnableSelection(SelectionContext::Default));
+        state.update_state(
+            SelectionAction::Select(vec![make_track("a"), make_track("a"), make_track("b")]).into(),
+        );
+
+        let events = state.update_state(AppAction::QueueSelection);
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, AppEvent::NotificationShown(_))));
+        assert!(!state.selection.is_selection_enabled());
+        state.update_state(AppAction::QueueTracks {
+            tracks: vec![make_track("a")],
+        });
+        assert_eq!(state.playback.upcoming_ids(), ["1", "a", "b", "a", "2"]);
+
+        state.update_state(AppAction::EnableSelection(SelectionContext::Queue));
+        let key = state.playback.upcoming_keys()[2];
+        let track = state.playback.view_track(key).unwrap();
+        state.update_state(SelectionAction::SelectKeyed(vec![(key.to_string(), track)]).into());
+        assert_eq!(state.selection.count(), 1);
+        state.update_state(AppAction::DequeueSelection);
+        assert_eq!(state.playback.upcoming_ids(), ["1", "a", "b", "2"]);
+    }
+
+    #[test]
+    fn test_start_actions_replace_the_queue_and_play_the_first_track() {
+        let mut state = AppState::new();
+        let album = crate::app::SongsSource::Album("a".into());
+        let ids: Vec<String> = (0..20).map(|i| i.to_string()).collect();
+        let start = |shuffle| {
+            let tracks = ids.iter().map(|id| make_track(id)).collect();
+            let load = PlaybackAction::LoadContextSongs(album.clone(), tracks);
+            start_actions(shuffle, load_context(album.clone(), Some("A".into()), load))
+        };
+        state.update_state(AppAction::QueueTracks {
+            tracks: vec![make_track("q")],
+        });
+
+        for action in start(false) {
+            state.update_state(action);
+        }
+        assert_eq!(state.playback.upcoming_ids(), ids);
+        assert!(state.playback.is_playing());
+
+        for action in start(true) {
+            state.update_state(action);
+        }
+        let upcoming = state.playback.upcoming_ids();
+        assert!(state.playback.is_shuffled());
+        assert_eq!(upcoming.len(), 20);
+        assert_ne!(upcoming, ids);
+    }
 }

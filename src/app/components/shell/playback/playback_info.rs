@@ -3,6 +3,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{glib, CompositeTemplate};
 
+use crate::app::components::utils::set_missing_art;
+
 mod imp {
 
     use super::*;
@@ -11,7 +13,7 @@ mod imp {
     #[template(resource = "/dev/diegovsky/Riff/components/playback_info.ui")]
     pub struct PlaybackInfoWidget {
         #[template_child]
-        pub playing_image: TemplateChild<gtk::Picture>,
+        pub playing_image: TemplateChild<gtk::Image>,
 
         #[template_child]
         pub song_info_box: TemplateChild<gtk::Box>,
@@ -49,7 +51,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct PlaybackInfoWidget(ObjectSubclass<imp::PlaybackInfoWidget>) @extends gtk::Widget, gtk::Button;
+    pub struct PlaybackInfoWidget(ObjectSubclass<imp::PlaybackInfoWidget>) @extends gtk::Widget, gtk::Button,
+        @implements gtk::Accessible, gtk::Actionable, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl PlaybackInfoWidget {
@@ -73,14 +76,24 @@ impl PlaybackInfoWidget {
         widget
             .playing_image
             .set_paintable(None::<gdk::Paintable>.as_ref());
+        set_missing_art(&*widget.playing_image, false);
     }
 
     pub fn set_info_visible(&self, visible: bool) {
         self.imp().song_info_box.set_visible(visible);
     }
 
-    pub fn set_artwork(&self, pixbuf: &gdk_pixbuf::Pixbuf) {
-        let texture = gdk::Texture::for_pixbuf(pixbuf);
-        self.imp().playing_image.set_paintable(Some(&texture));
+    pub fn set_artwork(&self, texture: &gdk::Texture) {
+        let widget = self.imp();
+        widget.playing_image.set_paintable(Some(texture));
+        set_missing_art(&*widget.playing_image, false);
+    }
+
+    pub fn set_missing_artwork(&self) {
+        let widget = self.imp();
+        widget
+            .playing_image
+            .set_paintable(None::<gdk::Paintable>.as_ref());
+        set_missing_art(&*widget.playing_image, true);
     }
 }

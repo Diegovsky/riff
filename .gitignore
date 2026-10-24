@@ -1,6 +1,7 @@
 # Build output
 /target/
 /build/
+/builddir/
 /cargo/
 /generated/
 /.flatpak-builder/

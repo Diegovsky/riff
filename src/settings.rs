@@ -11,73 +11,7 @@ use gio::prelude::SettingsExt;
 use libadwaita::ColorScheme;
 use librespot::playback::config::{AudioFormat, Bitrate, NormalisationMethod, NormalisationType};
 
-const SETTINGS: &str = "dev.diegovsky.Riff";
-
-/// Spotify user id recorded as verified-playable, or empty if none.
-pub fn drm_verified_user() -> String {
-    gio::Settings::new(SETTINGS)
-        .string("drm-verified-user")
-        .to_string()
-}
-
-/// Records `user_id` as verified-playable so it isn't reported as DRM-blocked later.
-pub fn set_drm_verified_user(user_id: &str) {
-    let _ = gio::Settings::new(SETTINGS).set_string("drm-verified-user", user_id);
-}
-
-/// Clears the verified-playable account so DRM detection runs again. Dev tools only.
-#[cfg(debug_assertions)]
-pub fn clear_drm_verified_user() {
-    let _ = gio::Settings::new(SETTINGS).set_string("drm-verified-user", "");
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum CloseWindowBehavior {
-    #[default]
-    Ask,
-    MinimizeToBackground,
-    StopAndQuit,
-}
-
-impl CloseWindowBehavior {
-    pub fn from_gsettings_enum(value: i32) -> Self {
-        match value {
-            1 => Self::MinimizeToBackground,
-            2 => Self::StopAndQuit,
-            _ => Self::Ask,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct WindowGeometry {
-    pub width: i32,
-    pub height: i32,
-    pub is_maximized: bool,
-}
-
-impl WindowGeometry {
-    pub fn new_from_gsettings() -> Self {
-        let settings = gio::Settings::new(SETTINGS);
-        Self {
-            width: settings.int("window-width"),
-            height: settings.int("window-height"),
-            is_maximized: settings.boolean("window-is-maximized"),
-        }
-    }
-
-    pub fn save(&self) -> Option<()> {
-        let settings = gio::Settings::new(SETTINGS);
-        settings.delay();
-        settings.set_int("window-width", self.width).ok()?;
-        settings.set_int("window-height", self.height).ok()?;
-        settings
-            .set_boolean("window-is-maximized", self.is_maximized)
-            .ok()?;
-        settings.apply();
-        Some(())
-    }
-}
+pub use riff_config::settings::*;
 
 // Player (librespot) settings
 impl SpotifyPlayerSettings {
@@ -109,10 +43,11 @@ impl SpotifyPlayerSettings {
         let volume = settings.double("volume");
         let shuffle = settings.boolean("shuffle");
         let skip_explicit = settings.boolean("skip-explicit");
+        let shuffle_separation = settings.uint("shuffle-separation");
         let repeat = match settings.string("repeat").as_str() {
-            "song" => RepeatMode::Song,
-            "playlist" => RepeatMode::Playlist,
-            "none" | _ => RepeatMode::None,
+            "song" => RepeatMode::Track,
+            "playlist" => RepeatMode::Context,
+            "none" | _ => RepeatMode::Off,
         };
 
         // Volume curve
@@ -182,6 +117,7 @@ impl SpotifyPlayerSettings {
             shuffle,
 
             skip_explicit,
+            shuffle_separation,
 
             bitrate,
             backend,
@@ -217,6 +153,7 @@ impl SpotifyPlayerSettings {
             SetShuffled(self.shuffle).into(),
             SetRepeatMode(self.repeat).into(),
             SetSkipExplicit(self.skip_explicit).into(),
+            SetShuffleSeparation(self.shuffle_separation).into(),
         ]
     }
 }
@@ -276,9 +213,9 @@ impl StateTracker {
             RepeatModeChanged(repeat) => self.settings.set_string(
                 "repeat",
                 match *repeat {
-                    RepeatMode::Song => "song",
-                    RepeatMode::Playlist => "playlist",
-                    RepeatMode::None => "none",
+                    RepeatMode::Track => "song",
+                    RepeatMode::Context => "playlist",
+                    RepeatMode::Off => "none",
                 },
             )?,
             _ => (),
@@ -304,29 +241,23 @@ impl StateTracker {
     }
 
     pub fn save_card_layout(&self, layout: CardLayout) {
-        let _ = self.settings.set_string(
-            "card-layout",
-            match layout {
-                CardLayout::Vertical => "vertical",
-                CardLayout::ImageOnly => "image-only",
-                CardLayout::Horizontal => "horizontal",
-            },
-        );
+        set_card_layout(match layout {
+            CardLayout::Vertical => "vertical",
+            CardLayout::ImageOnly => "image-only",
+            CardLayout::Horizontal => "horizontal",
+        });
     }
 
     pub fn save_card_size(&self, size: CardSize) {
-        let _ = self.settings.set_string(
-            "card-size",
-            match size {
-                CardSize::Small => "small",
-                CardSize::Medium => "medium",
-                CardSize::Large => "large",
-            },
-        );
+        set_card_size(match size {
+            CardSize::Small => "small",
+            CardSize::Medium => "medium",
+            CardSize::Large => "large",
+        });
     }
 
     pub fn load_card_layout(&self) -> CardLayout {
-        match self.settings.string("card-layout").as_str() {
+        match card_layout().as_str() {
             "image-only" => CardLayout::ImageOnly,
             "horizontal" => CardLayout::Horizontal,
             _ => CardLayout::Vertical,
@@ -334,7 +265,7 @@ impl StateTracker {
     }
 
     pub fn load_card_size(&self) -> CardSize {
-        match self.settings.string("card-size").as_str() {
+        match card_size().as_str() {
             "small" => CardSize::Small,
             "medium" => CardSize::Medium,
             _ => CardSize::Large,
@@ -342,34 +273,18 @@ impl StateTracker {
     }
 
     pub fn save_sort_order(&self, page: &str, order: SortOrder) {
-        let key = format!("sort-{page}");
-        if self
-            .settings
-            .settings_schema()
-            .map_or(false, |s| s.has_key(&key))
-        {
-            let _ = self.settings.set_string(&key, order.to_str());
-        }
+        set_sort_order(page, order.to_str());
     }
 
     pub fn load_sort_order(&self, page: &str) -> SortOrder {
-        let key = format!("sort-{page}");
-        if self
-            .settings
-            .settings_schema()
-            .map_or(false, |s| s.has_key(&key))
-        {
-            SortOrder::parse_key(self.settings.string(&key).as_str())
-        } else {
-            SortOrder::RecentlyAdded
-        }
+        sort_order(page).map_or(SortOrder::RecentlyAdded, |key| SortOrder::parse_key(&key))
     }
 }
 
 impl EventListener for StateTracker {
     fn on_event(&mut self, event: &AppEvent) {
         if let Err(e) = self.handle_event(event) {
-            error!("Trying to update gsettings: {e}")
+            error!("Trying to update gsettings: {e}");
         }
     }
 }

@@ -3,34 +3,28 @@ use gtk::prelude::*;
 use std::ops::Deref;
 use std::rc::Rc;
 
-use crate::app::components::{Component, EventListener};
-use crate::app::models::PlaylistSummary;
+use crate::app::components::{
+    add_tracks_to_playlist, dispatch_api_call_many, Component, EventListener,
+};
+use crate::app::models::{PlaylistSummary, Track};
 use crate::app::state::{
     LoginEvent, SelectionAction, SelectionContext, SelectionEvent, SelectionState,
 };
-use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, BrowserAction};
+use crate::app::{AppAction, AppEvent, AppModel, BrowserAction, Dispatcher};
 
 use super::widget::{SelectionToolState, SelectionToolbarWidget};
 
 pub struct SelectionToolbarModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl SelectionToolbarModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,
         }
-    }
-
-    pub fn move_up_selection(&self) {
-        self.dispatcher.dispatch(AppAction::MoveUpSelection);
-    }
-
-    pub fn move_down_selection(&self) {
-        self.dispatcher.dispatch(AppAction::MoveDownSelection);
     }
 
     pub fn queue_selection(&self) {
@@ -51,36 +45,32 @@ impl SelectionToolbarModel {
     }
 
     pub fn save_selection(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let ids: Vec<String> = self
             .selection()
             .peek_selection()
-            .map(|s| &s.id)
-            .cloned()
+            .map(|s| s.rri.id.clone())
             .collect();
-        self.dispatcher
-            .call_spotify_and_dispatch_many(move || async move {
-                api.save_tracks(ids).await?;
-                Ok(vec![
-                    AppAction::SaveSelection,
-                    AppAction::ShowNotification(gettext("Tracks saved!")),
-                ])
-            })
+        dispatch_api_call_many(&self.dispatcher, move || async move {
+            api.save_tracks(ids).await?;
+            Ok(vec![
+                AppAction::SaveSelection,
+                AppAction::ShowNotification(gettext("Tracks saved!")),
+            ])
+        })
     }
 
     fn remove_saved_tracks(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let ids: Vec<String> = self
             .selection()
             .peek_selection()
-            .map(|s| &s.id)
-            .cloned()
+            .map(|s| s.rri.id.clone())
             .collect();
-        self.dispatcher
-            .call_spotify_and_dispatch_many(move || async move {
-                api.remove_saved_tracks(ids).await?;
-                Ok(vec![AppAction::UnsaveSelection])
-            })
+        dispatch_api_call_many(&self.dispatcher, move || async move {
+            api.remove_tracks(ids).await?;
+            Ok(vec![AppAction::UnsaveSelection])
+        })
     }
 
     fn selection(&self) -> impl Deref<Target = SelectionState> + '_ {
@@ -91,43 +81,36 @@ impl SelectionToolbarModel {
         self.selection().count()
     }
 
-    fn user_playlists(&self) -> impl Deref<Target = Vec<PlaylistSummary>> + '_ {
-        self.app_model.map_state(|s| &s.logged_user.playlists)
+    fn user_playlists(&self) -> Vec<PlaylistSummary> {
+        self.app_model.get_state().logged_user.owned_playlists()
     }
 
     fn add_to_playlist(&self, id: &str) {
-        let id = id.to_string();
-        let api = self.app_model.get_spotify();
-        let uris: Vec<String> = self
-            .selection()
-            .peek_selection()
-            .map(|s| &s.uri)
-            .cloned()
-            .collect();
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                api.add_to_playlist(&id, uris).await?;
-                Ok(SelectionAction::Clear.into())
-            })
+        let tracks: Vec<Track> = self.selection().peek_selection().cloned().collect();
+        add_tracks_to_playlist(
+            &self.app_model,
+            &self.dispatcher,
+            id.to_string(),
+            tracks,
+            Some(SelectionAction::Clear.into()),
+        );
     }
 
     fn remove_from_playlist(&self, id: &str) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let id = id.to_string();
         let uris: Vec<String> = self
             .selection()
             .peek_selection()
-            .map(|s| &s.uri)
-            .cloned()
+            .filter_map(|s| s.rri.uri.clone())
             .collect();
-        self.dispatcher
-            .call_spotify_and_dispatch_many(move || async move {
-                api.remove_from_playlist(&id, uris.clone()).await?;
-                Ok(vec![
-                    BrowserAction::RemoveTracksFromPlaylist(id, uris).into(),
-                    SelectionAction::Clear.into(),
-                ])
-            })
+        dispatch_api_call_many(&self.dispatcher, move || async move {
+            api.remove_from_playlist(&id, uris.clone()).await?;
+            Ok(vec![
+                BrowserAction::RemoveTracksFromPlaylist(id, uris).into(),
+                SelectionAction::Clear.into(),
+            ])
+        })
     }
 }
 
@@ -139,16 +122,6 @@ pub struct SelectionToolbar {
 impl SelectionToolbar {
     pub fn new(model: SelectionToolbarModel, widget: SelectionToolbarWidget) -> Self {
         let model = Rc::new(model);
-        widget.connect_move_up(clone!(
-            #[weak]
-            model,
-            move || model.move_up_selection()
-        ));
-        widget.connect_move_down(clone!(
-            #[weak]
-            model,
-            move || model.move_down_selection()
-        ));
         widget.connect_queue(clone!(
             #[weak]
             model,
@@ -168,59 +141,22 @@ impl SelectionToolbar {
     }
 
     fn update_active_tools(&self) {
-        let count = self.model.selected_count();
-        match self.model.selection().context {
-            SelectionContext::Default => {
-                self.widget.set_move(SelectionToolState::Hidden);
-                self.widget
-                    .set_queue(SelectionToolState::Visible(count > 0));
-                self.widget.set_add(SelectionToolState::Visible(count > 0));
-                self.widget.set_remove(SelectionToolState::Hidden);
-                self.widget.set_save(SelectionToolState::Visible(count > 0));
-            }
-            SelectionContext::SavedTracks => {
-                self.widget.set_move(SelectionToolState::Hidden);
-                self.widget
-                    .set_queue(SelectionToolState::Visible(count > 0));
-                self.widget.set_add(SelectionToolState::Visible(count > 0));
-                self.widget
-                    .set_remove(SelectionToolState::Visible(count > 0));
-                self.widget.set_save(SelectionToolState::Hidden);
-            }
-            SelectionContext::ReadOnlyQueue => {
-                self.widget.set_move(SelectionToolState::Hidden);
-                self.widget.set_queue(SelectionToolState::Hidden);
-                self.widget.set_add(SelectionToolState::Hidden);
-                self.widget.set_remove(SelectionToolState::Hidden);
-                self.widget.set_save(SelectionToolState::Visible(count > 0));
-            }
-            SelectionContext::Queue => {
-                self.widget
-                    .set_move(SelectionToolState::Visible(count == 1));
-                self.widget.set_queue(SelectionToolState::Hidden);
-                self.widget.set_add(SelectionToolState::Hidden);
-                self.widget
-                    .set_remove(SelectionToolState::Visible(count > 0));
-                self.widget.set_save(SelectionToolState::Visible(count > 0));
-            }
-            SelectionContext::Playlist => {
-                self.widget.set_move(SelectionToolState::Hidden);
-                self.widget
-                    .set_queue(SelectionToolState::Visible(count > 0));
-                self.widget.set_add(SelectionToolState::Hidden);
-                self.widget.set_remove(SelectionToolState::Hidden);
-                self.widget.set_save(SelectionToolState::Hidden);
-            }
-            SelectionContext::EditablePlaylist(_) => {
-                self.widget.set_move(SelectionToolState::Hidden);
-                self.widget
-                    .set_queue(SelectionToolState::Visible(count > 0));
-                self.widget.set_add(SelectionToolState::Hidden);
-                self.widget
-                    .set_remove(SelectionToolState::Visible(count > 0));
-                self.widget.set_save(SelectionToolState::Hidden);
-            }
+        let shown = SelectionToolState::Visible(self.model.selected_count() > 0);
+        let hidden = SelectionToolState::Hidden;
+        let (queue, add, remove, remove_from_playlist, save) = match self.model.selection().context
+        {
+            SelectionContext::Default => (shown, shown, hidden, hidden, shown),
+            SelectionContext::SavedTracks => (shown, shown, shown, hidden, hidden),
+            SelectionContext::ReadOnlyQueue => (hidden, hidden, hidden, hidden, shown),
+            SelectionContext::Queue => (hidden, hidden, shown, hidden, shown),
+            SelectionContext::Playlist => (shown, hidden, hidden, hidden, shown),
+            SelectionContext::EditablePlaylist(_) => (shown, hidden, hidden, shown, shown),
         };
+        self.widget.set_queue(queue);
+        self.widget.set_add(add);
+        self.widget.set_remove(remove);
+        self.widget.set_remove_from_playlist(remove_from_playlist);
+        self.widget.set_save(save);
     }
 }
 

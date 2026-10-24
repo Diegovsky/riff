@@ -1,0 +1,10 @@
+[package]
+name = "riff-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Riff's app logic between the UI and the API layer, free of UI dependencies."
+
+[dependencies]
+riff-api = { path = "../riff-api" }
+rand = "0.10.3"

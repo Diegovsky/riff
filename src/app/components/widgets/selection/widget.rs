@@ -1,10 +1,8 @@
-use gio::prelude::ActionMapExt;
-use gio::{SimpleAction, SimpleActionGroup};
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
 
-use crate::app::components::{display_add_css_provider, labels};
+use crate::app::components::{display_add_css_provider, PlaylistPicker};
 use crate::app::models::PlaylistSummary;
 
 mod imp {
@@ -18,16 +16,13 @@ mod imp {
         pub action_bar: TemplateChild<gtk::ActionBar>,
 
         #[template_child]
-        pub move_up: TemplateChild<gtk::Button>,
-
-        #[template_child]
-        pub move_down: TemplateChild<gtk::Button>,
-
-        #[template_child]
         pub add: TemplateChild<gtk::MenuButton>,
 
         #[template_child]
         pub remove: TemplateChild<gtk::Button>,
+
+        #[template_child]
+        pub remove_from_playlist: TemplateChild<gtk::Button>,
 
         #[template_child]
         pub queue: TemplateChild<gtk::Button>,
@@ -63,7 +58,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct SelectionToolbarWidget(ObjectSubclass<imp::SelectionToolbarWidget>) @extends gtk::Widget, gtk::Box;
+    pub struct SelectionToolbarWidget(ObjectSubclass<imp::SelectionToolbarWidget>) @extends gtk::Widget, gtk::Box,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -83,20 +79,6 @@ impl SelectionToolState {
 }
 
 impl SelectionToolbarWidget {
-    pub fn connect_move_down<F>(&self, f: F)
-    where
-        F: Fn() + 'static,
-    {
-        self.imp().move_down.connect_clicked(move |_| f());
-    }
-
-    pub fn connect_move_up<F>(&self, f: F)
-    where
-        F: Fn() + 'static,
-    {
-        self.imp().move_up.connect_clicked(move |_| f());
-    }
-
     pub fn connect_queue<F>(&self, f: F)
     where
         F: Fn() + 'static,
@@ -113,16 +95,15 @@ impl SelectionToolbarWidget {
 
     pub fn connect_remove<F>(&self, f: F)
     where
-        F: Fn() + 'static,
+        F: Fn() + Clone + 'static,
     {
-        self.imp().remove.connect_clicked(move |_| f());
-    }
-
-    pub fn set_move(&self, state: SelectionToolState) {
-        self.imp().move_up.set_sensitive(state.sensitive());
-        self.imp().move_up.set_visible(state.visible());
-        self.imp().move_down.set_sensitive(state.sensitive());
-        self.imp().move_down.set_visible(state.visible());
+        let imp = self.imp();
+        imp.remove.connect_clicked(clone!(
+            #[strong]
+            f,
+            move |_| f()
+        ));
+        imp.remove_from_playlist.connect_clicked(move |_| f());
     }
 
     pub fn set_queue(&self, state: SelectionToolState) {
@@ -140,6 +121,12 @@ impl SelectionToolbarWidget {
         self.imp().remove.set_visible(state.visible());
     }
 
+    pub fn set_remove_from_playlist(&self, state: SelectionToolState) {
+        let imp = self.imp();
+        imp.remove_from_playlist.set_sensitive(state.sensitive());
+        imp.remove_from_playlist.set_visible(state.visible());
+    }
+
     pub fn set_save(&self, state: SelectionToolState) {
         self.imp().save.set_sensitive(state.sensitive());
         self.imp().save.set_visible(state.visible());
@@ -154,30 +141,17 @@ impl SelectionToolbarWidget {
     where
         F: Fn(&str) + Clone + 'static,
     {
-        let menu = gio::Menu::new();
-        let action_group = SimpleActionGroup::new();
+        let playlists = playlists.to_vec();
+        let picker = move || {
+            let on_playlist_selected = on_playlist_selected.clone();
+            PlaylistPicker::new(playlists.clone(), move |playlist| {
+                on_playlist_selected(&playlist.id)
+            })
+        };
 
-        for PlaylistSummary { title, id } in playlists {
-            let action_name = format!("playlist_{id}");
-
-            action_group.add_action(&{
-                let id = id.clone();
-                let action = SimpleAction::new(&action_name, None);
-                let f = on_playlist_selected.clone();
-                action.connect_activate(move |_, _| f(&id));
-                action
-            });
-
-            menu.append(
-                Some(&labels::add_to_playlist_label(title)),
-                Some(&format!("add_to.{action_name}")),
-            );
-        }
-
-        let popover = gtk::PopoverMenu::from_model(Some(&menu));
+        let popover = gtk::Popover::new();
+        popover.set_child(Some(&picker()));
+        popover.connect_closed(move |popover| popover.set_child(Some(&picker())));
         self.imp().add.set_popover(Some(&popover));
-        self.imp()
-            .add
-            .insert_action_group("add_to", Some(&action_group));
     }
 }

@@ -1,3 +1,6 @@
+mod about;
+pub use about::*;
+
 mod details_album;
 pub use details_album::*;
 
@@ -12,6 +15,9 @@ pub use details_user::*;
 
 mod now_playing;
 pub use now_playing::*;
+
+mod queue;
+pub use queue::*;
 
 mod login;
 pub use login::*;
@@ -33,3 +39,6 @@ pub use search::*;
 
 mod settings;
 pub use settings::*;
+
+mod shortcuts;
+pub use shortcuts::*;

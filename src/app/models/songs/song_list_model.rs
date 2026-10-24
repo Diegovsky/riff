@@ -88,11 +88,9 @@ impl SongListModel {
         // AppState's borrow_mut, because the ListView bind callback is now
         // self-contained: it reads only the SongModel handed to it by GTK and
         // never calls back into AppModel::get_state(). See Playlist::new.
-        if cfg!(not(test)) {
-            for ListRangeUpdate(a, b, c) in changes.into_iter() {
-                debug!("pos {}, removed {}, added {}", a, b, c);
-                self.items_changed(a as u32, b as u32, c as u32);
-            }
+        for ListRangeUpdate(a, b, c) in changes.into_iter() {
+            debug!("pos {}, removed {}, added {}", a, b, c);
+            self.items_changed(a as u32, b as u32, c as u32);
         }
     }
 
@@ -105,18 +103,22 @@ impl SongListModel {
         }
     }
 
-    pub fn collect(&self) -> Vec<SongDescription> {
+    pub fn ids(&self) -> Vec<String> {
+        self.inner().iter().map(|s| s.get_id()).collect()
+    }
+
+    pub fn collect(&self) -> Vec<Track> {
         self.inner().iter().map(|s| s.into_description()).collect()
     }
 
-    pub fn map_collect<T>(&self, map: impl Fn(SongDescription) -> T) -> Vec<T> {
+    pub fn map_collect<T>(&self, map: impl Fn(Track) -> T) -> Vec<T> {
         self.inner()
             .iter()
             .map(|s| map(s.into_description()))
             .collect()
     }
 
-    pub fn add(&mut self, song_batch: SongBatch) -> SongListModelPending {
+    pub fn add(&mut self, song_batch: Page<Track>) -> SongListModelPending {
         let range = self.inner_mut().add(song_batch);
         SongListModelPending::new(range, self)
     }
@@ -133,16 +135,16 @@ impl SongListModel {
         self.inner().index_continuous(i).cloned()
     }
 
-    pub fn song_batch_for(&self, i: usize) -> Option<SongBatch> {
+    pub fn song_batch_for(&self, i: usize) -> Option<Page<Track>> {
         self.inner().song_batch_for(i)
     }
 
-    pub fn last_batch(&self) -> Option<Batch> {
-        self.inner().last_batch()
+    pub fn needed_batch_for(&self, i: usize) -> Option<PageRequest> {
+        self.inner().needed_batch_for(i)
     }
 
-    pub fn needed_batch_for(&self, i: usize) -> Option<Batch> {
-        self.inner().needed_batch_for(i)
+    pub fn is_complete(&self) -> bool {
+        self.inner().is_complete()
     }
 
     pub fn partial_len(&self) -> usize {
@@ -153,12 +155,17 @@ impl SongListModel {
         self.inner().len()
     }
 
-    pub fn append(&mut self, songs: Vec<SongDescription>) -> SongListModelPending {
+    pub fn append(&mut self, songs: Vec<Track>) -> SongListModelPending {
         let range = self.inner_mut().append(songs);
         SongListModelPending::new(Some(range), self)
     }
 
-    pub fn prepend(&mut self, songs: Vec<SongDescription>) -> SongListModelPending {
+    pub fn replace_models(&mut self, songs: Vec<SongModel>) -> SongListModelPending {
+        let range = self.inner_mut().replace_models(songs);
+        SongListModelPending::new(Some(range), self)
+    }
+
+    pub fn prepend(&mut self, songs: Vec<Track>) -> SongListModelPending {
         let range = self.inner_mut().prepend(songs);
         SongListModelPending::new(Some(range), self)
     }

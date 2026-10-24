@@ -9,7 +9,7 @@ use std::rc::Rc;
 use crate::app::components::EventListener;
 use crate::app::{AppEvent, AppModel};
 
-const SETTINGS: &str = "dev.diegovsky.Riff";
+use riff_config::settings::SETTINGS;
 const INHIBIT_SUSPEND_KEY: &str = "inhibit-suspend";
 
 /// Pure decision helper: whether a suspend inhibitor should be held.

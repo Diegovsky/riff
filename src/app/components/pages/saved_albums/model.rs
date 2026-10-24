@@ -5,24 +5,23 @@ use std::rc::Rc;
 use gettextrs::gettext;
 
 use crate::app::components::{
-    CardLayout, CardListComponent, CardListModel, CardListPageModel, CardSize, ImageShape,
-    SortOrder,
+    dispatch_api_read, playing_card, CardLayout, CardListComponent, CardListModel,
+    CardListPageModel, CardSize, ImageShape, PlayingCard, SortOrder,
 };
-use crate::app::dispatch::Worker;
 use crate::app::models::*;
 use crate::app::state::HomeState;
 use crate::app::{
-    ActionDispatcher, AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, ListStore,
+    AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Dispatcher, ListStore,
     PaginationTarget,
 };
 
 pub struct SavedAlbumsModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl SavedAlbumsModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,
@@ -35,21 +34,24 @@ impl SavedAlbumsModel {
 }
 
 impl CardListModel for SavedAlbumsModel {
+    fn playing_card(&self) -> PlayingCard {
+        playing_card(&self.app_model.get_state().playback)
+    }
+
     fn get_store(&self) -> Option<impl Deref<Target = ListStore<CardModel>> + '_> {
         Some(Ref::map(self.state()?, |s| &s.albums))
     }
 
     fn refresh(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         if let Some(state) = self.state() {
             let batch_size = state.next_albums_page.batch_size;
             drop(state);
-            self.dispatcher
-                .call_spotify_and_dispatch(move || async move {
-                    api.get_saved_albums(0, batch_size)
-                        .await
-                        .map(|albums| BrowserAction::SetLibraryContent(albums).into())
-                });
+            dispatch_api_read(&self.dispatcher, move |tag| async move {
+                api.get_saved_albums(0, batch_size, tag)
+                    .await
+                    .map(|page| BrowserAction::SetLibraryContent(page.items).into())
+            });
         }
     }
 
@@ -64,7 +66,7 @@ impl CardListModel for SavedAlbumsModel {
     }
 
     fn load_more(&self) {
-        let api = self.app_model.get_spotify();
+        let api = self.app_model.api();
         let state = match self.state() {
             Some(s) => s,
             None => return,
@@ -79,12 +81,11 @@ impl CardListModel for SavedAlbumsModel {
         self.app_model
             .update_state(BrowserAction::ConsumeNextPage(PaginationTarget::SavedAlbums).into());
 
-        self.dispatcher
-            .call_spotify_and_dispatch(move || async move {
-                api.get_saved_albums(offset, batch_size)
-                    .await
-                    .map(|albums| BrowserAction::AppendLibraryContent(albums).into())
-            });
+        dispatch_api_read(&self.dispatcher, move |tag| async move {
+            api.get_saved_albums(offset, batch_size, tag)
+                .await
+                .map(|page| BrowserAction::AppendLibraryContent(page.items).into())
+        });
     }
 
     fn open_item(&self, id: String) {
@@ -93,6 +94,10 @@ impl CardListModel for SavedAlbumsModel {
 
     fn image_shape(&self) -> ImageShape {
         ImageShape::Square
+    }
+
+    fn filter_options(&self) -> Vec<FilterOption> {
+        FilterOption::release_types()
     }
 }
 
@@ -125,17 +130,16 @@ impl CardListPageModel for SavedAlbumsModel {
 pub type SavedAlbums = CardListComponent<SavedAlbumsModel>;
 
 pub fn make_saved_albums(
-    worker: Worker,
     model: SavedAlbumsModel,
     shared_layout: Rc<Cell<CardLayout>>,
     shared_size: Rc<Cell<CardSize>>,
-    dispatcher: Rc<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 ) -> SavedAlbums {
-    CardListComponent::new(
-        Rc::new(model),
-        worker,
-        shared_layout,
-        shared_size,
-        dispatcher,
-    )
+    CardListComponent::new(Rc::new(model), shared_layout, shared_size, dispatcher)
+}
+
+impl crate::app::ProvidesApi for SavedAlbumsModel {
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.app_model.api()
+    }
 }

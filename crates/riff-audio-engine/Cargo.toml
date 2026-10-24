@@ -1,0 +1,14 @@
+[package]
+name = "riff-audio-engine"
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+description = "Riff's audio engine: the DSP pipeline between the decoder and the audio backend."
+
+[dependencies]
+log = "0.4.17"
+
+[dependencies.librespot-playback]
+version = "0.8.0"
+default-features = false
+features = ["native-tls"]

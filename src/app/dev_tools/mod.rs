@@ -17,7 +17,7 @@ use crate::player::Command;
 /// Wire up the dev tools menu and all of its controls.
 ///
 /// Loads the dev menu from its own blueprint (`dev_tools.blp`), packs it into
-/// the sidebar header, and connects every dev widget to the app and player
+/// the navigation panel header, and connects every dev widget to the app and player
 /// senders. Called once during UI setup in debug builds.
 pub fn wire_dev_tools(
     builder: &gtk::Builder,
@@ -27,11 +27,12 @@ pub fn wire_dev_tools(
 ) {
     // The dev menu lives in its own blueprint (src/app/dev_tools.blp) so the
     // dev-only markup stays out of window.blp. Load it here and pack it into
-    // the sidebar header, right after the search button.
+    // the navigation panel header, right after the search button.
     let dev_builder = gtk::Builder::from_resource("/dev/diegovsky/Riff/dev_tools.ui");
     let dev_menu: gtk::MenuButton = dev_builder.object("dev_menu").unwrap();
-    let sidebar_header: libadwaita::HeaderBar = builder.object("sidebar_header").unwrap();
-    sidebar_header.pack_start(&dev_menu);
+    let navigation_panel_header: libadwaita::HeaderBar =
+        builder.object("navigation_panel_header").unwrap();
+    navigation_panel_header.pack_start(&dev_menu);
     dev_menu.set_visible(true);
 
     let display = gdk::Display::default().unwrap();
@@ -94,9 +95,9 @@ pub fn wire_dev_tools(
         // The connection-lost banner is deliberately NOT raised here. It
         // appears as a side effect once an actual API request fails while
         // offline, and clears itself once a request succeeds again (see
-        // call_spotify_and_dispatch_many), mirroring how a real outage is
+        // dispatch_api_call), mirroring how a real outage is
         // detected rather than the switch poking the toast directly.
-        crate::api::set_simulate_offline(active);
+        riff_api::set_simulate_offline(active);
         if active {
             let _ = player_sender.unbounded_send(Command::DevKillSession);
         }
@@ -137,7 +138,7 @@ pub fn wire_dev_tools(
         let idx = index as u8;
         button.connect_toggled(move |btn| {
             if btn.is_active() {
-                crate::api::set_injected_error(idx);
+                riff_api::set_injected_error(idx);
             }
         });
     }
@@ -180,7 +181,7 @@ pub fn wire_dev_tools(
         ),
         concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/src/app/components/widgets/playlist/song.css"
+            "/src/app/components/widgets/track_list/track_row.css"
         ),
         concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -220,11 +221,11 @@ pub fn wire_dev_tools(
         let state = model_for_dump.get_state();
         info!("==== APP STATE DUMP ====");
         info!("logged-in user: {:?}", state.logged_user.user);
-        info!("owned playlists: {}", state.logged_user.playlists.len());
+        info!("saved playlists: {}", state.logged_user.playlists.len());
         info!(
-            "browser screen: {:?} (nav depth {})",
+            "browser screen: {:?} (history length {})",
             state.browser.current_screen(),
-            state.browser.count()
+            state.browser.navigator().entries().len()
         );
         info!(
             "selection: enabled={} count={} context={:?}",
@@ -243,7 +244,7 @@ pub fn wire_dev_tools(
             playback.is_shuffled(),
             playback.repeat_mode(),
             playback.current_song_id(),
-            playback.songs().len()
+            playback.upcoming_keys().len()
         );
         info!("==== END STATE DUMP ====");
     });

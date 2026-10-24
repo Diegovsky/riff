@@ -1,7 +1,7 @@
-use crate::app::components::EventListener;
+use crate::app::components::{labels, EventListener};
 use crate::app::AppEvent;
-use crate::feature_flags::{self, FeatureFlag};
 use crate::settings::RiffSettings;
+use riff_config::feature_flags::FeatureFlag;
 
 use std::rc::Rc;
 
@@ -15,7 +15,7 @@ use super::PanWidget;
 use super::PitchWidget;
 use super::SettingsModel;
 
-const SETTINGS: &str = "dev.diegovsky.Riff";
+use riff_config::settings::{RESTART_REQUIRED_KEYS, SETTINGS};
 
 mod imp {
 
@@ -38,13 +38,16 @@ mod imp {
         pub audio_backend: TemplateChild<libadwaita::ComboRow>,
 
         #[template_child]
-        pub gapless_playback: TemplateChild<libadwaita::ActionRow>,
+        pub gapless_playback: TemplateChild<libadwaita::SwitchRow>,
 
         #[template_child]
         pub ap_port: TemplateChild<gtk::Entry>,
 
         #[template_child]
         pub theme: TemplateChild<libadwaita::ComboRow>,
+
+        #[template_child]
+        pub queue_side_panel_switch: TemplateChild<libadwaita::SwitchRow>,
 
         #[template_child]
         pub close_behavior: TemplateChild<libadwaita::ComboRow>,
@@ -54,6 +57,9 @@ mod imp {
 
         #[template_child]
         pub skip_explicit_switch: TemplateChild<libadwaita::SwitchRow>,
+
+        #[template_child]
+        pub shuffle_separation: TemplateChild<libadwaita::SpinRow>,
 
         #[template_child]
         pub volume_curve: TemplateChild<libadwaita::ComboRow>,
@@ -99,6 +105,18 @@ mod imp {
 
         #[template_child]
         pub pitch: TemplateChild<PitchWidget>,
+
+        #[template_child]
+        pub memory_cache_size: TemplateChild<libadwaita::SpinRow>,
+
+        #[template_child]
+        pub disk_cache_size: TemplateChild<libadwaita::SpinRow>,
+
+        #[template_child]
+        pub audio_cache_size: TemplateChild<libadwaita::SpinRow>,
+
+        #[template_child]
+        pub clear_cache_button: TemplateChild<gtk::Button>,
     }
 
     #[glib::object_subclass]
@@ -123,7 +141,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct SettingsDialog(ObjectSubclass<imp::SettingsDialog>) @extends gtk::Widget, libadwaita::Dialog, libadwaita::PreferencesDialog;
+    pub struct SettingsDialog(ObjectSubclass<imp::SettingsDialog>) @extends gtk::Widget, libadwaita::Dialog, libadwaita::PreferencesDialog,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl Default for SettingsDialog {
@@ -140,16 +159,8 @@ impl SettingsDialog {
         dialog.bind_settings();
         dialog.setup_bitrate_lossless_factory();
         dialog.bind_feature_flags();
-        dialog.apply_feature_flag_visibility();
         dialog.connect_theme_select();
         dialog
-    }
-
-    fn apply_feature_flag_visibility(&self) {
-        let widget = self.imp();
-        widget
-            .normalisation_group
-            .set_visible(feature_flags::is_enabled(FeatureFlag::Normalisation));
     }
 
     fn bind_backend_and_device(&self) {
@@ -334,14 +345,10 @@ impl SettingsDialog {
 
         let gapless_playback = widget
             .gapless_playback
-            .downcast_ref::<libadwaita::ActionRow>()
+            .downcast_ref::<libadwaita::SwitchRow>()
             .unwrap();
         settings
-            .bind(
-                "gapless-playback",
-                &gapless_playback.activatable_widget().unwrap(),
-                "active",
-            )
+            .bind("gapless-playback", gapless_playback, "active")
             .build();
 
         let ap_port = widget.ap_port.downcast_ref::<gtk::Entry>().unwrap();
@@ -564,6 +571,14 @@ impl SettingsDialog {
             })
             .build();
 
+        settings
+            .bind(
+                crate::settings::QUEUE_SIDE_PANEL,
+                &*widget.queue_side_panel_switch,
+                "active",
+            )
+            .build();
+
         let close_behavior = widget
             .close_behavior
             .downcast_ref::<libadwaita::ComboRow>()
@@ -612,15 +627,85 @@ impl SettingsDialog {
         settings
             .bind("skip-explicit", skip_explicit_switch, "active")
             .build();
+
+        let separation_row = widget.shuffle_separation.get();
+        let separation_adjustment = separation_row.adjustment();
+        let separation = settings.uint("shuffle-separation");
+        separation_adjustment.set_value(separation as f64);
+        separation_row.set_subtitle(&labels::shuffle_separation_label(separation));
+        {
+            let settings = settings.clone();
+            let separation_row = separation_row.downgrade();
+            separation_adjustment.connect_value_changed(move |adj| {
+                let separation = adj.value() as u32;
+                if let Some(row) = separation_row.upgrade() {
+                    row.set_subtitle(&labels::shuffle_separation_label(separation));
+                }
+                let _ = settings.set_uint("shuffle-separation", separation);
+            });
+        }
+
+        // Memory cache size (MB). Bound manually rather than via `Settings::bind`
+        // for the same spin-row feedback-loop reason noted above, and because the
+        // key is a uint while the adjustment is a double.
+        let memory_cache_size = widget
+            .memory_cache_size
+            .downcast_ref::<libadwaita::SpinRow>()
+            .unwrap();
+        let cache_adjustment = memory_cache_size.adjustment();
+        cache_adjustment.set_value(settings.uint("memory-cache-size-mb") as f64);
+        {
+            let settings = settings.clone();
+            cache_adjustment.connect_value_changed(move |adj| {
+                let _ = settings.set_uint("memory-cache-size-mb", adj.value() as u32);
+            });
+        }
+
+        // Disk (image) cache size (MB). Same manual-binding rationale as above.
+        let disk_cache_size = widget
+            .disk_cache_size
+            .downcast_ref::<libadwaita::SpinRow>()
+            .unwrap();
+        let disk_adjustment = disk_cache_size.adjustment();
+        disk_adjustment.set_value(settings.uint("disk-cache-size-mb") as f64);
+        {
+            let settings = settings.clone();
+            disk_adjustment.connect_value_changed(move |adj| {
+                let _ = settings.set_uint("disk-cache-size-mb", adj.value() as u32);
+            });
+        }
+
+        // Audio cache on disk size (MB).
+        let audio_cache_size = widget
+            .audio_cache_size
+            .downcast_ref::<libadwaita::SpinRow>()
+            .unwrap();
+        let audio_adjustment = audio_cache_size.adjustment();
+        audio_adjustment.set_value(settings.uint("audio-cache-size-mb") as f64);
+        {
+            let settings = settings.clone();
+            audio_adjustment.connect_value_changed(move |adj| {
+                let _ = settings.set_uint("audio-cache-size-mb", adj.value() as u32);
+            });
+        }
     }
 
     fn bind_feature_flags(&self) {
         let settings = gio::Settings::new(SETTINGS);
         let group = libadwaita::PreferencesGroup::new();
-        group.set_title("Experimental Features");
-        group.set_description(Some(
-            "These settings require restarting the application to take effect.",
-        ));
+        group.set_title(&gettextrs::gettext("Experimental Features"));
+        group.set_description(Some(&gettextrs::gettext(
+            "These features are still in development and may be unstable or incomplete.",
+        )));
+
+        settings
+            .bind(
+                FeatureFlag::Normalisation.key(),
+                &*self.imp().normalisation_group,
+                "visible",
+            )
+            .get()
+            .build();
 
         for flag in FeatureFlag::ALL.iter() {
             let row = libadwaita::SwitchRow::new();
@@ -654,6 +739,14 @@ impl SettingsDialog {
         });
     }
 
+    fn connect_closed<F>(&self, on_closed: F)
+    where
+        F: Fn() + 'static,
+    {
+        let dialog = self.upcast_ref::<libadwaita::Dialog>();
+        dialog.connect_closed(move |_| on_closed());
+    }
+
     fn connect_close<F>(&self, on_close: F)
     where
         F: Fn() + 'static,
@@ -662,6 +755,16 @@ impl SettingsDialog {
         dialog.connect_close_attempt(move |_| {
             on_close();
         });
+    }
+
+    /// Connect the "Clear Cache" button to the given handler.
+    fn connect_clear_cache<F>(&self, on_clear: F)
+    where
+        F: Fn() + 'static,
+    {
+        self.imp()
+            .clear_cache_button
+            .connect_clicked(move |_| on_clear());
     }
 
     /// Re-lock the equalizer and pan controls. The locks are UI-only and never
@@ -717,6 +820,27 @@ impl Settings {
                 close_model.stop_player();
             }
             close_model.set_settings();
+        });
+
+        let gsettings = gio::Settings::new(SETTINGS);
+        let startup_values: Vec<_> = RESTART_REQUIRED_KEYS
+            .iter()
+            .map(|key| gsettings.value(key))
+            .collect();
+        let restart_model = model.clone();
+        settings_dialog.connect_closed(move || {
+            let changed = RESTART_REQUIRED_KEYS
+                .iter()
+                .zip(&startup_values)
+                .any(|(key, startup)| gsettings.value(key) != *startup);
+            if changed {
+                restart_model.show_restart_required();
+            }
+        });
+
+        let clear_model = model.clone();
+        settings_dialog.connect_clear_cache(move || {
+            clear_model.clear_cache();
         });
 
         Self {

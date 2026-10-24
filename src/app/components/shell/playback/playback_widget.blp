@@ -51,7 +51,7 @@ template $PlaybackWidget : Box {
 
   Adw.BreakpointBin {
     width-request: 1;
-    height-request: 84;
+    height-request: 75;
     margin-top: 4;
 
     Adw.Breakpoint {
@@ -60,8 +60,9 @@ template $PlaybackWidget : Box {
       setters {
         now_playing_box.visible: false;
         now_playing_button_box.visible: true;
-        volume_slider_box.visible: false;
+        volume_box.visible: false;
         volume_button.visible: true;
+        queue_button.visible: false;
         playback_center.margin-start: 16;
         playback_center.margin-end: 16;
         // Narrow: drop equal thirds. The transport controls need more than a
@@ -81,9 +82,9 @@ template $PlaybackWidget : Box {
       homogeneous: true;
       halign: fill;
       hexpand: true;
-      height-request: 68;
+      height-request: 58;
       margin-top: 8;
-      margin-bottom: 8;
+      margin-bottom: 9;
       margin-start: 8;
       margin-end: 8;
 
@@ -100,11 +101,12 @@ template $PlaybackWidget : Box {
         // when a track is playing.
         Box now_playing_button_box {
           visible: false;
+          width-request: 40;
           valign: center;
 
           Button now_playing_button {
             visible: false;
-            icon-name: "music-queue-symbolic";
+            icon-name: "now-playing-symbolic";
             tooltip-text: _("Now Playing");
             focus-on-click: false;
             can-focus: false;
@@ -118,7 +120,7 @@ template $PlaybackWidget : Box {
 
         Box now_playing_box {
           hexpand: true;
-          height-request: 68;
+          height-request: 58;
           overflow: hidden;
           halign: start;
 
@@ -148,35 +150,58 @@ template $PlaybackWidget : Box {
         halign: end;
         valign: center;
 
-        Box volume_slider_box {
-          width-request: 250;
+        ToggleButton queue_button {
+          width-request: 40;
+          margin-end: 6;
+          icon-name: "queue-symbolic";
+          /* Translators: Tooltip of the playback bar button that shows or hides the queue. */
+          tooltip-text: _("Queue");
+          action-name: "win.utility-panel";
+          halign: end;
+          valign: center;
+          focus-on-click: false;
+          can-focus: false;
 
-          Image {
-            icon-name: 'multimedia-volume-control-symbolic';
-          }
+          styles [
+            "flat"
+          ]
+        }
 
-          Scale volume_slider {
+        // With the queue button, 250 wide
+        Box volume_box {
+          width-request: 204;
+
+          Box {
             hexpand: true;
-            show-fill-level: true;
-            restrict-to-fill-level: false;
-            value-pos: left;
 
-            styles [
-              'volume-slider'
-            ]
+            Image {
+              icon-name: 'multimedia-volume-control-symbolic';
+            }
 
-            adjustment: Adjustment {
-              lower: 0.0;
-              value: 0.7;
-              upper: 1.0;
-              step-increment: 0.01;
-              page-increment: 0.05;
-            };
+            Scale volume_slider {
+              hexpand: true;
+              show-fill-level: true;
+              restrict-to-fill-level: false;
+              value-pos: left;
+
+              styles [
+                'volume-slider'
+              ]
+
+              adjustment: Adjustment {
+                lower: 0.0;
+                value: 0.7;
+                upper: 1.0;
+                step-increment: 0.01;
+                page-increment: 0.05;
+              };
+            }
           }
         }
 
         MenuButton volume_button {
           visible: false;
+          width-request: 40;
           icon-name: 'multimedia-volume-control-symbolic';
           tooltip-text: _("Volume");
           halign: end;
@@ -198,6 +223,7 @@ template $PlaybackWidget : Box {
             };
           };
         }
+
       }
     };
   }

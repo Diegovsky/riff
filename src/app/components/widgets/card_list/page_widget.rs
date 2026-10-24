@@ -37,7 +37,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct CardListWidget(ObjectSubclass<imp::CardListWidget>)
-        @extends gtk::Widget, gtk::Box;
+        @extends gtk::Widget, gtk::Box,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 impl CardListWidget {

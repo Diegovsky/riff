@@ -5,7 +5,7 @@ use gtk::CompositeTemplate;
 
 use super::lock_button;
 
-const SETTINGS: &str = "dev.diegovsky.Riff";
+use riff_config::settings::SETTINGS;
 
 mod imp {
     use super::*;
@@ -50,7 +50,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct PanWidget(ObjectSubclass<imp::PanWidget>)
-        @extends gtk::Widget, libadwaita::PreferencesGroup;
+        @extends gtk::Widget, libadwaita::PreferencesGroup,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl Default for PanWidget {

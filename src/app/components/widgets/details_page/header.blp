@@ -40,33 +40,22 @@ template $DetailsHeaderWidget : Widget {
 
         styles [
           "details-header__image-box",
+          "details-header__image-placeholder",
+          "card",
         ]
 
         Overlay {
-          Picture image {
-            content-fit: cover;
+
+          Image image {
+            pixel-size: 200;
+            halign: center;
+            valign: center;
 
             styles [
               "details-header__image",
             ]
           }
 
-          [overlay]
-          Button info_button {
-            icon-name: "preferences-system-details-symbolic";
-            tooltip-text: _("Details");
-            halign: end;
-            valign: end;
-            visible: false;
-            can-target: true;
-            margin-end: 4;
-            margin-bottom: 4;
-
-            styles [
-              "circular",
-              "info__button",
-            ]
-          }
         }
       }
 
@@ -199,16 +188,16 @@ template $DetailsHeaderWidget : Widget {
             hexpand: true;
           }
 
-          Button edit_button {
-            icon-name: "document-edit-symbolic";
+          MenuButton menu_button {
+            icon-name: "view-more-symbolic";
             halign: center;
             valign: center;
             visible: false;
-            tooltip-text: _("Edit");
+            tooltip-text: _("More Options");
 
             styles [
               "circular",
-              "edit__button",
+              "menu__button",
             ]
           }
         }

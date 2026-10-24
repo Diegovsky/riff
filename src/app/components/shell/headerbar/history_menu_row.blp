@@ -1,0 +1,15 @@
+using Gtk 4.0;
+
+template $HistoryMenuRow : ListBoxRow {
+  Box {
+    spacing: 12;
+
+    Image icon {}
+
+    Label label {
+      xalign: 0;
+      ellipsize: end;
+      max-width-chars: 40;
+    }
+  }
+}

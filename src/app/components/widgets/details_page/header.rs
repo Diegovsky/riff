@@ -1,3 +1,4 @@
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gettextrs::gettext;
@@ -6,6 +7,14 @@ use gtk::subclass::prelude::*;
 use gtk::CompositeTemplate;
 
 use super::{SubtitleLinksBox, HEADER_IMAGE_SIZE};
+use crate::app::components::utils::add_hover_class;
+use crate::app::components::{labels, ExpandBehavior, SegmentedButton};
+
+/// Between a subtitle and its detail (see `PageModel::get_subtitle_detail`).
+pub(super) const DETAIL_SEPARATOR: &str = " · ";
+
+const SUBTITLE_LINK_CLASS: &str = "subtitle-link";
+const SUBTITLE_LINK_HOVER_CLASS: &str = "subtitle-link--hover";
 
 /// Controls the shape of the artwork in the details header.
 /// - `Square`: used for albums/playlists (rendered with rounded card corners).
@@ -35,7 +44,7 @@ mod imp {
         pub image_box: TemplateChild<gtk::Box>,
 
         #[template_child]
-        pub image: TemplateChild<gtk::Picture>,
+        pub image: TemplateChild<gtk::Image>,
 
         #[template_child]
         pub caption_label: TemplateChild<gtk::Label>,
@@ -56,16 +65,16 @@ mod imp {
         pub shuffle_button: TemplateChild<gtk::Button>,
 
         #[template_child]
+        pub menu_button: TemplateChild<gtk::MenuButton>,
+
+        #[template_child]
         pub like_button: TemplateChild<gtk::Button>,
 
         #[template_child]
         pub share_button: TemplateChild<gtk::Button>,
 
         #[template_child]
-        pub info_button: TemplateChild<gtk::Button>,
-
-        #[template_child]
-        pub edit_button: TemplateChild<gtk::Button>,
+        pub button_box: TemplateChild<gtk::Box>,
     }
 
     #[glib::object_subclass]
@@ -122,7 +131,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct DetailsHeaderWidget(ObjectSubclass<imp::DetailsHeaderWidget>) @extends gtk::Widget;
+    pub struct DetailsHeaderWidget(ObjectSubclass<imp::DetailsHeaderWidget>) @extends gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 /// High-level wrapper around `DetailsHeaderWidget`.
@@ -131,30 +141,31 @@ glib::wrapper! {
 /// buttons without touching GObject internals directly.
 pub struct DetailsHeader {
     widget: DetailsHeaderWidget,
+    like_pin: LikePinState,
+}
+
+#[derive(Default)]
+struct LikePinState {
+    seg: RefCell<Option<(SegmentedButton, gtk::Button, gtk::Button)>>,
+    like_visible: Cell<bool>,
+    pin_enabled: Cell<bool>,
+    liked: Cell<bool>,
 }
 
 impl DetailsHeader {
-    pub fn new(shape: HeaderImageShape) -> Self {
-        let widget: DetailsHeaderWidget = glib::Object::new();
-
+    pub fn for_widget(widget: DetailsHeaderWidget, shape: HeaderImageShape) -> Self {
         let imp = widget.imp();
-        imp.image.set_halign(gtk::Align::Center);
-        imp.image.set_valign(gtk::Align::Center);
-        imp.image_box
-            .add_css_class("details-header__image-placeholder");
-        imp.image_box.add_css_class("card");
-
         if shape == HeaderImageShape::Circle {
             imp.image.add_css_class("details-header__image--circular");
             imp.image_box
                 .add_css_class("details-header__image--circular");
         }
 
-        Self { widget }
-    }
-
-    pub fn widget(&self) -> &gtk::Widget {
-        self.widget.upcast_ref()
+        let like_pin = LikePinState {
+            like_visible: Cell::new(true),
+            ..Default::default()
+        };
+        Self { widget, like_pin }
     }
 
     // Text content
@@ -203,7 +214,8 @@ impl DetailsHeader {
         );
         let imp = self.widget.imp();
         imp.image.set_paintable(Some(&icon));
-        imp.image.set_content_fit(gtk::ContentFit::Fill);
+        imp.image_box
+            .add_css_class("details-header__image-box--icon");
     }
 
     // Action button state
@@ -233,11 +245,28 @@ impl DetailsHeader {
             "non-starred-symbolic"
         };
         self.widget.imp().like_button.set_icon_name(icon);
+        if let Some((_, like, _)) = &*self.like_pin.seg.borrow() {
+            like.set_icon_name(icon);
+        }
+        self.like_pin.liked.set(is_liked);
+        self.sync_like_controls();
     }
 
     /// Show or hide the like button.
     pub fn set_like_visible(&self, visible: bool) {
-        self.widget.imp().like_button.set_visible(visible);
+        self.like_pin.like_visible.set(visible);
+        if self.like_pin.seg.borrow().is_none() {
+            self.widget.imp().like_button.set_visible(visible);
+        }
+        self.sync_like_controls();
+    }
+
+    /// Override the like button's tooltip.
+    pub fn set_like_tooltip(&self, tooltip: &str) {
+        self.widget
+            .imp()
+            .like_button
+            .set_tooltip_text(Some(tooltip));
     }
 
     // Signal connections
@@ -256,16 +285,37 @@ impl DetailsHeader {
         button.connect_clicked(move |_| f());
     }
 
+    /// Sections of (id, label) entries; `on_activate` gets the id. Hidden when
+    /// empty.
+    pub fn set_menu<F: Fn(&str) + 'static>(
+        &self,
+        sections: &[Vec<(String, String)>],
+        on_activate: F,
+    ) {
+        let button = &self.widget.imp().menu_button;
+        let on_activate = Rc::new(on_activate);
+        let actions = gio::SimpleActionGroup::new();
+        let menu = gio::Menu::new();
+        for entries in sections.iter().filter(|entries| !entries.is_empty()) {
+            let section = gio::Menu::new();
+            for (id, label) in entries {
+                let action = gio::SimpleAction::new(id, None);
+                let on_activate = on_activate.clone();
+                let action_id = id.clone();
+                action.connect_activate(move |_, _| on_activate(&action_id));
+                actions.add_action(&action);
+                section.append(Some(label), Some(&format!("header.{id}")));
+            }
+            menu.append_section(None, &section);
+        }
+        button.insert_action_group("header", Some(&actions));
+        button.set_menu_model(Some(&menu));
+        button.set_visible(menu.n_items() > 0);
+    }
+
     /// Connect a handler to the like/save button. Also makes the button visible.
     pub fn connect_liked<F: Fn() + 'static>(&self, f: F) {
         let button = &self.widget.imp().like_button;
-        button.set_visible(true);
-        button.connect_clicked(move |_| f());
-    }
-
-    /// Connect a handler to the info button. Also makes the button visible.
-    pub fn connect_info<F: Fn() + 'static>(&self, f: F) {
-        let button = &self.widget.imp().info_button;
         button.set_visible(true);
         button.connect_clicked(move |_| f());
     }
@@ -277,21 +327,81 @@ impl DetailsHeader {
         button.connect_clicked(move |_| f());
     }
 
-    /// Connect a handler to the edit button. Also makes the button visible.
-    #[allow(dead_code)]
-    pub fn connect_edit<F: Fn() + 'static>(&self, f: F) {
-        let button = &self.widget.imp().edit_button;
-        button.set_visible(true);
-        button.connect_clicked(move |_| f());
+    /// Update the pin button icon and tooltip to reflect pinned state.
+    pub fn set_pinned(&self, is_pinned: bool) {
+        let (icon, tooltip) = if is_pinned {
+            ("view-pin-symbolic", &*labels::UNPIN_FROM_SIDEBAR)
+        } else {
+            ("view-pin-outline-symbolic", &*labels::PIN_TO_SIDEBAR)
+        };
+        if let Some((_, _, pin)) = &*self.like_pin.seg.borrow() {
+            pin.set_icon_name(icon);
+            pin.set_tooltip_text(Some(tooltip));
+        }
     }
 
-    /// Set multiple artist link buttons in the subtitle area.
-    /// Each artist is rendered as a clickable button. Buttons are separated by
-    /// comma labels: "Artist 1, Artist 2, Artist 3".
-    /// The callback receives the artist ID when a button is clicked.
+    pub fn set_pin_visible(&self, visible: bool) {
+        if let Some((seg, _, _)) = &*self.like_pin.seg.borrow() {
+            seg.set_icon_visible(1, visible);
+        }
+        self.sync_like_controls();
+    }
+
+    /// Hide the standalone like button.
+    pub fn set_pin_enabled(&self, enabled: bool) {
+        self.like_pin.pin_enabled.set(enabled);
+        self.sync_like_controls();
+    }
+
+    fn sync_like_controls(&self) {
+        let seg = self.like_pin.seg.borrow();
+        let Some((seg, _, pin)) = &*seg else {
+            return;
+        };
+        let like_visible = self.like_pin.like_visible.get();
+        let like_button = &self.widget.imp().like_button;
+        let pin_enabled = self.like_pin.pin_enabled.get();
+        like_button.set_visible(like_visible && !pin_enabled);
+        seg.widget()
+            .set_visible(pin_enabled && (like_visible || pin.is_visible()));
+        seg.set_icon_visible(0, like_visible);
+        // Keep the pin segment revealed for liked items, and when there is
+        // no like segment to hover.
+        let behavior = if like_visible && !self.like_pin.liked.get() {
+            ExpandBehavior::OnHover
+        } else {
+            ExpandBehavior::AlwaysExpanded
+        };
+        if seg.expand_behavior() != behavior {
+            seg.set_expand_behavior(behavior);
+        }
+    }
+
+    /// Add a like+pin segmented control after the standalone pin button.
+    ///
+    /// The like segment is always visible and acts as the expand trigger;
+    /// hovering reveals the pin segment. Returns `(like_segment, pin_segment)`
+    /// for wiring actions and state updates.
+    pub fn add_like_pin_segmented_button(&self) -> (gtk::Button, gtk::Button) {
+        let seg = SegmentedButton::new(ExpandBehavior::OnHover);
+        seg.widget().set_valign(gtk::Align::Center);
+        seg.widget().add_css_class("like-pin__button");
+
+        let like = seg.add_icon("non-starred-symbolic", &gettext("Add to Library"), || {});
+        let pin = seg.add_icon("view-pin-outline-symbolic", &labels::PIN_TO_SIDEBAR, || {});
+
+        let imp = self.widget.imp();
+        imp.button_box
+            .insert_child_after(seg.widget(), Some(&*imp.like_button));
+        *self.like_pin.seg.borrow_mut() = Some((seg, like.clone(), pin.clone()));
+        self.sync_like_controls();
+        (like, pin)
+    }
+
     pub fn set_subtitle_links<F: Fn(&str) + 'static>(
         &self,
         artists: &[(String, String)],
+        detail: Option<&str>,
         on_clicked: F,
     ) {
         let imp = self.widget.imp();
@@ -317,18 +427,43 @@ impl DetailsHeader {
                 links_box.append_link(&separator);
             }
 
-            let button = gtk::Button::builder()
+            let label = gtk::Label::builder()
                 .label(name)
-                .css_classes(["flat", "subtitle-link-button"])
+                .focusable(true)
+                .accessible_role(gtk::AccessibleRole::Link)
+                .css_classes(["body", SUBTITLE_LINK_CLASS])
                 .build();
 
+            let click = gtk::GestureClick::new();
+            let click_id = id.clone();
+            let cb = Rc::clone(&on_clicked);
+            click.connect_released(move |gesture, _, _, _| {
+                gesture.set_state(gtk::EventSequenceState::Claimed);
+                cb(&click_id);
+            });
+            label.add_controller(click);
+
+            let keys = gtk::EventControllerKey::new();
             let id = id.clone();
             let cb = Rc::clone(&on_clicked);
-            button.connect_clicked(move |_| {
-                cb(&id);
+            keys.connect_key_pressed(move |_, key, _, _| match key {
+                gtk::gdk::Key::Return | gtk::gdk::Key::KP_Enter | gtk::gdk::Key::space => {
+                    cb(&id);
+                    gtk::glib::Propagation::Stop
+                }
+                _ => gtk::glib::Propagation::Proceed,
             });
+            label.add_controller(keys);
 
-            links_box.append_link(&button);
+            add_hover_class(&label, SUBTITLE_LINK_HOVER_CLASS);
+
+            links_box.append_link(&label);
+        }
+
+        if let Some(detail) = detail {
+            let detail_label = gtk::Label::new(Some(&format!("{DETAIL_SEPARATOR}{detail}")));
+            detail_label.add_css_class("body");
+            links_box.append_link(&detail_label);
         }
     }
 

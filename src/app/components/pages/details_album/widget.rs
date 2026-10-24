@@ -1,7 +1,7 @@
 // Widget for the album detail page.
-// Shows album art, track list, and a release info dialog (triggered by the
-// info button in the header).
+// Album art, tracks, and a release info dialog.
 
+use gettextrs::gettext;
 use gtk::prelude::*;
 use libadwaita::prelude::AdwDialogExt;
 use std::rc::Rc;
@@ -10,9 +10,9 @@ use super::release_details::ReleaseDetailsDialog;
 use super::DetailsModel;
 
 use crate::app::components::{
-    Component, DetailsPageComponent, EventListener, HasHeaderBarModel, HeaderRegistrar, PageModel,
+    Component, DetailsPageComponent, EventListener, HasHeaderBarModel, PageHeader, PageModel,
 };
-use crate::app::dispatch::Worker;
+use crate::app::models::AlbumExt;
 use crate::app::AppEvent;
 
 /// GTK widget for the album detail page.
@@ -22,35 +22,28 @@ pub struct Details {
 }
 
 impl Details {
-    pub fn new(
-        model: Rc<DetailsModel>,
-        worker: Worker,
-        registrar: HeaderRegistrar,
-        name: String,
-    ) -> Self {
-        let mut component = DetailsPageComponent::new(
-            model.clone(),
-            model.to_headerbar_model(),
-            worker,
-            registrar,
-            name,
-        );
-        component.create_playlist(None);
+    pub fn new(model: Rc<DetailsModel>, header: PageHeader) -> Self {
+        let mut component =
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), header);
+        component.create_track_list(None);
 
         let modal = ReleaseDetailsDialog::new();
 
-        // Wire the info button to open the release details dialog.
-        component.page().header().connect_info(clone!(
-            #[weak]
-            modal,
-            #[weak(rename_to = widget)]
-            component.page().widget(),
-            move || {
-                let modal = modal.upcast_ref::<libadwaita::Dialog>();
-                let parent = widget.root().and_then(|r| r.downcast::<gtk::Window>().ok());
-                modal.present(parent.as_ref());
-            }
-        ));
+        component.add_menu_entry(
+            "details",
+            &gettext("Details"),
+            clone!(
+                #[weak]
+                modal,
+                #[weak(rename_to = widget)]
+                component.page().widget(),
+                move || {
+                    let modal = modal.upcast_ref::<libadwaita::Dialog>();
+                    let parent = widget.root().and_then(|r| r.downcast::<gtk::Window>().ok());
+                    modal.present(parent.as_ref());
+                }
+            ),
+        );
 
         Self { component, modal }
     }
@@ -71,15 +64,13 @@ impl EventListener for Details {
             // Update the release details dialog when album info loads
             if self.component.model().should_refresh_details(event) {
                 if let Some(album) = self.component.model().get_album_info() {
-                    let details = &album.release_details;
-                    let desc = &album.description;
                     self.modal.set_details(
-                        &desc.title,
-                        &desc.artists_name(),
-                        &details.label,
-                        desc.release_date.as_ref().unwrap(),
-                        details.total_tracks,
-                        &details.copyright_text,
+                        &album.title,
+                        &album.artists_name(),
+                        album.label.as_deref().unwrap_or_default(),
+                        &album.release_date_string().unwrap_or_default(),
+                        album.total_tracks.unwrap_or(0) as usize,
+                        album.copyright.as_deref().unwrap_or_default(),
                     );
                 }
             }

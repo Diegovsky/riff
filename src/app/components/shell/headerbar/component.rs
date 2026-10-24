@@ -4,36 +4,42 @@ use std::rc::Rc;
 
 use glib::clone;
 
-use crate::app::components::EventListener;
-use crate::app::state::{SelectionContext, SelectionEvent};
-use crate::app::{ActionDispatcher, AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent};
+use crate::app::components::navigation_panel::NavigationPanelDestination;
+use crate::app::components::{labels, EventListener};
+use crate::app::state::{Entry, HomePage, Route, SelectionAction, SelectionEvent};
+use crate::app::{AppAction, AppEvent, AppModel, BrowserAction, BrowserEvent, Dispatcher};
 
-use super::widget::AppHeaderBar;
+use super::widget::{AppHeaderBar, HistoryMenuItem, HistorySide};
 
 /// Selection behavior the shared header needs from the active screen.
 /// Back and title are handled by the header itself.
 pub trait HeaderBarModel {
-    fn selection_context(&self) -> Option<SelectionContext>;
-    fn can_select_all(&self) -> bool;
-    fn start_selection(&self);
     fn select_all(&self);
+    fn selectable_keys(&self) -> Vec<String>;
+    fn deselect_all(&self);
     fn cancel_selection(&self);
+    fn selects_queue(&self) -> bool;
 }
 
 /// Per-screen selection hooks, wrapped into a [`HeaderBarModel`] by
 /// [`SimpleHeaderBarModelWrapper`].
 pub trait SimpleHeaderBarModel {
-    fn selection_context(&self) -> Option<SelectionContext>;
     fn select_all(&self);
+    fn selectable_keys(&self) -> Vec<String> {
+        vec![]
+    }
+    fn selects_queue(&self) -> bool {
+        false
+    }
 }
 
 pub struct SimpleHeaderBarModelWrapper<M> {
     wrapped_model: Rc<M>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl<M> SimpleHeaderBarModelWrapper<M> {
-    pub fn new(wrapped_model: Rc<M>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(wrapped_model: Rc<M>, dispatcher: Dispatcher) -> Self {
         Self {
             wrapped_model,
             dispatcher,
@@ -45,28 +51,35 @@ impl<M> HeaderBarModel for SimpleHeaderBarModelWrapper<M>
 where
     M: SimpleHeaderBarModel + 'static,
 {
-    fn selection_context(&self) -> Option<SelectionContext> {
-        self.wrapped_model.selection_context()
-    }
-
-    fn can_select_all(&self) -> bool {
-        true
-    }
-
-    fn start_selection(&self) {
-        if let Some(context) = self.wrapped_model.selection_context() {
-            self.dispatcher
-                .dispatch(AppAction::EnableSelection(context));
-        }
-    }
-
     fn select_all(&self) {
         self.wrapped_model.select_all()
+    }
+
+    fn selectable_keys(&self) -> Vec<String> {
+        self.wrapped_model.selectable_keys()
+    }
+
+    fn deselect_all(&self) {
+        self.dispatcher
+            .dispatch(SelectionAction::DeselectAll.into())
     }
 
     fn cancel_selection(&self) {
         self.dispatcher.dispatch(AppAction::CancelSelection)
     }
+
+    fn selects_queue(&self) -> bool {
+        self.wrapped_model.selects_queue()
+    }
+}
+
+fn all_selected(model: &dyn HeaderBarModel, app_model: &AppModel) -> bool {
+    let state = app_model.get_state();
+    if state.selection.count() == 0 {
+        return false;
+    }
+    let keys = model.selectable_keys();
+    !keys.is_empty() && keys.iter().all(|key| state.selection.is_song_selected(key))
 }
 
 /// Maps a header page name (see [`resolve_active_page`]) to the
@@ -74,17 +87,38 @@ where
 /// [`AppHeaderBarComponent`] reads it to rebind the header on screen changes.
 pub type HeaderModelRegistry = Rc<RefCell<HashMap<String, Rc<dyn HeaderBarModel>>>>;
 
-/// Home sub-page shown before the first [`BrowserEvent::HomeVisiblePageChanged`].
-const DEFAULT_HOME_PAGE: &str = "library";
+/// Most entries listed in a history menu.
+const HISTORY_MENU_LENGTH: usize = 10;
 
-/// Resolve which header page is active. The "home" screen hosts several
-/// sub-pages, so it follows the visible home sub-page; any other screen maps
-/// to its own identifier.
-fn resolve_active_page<'a>(current_screen: &'a str, home_page: &'a str) -> &'a str {
-    if current_screen == "home" {
-        home_page
-    } else {
-        current_screen
+fn resolve_active_page(route: &Route) -> String {
+    match route {
+        Route::Home(page) => page.id().to_string(),
+        _ => route.screen_key(),
+    }
+}
+
+fn history_menu<'a>(entries: impl Iterator<Item = &'a Entry>) -> Vec<HistoryMenuItem> {
+    entries
+        .take(HISTORY_MENU_LENGTH)
+        .map(|entry| HistoryMenuItem {
+            id: entry.id,
+            icon: route_icon(&entry.route),
+            label: entry
+                .title
+                .clone()
+                .unwrap_or_else(|| labels::route_label(&entry.route)),
+        })
+        .collect()
+}
+
+fn route_icon(route: &Route) -> &'static str {
+    match route {
+        Route::Home(HomePage::NowPlaying) => NavigationPanelDestination::NowPlaying.icon(),
+        Route::Home(_) => "paper-sheet-symbolic",
+        Route::Album(_) => "library-music-symbolic",
+        Route::Artist(_) | Route::User(_) => "avatar-default-symbolic",
+        Route::Playlist(_) => "playlist2-symbolic",
+        Route::Search => "system-search-symbolic",
     }
 }
 
@@ -95,37 +129,63 @@ pub struct AppHeaderBarComponent {
     app_model: Rc<AppModel>,
     models: HeaderModelRegistry,
     active_model: Rc<RefCell<Option<Rc<dyn HeaderBarModel>>>>,
-    home_page: String,
 }
 
 impl AppHeaderBarComponent {
     pub fn new(
         widget: AppHeaderBar,
         app_model: Rc<AppModel>,
-        dispatcher: Box<dyn ActionDispatcher>,
+        dispatcher: Dispatcher,
         models: HeaderModelRegistry,
     ) -> Self {
         let active_model: Rc<RefCell<Option<Rc<dyn HeaderBarModel>>>> = Rc::new(RefCell::new(None));
 
-        // Back navigates the browser stack.
-        widget.connect_go_back(move || dispatcher.dispatch(BrowserAction::NavigationPop.into()));
-
-        // Selection controls route to the active screen.
-        widget.connect_selection_start(clone!(
+        widget.connect_go_back(clone!(
             #[strong]
-            active_model,
-            move || {
-                if let Some(model) = active_model.borrow().as_ref() {
-                    model.start_selection();
-                }
+            dispatcher,
+            move || dispatcher.dispatch(BrowserAction::NavigationBack.into())
+        ));
+        widget.connect_go_forward(clone!(
+            #[strong]
+            dispatcher,
+            move || dispatcher.dispatch(BrowserAction::NavigationForward.into())
+        ));
+
+        widget.connect_history_menu(clone!(
+            #[weak]
+            app_model,
+            #[weak]
+            widget,
+            move |side| {
+                let state = app_model.get_state();
+                let navigator = state.browser.navigator();
+                let items = match side {
+                    HistorySide::Back => history_menu(navigator.back_entries()),
+                    HistorySide::Forward => history_menu(navigator.forward_entries()),
+                };
+                drop(state);
+                widget.show_history_menu(side, items);
             }
         ));
+        widget.connect_history_pick(clone!(
+            #[strong]
+            dispatcher,
+            move |id| dispatcher.dispatch(BrowserAction::NavigationGoTo(id).into())
+        ));
+
+        // Selection controls route to the active screen.
         widget.connect_select_all(clone!(
             #[strong]
             active_model,
+            #[weak]
+            app_model,
             move || {
                 if let Some(model) = active_model.borrow().as_ref() {
-                    model.select_all();
+                    if all_selected(&**model, &app_model) {
+                        model.deselect_all();
+                    } else {
+                        model.select_all();
+                    }
                 }
             }
         ));
@@ -144,42 +204,61 @@ impl AppHeaderBarComponent {
             app_model,
             models,
             active_model,
-            home_page: DEFAULT_HOME_PAGE.to_string(),
         }
-    }
-
-    fn current_screen_id(&self) -> String {
-        self.app_model
-            .get_state()
-            .browser
-            .current_screen()
-            .identifier()
-            .into_owned()
     }
 
     /// Recompute the active page and rebind the header's stacks and state.
     fn refresh_active(&self) {
-        let current = self.current_screen_id();
-        let active = resolve_active_page(&current, &self.home_page).to_string();
+        let active = resolve_active_page(self.app_model.get_state().browser.current_screen());
 
         self.widget.set_active(&active);
 
         let model = self.models.borrow().get(&active).cloned();
-        if let Some(ref model) = model {
-            self.widget
-                .set_selection_possible(model.selection_context().is_some());
-            self.widget.set_select_all_possible(model.can_select_all());
-        } else {
-            self.widget.set_selection_possible(false);
-            self.widget.set_select_all_possible(false);
-        }
+        self.widget.set_select_all_possible(model.is_some());
         *self.active_model.borrow_mut() = model;
 
+        let state = self.app_model.get_state();
+        self.widget.set_can_go_back(state.browser.can_go_back());
         self.widget
-            .set_can_go_back(self.app_model.get_state().browser.can_pop());
+            .set_can_go_forward(state.browser.can_go_forward());
+        drop(state);
+        self.refresh_selection();
+    }
+
+    fn selecting_here(&self) -> bool {
+        let queue = self
+            .active_model
+            .borrow()
+            .as_ref()
+            .is_some_and(|model| model.selects_queue());
+        self.app_model.get_state().selection.is_selecting_in(queue)
+    }
+
+    fn refresh_selection(&self) {
+        let active = self.selecting_here();
+        if active != self.widget.is_selection_active() {
+            self.widget.set_selection_active(active);
+        }
+        if active {
+            let count = self.app_model.get_state().selection.count();
+            self.widget.set_selection_count(count);
+        }
+        self.refresh_select_all();
+    }
+
+    fn refresh_select_all(&self) {
+        let all = self
+            .active_model
+            .borrow()
+            .as_ref()
+            .is_some_and(|model| all_selected(&**model, &self.app_model));
+        self.widget.set_all_selected(all);
     }
 
     fn cancel_active_selection(&self) {
+        if !self.selecting_here() {
+            return;
+        }
         let model = self.active_model.borrow().clone();
         if let Some(model) = model {
             model.cancel_selection();
@@ -192,25 +271,14 @@ impl EventListener for AppHeaderBarComponent {
         match event {
             AppEvent::Started => self.refresh_active(),
             AppEvent::BrowserEvent(
-                BrowserEvent::NavigationPushed(_)
-                | BrowserEvent::NavigationPopped
-                | BrowserEvent::NavigationPoppedTo(_)
-                | BrowserEvent::NavigationHidden(_),
+                BrowserEvent::NavigationChanged(_) | BrowserEvent::NavigationHidden(_),
             ) => {
                 self.cancel_active_selection();
                 self.refresh_active();
             }
-            AppEvent::BrowserEvent(BrowserEvent::HomeVisiblePageChanged(page)) => {
-                self.home_page = (*page).to_string();
-                self.refresh_active();
-            }
-            AppEvent::SelectionEvent(SelectionEvent::SelectionModeChanged(active)) => {
-                self.widget.set_selection_active(*active);
-            }
-            AppEvent::SelectionEvent(SelectionEvent::SelectionChanged) => {
-                let count = self.app_model.get_state().selection.count();
-                self.widget.set_selection_count(count);
-            }
+            AppEvent::SelectionEvent(
+                SelectionEvent::SelectionModeChanged(_) | SelectionEvent::SelectionChanged,
+            ) => self.refresh_selection(),
             _ => {}
         }
     }
@@ -219,20 +287,33 @@ impl EventListener for AppHeaderBarComponent {
 #[cfg(test)]
 mod tests {
     use super::resolve_active_page;
+    use crate::app::state::{HomePage, Route};
 
     #[test]
     fn home_screen_follows_home_sub_page() {
-        assert_eq!(resolve_active_page("home", "library"), "library");
-        assert_eq!(resolve_active_page("home", "saved_tracks"), "saved_tracks");
-        assert_eq!(resolve_active_page("home", "now_playing"), "now_playing");
+        assert_eq!(
+            resolve_active_page(&Route::Home(HomePage::Library)),
+            "library"
+        );
+        assert_eq!(
+            resolve_active_page(&Route::Home(HomePage::SavedTracks)),
+            "saved_tracks"
+        );
+        assert_eq!(
+            resolve_active_page(&Route::Home(HomePage::NowPlaying)),
+            "now_playing"
+        );
     }
 
     #[test]
-    fn pushed_screen_maps_to_itself() {
-        assert_eq!(resolve_active_page("album_123", "library"), "album_123");
-        assert_eq!(resolve_active_page("search", "saved_tracks"), "search");
+    fn other_screens_map_to_their_key() {
         assert_eq!(
-            resolve_active_page("artist_abc", "now_playing"),
+            resolve_active_page(&Route::Album("123".into())),
+            "album_123"
+        );
+        assert_eq!(resolve_active_page(&Route::Search), "search");
+        assert_eq!(
+            resolve_active_page(&Route::Artist("abc".into())),
             "artist_abc"
         );
     }

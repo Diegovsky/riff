@@ -4,25 +4,10 @@ using Adw 1;
 Adw.ApplicationWindow window {
   default-width: 1080;
   default-height: 720;
-
-  Adw.Breakpoint {
-    condition("max-width:764sp")
-
-    setters {
-      mobile_now_playing_container.visible: true;
-    }
-  }
-
-  Adw.Breakpoint {
-    condition("max-width:550sp")
-
-    setters {
-      mobile_now_playing_container.visible: true;
-      split_view.collapsed: true;
-    }
-  }
+  height-request: 380;
 
   $ShellBox {
+    // Keep in sync with pages/shortcuts/shortcuts.blp
     ShortcutController {
       scope: local;
 
@@ -37,18 +22,68 @@ Adw.ApplicationWindow window {
       }
 
       Shortcut {
-        trigger: "P";
+        trigger: "<Ctrl>bracketleft";
         action: "action(app.player_prev)";
       }
 
       Shortcut {
-        trigger: "N";
+        trigger: "<Ctrl>bracketright";
         action: "action(app.player_next)";
       }
 
       Shortcut {
-        trigger: "<Alt>Left";
-        action: "action(app.nav_pop)";
+        trigger: "<Ctrl>S";
+        action: "action(app.toggle_shuffle)";
+      }
+
+      Shortcut {
+        trigger: "<Ctrl>R";
+        action: "action(app.toggle_repeat)";
+      }
+
+      Shortcut {
+        trigger: "<Ctrl>M";
+        action: "action(app.toggle_mute)";
+      }
+
+      Shortcut {
+        trigger: "<Alt>1";
+        action: "action(app.nav_now_playing)";
+      }
+
+      Shortcut {
+        trigger: "<Alt>2";
+        action: "action(app.nav_artists)";
+      }
+
+      Shortcut {
+        trigger: "<Alt>3";
+        action: "action(app.nav_albums)";
+      }
+
+      Shortcut {
+        trigger: "<Alt>4";
+        action: "action(app.nav_playlists)";
+      }
+
+      Shortcut {
+        trigger: "<Alt>5";
+        action: "action(app.nav_tracks)";
+      }
+
+      Shortcut {
+        trigger: "F9";
+        action: "action(win.show-navigation-panel)";
+      }
+
+      Shortcut {
+        trigger: "<Alt>Left|Back";
+        action: "action(app.nav_back)";
+      }
+
+      Shortcut {
+        trigger: "<Alt>Right|Forward";
+        action: "action(app.nav_forward)";
       }
 
       Shortcut {
@@ -57,104 +92,167 @@ Adw.ApplicationWindow window {
       }
     }
 
+    ShortcutController arrow_shortcuts {
+      scope: local;
+      propagation-phase: capture;
+
+      Shortcut {
+        trigger: "<Ctrl>Left";
+        action: "action(app.seek_backward)";
+      }
+
+      Shortcut {
+        trigger: "<Ctrl>Right";
+        action: "action(app.seek_forward)";
+      }
+
+      Shortcut {
+        trigger: "<Ctrl>Down";
+        action: "action(app.volume_down)";
+      }
+
+      Shortcut {
+        trigger: "<Ctrl>Up";
+        action: "action(app.volume_up)";
+      }
+
+      Shortcut {
+        trigger: "<Ctrl><Shift>Left";
+        action: "action(app.player_prev)";
+      }
+
+      Shortcut {
+        trigger: "<Ctrl><Shift>Right";
+        action: "action(app.player_next)";
+      }
+    }
+
     Adw.ToastOverlay toast_overlay {
       vexpand: true;
 
-      Adw.NavigationSplitView split_view {
-        vexpand: true;
+      // Bottom sheet
+      Adw.BottomSheet bottom_sheet {
+        reveal-bottom-bar: false;
+        // Narrow windows only. Beside the content, the queue isn't in the
+        // sheet: the bar shows the current track and doesn't open
+        bottom-bar: $QueueBarWidget queue_bar {
+          height-request: 36;
+        };
+        full-width: false;
 
-        sidebar: Adw.NavigationPage {
-          title: "Sidebar";
+        // Dropped by the narrow breakpoints (see shell/layout)
+        styles [
+          "bottom-sheet--padded",
+        ]
 
-          child: Box sidebar_panel {
-            orientation: vertical;
+        content: Adw.OverlaySplitView utility_split {
+          sidebar-position: end;
+          show-sidebar: false;
+          pin-sidebar: true;
+          sidebar-width-unit: px;
+          // The bottom sheet's bottom bar is over the content: the content
+          // ends above it
+          margin-bottom: bind bottom_sheet.bottom-bar-height;
 
-            Adw.HeaderBar sidebar_header {
-              styles ["flat"]
+          // An OverlaySplitView collapses without reparenting its children,
+          // which would rebuild every page
+          content: Adw.OverlaySplitView navigation_split {
+            vexpand: true;
+            pin-sidebar: true;
+            sidebar-width-unit: px;
 
-              Button search_button {
-                icon-name: "system-search-symbolic";
-                tooltip-text: _("Search");
-                focus-on-click: false;
-                can-focus: false;
+            // Navigation panel
+            sidebar: Box navigation_panel {
+              Box {
+                orientation: vertical;
+                hexpand: true;
+
+                Adw.HeaderBar navigation_panel_header {
+                  styles [
+                    "flat",
+                  ]
+
+                  Button search_button {
+                    icon-name: "system-search-symbolic";
+                    tooltip-text: _("Search");
+                    focus-on-click: false;
+                    can-focus: false;
+                  }
+
+                  [title]
+                  Adw.WindowTitle {
+                    title: "Riff";
+                  }
+
+                  [end]
+                  MenuButton user {
+                    icon-name: "open-menu-symbolic";
+                    tooltip-text: _("Main Menu");
+                    // Opens with F10
+                    primary: true;
+                    focus-on-click: false;
+                    can-focus: false;
+                  }
+                }
+
+                ScrolledWindow {
+                  hscrollbar-policy: never;
+
+                  ListBox home_listbox {
+                    vexpand: true;
+
+                    styles [
+                      "navigation-sidebar",
+                    ]
+                  }
+                }
               }
 
-              [title]
-              Adw.WindowTitle {
-                title: "Riff";
-              }
-
-              [end]
-              MenuButton user {
-                icon-name: "open-menu-symbolic";
-                tooltip-text: _("Main Menu");
-                focus-on-click: false;
-                can-focus: false;
-              }
-            }
-
-            ScrolledWindow {
-              hscrollbar-policy: never;
-              ListBox home_listbox {
-                width-request: 200;
-                vexpand: true;
+              // The drag itself is on the split view (see shell/layout)
+              Box navigation_resize_handle {
+                width-request: 6;
 
                 styles [
-                  "navigation-sidebar",
+                  "navigation-panel__resize-handle",
                 ]
               }
-            }
+            };
+
+            // Content panel. In a ClipBin, so the panels are never squeezed
+            // for it while they slide (see shell/layout/clip_bin.rs)
+            content: $ClipBin {
+              child: Box content_panel {
+                orientation: vertical;
+
+                $AppHeaderBar app_header {}
+
+                Stack content_stack {
+                  hexpand: true;
+                  vexpand: true;
+                  transition-type: slide_left_right;
+                }
+              };
+            };
           };
-        };
 
-        content: Adw.NavigationPage {
-          tag: "content";
-          title: "Home";
-
-          child: Box {
-            orientation: vertical;
-
-            $AppHeaderBar app_header {
-            }
-
-            Stack navigation_stack {
-              hexpand: true;
-              vexpand: true;
-              transition-type: slide_left_right;
-            }
-          };
+          // Utility panel
+          sidebar: $UtilityPanelWidget utility_panel {};
         };
       }
     }
 
-    // Trailing children of ShellBox, pinned to the bottom at fixed height.
-    // See shell/window/shell_box.rs.
-    Box mobile_now_playing_container {
-      visible: false;
-      hexpand: true;
-
-      $PlaybackInfoMobileWidget mobile_now_playing {
-        visible: false;
-        hexpand: true;
-        height-request: 36;
-
-        styles [
-          "mobile-now-playing",
-        ]
-      }
-    }
-
+    // Playback bar, with the selection toolbar over it
     Overlay {
       hexpand: true;
 
       $PlaybackWidget playback {
-        hexpand: "1";
+        hexpand: true;
         vexpand: false;
       }
 
       [overlay]
       $SelectionToolbarWidget selection_toolbar {
-        hexpand: "1";
+        hexpand: true;
       }
     }
   }
@@ -163,8 +261,45 @@ Adw.ApplicationWindow window {
 Adw.AboutDialog about {
   application-name: "Riff";
   application-icon: "dev.diegovsky.Riff";
+  developer-name: "The Riff Team";
   website: "https://github.com/Diegovsky/riff";
   support-url: "https://discord.gg/rAAvFSC7VQ";
   issue-url: "https://github.com/Diegovsky/riff/issues";
   license-type: mit_x11;
+}
+
+menu main_menu {
+  section {
+    item {
+      label: _("Preferences");
+      action: "win.preferences";
+    }
+
+    item {
+      label: _("Keyboard Shortcuts");
+      action: "win.show-shortcuts";
+    }
+
+    item {
+      label: _("Report Issue");
+      action: "menu.report-issue";
+    }
+
+    item {
+      label: _("About Riff");
+      action: "menu.about";
+    }
+  }
+
+  section {
+    item {
+      label: _("Log Out");
+      action: "menu.logout";
+    }
+
+    item {
+      label: _("Quit");
+      action: "app.quit";
+    }
+  }
 }

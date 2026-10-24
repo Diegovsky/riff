@@ -1,0 +1,9 @@
+button.drawer-handle {
+  min-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+button.drawer-handle image {
+  -gtk-icon-size: 22px;
+}

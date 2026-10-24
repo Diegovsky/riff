@@ -2,16 +2,16 @@ name: riff-quality
 
 on:
   push:
-    branches: [master, development]
+    branches: [main, development]
   pull_request:
-    branches: [master, development]
+    branches: [main, development]
 
 jobs:
   rustfmt:
     name: "Rustfmt"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -23,34 +23,66 @@ jobs:
       - name: Add empty config.rs
         run: echo > src/config.rs
 
+      # Create minimal stub of spotify-api crate as it is not committed.
+      - name: Create generated crate stub
+        run: |
+          mkdir -p generated/spotify-api/src
+          printf '[package]\nname = "spotify-api"\nversion = "0.0.0"\nedition = "2021"\n' > generated/spotify-api/Cargo.toml
+          echo > generated/spotify-api/src/lib.rs
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
   blueprint-lint:
     name: "Blueprint Lint"
     runs-on: ubuntu-latest
-    # Ubuntu's apt libadwaita typelib lags behind; run in a Fedora container
-    # that ships libadwaita 1.7 so blueprints using Adw 1.7 widgets (e.g.
-    # Adw.WrapBox) validate against the version the app actually builds against.
     container:
-      image: fedora:42
+      image: fedora:44
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install dependencies
         run: dnf install -y blueprint-compiler gtk4-devel libadwaita-devel libxml2 python3
 
       - name: Run blueprint lint
-        run: ./scripts/lint-blueprints.sh
+        run: ./scripts/checks/lint-blueprints.sh
 
   shellcheck:
     name: "ShellCheck"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install shellcheck
         run: sudo apt-get -y update && sudo apt-get -y install shellcheck
 
       - name: Run shellcheck
         run: find "$GITHUB_WORKSPACE" -type f -name "*.sh" -print0 | xargs -0 shellcheck
+
+  check-icons:
+    name: "Bundled Icons"
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:44
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: dnf install -y gtk4 libadwaita glib2-devel findutils
+
+      - name: Check every referenced icon is bundled
+        run: ./scripts/checks/check-icons.sh
+
+  translations:
+    name: "Translations"
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:44
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install gettext
+        run: dnf install -y gettext
+
+      - name: Check POTFILES, pot and po files are up to date
+        run: ./scripts/checks/check-translations.sh

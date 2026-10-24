@@ -1,3 +1,4 @@
+mod close_dialog;
 mod shell_box;
 pub use shell_box::expose_widgets;
 
@@ -5,14 +6,15 @@ use gettextrs::gettext;
 use gio::prelude::SettingsExt;
 use gtk::prelude::*;
 use libadwaita::prelude::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::app::components::EventListener;
+use crate::app::state::LoginEvent;
 use crate::app::{AppEvent, AppModel};
 use crate::settings::{CloseWindowBehavior, WindowGeometry};
 
-const SETTINGS: &str = "dev.diegovsky.Riff";
+use riff_config::settings::SETTINGS;
 
 thread_local! {
     static WINDOW_GEOMETRY: RefCell<WindowGeometry> = const { RefCell::new(WindowGeometry {
@@ -23,6 +25,7 @@ thread_local! {
 pub struct MainWindow {
     initial_window_geometry: WindowGeometry,
     window: libadwaita::ApplicationWindow,
+    logged_in: Cell<bool>,
 }
 
 impl MainWindow {
@@ -54,7 +57,7 @@ impl MainWindow {
                     }
                     CloseWindowBehavior::StopAndQuit => glib::Propagation::Proceed,
                     CloseWindowBehavior::Ask => {
-                        Self::show_close_dialog(window);
+                        close_dialog::show(window);
                         glib::Propagation::Stop
                     }
                 }
@@ -73,63 +76,8 @@ impl MainWindow {
         Self {
             initial_window_geometry,
             window,
+            logged_in: Cell::new(false),
         }
-    }
-
-    fn show_close_dialog(window: &libadwaita::ApplicationWindow) {
-        let dialog = libadwaita::AlertDialog::new(
-            Some(&gettext("Riff is still playing")),
-            Some(&gettext(
-                "What should Riff do if you close it while audio is playing?",
-            )),
-        );
-
-        dialog.add_response("background", &gettext("Continue in Background"));
-        dialog.add_response("quit", &gettext("Stop Audio and Quit"));
-
-        dialog.set_response_appearance("quit", libadwaita::ResponseAppearance::Destructive);
-        dialog.set_default_response(Some("background"));
-        dialog.set_close_response("background");
-        dialog.set_prefer_wide_layout(true);
-
-        let remember_check = gtk::CheckButton::with_label(&gettext("Remember my choice"));
-        remember_check.set_halign(gtk::Align::Center);
-        dialog.set_extra_child(Some(&remember_check));
-
-        dialog.choose(
-            window,
-            None::<&gio::Cancellable>,
-            clone!(
-                #[weak]
-                window,
-                move |response| {
-                    let settings = gio::Settings::new(SETTINGS);
-                    match response.as_str() {
-                        "quit" => {
-                            if remember_check.is_active() {
-                                let _ = settings.set_enum(
-                                    "close-window-behavior",
-                                    CloseWindowBehavior::StopAndQuit as i32,
-                                );
-                            }
-                            if let Some(app) = window.application() {
-                                app.quit();
-                            }
-                        }
-                        _ => {
-                            // "background" or dialog dismissed
-                            if remember_check.is_active() {
-                                let _ = settings.set_enum(
-                                    "close-window-behavior",
-                                    CloseWindowBehavior::MinimizeToBackground as i32,
-                                );
-                            }
-                            window.set_visible(false);
-                        }
-                    }
-                }
-            ),
-        );
     }
 
     fn show_drm_blocked_dialog(&self) {
@@ -158,11 +106,22 @@ impl MainWindow {
         if self.initial_window_geometry.is_maximized {
             self.window.maximize();
         }
-        self.window.present();
     }
 
     fn raise(&self) {
+        if self.logged_in.get() {
+            self.window.present();
+        }
+    }
+
+    fn show(&self) {
+        self.logged_in.set(true);
         self.window.present();
+    }
+
+    fn hide(&self) {
+        self.logged_in.set(false);
+        self.window.set_visible(false);
     }
 
     fn save_window_geometry<W: GtkWindowExt>(window: &W) {
@@ -185,6 +144,8 @@ impl EventListener for MainWindow {
             AppEvent::Started => self.start(),
             AppEvent::Raised => self.raise(),
             AppEvent::DrmBlockedDialogShown => self.show_drm_blocked_dialog(),
+            AppEvent::LoginEvent(LoginEvent::LoginCompleted) => self.show(),
+            AppEvent::LoginEvent(LoginEvent::LogoutCompleted) => self.hide(),
             _ => {}
         }
     }

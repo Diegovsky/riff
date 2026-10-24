@@ -1,23 +1,18 @@
-use crate::app::state::ScreenName;
-use crate::app::{ActionDispatcher, AppModel, BrowserAction};
-use std::ops::Deref;
+use crate::app::state::EntryId;
+use crate::app::{AppModel, BrowserAction, Dispatcher};
 use std::rc::Rc;
 
 pub struct NavigationModel {
     app_model: Rc<AppModel>,
-    dispatcher: Box<dyn ActionDispatcher>,
+    dispatcher: Dispatcher,
 }
 
 impl NavigationModel {
-    pub fn new(app_model: Rc<AppModel>, dispatcher: Box<dyn ActionDispatcher>) -> Self {
+    pub fn new(app_model: Rc<AppModel>, dispatcher: Dispatcher) -> Self {
         Self {
             app_model,
             dispatcher,
         }
-    }
-
-    pub fn visible_child_name(&self) -> impl Deref<Target = ScreenName> + '_ {
-        self.app_model.map_state(|s| s.browser.current_screen())
     }
 
     pub fn set_nav_hidden(&self, hidden: bool) {
@@ -25,7 +20,20 @@ impl NavigationModel {
             .dispatch(BrowserAction::SetNavigationHidden(hidden).into());
     }
 
-    pub fn children_count(&self) -> usize {
-        self.app_model.get_state().browser.count()
+    pub fn go_back(&self) {
+        self.dispatcher
+            .dispatch(BrowserAction::NavigationBack.into());
+    }
+
+    pub fn go_forward(&self) {
+        if self.app_model.get_state().browser.can_go_forward() {
+            self.dispatcher
+                .dispatch(BrowserAction::NavigationForward.into());
+        }
+    }
+
+    pub fn save_scroll(&self, entry: EntryId, scroll: f64) {
+        self.dispatcher
+            .dispatch(BrowserAction::SaveScroll(entry, scroll.max(0.0) as u32).into());
     }
 }

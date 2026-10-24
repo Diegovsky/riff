@@ -2,40 +2,124 @@
 // Shows playlist art, track list, and supports inline title editing
 // when the user owns the playlist and selection mode is toggled.
 
+use gtk::prelude::*;
+use libadwaita::prelude::*;
+use std::cell::Cell;
 use std::rc::Rc;
 
 use super::PlaylistDetailsModel;
 
+use crate::app::components::utils::{confirm_delete_playlist, decode_px};
 use crate::app::components::{
-    Component, DetailsPageComponent, EventListener, HasHeaderBarModel, HeaderRegistrar,
+    labels, Component, DetailsPageComponent, EventListener, HasHeaderBarModel, PageHeader,
+    PlaylistDialog,
 };
-use crate::app::dispatch::Worker;
-use crate::app::state::SelectionEvent;
-use crate::app::AppEvent;
+use crate::app::load;
+use crate::app::state::{BrowserEvent, SelectionEvent};
+use crate::app::{AppEvent, ProvidesApi};
+use riff_api::models::is_resource_url;
+
+const EDIT_DETAILS_ENTRY: &str = "edit_details";
+
+const COVER_PREVIEW_SIZE: i32 = 160;
 
 /// GTK widget for the playlist detail page.
 pub struct PlaylistDetails {
     model: Rc<PlaylistDetailsModel>,
     component: DetailsPageComponent<PlaylistDetailsModel>,
+    owner_menu_added: Cell<bool>,
 }
 
 impl PlaylistDetails {
-    pub fn new(
-        model: Rc<PlaylistDetailsModel>,
-        worker: Worker,
-        registrar: HeaderRegistrar,
-        name: String,
-    ) -> Self {
-        let mut component = DetailsPageComponent::new(
-            model.clone(),
-            model.to_headerbar_model(),
-            worker,
-            registrar,
-            name,
-        );
-        component.create_playlist(None);
+    pub fn new(model: Rc<PlaylistDetailsModel>, header: PageHeader) -> Self {
+        let mut component =
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), header);
+        component.create_track_list(None);
 
-        Self { model, component }
+        Self {
+            model,
+            component,
+            owner_menu_added: Cell::new(false),
+        }
+    }
+
+    fn add_owner_menu(&self) {
+        if self.owner_menu_added.get() || !self.model.is_playlist_editable() {
+            return;
+        }
+        self.owner_menu_added.set(true);
+
+        self.component.add_menu_entry(
+            EDIT_DETAILS_ENTRY,
+            &labels::EDIT_PLAYLIST_DETAILS,
+            clone!(
+                #[weak(rename_to = model)]
+                self.model,
+                #[weak(rename_to = widget)]
+                self.component.page().widget(),
+                move || Self::show_edit_dialog(&model, &widget)
+            ),
+        );
+        self.component.add_menu_entry(
+            "delete",
+            &labels::DELETE_PLAYLIST,
+            clone!(
+                #[weak(rename_to = model)]
+                self.model,
+                #[weak(rename_to = widget)]
+                self.component.page().widget(),
+                move || Self::confirm_delete(&model, &widget)
+            ),
+        );
+    }
+
+    fn show_edit_dialog(model: &Rc<PlaylistDetailsModel>, widget: &impl IsA<gtk::Widget>) {
+        let Some((name, description, public, cover)) = model.get_playlist_info().map(|p| {
+            let cover = p.art.best_for_width(COVER_PREVIEW_SIZE as u32);
+            (
+                p.title.clone(),
+                p.description.clone(),
+                p.public,
+                cover.filter(|url| !is_resource_url(url)).map(str::to_owned),
+            )
+        }) else {
+            return;
+        };
+        let dialog =
+            PlaylistDialog::for_editing(&name, description.as_deref(), public == Some(true));
+        if let Some(url) = cover {
+            let api = model.api_service();
+            let size = decode_px(COVER_PREVIEW_SIZE);
+            let tag = load::visible();
+            glib::spawn_future_local(clone!(
+                #[weak]
+                dialog,
+                async move {
+                    if let Some(texture) = api.load_image(&url, size, size, tag).await {
+                        dialog.set_current_cover(&texture);
+                    }
+                }
+            ));
+        }
+        dialog.connect_save(clone!(
+            #[weak]
+            model,
+            #[upgrade_or_else]
+            || tokio::sync::oneshot::channel().1,
+            move |form| model.edit_playlist(form)
+        ));
+        dialog.present(Some(widget));
+    }
+
+    fn confirm_delete(model: &Rc<PlaylistDetailsModel>, widget: &impl IsA<gtk::Widget>) {
+        confirm_delete_playlist(
+            Some(widget.upcast_ref()),
+            clone!(
+                #[weak]
+                model,
+                move || model.delete_playlist()
+            ),
+        );
     }
 
     fn set_editing(&self, editing: bool) {
@@ -68,8 +152,18 @@ impl Component for PlaylistDetails {
 impl EventListener for PlaylistDetails {
     fn on_event(&mut self, event: &AppEvent) {
         self.component.handle_event(event);
-        if let AppEvent::SelectionEvent(SelectionEvent::SelectionModeChanged(active)) = event {
-            self.set_editing(*active);
+        match event {
+            AppEvent::SelectionEvent(SelectionEvent::SelectionModeChanged(active)) => {
+                self.set_editing(*active);
+            }
+            AppEvent::BrowserEvent(
+                BrowserEvent::PlaylistDetailsLoaded(id)
+                | BrowserEvent::PlaylistTracksAppended(id)
+                | BrowserEvent::PlaylistTracksRemoved(id),
+            ) if *id == self.model.id => {
+                self.add_owner_menu();
+            }
+            _ => {}
         }
         self.broadcast_event(event);
     }

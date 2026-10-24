@@ -9,11 +9,13 @@ mod selection_state;
 mod settings_state;
 mod spotify_link;
 
-pub use app_model::AppModel;
+pub use app_model::{AppModel, ProvidesApi};
 pub use app_state::*;
 pub use browser_state::*;
 pub use login_state::*;
 pub use playback_state::*;
+pub use riff_core::navigation::{Direction, Entry, EntryId, HomePage, Route, Transition};
+pub use riff_core::play_queue::EntryKey;
 pub use screen_states::*;
 pub use selection_state::*;
 pub use settings_state::*;

@@ -9,8 +9,32 @@ on:
   workflow_dispatch:
 
 jobs:
+  generate-spotify-api-crate:
+    name: "Generate Spotify API crate"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Generate Spotify API crate
+        run: ./scripts/api/generate-spotify-api.sh
+
+      - name: Upload generated crate
+        uses: actions/upload-artifact@v7
+        with:
+          name: spotify-api-crate
+          path: generated/spotify-api
+          include-hidden-files: true
+          retention-days: 1
+
   flatpak:
     name: "Flatpak ${{ matrix.variant.arch }}"
+    needs: [generate-spotify-api-crate]
     runs-on: ${{ matrix.variant.runner }}
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
@@ -23,9 +47,14 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+
+      - name: Download generated Spotify API crate
+        uses: actions/download-artifact@v8
         with:
-          ref: development
+          name: spotify-api-crate
+          path: generated/spotify-api
+
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: riff-${{ matrix.variant.arch }}.flatpak
@@ -38,12 +67,13 @@ jobs:
     needs: [flatpak]
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    permissions: write-all
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
@@ -56,7 +86,7 @@ jobs:
           ls -la release-files/
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: "snapshot-${{ github.run_number }}"
           name: "Riff Snapshot Build #${{ github.run_number }}"

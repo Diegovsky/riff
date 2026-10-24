@@ -5,10 +5,10 @@ use std::rc::Rc;
 
 use super::SavedTracksModel;
 use crate::app::components::{
-    Component, DetailsPageComponent, EventListener, HasHeaderBarModel, HeaderRegistrar,
+    Component, DetailsPageComponent, EventListener, HasHeaderBarModel, PageHeader,
 };
 use crate::app::state::LoginEvent;
-use crate::app::{AppEvent, Worker};
+use crate::app::AppEvent;
 
 /// GTK widget for the saved tracks (liked songs) detail page.
 pub struct SavedTracks {
@@ -17,20 +17,10 @@ pub struct SavedTracks {
 }
 
 impl SavedTracks {
-    pub fn new(
-        model: Rc<SavedTracksModel>,
-        worker: Worker,
-        registrar: HeaderRegistrar,
-        name: String,
-    ) -> Self {
-        let mut component = DetailsPageComponent::new(
-            model.clone(),
-            model.to_headerbar_model(),
-            worker,
-            registrar,
-            name,
-        );
-        component.create_playlist(None);
+    pub fn new(model: Rc<SavedTracksModel>, header: PageHeader) -> Self {
+        let mut component =
+            DetailsPageComponent::new(model.clone(), model.to_headerbar_model(), header);
+        component.create_track_list(None);
 
         Self { model, component }
     }

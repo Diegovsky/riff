@@ -9,12 +9,11 @@ use crate::app::components::utils::Debouncer;
 use crate::app::components::widgets::card_list::card_view_menu::CardViewMenu;
 use crate::app::components::{
     display_add_css_provider, CardLayout, CardList, CardListModel, CardSize, CardWidget, Component,
-    EventListener, HeaderRegistrar, ImageShape, Playlist, SortOrder, CLAMP_MAX_SIZE,
+    EventListener, ImageShape, PageHeader, SortOrder, TrackList, CLAMP_MAX_SIZE,
 };
-use crate::app::dispatch::Worker;
-use crate::app::models::{CardModel, SearchType, SongDescription};
+use crate::app::models::{CardModel, SearchType, Track};
 use crate::app::state::{AppEvent, BrowserEvent};
-use crate::app::{ActionDispatcher, ListStore};
+use crate::app::{Dispatcher, ListStore};
 
 use super::{SearchResultsModel, SearchScopeCardsModel, SearchScopeTracksModel};
 
@@ -103,7 +102,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct SearchResultsWidget(ObjectSubclass<imp::SearchResultsWidget>) @extends gtk::Widget, gtk::Box;
+    pub struct SearchResultsWidget(ObjectSubclass<imp::SearchResultsWidget>) @extends gtk::Widget, gtk::Box,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 impl Default for SearchResultsWidget {
@@ -221,6 +221,13 @@ struct SearchSectionModel {
     store: ListStore<CardModel>,
     shape: ImageShape,
     on_activated: Box<dyn Fn(String)>,
+    api_service: std::sync::Arc<riff_api::ApiService>,
+}
+
+impl crate::app::ProvidesApi for SearchSectionModel {
+    fn api_service(&self) -> std::sync::Arc<riff_api::ApiService> {
+        self.api_service.clone()
+    }
 }
 
 impl CardListModel for SearchSectionModel {
@@ -281,14 +288,13 @@ fn build_section(
     filter: SearchType,
     section: &Rc<SearchSectionModel>,
     model: &Rc<SearchResultsModel>,
-    worker: &Worker,
     layout: CardLayout,
     size: CardSize,
 ) -> Rc<CardList> {
     container.append(&make_section_header(title, filter, model));
     let card_list = Rc::new(CardList::new());
     container.append(card_list.widget());
-    card_list.bind(section, worker.clone(), layout, size);
+    card_list.bind(section, layout, size);
     card_list.set_max_rows(Some(SECTION_MAX_ROWS));
     card_list.widget().set_margin_bottom(SECTION_BOTTOM_MARGIN);
     card_list
@@ -317,20 +323,18 @@ pub struct SearchResults {
     view_menu: CardViewMenu,
     layout: Rc<Cell<CardLayout>>,
     size: Rc<Cell<CardSize>>,
-    worker: Worker,
     debouncer: Debouncer,
     children: Vec<Box<dyn EventListener>>,
-    registrar: HeaderRegistrar,
+    header: PageHeader,
 }
 
 impl SearchResults {
     pub fn new(
         model: SearchResultsModel,
-        worker: Worker,
         layout: Rc<Cell<CardLayout>>,
         size: Rc<Cell<CardSize>>,
-        dispatcher: Rc<dyn ActionDispatcher>,
-        registrar: HeaderRegistrar,
+        dispatcher: Dispatcher,
+        header: PageHeader,
     ) -> Self {
         display_add_css_provider(resource!("/components/search.css"));
 
@@ -340,17 +344,20 @@ impl SearchResults {
         // Move the search bar into the shared header as this screen's title.
         let search_bar = widget.imp().search_bar.get();
         widget.remove(&search_bar);
-        registrar.add_title("search", &search_bar);
+        header.set_title_widget(&search_bar);
 
         // --- Combined ("all") view: Tracks / Artists / Albums sections ---
         let all_box = gtk::Box::new(gtk::Orientation::Vertical, SECTION_SPACING);
 
+        let section_api_service = model.app_model().api();
+
         let track_section = Rc::new(SearchSectionModel {
             store: ListStore::new(),
             shape: ImageShape::Square,
-            // Tracks need the full SongDescription, so activation is wired
+            // Tracks need the full Track, so activation is wired
             // separately via connect_child_activated below rather than by id.
             on_activated: Box::new(|_| {}),
+            api_service: section_api_service.clone(),
         });
         let artist_section = Rc::new(SearchSectionModel {
             store: ListStore::new(),
@@ -360,6 +367,7 @@ impl SearchResults {
                 model,
                 move |id| model.open_artist(id)
             )),
+            api_service: section_api_service.clone(),
         });
         let album_section = Rc::new(SearchSectionModel {
             store: ListStore::new(),
@@ -369,6 +377,7 @@ impl SearchResults {
                 model,
                 move |id| model.open_album(id)
             )),
+            api_service: section_api_service.clone(),
         });
         let playlist_section = Rc::new(SearchSectionModel {
             store: ListStore::new(),
@@ -378,6 +387,7 @@ impl SearchResults {
                 model,
                 move |id| model.open_playlist(id)
             )),
+            api_service: section_api_service.clone(),
         });
 
         let track_card_list = build_section(
@@ -386,16 +396,15 @@ impl SearchResults {
             SearchType::Tracks,
             &track_section,
             &model,
-            &worker,
             layout.get(),
             size.get(),
         );
 
-        // Override track activation to pass the full SongDescription.
+        // Override track activation to pass the full Track.
         let track_section_clone = Rc::clone(&track_section);
         let model_weak = Rc::downgrade(&model);
         track_card_list
-            .widget()
+            .flowbox()
             .connect_child_activated(move |_, child| {
                 let Some(card_widget) = child.child().and_then(|w| w.downcast::<CardWidget>().ok())
                 else {
@@ -411,7 +420,7 @@ impl SearchResults {
                 if let Some(card_model) = track_section_clone.store.iter().find(|c| c.id() == id) {
                     if let Some(song) = card_model
                         .data()
-                        .and_then(|d| d.downcast_ref::<SongDescription>().cloned())
+                        .and_then(|d| d.downcast_ref::<Track>().cloned())
                     {
                         m.open_track(song);
                     }
@@ -424,7 +433,6 @@ impl SearchResults {
             SearchType::Artists,
             &artist_section,
             &model,
-            &worker,
             layout.get(),
             size.get(),
         );
@@ -435,7 +443,6 @@ impl SearchResults {
             SearchType::Albums,
             &album_section,
             &model,
-            &worker,
             layout.get(),
             size.get(),
         );
@@ -446,7 +453,6 @@ impl SearchResults {
             SearchType::Playlists,
             &playlist_section,
             &model,
-            &worker,
             layout.get(),
             size.get(),
         );
@@ -454,23 +460,20 @@ impl SearchResults {
         // --- Scoped card view (artists / albums / playlists) ---
         let scope_cards_model = Rc::new(SearchScopeCardsModel::new(
             model.app_model(),
-            dispatcher.box_clone(),
+            dispatcher.clone(),
         ));
         let scope_card_list = Rc::new(CardList::new());
-        scope_card_list.bind(&scope_cards_model, worker.clone(), layout.get(), size.get());
+        scope_card_list.bind(&scope_cards_model, layout.get(), size.get());
 
         // --- Scoped track view (songs) ---
         let scope_tracks_model = Rc::new(SearchScopeTracksModel::new(
             model.app_model(),
-            dispatcher.box_clone(),
+            dispatcher.clone(),
         ));
         let track_listview =
             gtk::ListView::new(None::<gtk::NoSelection>, None::<gtk::ListItemFactory>);
-        let scope_playlist = Playlist::new(
-            track_listview.clone(),
-            Rc::clone(&scope_tracks_model),
-            worker.clone(),
-        );
+        let scope_track_list =
+            TrackList::new(track_listview.clone(), Rc::clone(&scope_tracks_model));
 
         // Constrain the track list width to match the Now Playing page.
         track_listview.set_hexpand(true);
@@ -495,6 +498,8 @@ impl SearchResults {
         content_stack.set_visible_child_name(PAGE_ALL);
         widget.imp().results_box.append(&content_stack);
 
+        scope_track_list.connect_scrolling();
+
         // Card view menu (layout/size/sort controls) in the headerbar.
         let current_sort = Rc::new(Cell::new(SortOrder::RecentlyAdded));
         let view_menu = CardViewMenu::new(
@@ -503,10 +508,12 @@ impl SearchResults {
             Rc::clone(&layout),
             Rc::clone(&size),
             current_sort,
+            &[],
+            |_, _| {},
             Rc::clone(&track_card_list),
-            Rc::clone(&dispatcher),
+            dispatcher.clone(),
         );
-        registrar.add_end("search", view_menu.widget());
+        header.add_end(view_menu.widget());
 
         widget.connect_search_updated(clone!(
             #[weak]
@@ -554,10 +561,9 @@ impl SearchResults {
             view_menu,
             layout,
             size,
-            worker,
             debouncer: Debouncer::new(),
-            children: vec![Box::new(scope_playlist)],
-            registrar,
+            children: vec![Box::new(scope_track_list)],
+            header,
         }
     }
 
@@ -568,19 +574,24 @@ impl SearchResults {
 
         let tracks: Vec<CardModel> = results
             .tracks
-            .songs
+            .items
             .iter()
             .map(|track| CardModel::from(track).with_data(track.clone()))
             .collect();
         replace_store_contents(&self.track_section.store, tracks);
 
-        let artists: Vec<CardModel> = results.artists.iter().map(CardModel::from).collect();
+        let artists: Vec<CardModel> = results.artists.items.iter().map(CardModel::from).collect();
         replace_store_contents(&self.artist_section.store, artists);
 
-        let albums: Vec<CardModel> = results.albums.iter().map(CardModel::from).collect();
+        let albums: Vec<CardModel> = results.albums.items.iter().map(CardModel::from).collect();
         replace_store_contents(&self.album_section.store, albums);
 
-        let playlists: Vec<CardModel> = results.playlists.iter().map(CardModel::from).collect();
+        let playlists: Vec<CardModel> = results
+            .playlists
+            .items
+            .iter()
+            .map(CardModel::from)
+            .collect();
         replace_store_contents(&self.playlist_section.store, playlists);
     }
 
@@ -631,7 +642,6 @@ impl SearchResults {
                 // Rebind so the correct image shape (round for artists) applies.
                 self.scope_card_list.bind(
                     &self.scope_cards_model,
-                    self.worker.clone(),
                     self.layout.get(),
                     self.size.get(),
                 );
@@ -657,7 +667,7 @@ impl SearchResults {
 
 impl Drop for SearchResults {
     fn drop(&mut self) {
-        self.registrar.remove("search");
+        self.header.remove();
     }
 }
 

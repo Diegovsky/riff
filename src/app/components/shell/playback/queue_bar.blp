@@ -1,0 +1,62 @@
+using Gtk 4.0;
+using Adw 1;
+
+// The bar at the bottom of narrow windows: a drag handle (or the current
+// track) that makes way for the track playing or next (see queue_bar.rs).
+template $QueueBarWidget : Adw.Bin {
+  child: Stack stack {
+    transition-type: slide_left;
+    transition-duration: 400;
+
+    StackPage {
+      name: "rest";
+
+      child: Box {
+        Box {
+          visible: bind template.show-track inverted;
+          hexpand: true;
+          halign: center;
+          valign: center;
+
+          styles [
+            "queue-bar__handle",
+          ]
+        }
+
+        Label track_label {
+          visible: bind template.show-track;
+          hexpand: true;
+          ellipsize: end;
+          single-line-mode: true;
+          margin-start: 12;
+          margin-end: 12;
+
+          styles [
+            "queue-bar__text",
+          ]
+        }
+      };
+    }
+
+    StackPage {
+      name: "text";
+
+      child: ScrolledWindow scroller {
+        hscrollbar-policy: external;
+        vscrollbar-policy: never;
+        propagate-natural-height: true;
+
+        child: Label label {
+          single-line-mode: true;
+          xalign: 0.5;
+          margin-start: 12;
+          margin-end: 12;
+
+          styles [
+            "queue-bar__text",
+          ]
+        };
+      };
+    }
+  };
+}

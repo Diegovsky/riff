@@ -1,0 +1,32 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $Drawer : Adw.Bin {
+  EventControllerMotion motion {}
+
+  child: Overlay {
+    child: Revealer revealer {
+      transition-type: slide_right;
+      reveal-child: true;
+      overflow: hidden;
+    };
+
+    [overlay]
+    Button handle {
+      visible: false;
+      halign: start;
+      icon-name: "drawer-handle-symbolic";
+      focus-on-click: false;
+      can-focus: false;
+
+      layout {
+        measure: true;
+      }
+
+      styles [
+        "flat",
+        "drawer-handle",
+      ]
+    }
+  };
+}

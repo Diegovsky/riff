@@ -7,16 +7,54 @@ use std::{cell::Ref, ops::Deref};
 use crate::app::components::utils::format_duration;
 use crate::app::models::*;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QueueRole {
+    Queued,
+    Context,
+    Current,
+    Fixed,
+}
+
 // UI model for a song
 glib::wrapper! {
     pub struct SongModel(ObjectSubclass<imp::SongModel>);
 }
 
 impl SongModel {
-    pub fn new(song: SongDescription) -> Self {
+    pub fn new(song: Track) -> Self {
         let o: Self = glib::Object::new();
         o.imp().song.replace(Some(song));
         o
+    }
+
+    pub fn new_keyed(song: Track, key: String) -> Self {
+        let o = Self::new(song);
+        o.imp().key.replace(Some(key));
+        o
+    }
+
+    pub fn set_queue_role(&self, role: Option<QueueRole>) {
+        self.imp().queue_role.set(role);
+    }
+
+    pub fn queue_role(&self) -> Option<QueueRole> {
+        self.imp().queue_role.get()
+    }
+
+    pub fn set_group(&self, group: Option<String>) {
+        self.imp().group.replace(group);
+    }
+
+    pub fn group(&self) -> Option<String> {
+        self.imp().group.borrow().clone()
+    }
+
+    pub fn row_key(&self) -> String {
+        self.imp()
+            .key
+            .borrow()
+            .clone()
+            .unwrap_or_else(|| self.get_id())
     }
 
     pub fn set_playing(&self, is_playing: bool) {
@@ -29,6 +67,10 @@ impl SongModel {
 
     pub fn set_liked(&self, is_liked: bool) {
         self.set_property("liked", is_liked);
+    }
+
+    pub fn set_pinned(&self, is_pinned: bool) {
+        self.set_property("pinned", is_pinned);
     }
 
     pub fn set_explicit_filtered(&self, is_explicit_filtered: bool) {
@@ -45,6 +87,10 @@ impl SongModel {
 
     pub fn get_liked(&self) -> bool {
         self.property("liked")
+    }
+
+    pub fn get_pinned(&self) -> bool {
+        self.property("pinned")
     }
 
     pub fn get_id(&self) -> String {
@@ -123,17 +169,26 @@ impl SongModel {
         );
     }
 
-    pub fn unbind_all(&self) {
-        self.imp().unbind_all(self);
+    pub fn begin_bindings(&self, owner: usize) {
+        self.unbind(owner);
+        self.imp().binding_owner.set(owner);
     }
 
-    pub fn description(&self) -> impl Deref<Target = SongDescription> + '_ {
+    pub fn unbind(&self, owner: usize) {
+        self.imp().unbind(self, owner);
+    }
+
+    pub fn push_signal(&self, id: SignalHandlerId) {
+        self.imp().push_signal(id);
+    }
+
+    pub fn description(&self) -> impl Deref<Target = Track> + '_ {
         Ref::map(self.imp().song.borrow(), |s| {
             s.as_ref().expect("song set at constructor")
         })
     }
 
-    pub fn into_description(&self) -> SongDescription {
+    pub fn into_description(&self) -> Track {
         self.imp()
             .song
             .borrow()
@@ -147,8 +202,10 @@ mod imp {
 
     use super::*;
     use std::cell::{Cell, RefCell};
+    use std::collections::HashMap;
 
-    // Keep track of signals and bindings targeting this song
+    // Keep track of signals and bindings targeting this song, by the row
+    // they are for
     #[derive(Default)]
     struct BindingsInner {
         pub signals: Vec<SignalHandlerId>,
@@ -157,24 +214,35 @@ mod imp {
 
     #[derive(Default)]
     pub struct SongModel {
-        pub song: RefCell<Option<SongDescription>>,
+        pub song: RefCell<Option<Track>>,
+        pub key: RefCell<Option<String>>,
+        pub queue_role: Cell<Option<QueueRole>>,
+        pub group: RefCell<Option<String>>,
         pub state: Cell<SongState>,
-        bindings: RefCell<BindingsInner>,
+        bindings: RefCell<HashMap<usize, BindingsInner>>,
+        pub binding_owner: Cell<usize>,
     }
 
     impl SongModel {
+        fn with_owner_bindings(&self, f: impl FnOnce(&mut BindingsInner)) {
+            let mut bindings = self.bindings.borrow_mut();
+            f(bindings.entry(self.binding_owner.get()).or_default());
+        }
+
         pub fn push_signal(&self, id: SignalHandlerId) {
-            self.bindings.borrow_mut().signals.push(id);
+            self.with_owner_bindings(|b| b.signals.push(id));
         }
 
         pub fn push_binding(&self, binding: glib::Binding) {
-            self.bindings.borrow_mut().bindings.push(binding);
+            self.with_owner_bindings(|b| b.bindings.push(binding));
         }
 
-        pub fn unbind_all<O: ObjectExt>(&self, o: &O) {
-            let mut bindings = self.bindings.borrow_mut();
-            bindings.signals.drain(..).for_each(|s| o.disconnect(s));
-            bindings.bindings.drain(..).for_each(|b| b.unbind());
+        pub fn unbind<O: ObjectExt>(&self, o: &O, owner: usize) {
+            let Some(bindings) = self.bindings.borrow_mut().remove(&owner) else {
+                return;
+            };
+            bindings.signals.into_iter().for_each(|s| o.disconnect(s));
+            bindings.bindings.into_iter().for_each(|b| b.unbind());
         }
     }
 
@@ -186,7 +254,7 @@ mod imp {
     }
 
     lazy_static! {
-        static ref PROPERTIES: [glib::ParamSpec; 11] = [
+        static ref PROPERTIES: [glib::ParamSpec; 12] = [
             glib::ParamSpecString::builder("id").read_only().build(),
             glib::ParamSpecUInt::builder("index").read_only().build(),
             glib::ParamSpecString::builder("title").read_only().build(),
@@ -199,18 +267,26 @@ mod imp {
             // Can be true when playback is paused; just means this is the current song
             glib::ParamSpecBoolean::builder("playing")
                 .readwrite()
+                .explicit_notify()
                 .build(),
             glib::ParamSpecBoolean::builder("selected")
                 .readwrite()
+                .explicit_notify()
                 .build(),
             glib::ParamSpecBoolean::builder("liked")
                 .readwrite()
+                .explicit_notify()
+                .build(),
+            glib::ParamSpecBoolean::builder("pinned")
+                .readwrite()
+                .explicit_notify()
                 .build(),
             glib::ParamSpecBoolean::builder("playable")
                 .read_only()
                 .build(),
             glib::ParamSpecBoolean::builder("explicit-filtered")
                 .readwrite()
+                .explicit_notify()
                 .build(),
         ];
     }
@@ -221,77 +297,47 @@ mod imp {
         }
 
         fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
-            match pspec.name() {
-                "playing" => {
-                    let is_playing = value
+            let state = self.state.get();
+            let new_state = match pspec.name() {
+                "playing" => SongState {
+                    is_playing: value
                         .get()
-                        .expect("type conformity checked by `Object::set_property`");
-                    let SongState {
-                        is_selected,
-                        is_liked,
-                        is_explicit_filtered,
-                        ..
-                    } = self.state.get();
-                    self.state.set(SongState {
-                        is_playing,
-                        is_selected,
-                        is_liked,
-                        is_explicit_filtered,
-                    });
-                }
-                "selected" => {
-                    let is_selected = value
+                        .expect("type conformity checked by `Object::set_property`"),
+                    ..state
+                },
+                "selected" => SongState {
+                    is_selected: value
                         .get()
-                        .expect("type conformity checked by `Object::set_property`");
-                    let SongState {
-                        is_playing,
-                        is_liked,
-                        is_explicit_filtered,
-                        ..
-                    } = self.state.get();
-                    self.state.set(SongState {
-                        is_playing,
-                        is_selected,
-                        is_liked,
-                        is_explicit_filtered,
-                    });
-                }
-                "liked" => {
-                    let is_liked = value
+                        .expect("type conformity checked by `Object::set_property`"),
+                    ..state
+                },
+                "liked" => SongState {
+                    is_liked: value
                         .get()
-                        .expect("type conformity checked by `Object::set_property`");
-                    let SongState {
-                        is_playing,
-                        is_selected,
-                        is_explicit_filtered,
-                        ..
-                    } = self.state.get();
-                    self.state.set(SongState {
-                        is_playing,
-                        is_selected,
-                        is_liked,
-                        is_explicit_filtered,
-                    });
-                }
-                "explicit-filtered" => {
-                    let is_explicit_filtered = value
+                        .expect("type conformity checked by `Object::set_property`"),
+                    ..state
+                },
+                "pinned" => SongState {
+                    is_pinned: value
                         .get()
-                        .expect("type conformity checked by `Object::set_property`");
-                    let SongState {
-                        is_playing,
-                        is_selected,
-                        is_liked,
-                        ..
-                    } = self.state.get();
-                    self.state.set(SongState {
-                        is_playing,
-                        is_selected,
-                        is_liked,
-                        is_explicit_filtered,
-                    });
-                }
+                        .expect("type conformity checked by `Object::set_property`"),
+                    ..state
+                },
+                "explicit-filtered" => SongState {
+                    is_explicit_filtered: value
+                        .get()
+                        .expect("type conformity checked by `Object::set_property`"),
+                    ..state
+                },
                 _ => unimplemented!(),
+            };
+
+            if new_state == state {
+                return;
             }
+            self.state.set(new_state);
+            // These properties are `explicit_notify`, so we own the notification.
+            self.obj().notify_by_pspec(pspec);
         }
 
         fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
@@ -323,6 +369,7 @@ mod imp {
                     .borrow()
                     .as_ref()
                     .expect("song set at constructor")
+                    .rri
                     .id
                     .to_value(),
                 "duration" => self
@@ -338,13 +385,13 @@ mod imp {
                     .as_ref()
                     .expect("song set at constructor")
                     .art
-                    .as_ref()
-                    .and_then(|s| s.best_for_width(48))
+                    .best_for_width(48)
                     .map(str::to_owned)
                     .to_value(),
                 "playing" => self.state.get().is_playing.to_value(),
                 "selected" => self.state.get().is_selected.to_value(),
                 "liked" => self.state.get().is_liked.to_value(),
+                "pinned" => self.state.get().is_pinned.to_value(),
                 "playable" => self
                     .song
                     .borrow()
@@ -356,5 +403,97 @@ mod imp {
                 _ => unimplemented!(),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::models::make_track;
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    #[test]
+    fn test_unbinding_a_row_leaves_the_song_bound_to_its_other_rows() {
+        let song = SongModel::new(make_track("song1"));
+        let (row_a, row_b) = (
+            SongModel::new(make_track("a")),
+            SongModel::new(make_track("b")),
+        );
+        let is_selected = |row: &SongModel| row.property::<bool>("selected");
+
+        song.begin_bindings(1);
+        song.bind_selected(&row_a, "selected");
+        song.begin_bindings(2);
+        song.bind_selected(&row_b, "selected");
+        song.set_selected(true);
+        assert!(is_selected(&row_a) && is_selected(&row_b));
+
+        song.unbind(2);
+        song.set_selected(false);
+        assert!(!is_selected(&row_a) && is_selected(&row_b));
+
+        song.begin_bindings(1);
+        song.set_selected(true);
+        assert!(!is_selected(&row_a));
+    }
+
+    fn count_notifications(property: &str, apply: impl Fn(&SongModel)) -> u32 {
+        let model = SongModel::new(make_track("song1"));
+        let count = Rc::new(Cell::new(0u32));
+        let counter = count.clone();
+        model.connect_notify_local(Some(property), move |_, _| {
+            counter.set(counter.get() + 1);
+        });
+        apply(&model);
+        count.get()
+    }
+
+    #[test]
+    fn test_state_setters_do_not_notify_when_unchanged() {
+        // Song state is re-seeded in bulk on most app events, usually with the
+        // values the model already holds. Listeners on these properties can be
+        // expensive, so a no-op set must stay silent.
+        assert_eq!(
+            count_notifications("liked", |m| {
+                m.set_liked(false);
+                m.set_liked(false);
+            }),
+            0
+        );
+        assert_eq!(count_notifications("playing", |m| m.set_playing(false)), 0);
+        assert_eq!(
+            count_notifications("selected", |m| m.set_selected(false)),
+            0
+        );
+        assert_eq!(
+            count_notifications("explicit-filtered", |m| m.set_explicit_filtered(false)),
+            0
+        );
+    }
+
+    #[test]
+    fn test_state_setters_notify_once_per_change() {
+        assert_eq!(
+            count_notifications("liked", |m| {
+                m.set_liked(true);
+                m.set_liked(true);
+                m.set_liked(false);
+            }),
+            2
+        );
+    }
+
+    #[test]
+    fn test_state_setters_update_values() {
+        let model = SongModel::new(make_track("song1"));
+        model.set_liked(true);
+        model.set_playing(true);
+        model.set_selected(true);
+        model.set_explicit_filtered(true);
+        assert!(model.get_liked());
+        assert!(model.get_playing());
+        assert!(model.get_selected());
+        assert!(model.property::<bool>("explicit-filtered"));
     }
 }

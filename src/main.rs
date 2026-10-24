@@ -7,32 +7,39 @@ extern crate lazy_static;
 extern crate log;
 extern crate gettextrs;
 
-use app::state::ScreenName;
+use app::state::{HomePage, Route};
 use futures::channel::mpsc::UnboundedSender;
 use gettextrs::*;
 use gio::prelude::*;
 use gio::ApplicationFlags;
 use gio::SimpleAction;
 use gtk::prelude::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-mod about;
-mod api;
 mod app;
-mod audio_engine;
-mod auth;
 mod config;
 mod connect;
 mod dbus;
-pub mod feature_flags;
 mod inhibitor;
 mod player;
 mod settings;
 
 use crate::app::components::expose_custom_widgets;
-use crate::app::dispatch::{spawn_task_handler, DispatchLoop};
+use crate::app::dispatch::DispatchLoop;
 use crate::app::{state::PlaybackAction, App, AppAction, BrowserAction};
 
+// Steps of the seek and volume shortcuts
+const SEEK_STEP_MS: i32 = 5_000;
+const VOLUME_STEP: f64 = 0.05;
+#[cfg(target_env = "gnu")]
+const MALLOC_ARENAS: libc::c_int = 4;
+
 fn main() {
+    #[cfg(target_env = "gnu")]
+    unsafe {
+        libc::mallopt(libc::M_ARENA_MAX, MALLOC_ARENAS);
+    }
+
     let settings = settings::RiffSettings::new_from_gsettings().unwrap_or_default();
     setup_gtk(&settings);
 
@@ -57,15 +64,15 @@ fn main() {
 
     // Couple of actions used with shortcuts
     register_actions(&gtk_app, sender.clone());
-    about::setup_about(builder.object::<libadwaita::AboutDialog>("about").unwrap());
+    // Displayed as the accelerator hint next to "Preferences" in the main menu.
+    gtk_app.set_accels_for_action("win.preferences", &["<Ctrl>comma"]);
+    // Displayed as the accelerator hint next to "Keyboard Shortcuts" in the main menu.
+    gtk_app.set_accels_for_action("win.show-shortcuts", &["<Ctrl>question"]);
+    app::components::setup_about(builder.object::<libadwaita::AboutDialog>("about").unwrap());
+    setup_arrow_shortcuts(&window, builder.object("arrow_shortcuts").unwrap());
 
     // Main app logic is hooked up here
-    let app = App::new(
-        settings,
-        builder,
-        sender.clone(),
-        spawn_task_handler(&context),
-    );
+    let app = App::new(settings, builder, sender.clone());
     context.spawn_local(app.attach(dispatch_loop));
 
     let sender_clone = sender.clone();
@@ -85,7 +92,9 @@ fn main() {
         gtk_app.activate();
 
         // There should only be one target because %u is used in desktop file
-        let target = &targets[0];
+        let Some(target) = targets.first() else {
+            return;
+        };
         let uri = target.uri().to_string();
         let action = AppAction::OpenURI(uri)
             .unwrap_or_else(|| AppAction::ShowNotification(gettext("Failed to open link!")));
@@ -96,7 +105,26 @@ fn main() {
         gtk_app.run();
     });
 
+    if RESTART_REQUESTED.load(Ordering::Relaxed) {
+        relaunch();
+    }
+
     std::process::exit(0);
+}
+
+static RESTART_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+fn relaunch() {
+    use std::os::unix::process::CommandExt;
+
+    let Ok(exe) = std::env::current_exe() else {
+        error!("Cannot restart: unknown executable path");
+        return;
+    };
+    let err = std::process::Command::new(exe)
+        .args(std::env::args_os().skip(1))
+        .exec();
+    error!("Cannot restart: {err}");
 }
 
 fn setup_gtk(settings: &settings::RiffSettings) {
@@ -130,6 +158,21 @@ fn setup_gtk(settings: &settings::RiffSettings) {
     );
 }
 
+fn setup_arrow_shortcuts(
+    window: &libadwaita::ApplicationWindow,
+    shortcuts: gtk::ShortcutController,
+) {
+    window.connect_focus_widget_notify(move |window| {
+        let typing = GtkWindowExt::focus(window)
+            .is_some_and(|focus| focus.is::<gtk::Text>() || focus.is::<gtk::TextView>());
+        shortcuts.set_propagation_phase(if typing {
+            gtk::PropagationPhase::None
+        } else {
+            gtk::PropagationPhase::Capture
+        });
+    });
+}
+
 fn register_actions(app: &gtk::Application, sender: UnboundedSender<AppAction>) {
     let quit = SimpleAction::new("quit", None);
     quit.connect_activate(clone!(
@@ -143,6 +186,34 @@ fn register_actions(app: &gtk::Application, sender: UnboundedSender<AppAction>) 
         }
     ));
     app.add_action(&quit);
+
+    let restart = SimpleAction::new("restart", None);
+    restart.connect_activate(clone!(
+        #[weak]
+        app,
+        move |_, _| {
+            RESTART_REQUESTED.store(true, Ordering::Relaxed);
+            app.quit();
+        }
+    ));
+    app.add_action(&restart);
+
+    let resize_window =
+        SimpleAction::new("resize_window", Some(glib::VariantTy::new("(ii)").unwrap()));
+    resize_window.connect_activate(clone!(
+        #[weak]
+        app,
+        move |_, parameter| {
+            let Some((width, height)) = parameter.and_then(|p| p.get::<(i32, i32)>()) else {
+                return;
+            };
+            if let Some(window) = app.active_window() {
+                window.unmaximize();
+                window.set_default_size(width, height);
+            }
+        }
+    ));
+    app.add_action(&resize_window);
 
     app.add_action(&make_action(
         "toggle_playback",
@@ -163,29 +234,79 @@ fn register_actions(app: &gtk::Application, sender: UnboundedSender<AppAction>) 
     ));
 
     app.add_action(&make_action(
-        "nav_pop",
-        AppAction::BrowserAction(BrowserAction::NavigationPop),
+        "toggle_shuffle",
+        PlaybackAction::ToggleShuffle.into(),
+        sender.clone(),
+    ));
+
+    app.add_action(&make_action(
+        "toggle_repeat",
+        PlaybackAction::ToggleRepeat.into(),
+        sender.clone(),
+    ));
+
+    app.add_action(&make_action(
+        "seek_backward",
+        PlaybackAction::SeekBy(-SEEK_STEP_MS).into(),
+        sender.clone(),
+    ));
+
+    app.add_action(&make_action(
+        "seek_forward",
+        PlaybackAction::SeekBy(SEEK_STEP_MS).into(),
+        sender.clone(),
+    ));
+
+    app.add_action(&make_action(
+        "volume_down",
+        PlaybackAction::AdjustVolume(-VOLUME_STEP).into(),
+        sender.clone(),
+    ));
+
+    app.add_action(&make_action(
+        "volume_up",
+        PlaybackAction::AdjustVolume(VOLUME_STEP).into(),
+        sender.clone(),
+    ));
+
+    app.add_action(&make_action(
+        "toggle_mute",
+        PlaybackAction::ToggleMute.into(),
+        sender.clone(),
+    ));
+
+    for (name, page) in [
+        ("nav_now_playing", HomePage::NowPlaying),
+        ("nav_artists", HomePage::SavedArtists),
+        ("nav_albums", HomePage::Library),
+        ("nav_playlists", HomePage::SavedPlaylists),
+        ("nav_tracks", HomePage::SavedTracks),
+    ] {
+        // Same as picking the page in the navigation panel
+        app.add_action(&make_action(
+            name,
+            BrowserAction::Navigate(Route::Home(page)).into(),
+            sender.clone(),
+        ));
+    }
+
+    app.add_action(&make_action(
+        "nav_back",
+        AppAction::BrowserAction(BrowserAction::NavigationBack),
+        sender.clone(),
+    ));
+
+    app.add_action(&make_action(
+        "nav_forward",
+        AppAction::BrowserAction(BrowserAction::NavigationForward),
         sender.clone(),
     ));
 
     app.add_action(&make_action(
         "search",
-        AppAction::BrowserAction(BrowserAction::NavigationPush(ScreenName::Search)),
+        AppAction::BrowserAction(BrowserAction::Navigate(Route::Search)),
         sender.clone(),
     ));
-
-    app.add_action(&{
-        let action = SimpleAction::new("open_playlist", Some(glib::VariantTy::STRING));
-        action.set_enabled(true);
-        action.connect_activate(move |_, playlist_id| {
-            if let Some(id) = playlist_id.and_then(|s| s.str()) {
-                sender
-                    .unbounded_send(AppAction::ViewPlaylist(id.to_owned()))
-                    .unwrap();
-            }
-        });
-        action
-    });
 }
 
 fn make_action(

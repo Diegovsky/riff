@@ -3,13 +3,20 @@ use gtk::subclass::prelude::*;
 use gtk::{glib, CompositeTemplate};
 
 use crate::app::components::display_add_css_provider;
-use crate::app::components::utils::{format_duration, Clock, Debouncer};
-use crate::app::loader::ImageLoader;
+use crate::app::components::utils::{decode_px, format_duration, Clock, Debouncer};
 use crate::app::models::RepeatMode;
-use crate::app::Worker;
+
+use riff_api::models::is_resource_url;
+use riff_api::ApiService;
+
+use crate::app::load;
+use std::sync::Arc;
 
 use super::playback_controls::PlaybackControlsWidget;
 use super::playback_info::PlaybackInfoWidget;
+
+/// Matches the artwork size request in playback_info.blp.
+const ARTWORK_SIZE: i32 = 56;
 
 mod imp {
 
@@ -41,6 +48,9 @@ mod imp {
 
         #[template_child]
         pub volume_slider: TemplateChild<gtk::Scale>,
+
+        #[template_child]
+        pub queue_button: TemplateChild<gtk::ToggleButton>,
 
         pub clock: Clock,
     }
@@ -98,7 +108,8 @@ mod imp {
 }
 
 glib::wrapper! {
-    pub struct PlaybackWidget(ObjectSubclass<imp::PlaybackWidget>) @extends gtk::Widget, gtk::Box;
+    pub struct PlaybackWidget(ObjectSubclass<imp::PlaybackWidget>) @extends gtk::Widget, gtk::Box,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 impl PlaybackWidget {
@@ -117,18 +128,24 @@ impl PlaybackWidget {
         self.set_song_duration(None);
     }
 
-    fn set_artwork(&self, image: &gdk_pixbuf::Pixbuf) {
+    fn set_artwork(&self, texture: &gdk::Texture) {
         let widget = self.imp();
-        widget.now_playing.set_artwork(image);
+        widget.now_playing.set_artwork(texture);
     }
 
-    pub fn set_artwork_from_url(&self, url: String, worker: &Worker) {
+    pub fn set_artwork_from_url(&self, url: String, api_service: Arc<ApiService>) {
+        if is_resource_url(&url) {
+            self.imp().now_playing.set_missing_artwork();
+            return;
+        }
         let weak_self = self.downgrade();
-        worker.send_local_task(async move {
-            let loader = ImageLoader::new();
-            let result = loader.load_remote(&url, "jpg", 48, 48).await;
-            if let (Some(ref _self), Some(ref result)) = (weak_self.upgrade(), result) {
-                _self.set_artwork(result);
+        // Not part of any page, so it rides the current epoch.
+        let tag = load::transport();
+        let size = decode_px(ARTWORK_SIZE);
+        glib::MainContext::default().spawn_local(async move {
+            let result = api_service.load_image(&url, size, size, tag).await;
+            if let (Some(ref _self), Some(ref texture)) = (weak_self.upgrade(), result) {
+                _self.set_artwork(texture);
             }
         });
     }

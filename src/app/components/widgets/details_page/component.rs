@@ -1,101 +1,108 @@
 use gtk::prelude::*;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use super::{is_playback_event, DetailsPage, PageModel};
+use super::header::DETAIL_SEPARATOR;
+use super::{is_playback_event, DetailsHeader, DetailsPage, DetailsSectionWidget, PinnedPageModel};
 use crate::app::components::{
-    CardLayout, CardList, CardListModel, CardSize, Component, EmbeddedCardList, EventListener,
-    FilterToggle, HeaderBarModel, HeaderRegistrar, Playlist, PlaylistModel, SortOrder,
+    filter_matches_nothing, labels, CardLayout, CardList, CardListModel, CardSize, Component,
+    EmbeddedCardList, EventListener, HeaderBarModel, PageHeader, SortOrder, TrackList,
+    TrackListModel,
 };
-use crate::app::dispatch::Worker;
-use crate::app::{ActionDispatcher, AppEvent};
+use crate::app::{AppEvent, Dispatcher};
+use riff_config::feature_flags::{is_enabled, FeatureFlag};
+
+const QUEUE: &str = "queue";
 
 /// A generic details page component that wires all standard behavior
 /// from a `PageModel` implementation automatically.
 pub struct DetailsPageComponent<M> {
     model: Rc<M>,
-    worker: Worker,
     page: DetailsPage,
     content: gtk::Box,
     children: Vec<Box<dyn EventListener>>,
-    registrar: HeaderRegistrar,
-    name: String,
-    header_title: libadwaita::WindowTitle,
-    end_box: gtk::Box,
+    header: PageHeader,
+    // Header menu entries added by the page
+    page_menu: Rc<RefCell<Vec<(String, String, Rc<dyn Fn()>)>>>,
 }
 
-impl<M: PageModel + 'static> DetailsPageComponent<M> {
+/// Sync the pin segment of the like+pin control from the model's current state.
+fn set_pin_button_state<M: PinnedPageModel>(model: &M, header: &DetailsHeader) {
+    let pin_enabled = is_enabled(FeatureFlag::PinnedObjects);
+    header.set_pin_enabled(pin_enabled);
+    let pin_visible = pin_enabled && model.is_liked();
+    header.set_pin_visible(pin_visible);
+    if pin_visible {
+        header.set_pinned(model.is_pinned());
+    }
+}
+
+impl<M: PinnedPageModel + 'static> DetailsPageComponent<M> {
     /// Create a details page with an internal content box.
     ///
-    /// Use [`Self::create_playlist`] and [`Self::create_card_list`] to append
+    /// Use [`Self::create_track_list`] and [`Self::create_card_list`] to append
     /// widgets into the content area in call order.
     pub fn new<H: HeaderBarModel + 'static>(
         model: Rc<M>,
         headerbar_model: Rc<H>,
-        worker: Worker,
-        registrar: HeaderRegistrar,
-        name: String,
+        header: PageHeader,
     ) -> Self {
-        let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        let page = DetailsPage::new(model.header_image_shape(), &content);
+        let page = DetailsPage::new(model.header_image_shape());
+        let content = page.content().clone();
 
-        // Register this screen's header contribution: a scroll-revealed title,
-        // an end-button container, and the selection/back model.
-        let header_title = registrar.add_title_widget(&name);
-        page.connect_title_reveal(&header_title);
-        let end_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        registrar.add_end(&name, &end_box);
-        registrar.register_model(&name, headerbar_model);
+        header.set_title_revealed(false);
+        page.connect_title_reveal(clone!(
+            #[strong]
+            header,
+            move |revealed| header.set_title_revealed(revealed)
+        ));
+        header.set_model(headerbar_model);
 
         let mut c = Self {
             model,
-            worker,
             page,
             content,
             children: vec![],
-            registrar,
-            name,
-            header_title,
-            end_box,
+            header,
+            page_menu: Default::default(),
         };
         c.wire();
         c
     }
 
-    /// Append a widget to this page's end area in the shared header.
-    pub fn add_header_end(&self, widget: &impl IsA<gtk::Widget>) {
-        self.end_box.append(widget);
+    pub fn header(&self) -> &PageHeader {
+        &self.header
     }
 
-    /// Create a [`Playlist`] child, appending an optional label and a `ListView`
-    /// to the content box. Registers the playlist as an event listener.
-    pub fn create_playlist(&mut self, label: Option<&str>)
+    /// For content with its own component, like a `QueueList`.
+    pub fn append_content(&self, widget: &impl IsA<gtk::Widget>) {
+        self.content.append(widget);
+    }
+
+    /// Create a [`TrackList`] child, appending an optional label and a `ListView`
+    /// to the content box. Registers the track list as an event listener.
+    pub fn create_track_list(&mut self, label: Option<&str>) -> gtk::ListView
     where
-        M: PlaylistModel,
+        M: TrackListModel,
     {
-        if let Some(text) = label {
-            let lbl = gtk::Label::builder()
-                .label(text)
-                .halign(gtk::Align::Start)
-                .css_classes(["title-4", "skeleton"])
-                .margin_bottom(16)
-                .build();
-            self.content.append(&lbl);
-        }
         let listview = gtk::ListView::new(None::<gtk::NoSelection>, None::<gtk::ListItemFactory>);
-        listview.set_margin_bottom(16);
-        self.content.append(&listview);
-        let playlist = Box::new(Playlist::new(
-            listview,
-            self.model.clone(),
-            self.worker.clone(),
-        ));
-        self.children.push(playlist);
+        let section = DetailsSectionWidget::new(label, &listview);
+        section.add_css_class("details-section--tracks");
+        self.content.append(&section);
+
+        let track_list = TrackList::new(listview.clone(), self.model.clone());
+        // Requires an ancestor ScrolledWindow, provided by DetailsPage; must
+        // run after the listview above is appended into the page's content.
+        track_list.connect_scrolling();
+        self.children.push(Box::new(track_list));
+        listview
     }
 
     /// Create an [`EmbeddedCardList`] with view controls, appending it to the content box
-    /// and registering it as an event listener. Packs the view button into the headerbar.
-    /// If the model provides filter options, a filter toggle bar is shown inline with the label.
+    /// and registering it as an event listener.
+    ///
+    /// The view button sits inline beside the label, and moves into the headerbar
+    /// once the label row scrolls out of view. Returns the card grid.
     pub fn create_embedded_card_list(
         &mut self,
         label: Option<&str>,
@@ -103,82 +110,25 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         available_sorts: &[SortOrder],
         shared_layout: Rc<Cell<CardLayout>>,
         shared_size: Rc<Cell<CardSize>>,
-        dispatcher: Rc<dyn ActionDispatcher>,
-    ) where
+        dispatcher: Dispatcher,
+    ) -> gtk::Widget
+    where
         M: CardListModel,
     {
-        let filter_options = self.model.filter_options();
-        let has_filters = !filter_options.is_empty();
-
         let card_list = Rc::new(CardList::new());
-        card_list.widget().set_margin_bottom(16);
+        let grid = card_list.widget().clone();
+        let section = DetailsSectionWidget::new(label, card_list.widget());
+        self.content.append(&section);
 
-        if has_filters {
-            // Header row: label (left, hexpand) + filter toggle (right, shrinkable)
-            let header_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-            header_row.set_margin_bottom(10);
-
-            if let Some(text) = label {
-                let lbl = gtk::Label::builder()
-                    .label(text)
-                    .halign(gtk::Align::Start)
-                    .hexpand(true)
-                    .css_classes(["title-4", "skeleton"])
-                    .build();
-                header_row.append(&lbl);
+        let on_filter_changed = clone!(
+            #[weak]
+            section,
+            move |category: &str, visible_count: usize| {
+                section.set_empty(filter_matches_nothing(category, visible_count));
             }
-
-            // Empty state label shown when a filter matches nothing
-            let empty_label = gtk::Label::builder()
-                .label("")
-                .halign(gtk::Align::Center)
-                .valign(gtk::Align::Center)
-                .margin_top(24)
-                .margin_bottom(24)
-                .css_classes(["dim-label"])
-                .visible(false)
-                .build();
-
-            let empty_label_ref = empty_label.clone();
-            let filter_widget = FilterToggle::new(
-                &filter_options,
-                Rc::clone(&card_list),
-                move |category, visible_count| {
-                    if category.is_empty() {
-                        empty_label_ref.set_visible(false);
-                    } else if visible_count == 0 {
-                        let msg = gettextrs::gettext("No items found for this filter");
-                        empty_label_ref.set_label(&msg);
-                        empty_label_ref.set_visible(true);
-                    } else {
-                        empty_label_ref.set_visible(false);
-                    }
-                },
-            );
-
-            header_row.append(&filter_widget);
-            self.content.append(&header_row);
-            self.content.append(&empty_label);
-        } else if let Some(text) = label {
-            // No filters - just append a plain label
-            let lbl = gtk::Label::builder()
-                .label(text)
-                .halign(gtk::Align::Start)
-                .hexpand(true)
-                .css_classes(["title-4", "skeleton"])
-                .margin_bottom(10)
-                .build();
-            self.content.append(&lbl);
-        }
-
-        self.content.append(card_list.widget());
-
-        card_list.bind(
-            &self.model,
-            self.worker.clone(),
-            CardLayout::Vertical,
-            CardSize::Large,
         );
+
+        card_list.bind(&self.model, CardLayout::Vertical, CardSize::Large);
         card_list.show_placeholders();
 
         let embedded = EmbeddedCardList::new(
@@ -187,10 +137,51 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             available_sorts,
             shared_layout,
             shared_size,
+            &self.model.filter_options(),
+            on_filter_changed,
+            {
+                let model = Rc::downgrade(&self.model);
+                move || model.upgrade().and_then(|m| m.playing_card())
+            },
             dispatcher,
         );
-        self.add_header_end(embedded.view_button());
+
+        let button = embedded.view_button().clone();
+        section.set_button(&button);
+        let button_slot = section.button_slot().clone();
+
+        // Weak, so the handler on the page's scroll adjustment doesn't keep
+        // the button and its slots alive.
+        self.page.connect_scrolled_past(
+            section.header_row().upcast_ref(),
+            clone!(
+                #[weak]
+                button,
+                #[weak]
+                button_slot,
+                #[strong(rename_to = header)]
+                self.header,
+                move |past| {
+                    if past {
+                        // Keep the row's height once the button leaves it, so
+                        // the content below doesn't shift.
+                        button_slot.set_height_request(button_slot.height());
+                        if button.parent().as_ref() == Some(button_slot.upcast_ref()) {
+                            button_slot.remove(&button);
+                        }
+                        header.add_end(&button);
+                    } else {
+                        header.remove_end(&button);
+                        if button.parent().is_none() {
+                            button_slot.append(&button);
+                        }
+                    }
+                }
+            ),
+        );
+
         self.children.push(Box::new(embedded));
+        grid
     }
 
     pub fn page(&self) -> &DetailsPage {
@@ -203,6 +194,50 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
 
     pub fn add_child(&mut self, child: Box<dyn EventListener>) {
         self.children.push(child);
+    }
+
+    /// For entries that need the page's widgets, like a dialog.
+    pub fn add_menu_entry(&self, id: &str, label: &str, on_activate: impl Fn() + 'static) {
+        self.page_menu
+            .borrow_mut()
+            .push((id.to_string(), label.to_string(), Rc::new(on_activate)));
+        self.refresh_menu();
+    }
+
+    fn refresh_menu(&self) {
+        let mut queue = vec![];
+        if self.model.has_queue_menu() {
+            queue.push((QUEUE.to_string(), labels::ADD_TO_QUEUE.clone()));
+        }
+        let mut other = self.model.header_menu_entries();
+        other.extend(
+            self.page_menu
+                .borrow()
+                .iter()
+                .map(|(id, label, _)| (id.clone(), label.clone())),
+        );
+        let page_menu = Rc::downgrade(&self.page_menu);
+        self.page.header().set_menu(
+            &[queue, other],
+            clone!(
+                #[weak(rename_to = m)]
+                self.model,
+                move |id| {
+                    let page_entry = page_menu.upgrade().and_then(|entries| {
+                        entries
+                            .borrow()
+                            .iter()
+                            .find(|(entry, _, _)| entry == id)
+                            .map(|(_, _, f)| f.clone())
+                    });
+                    match (id, page_entry) {
+                        (_, Some(on_activate)) => on_activate(),
+                        (QUEUE, None) => m.queue_all(),
+                        (other, None) => m.on_header_menu(other),
+                    }
+                }
+            ),
+        );
     }
 
     /// Wire up signal handlers and initial state based on the model's `PageModel` impl.
@@ -221,20 +256,32 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             ));
         }
 
+        self.refresh_menu();
+
         if self.model.has_like_button() {
             self.page.header().connect_liked(clone!(
                 #[weak(rename_to = m)]
                 self.model,
                 move || m.toggle_like()
             ));
-        }
-
-        if self.model.has_info_button() {
-            self.page.header().connect_info(clone!(
-                #[weak(rename_to = m)]
-                self.model,
-                move || m.on_info_clicked()
-            ));
+            if self.model.supports_pin_button() {
+                let (like, pin) = self.page.header().add_like_pin_segmented_button();
+                like.connect_clicked(clone!(
+                    #[weak(rename_to = m)]
+                    self.model,
+                    move |_| {
+                        if m.is_liked() && m.is_pinned() {
+                            m.toggle_pin();
+                        }
+                        m.toggle_like()
+                    }
+                ));
+                pin.connect_clicked(clone!(
+                    #[weak(rename_to = m)]
+                    self.model,
+                    move |_| m.toggle_pin()
+                ));
+            }
         }
 
         if self.model.has_share_button() {
@@ -251,6 +298,10 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             move || m.load_more()
         ));
 
+        if self.model.supports_pin_button() {
+            set_pin_button_state(&*self.model, self.page.header());
+        }
+
         // Initial state
         if let Some(icon) = self.model.default_icon() {
             self.page.header().set_default_icon(icon);
@@ -264,11 +315,19 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
 
     /// Refresh the page header from the model's current state.
     pub fn refresh_details(&self) {
+        let detail = self.model.get_subtitle_detail();
         if let Some(title) = self.model.get_title() {
             let subtitle = self.model.get_subtitle().unwrap_or_default();
-            self.page.set_details(&title, &subtitle);
-            self.header_title.set_title(&title);
-            self.header_title.set_subtitle(&subtitle);
+            let full_subtitle = match &detail {
+                Some(detail) if !subtitle.is_empty() => {
+                    format!("{subtitle}{DETAIL_SEPARATOR}{detail}")
+                }
+                Some(detail) => detail.clone(),
+                None => subtitle.clone(),
+            };
+            self.page.set_details(&title, &full_subtitle);
+            self.header.set_title(&title);
+            self.header.set_subtitle(&subtitle);
         }
 
         // Set subtitle links if the model provides them
@@ -276,10 +335,11 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         if !links.is_empty() {
             let artists: Vec<(String, String)> = links
                 .iter()
-                .map(|a| (a.id.clone(), a.name.clone()))
+                .map(|a| (a.rri.id.clone(), a.name.clone()))
                 .collect();
             self.page.header().set_subtitle_links(
                 &artists,
+                detail.as_deref(),
                 clone!(
                     #[weak(rename_to = m)]
                     self.model,
@@ -299,9 +359,15 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
             if !self.model.like_visible() {
                 self.page.header().set_like_visible(false);
             }
+            if let Some(tooltip) = self.model.like_tooltip(self.model.is_liked()) {
+                self.page.header().set_like_tooltip(&tooltip);
+            }
         }
         self.page
-            .load_artwork_or_finish(self.model.get_artwork().as_ref(), &self.worker);
+            .load_artwork_or_finish(self.model.get_artwork().as_ref(), self.model.api_service());
+        if self.model.supports_pin_button() {
+            set_pin_button_state(&*self.model, self.page.header());
+        }
     }
 
     /// Standard event handling. Returns true if the event was consumed.
@@ -319,9 +385,10 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
         if self.model.should_refresh_details(event) {
             self.refresh_details();
             if self.model.has_play_button() {
+                // Not when paused or stopped
                 self.page
                     .header()
-                    .set_playing(self.model.source_is_playing());
+                    .set_playing(self.model.source_is_playing() && self.model.is_playing());
             }
             return true;
         }
@@ -331,6 +398,21 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
                 if !self.model.like_visible() {
                     self.page.header().set_like_visible(false);
                 }
+                if let Some(tooltip) = self.model.like_tooltip(self.model.is_liked()) {
+                    self.page.header().set_like_tooltip(&tooltip);
+                }
+                if self.model.supports_pin_button() {
+                    set_pin_button_state(&*self.model, self.page.header());
+                }
+            }
+            return true;
+        }
+        if matches!(
+            event,
+            AppEvent::BrowserEvent(crate::app::BrowserEvent::PinnedPlaylistsUpdated)
+        ) {
+            if self.model.supports_pin_button() {
+                set_pin_button_state(&*self.model, self.page.header());
             }
             return true;
         }
@@ -346,7 +428,7 @@ impl<M: PageModel + 'static> DetailsPageComponent<M> {
     }
 }
 
-impl<M: PageModel + 'static> Component for DetailsPageComponent<M> {
+impl<M: PinnedPageModel + 'static> Component for DetailsPageComponent<M> {
     fn get_root_widget(&self) -> &gtk::Widget {
         self.page.widget().upcast_ref()
     }
@@ -358,11 +440,11 @@ impl<M: PageModel + 'static> Component for DetailsPageComponent<M> {
 impl<M> Drop for DetailsPageComponent<M> {
     fn drop(&mut self) {
         // Unregister from the shared header so a re-push re-registers cleanly.
-        self.registrar.remove(&self.name);
+        self.header.remove();
     }
 }
 
-impl<M: PageModel + 'static> EventListener for DetailsPageComponent<M> {
+impl<M: PinnedPageModel + 'static> EventListener for DetailsPageComponent<M> {
     fn on_event(&mut self, event: &AppEvent) {
         self.handle_event(event);
         self.broadcast_event(event);
