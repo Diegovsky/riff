@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Riff\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-31 08:42-0700\n"
+"POT-Creation-Date: 2026-10-23 17:09-0700\n"
 "Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -10,179 +10,425 @@ msgstr ""
 "X-Generator: POEditor.com\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#. translators: This notification is shown when Spotify throttles requests.
-#: src/app/batch_loader.rs:107 src/app/components/mod.rs:73
-#: src/connect/player.rs:248
-msgid "Rate limited by Spotify. Please wait a moment and try again."
-msgstr ""
-
-#. translators: This notification is the default message for unhandled errors. Logs refer to console output.
-#: src/app/batch_loader.rs:114 src/app/components/mod.rs:87
-msgid "An error occured. Check logs for details!"
-msgstr "An error occured. Check logs for details!"
-
 #. translators: This is part of a contextual menu attached to a single track; this entry allows viewing the album containing a specific track.
-#: src/app/components/labels.rs:5
+#: src/app/components/labels.rs:8
 msgid "View Album"
 msgstr "View Album"
 
 #. translators: This is part of a contextual menu attached to a single track; the intent is to copy the link (public URL) to a specific track.
-#: src/app/components/labels.rs:8
-#: src/app/components/widgets/details_page/header.blp:190
+#: src/app/components/labels.rs:11
+#: src/app/components/widgets/details_page/header.blp:179
 msgid "Copy Link"
 msgstr "Copy Link"
 
-#. translators: This is part of a contextual menu attached to a single track; this entry adds a track at the end of the play queue.
-#: src/app/components/labels.rs:11
-#: src/app/components/widgets/selection/selection_toolbar.blp:54
+#. translators: This is part of a contextual menu attached to a single track; this entry queues the track after the tracks already queued.
+#: src/app/components/labels.rs:14
+#: src/app/components/widgets/selection/selection_toolbar.blp:38
 msgid "Add to Queue"
 msgstr "Add to Queue"
 
+#. translators: This is part of a contextual menu attached to a single track; this entry opens a list of playlists to add the track to.
+#: src/app/components/labels.rs:17
+#: src/app/components/widgets/selection/selection_toolbar.blp:50
+msgid "Add to Playlist"
+msgstr "Add to Playlist"
+
+#. translators: This is part of a contextual menu attached to a single track; this entry starts selecting tracks, with this one.
+#: src/app/components/labels.rs:20
+#, fuzzy
+msgid "Select Track"
+msgstr "Tracks"
+
+#. translators: This is part of a contextual menu attached to a single track; this entry removes the track from the playlist being viewed.
+#: src/app/components/labels.rs:23
+#: src/app/components/widgets/selection/selection_toolbar.blp:72
+#, fuzzy
+msgid "Remove from Playlist"
+msgstr "Remove from Queue"
+
+#. translators: Name of the user's saved tracks, as the source of what's playing (e.g. "Next from: Saved Tracks").
+#. translators: This is a navigation panel entry to browse to saved tracks.
+#: src/app/components/labels.rs:26
+#: src/app/components/shell/navigation_panel/navigation_panel_item.rs:78
+msgid "Saved Tracks"
+msgstr "Tracks"
+
+#. translators: Header above the tracks the user added to the play queue, on the queue page.
+#: src/app/components/labels.rs:29
+msgid "Next in Queue"
+msgstr ""
+
+#. translators: Header of the current track, on the queue page (when shown in the list).
+#. translators: This is a navigation panel entry to browse to saved playlists.
+#: src/app/components/labels.rs:32
+#: src/app/components/pages/now_playing/model.rs:71
+#: src/app/components/shell/navigation_panel/navigation_panel_item.rs:80
+#: src/app/components/pages/shortcuts/shortcuts.blp:79
+#: src/app/components/shell/playback/playback_widget.blp:110
+msgid "Now Playing"
+msgstr "Now Playing"
+
+#. translators: Tooltip of the button in the header of the queued tracks, on the queue page. It removes all queued tracks.
+#: src/app/components/labels.rs:35
+msgid "Clear Queue"
+msgstr ""
+
+#. translators: Notification shown after tracks were added to the play queue.
+#: src/app/components/labels.rs:38
+#, fuzzy
+msgid "Added to queue"
+msgstr "Add to Queue"
+
 #. translators: This is part of a contextual menu attached to a single track; this entry removes a track from the play queue.
-#: src/app/components/labels.rs:14
+#: src/app/components/labels.rs:41
 msgid "Remove from Queue"
 msgstr "Remove from Queue"
 
+#. translators: This is part of a contextual menu attached to a single track; this entry saves the track to the user's saved tracks.
+#: src/app/components/labels.rs:44
+#: src/app/components/widgets/track_list/track_row.blp:159
+#: src/app/components/widgets/selection/selection_toolbar.blp:83
+#, fuzzy
+msgid "Add to Saved Tracks"
+msgstr "Tracks"
+
+#. translators: This is part of a contextual menu attached to a single track; this entry removes the track from the user's saved tracks.
+#: src/app/components/labels.rs:47
+#, fuzzy
+msgid "Remove from Saved Tracks"
+msgstr "Tracks"
+
+#. translators: This is part of a contextual menu attached to a single track, and the tooltip of the pin button on a detail page; this entry pins the item to the sidebar.
+#: src/app/components/labels.rs:50
+msgid "Pin to Sidebar"
+msgstr ""
+
+#. translators: This is part of a contextual menu attached to a single track, and the tooltip of the pin button on a detail page; this entry removes the item from the sidebar.
+#: src/app/components/labels.rs:53
+msgid "Unpin from Sidebar"
+msgstr ""
+
+#. translators: This is the tooltip for the like/star button on an album's detail page; it saves the album to the user's saved albums.
+#: src/app/components/labels.rs:56
+msgid "Add to Saved Albums"
+msgstr ""
+
+#. translators: This is the tooltip for the like/star button on an album's detail page; it removes the album from the user's saved albums.
+#: src/app/components/labels.rs:59
+#, fuzzy
+msgid "Remove from Saved Albums"
+msgstr "Remove from Queue"
+
+#. translators: This is the tooltip for the like/star button on an artist's detail page; it follows the artist, adding them to the user's saved artists.
+#: src/app/components/labels.rs:62
+#, fuzzy
+msgid "Add to Saved Artists"
+msgstr "Add to Playlist"
+
+#. translators: This is the tooltip for the like/star button on an artist's detail page; it unfollows the artist, removing them from the user's saved artists.
+#: src/app/components/labels.rs:65
+#, fuzzy
+msgid "Remove from Saved Artists"
+msgstr "You have no saved playlists."
+
+#. translators: This is the tooltip for the like/star button on a playlist's detail page; it saves the playlist to the user's saved playlists.
+#: src/app/components/labels.rs:68
+#, fuzzy
+msgid "Add to Saved Playlists"
+msgstr "Add to Playlist"
+
+#. translators: This is the tooltip for the like/star button on a playlist's detail page; it removes the playlist from the user's saved playlists.
+#: src/app/components/labels.rs:71
+#, fuzzy
+msgid "Remove from Saved Playlists"
+msgstr "You have no saved playlists."
+
 #. translators: This is part of a contextual menu attached to a playlist in the sidebar; this entry starts playing the playlist from the first track.
-#: src/app/components/labels.rs:17
-#: src/app/components/shell/playback/playback_controls.rs:70
-#: src/app/components/widgets/details_page/header.rs:221
-#: src/app/components/widgets/details_page/header.blp:151
+#: src/app/components/labels.rs:74
+#: src/app/components/shell/playback/playback_controls.rs:71
+#: src/app/components/widgets/details_page/header.rs:233
+#: src/app/components/widgets/details_page/header.blp:140
 msgid "Play"
 msgstr "Play"
 
 #. translators: This is part of a contextual menu attached to a playlist in the sidebar; this entry starts playing the playlist in shuffle mode.
-#: src/app/components/labels.rs:20
+#: src/app/components/labels.rs:77
+#: src/app/components/pages/shortcuts/shortcuts.blp:50
 #: src/app/components/shell/playback/playback_controls.blp:15
-#: src/app/components/widgets/details_page/header.blp:164
+#: src/app/components/widgets/details_page/header.blp:153
 msgid "Shuffle"
 msgstr "Shuffle"
 
 #. translators: This is part of a contextual menu attached to a playlist in the sidebar; this entry deletes a playlist owned by the user.
-#: src/app/components/labels.rs:23
+#: src/app/components/labels.rs:80
 #, fuzzy
 msgid "Delete Playlist"
 msgstr "Add to Playlist"
 
 #. translators: This is part of a contextual menu attached to a playlist in the sidebar; this entry unfollows a playlist the user does not own.
-#: src/app/components/labels.rs:26
+#: src/app/components/labels.rs:83
 #, fuzzy
 msgid "Unfollow Playlist"
 msgstr "Unnamed Playlist"
 
-#. translators: This is part of a larger text that says "Add to <playlist name>". This text should be as short as possible.
-#: src/app/components/labels.rs:33
-#, rust-format
-msgid "Add to {}"
+#. translators: This is part of the menu of a playlist's page; this entry opens a dialog to edit the name, description, cover and visibility of a playlist owned by the user.
+#: src/app/components/labels.rs:86
+msgid "Edit Details"
+msgstr ""
+
+#. translators: This is the caption shown in the header of a playlist's detail page when anyone can open the playlist.
+#: src/app/components/labels.rs:89
+#, fuzzy
+msgid "Public Playlist"
+msgstr "Playlists"
+
+#. translators: This is the caption shown in the header of a playlist's detail page when nobody but its owner can open the playlist.
+#: src/app/components/labels.rs:92
+#, fuzzy
+msgid "Private Playlist"
+msgstr "Add to Playlist"
+
+#. translators: This is the caption shown in the header of an album's detail page when the release is a full album.
+#. translators: An album in the back/forward history menu, while its name is loading.
+#: src/app/components/labels.rs:95 src/app/components/labels.rs:201
+#: src/app/components/pages/settings/settings.blp:193
+#, fuzzy
+msgid "Album"
+msgstr "Albums"
+
+#. translators: This is the caption shown in the header of an album's detail page when the release is a single.
+#: src/app/components/labels.rs:98
+msgid "Single"
+msgstr ""
+
+#. translators: This is the caption shown in the header of an album's detail page when the release is an EP (extended play).
+#: src/app/components/labels.rs:101
+msgid "EP"
+msgstr ""
+
+#. translators: Shown in place of a card list when the selected filter (e.g. "EPs") matches nothing.
+#. Translators: Shown in place of a card list when the selected filter (e.g. "EPs") matches nothing.
+#: src/app/components/labels.rs:104
+#: src/app/components/widgets/details_page/details_section.blp:39
+msgid "No items found for this filter"
+msgstr ""
+
+#. translators: This is the caption shown in the header of an album's detail page when the release is a compilation.
+#: src/app/components/labels.rs:107
+msgid "Compilation"
+msgstr ""
+
+#. translators: This notification is shown when a track was added to a playlist; {} is the name of the playlist.
+#: src/app/components/labels.rs:112
+#, fuzzy, rust-format
+msgid "Added to {}"
 msgstr "Add to {}"
 
+#. translators: This notification is shown when nothing was added to a playlist, as it already lists the tracks; {} is the name of the playlist.
+#: src/app/components/labels.rs:117
+#, rust-format
+msgid "Already in {}"
+msgstr ""
+
+#. translators: This notification is shown when tracks were added to a playlist, except those it already lists; the first {} is the name of the playlist, the second {} is how many tracks were left out.
+#: src/app/components/labels.rs:123
+#, rust-format
+msgid "Added to {}, skipping {} track already in it"
+msgid_plural "Added to {}, skipping {} tracks already in it"
+msgstr[0] ""
+msgstr[1] ""
+
 #. translators: This shows up when in selection mode. This text should be as short as possible.
-#: src/app/components/labels.rs:42
+#: src/app/components/labels.rs:132
 #, fuzzy, rust-format
 msgid "{} track selected"
 msgid_plural "{} tracks selected"
 msgstr[0] "{} song selected"
 msgstr[1] "{} songs selected"
 
+#. translators: Shown from time to time in the bar at the bottom of the window that opens the queue. It's Pango markup: keep the tags, around the same words. The first {} is the title of the track playing, the second its artist.
+#: src/app/components/labels.rs:156
+#, rust-format
+msgid ""
+"<span size=\"small\" weight=\"light\">Now Playing</span> <b>{}</b> <span "
+"size=\"small\" weight=\"light\">by</span> {}"
+msgstr ""
+
+#. translators: Shown from time to time in the bar at the bottom of the window that opens the queue, while playback is paused. It's Pango markup: keep the tags, around the same words. The first {} is the title of the current track, the second its artist.
+#: src/app/components/labels.rs:162
+#, rust-format
+msgid ""
+"<span size=\"small\" weight=\"light\">Current Track</span> <b>{}</b> <span "
+"size=\"small\" weight=\"light\">by</span> {}"
+msgstr ""
+
+#. translators: Shown from time to time in the bar at the bottom of the window that opens the queue. It's Pango markup: keep the tags, around the same words. The first {} is the title of the track playing next, the second its artist.
+#: src/app/components/labels.rs:168
+#, rust-format
+msgid ""
+"<span size=\"small\" weight=\"light\">Up Next</span> <b>{}</b> <span "
+"size=\"small\" weight=\"light\">by</span> {}"
+msgstr ""
+
+#. translators: Header above the rest of the album, playlist or artist being played, on the queue page. {} is its name.
+#: src/app/components/labels.rs:174
+#, fuzzy, rust-format
+msgid "Next from: {}"
+msgstr "More from {}"
+
+#. translators: Description of the shuffle separation preference. {} is the number of other songs, chosen by the user. "When possible" because an album or playlist can have too few songs.
+#: src/app/components/labels.rs:180
+#, rust-format
+msgid ""
+"When possible, shuffle and repeat mode will play at least {} other song "
+"before repeating a song"
+msgid_plural ""
+"When possible, shuffle and repeat mode will play at least {} other songs "
+"before repeating a song"
+msgstr[0] ""
+msgstr[1] ""
+
 #. translators: This is part of a contextual menu attached to a single track; the full text is "More from <artist>".
-#: src/app/components/labels.rs:51
+#: src/app/components/labels.rs:189
 #, rust-format
 msgid "More from {}"
 msgstr "More from {}"
 
 #. translators: This is part of a larger label that reads "<Album> by <Artist>"
-#: src/app/components/labels.rs:60
+#: src/app/components/labels.rs:194
 #, rust-format
 msgid "{} by {}"
 msgstr "{} by {}"
 
-#: src/app/components/pages/details_artist/model.rs:219
-msgid "All"
-msgstr ""
+#. translators: An artist in the back/forward history menu, while their name is loading.
+#: src/app/components/labels.rs:203
+#, fuzzy
+msgid "Artist"
+msgstr "Artists"
 
-#: src/app/components/pages/details_artist/model.rs:220
-msgid "Albums"
-msgstr "Albums"
-
-#: src/app/components/pages/details_artist/model.rs:221
-msgid "Singles"
-msgstr ""
-
-#: src/app/components/pages/details_artist/model.rs:222
-msgid "Compilations"
-msgstr ""
-
-#: src/app/components/pages/details_artist/widget.rs:39
-msgid "Top Tracks"
-msgstr "Top Tracks"
-
-#: src/app/components/pages/details_artist/widget.rs:41
-msgid "Releases"
-msgstr "Releases"
-
-#: src/app/components/pages/details_playlist/model.rs:97
+#. translators: A playlist in the back/forward history menu, while its name is loading.
+#: src/app/components/labels.rs:205
+#: src/app/components/pages/details_playlist/model.rs:154
 #, fuzzy
 msgid "Playlist"
 msgstr "Playlists"
 
-#: src/app/components/pages/details_user/model.rs:47
+#. translators: A user's page in the back/forward history menu, while their name is loading.
+#: src/app/components/labels.rs:207
+msgid "User"
+msgstr ""
+
+#. translators: The search page in the back/forward history menu.
+#: src/app/components/labels.rs:209
+#: src/app/components/pages/shortcuts/shortcuts.blp:64 src/window.blp:177
+#, fuzzy
+msgid "Search"
+msgstr "Search Spotify"
+
+#. translators: This notification is shown when uploading the cover of a playlist failed.
+#: src/app/components/mod.rs:127
+msgid "The playlist's cover could not be uploaded."
+msgstr ""
+
+#. translators: This notification is shown when Spotify throttles requests.
+#: src/app/components/mod.rs:228 src/connect/player.rs:256
+msgid "Rate limited by Spotify. Please wait a moment and try again."
+msgstr ""
+
+#. translators: This notification is the default message for unhandled errors. Logs refer to console output.
+#: src/app/components/mod.rs:244
+msgid "An error occured. Check logs for details!"
+msgstr "An error occured. Check logs for details!"
+
+#: src/app/components/pages/details_artist/widget.rs:33
+msgid "Top Tracks"
+msgstr "Top Tracks"
+
+#: src/app/components/pages/details_artist/widget.rs:35
+msgid "Releases"
+msgstr "Releases"
+
+#. translators: This notification is shown when the user emptied the description of a playlist, which cannot be removed once set.
+#: src/app/components/pages/details_playlist/model.rs:104
+msgid "A playlist's description can't be removed, so it was kept."
+msgstr ""
+
+#: src/app/components/pages/details_user/model.rs:50
 msgid "Profile"
 msgstr ""
 
-#: src/app/components/pages/details_user/widget.rs:41
+#: src/app/components/pages/details_user/widget.rs:34
 #, fuzzy
 msgid "Public Playlists"
 msgstr "Playlists"
 
-#. translators: This is a sidebar entry to browse to saved playlists.
-#: src/app/components/pages/now_playing/model.rs:75
-#: src/app/components/shell/sidebar/sidebar_item.rs:47
-#: src/app/components/shell/playback/playback_widget.blp:108
-msgid "Now Playing"
-msgstr "Now Playing"
-
-#: src/app/components/pages/now_playing/widget.rs:41
-msgid "Queue"
-msgstr ""
-
 #. translators: Short text displayed instead of a track title when nothing plays
-#: src/app/components/pages/now_playing/widget.rs:54
-#: src/app/components/shell/playback/playback_info_mobile.rs:53
-#: src/app/components/shell/playback/playback_info.rs:70
+#: src/app/components/pages/now_playing/widget.rs:50
+#: src/app/components/shell/playback/playback_info.rs:73
 #, fuzzy
 msgid "No Track Playing"
 msgstr "Now Playing"
 
-#: src/app/components/pages/saved_albums/model.rs:104
+#. translators: Title of the queue, listing what plays next, when it's shown beside the content.
+#. Translators: Tooltip of the playback bar button that shows or hides the queue.
+#: src/app/components/pages/queue/component.rs:57
+#: src/app/components/shell/playback/playback_widget.blp:158
+msgid "Queue"
+msgstr ""
+
+#: src/app/components/pages/saved_albums/model.rs:109
 msgid "You have no saved albums."
 msgstr "You have no saved albums."
 
-#: src/app/components/pages/saved_albums/model.rs:107
+#: src/app/components/pages/saved_albums/model.rs:112
 msgid "Your library will be shown here."
 msgstr "Your library will be shown here."
 
-#: src/app/components/pages/saved_artists/model.rs:100
+#: src/app/components/pages/saved_artists/model.rs:101
 #, fuzzy
 msgid "You have no saved artists."
 msgstr "You have no saved playlists."
 
-#: src/app/components/pages/saved_artists/model.rs:103
+#: src/app/components/pages/saved_artists/model.rs:104
 #, fuzzy
 msgid "Your followed artists will be shown here."
 msgstr "Your playlists will be shown here."
 
-#: src/app/components/pages/saved_playlists/model.rs:104
+#. translators: Filter of the saved playlists: shows all of them.
+#: src/app/components/pages/saved_playlists/model.rs:105
+#: src/app/models/card_enums.rs:172
+msgid "All"
+msgstr ""
+
+#. translators: Filter of the saved playlists: shows only those the user created.
+#: src/app/components/pages/saved_playlists/model.rs:107
+msgid "Created"
+msgstr ""
+
+#. translators: Filter of the saved playlists: shows only those made by others, which the user follows.
+#: src/app/components/pages/saved_playlists/model.rs:109
+msgid "Followed"
+msgstr ""
+
+#: src/app/components/pages/saved_playlists/model.rs:128
 msgid "You have no saved playlists."
 msgstr "You have no saved playlists."
 
-#: src/app/components/pages/saved_playlists/model.rs:107
+#: src/app/components/pages/saved_playlists/model.rs:131
 msgid "Your playlists will be shown here."
 msgstr "Your playlists will be shown here."
 
-#: src/app/components/pages/saved_tracks/model.rs:66
+#: src/app/components/pages/saved_tracks/model.rs:59
 #, fuzzy
 msgid "All Tracks"
 msgstr "Tracks"
+
+#: src/app/components/pages/saved_tracks/model.rs:71
+#, fuzzy, rust-format
+msgid "{} Track"
+msgid_plural "{} Tracks"
+msgstr[0] "Tracks"
+msgstr[1] "Tracks"
 
 #: src/app/components/shell/clipboard_import/mod.rs:91
 msgid "Open Spotify link?"
@@ -208,9 +454,15 @@ msgstr ""
 msgid "There’s a Spotify track link in your clipboard. Open it in Riff?"
 msgstr ""
 
+#. translators: Button of the dialog asking to confirm clearing the play queue: keeps the queue.
 #. Translators: Button label. Exits selection mode.
+#. translators: Button of a dialog asking to confirm something that cannot be undone: leaves things as they are.
 #: src/app/components/shell/clipboard_import/mod.rs:116
-#: src/app/components/shell/headerbar/headerbar.blp:84
+#: src/app/components/widgets/queue_list/model.rs:263
+#: src/app/components/pages/queue/queue_page.blp:19
+#: src/app/components/shell/headerbar/headerbar.blp:116
+#: src/app/components/shell/utility_panel/utility_panel.blp:52
+#: src/app/components/utils.rs:226
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -218,115 +470,127 @@ msgstr "Cancel"
 msgid "Open"
 msgstr ""
 
-#: src/app/components/shell/device_selector/widget.rs:138
+#: src/app/components/shell/device_selector/widget.rs:141
 #: src/app/components/shell/device_selector/device_selector.blp:9
 #: src/app/components/shell/device_selector/device_selector.blp:37
 msgid "This Device"
 msgstr ""
 
-#. translators: This is a sidebar entry to browse to saved albums.
-#: src/app/components/shell/navigation/factory.rs:58
-#: src/app/components/shell/sidebar/sidebar_item.rs:43
-#: src/app/components/shell/sidebar/sidebar_item.rs:97
+#. translators: This is a navigation panel entry to browse to saved albums.
+#: src/app/components/shell/navigation/factory.rs:55
+#: src/app/components/shell/navigation_panel/navigation_panel_item.rs:76
+#: src/app/components/shell/navigation_panel/navigation_panel_item.rs:148
 msgid "Library"
 msgstr "Albums"
 
-#. translators: This is a sidebar entry that marks that the entries below are playlists.
-#: src/app/components/shell/navigation/factory.rs:76
-#: src/app/components/shell/sidebar/sidebar_item.rs:49
+#. translators: This is a navigation panel entry that marks that the entries below are playlists.
+#: src/app/components/shell/navigation/factory.rs:71
+#: src/app/components/shell/navigation_panel/navigation_panel_item.rs:82
+#: src/app/components/pages/shortcuts/shortcuts.blp:94
 msgid "Playlists"
 msgstr "Playlists"
 
-#. translators: This is a sidebar entry to browse to followed artists.
-#: src/app/components/shell/navigation/factory.rs:88
-#: src/app/components/shell/sidebar/sidebar_item.rs:51
+#. translators: This is a navigation panel entry to browse to followed artists.
+#: src/app/components/shell/navigation/factory.rs:82
+#: src/app/components/shell/navigation_panel/navigation_panel_item.rs:84
+#: src/app/components/pages/shortcuts/shortcuts.blp:84
 msgid "Artists"
 msgstr "Artists"
 
-#. translators: This is a notification that pop ups when a new playlist is created. It includes the name of that playlist.
-#: src/app/components/shell/notification/mod.rs:69
-msgid "New playlist created."
+#. translators: Shown in a toast after closing settings when a changed setting needs an app restart.
+#: src/app/components/shell/notification/mod.rs:93
+msgid "Please restart the app to apply the changes"
 msgstr ""
 
-#. translators: This is a label in the notification shown after creating a new playlist. If it is clicked, the new playlist will be opened.
-#: src/app/components/shell/notification/mod.rs:71
-msgid "View"
-msgstr ""
-
+#. translators: Button in the toast that restarts the app to apply changed settings.
 #: src/app/components/shell/notification/mod.rs:95
+msgid "Restart"
+msgstr ""
+
+#: src/app/components/shell/notification/mod.rs:111
 msgid "Connection lost. Trying to reconnect…"
 msgstr ""
 
-#: src/app/components/shell/playback/playback_controls.rs:68
-#: src/app/components/widgets/details_page/header.rs:219
+#. translators: Shown in a toast when the user presses Previous but there is no earlier track to play.
+#: src/app/components/shell/notification/mod.rs:137
+msgid "No previous track"
+msgstr ""
+
+#: src/app/components/shell/playback/playback_controls.rs:69
+#: src/app/components/widgets/details_page/header.rs:231
 msgid "Pause"
 msgstr "Pause"
 
-#. translators: This is a sidebar entry to browse to saved tracks.
-#: src/app/components/shell/sidebar/sidebar_item.rs:45
-msgid "Saved Tracks"
-msgstr "Tracks"
-
-#: src/app/components/shell/sidebar/sidebar_item.rs:88
-msgid "All Playlists"
-msgstr ""
-
-#: src/app/components/shell/sidebar/sidebar_item.rs:106
-msgid "New Playlist"
-msgstr ""
-
-#: src/app/components/shell/sidebar/sidebar.rs:68
+#: src/app/components/shell/navigation_panel/model.rs:87
 msgid "Unnamed Playlist"
 msgstr "Unnamed Playlist"
 
-#. translators: This is a menu entry.
-#: src/app/components/shell/user_menu/user_menu.rs:70
-msgid "Preferences"
+#: src/app/components/shell/navigation_panel/model.rs:439
+#, fuzzy
+msgid "Pinned Playlist"
+msgstr "Unnamed Playlist"
+
+#: src/app/components/shell/navigation_panel/model.rs:440
+#, fuzzy
+msgid "Pinned Album"
+msgstr "View Album"
+
+#: src/app/components/shell/navigation_panel/model.rs:441
+#, fuzzy
+msgid "Pinned Artist"
+msgstr "Artists"
+
+#: src/app/components/shell/navigation_panel/model.rs:442
+#, fuzzy
+msgid "Pinned Track"
+msgstr "Tracks"
+
+#: src/app/components/shell/navigation_panel/navigation_panel_item.rs:130
+msgid "All Playlists"
 msgstr ""
 
-#. translators: This is a menu entry.
-#: src/app/components/shell/user_menu/user_menu.rs:72
-msgid "About"
-msgstr "About"
+#: src/app/components/shell/navigation_panel/navigation_panel_item.rs:139
+msgid "Pinned"
+msgstr ""
 
-#. translators: This is a menu entry.
-#: src/app/components/shell/user_menu/user_menu.rs:74
+#. Translators: title of the dialog that creates a new playlist
+#: src/app/components/shell/navigation_panel/navigation_panel.rs:220
+#: src/app/components/widgets/playlist_dialog/playlist_dialog.blp:7
+msgid "New Playlist"
+msgstr ""
+
+#: src/app/components/shell/window/close_dialog.rs:12
+msgid "Riff is Still Playing"
+msgstr ""
+
+#: src/app/components/shell/window/close_dialog.rs:13
+msgid "How should Riff close while audio is playing?"
+msgstr ""
+
+#: src/app/components/shell/window/close_dialog.rs:16
+#: src/app/components/pages/settings/settings.blp:47
+msgid "Run in Background"
+msgstr ""
+
+#: src/app/components/shell/window/close_dialog.rs:17
+#: src/app/components/pages/settings/settings.blp:48
+#: src/app/components/pages/shortcuts/shortcuts.blp:128 src/window.blp:301
 msgid "Quit"
 msgstr "Quit"
 
-#. translators: This is a menu entry.
-#: src/app/components/shell/user_menu/user_menu.rs:79
-msgid "Log Out"
-msgstr "Log Out"
-
-#: src/app/components/shell/window/mod.rs:81
-msgid "Riff is still playing"
-msgstr ""
-
-#. Translators: Description for the close window behavior preference
-#: src/app/components/shell/window/mod.rs:83
-#: src/app/components/pages/settings/settings.blp:33
-msgid "What should Riff do if you close it while audio is playing?"
-msgstr ""
-
-#: src/app/components/shell/window/mod.rs:87
-#: src/app/components/pages/settings/settings.blp:37
-msgid "Continue in Background"
-msgstr ""
-
-#: src/app/components/shell/window/mod.rs:88
-msgid "Stop Audio and Quit"
-msgstr ""
-
-#: src/app/components/shell/window/mod.rs:95
+#: src/app/components/shell/window/close_dialog.rs:24
 msgid "Remember my choice"
 msgstr ""
 
-#: src/app/components/shell/window/mod.rs:136
+#: src/app/components/shell/window/close_dialog.rs:67
+msgid "Close"
+msgstr ""
+
+#: src/app/components/shell/window/mod.rs:84
 msgid "Playback Not Available"
 msgstr ""
 
-#: src/app/components/shell/window/mod.rs:139
+#: src/app/components/shell/window/mod.rs:87
 msgid ""
 "This account appears to be using Spotify's new PlayPlay DRM, which prevents "
 "playback in Riff. Spotify's PlayPlay DRM is proprietary and only works in "
@@ -336,21 +600,43 @@ msgid ""
 "PlayPlay DRM."
 msgstr ""
 
-#: src/app/components/shell/window/mod.rs:145
+#: src/app/components/shell/window/mod.rs:93
 msgid "Dismiss"
 msgstr ""
 
-#: src/app/components/widgets/playlist/song.rs:136
-#: src/app/components/widgets/playlist/song.rs:156
-msgid "Not Available in Your Region"
-msgstr ""
+#: src/app/components/widgets/details_page/header.rs:390
+#: src/app/components/widgets/details_page/header.blp:166
+#, fuzzy
+msgid "Add to Library"
+msgstr "Albums"
 
-#: src/app/components/widgets/playlist/song.rs:148
+#: src/app/components/widgets/track_list/track_row.rs:371
 msgid "Explicit Content is Disabled"
 msgstr ""
 
-#: src/app/components/widgets/selection/component.rs:66
+#: src/app/components/widgets/track_list/track_row.rs:373
+msgid "Not Available in Your Region"
+msgstr ""
+
+#: src/app/components/widgets/selection/component.rs:58
 msgid "Tracks saved!"
+msgstr ""
+
+#. translators: Title of the dialog asking to confirm clearing the play queue, from its trash button.
+#: src/app/components/widgets/queue_list/model.rs:258
+msgid "Clear the Queue?"
+msgstr ""
+
+#. translators: Body of the dialog asking to confirm clearing the play queue.
+#: src/app/components/widgets/queue_list/model.rs:260
+msgid "All tracks added to the queue will be removed."
+msgstr ""
+
+#. translators: Button of the dialog asking to confirm clearing the play queue: clears it.
+#. Translators: Label for the button that clears the cache
+#: src/app/components/widgets/queue_list/model.rs:265
+#: src/app/components/pages/settings/settings.blp:374
+msgid "Clear"
 msgstr ""
 
 #. Translators: Sort option. Shows items in the order they were saved,
@@ -384,11 +670,24 @@ msgstr "Released"
 msgid "Popularity"
 msgstr ""
 
-#: src/app/models/card_model.rs:29
-msgid "Untitled"
+#: src/app/models/card_enums.rs:173
+#: src/app/components/pages/shortcuts/shortcuts.blp:89
+msgid "Albums"
+msgstr "Albums"
+
+#: src/app/models/card_enums.rs:174
+msgid "Singles"
 msgstr ""
 
-#: src/connect/player.rs:65
+#: src/app/models/card_enums.rs:175
+msgid "EPs"
+msgstr ""
+
+#: src/app/models/card_enums.rs:176
+msgid "Compilations"
+msgstr ""
+
+#: src/connect/player.rs:64
 msgid "Connection to device lost!"
 msgstr ""
 
@@ -398,11 +697,11 @@ msgstr ""
 msgid "Playing music"
 msgstr ""
 
-#: src/main.rs:91
+#: src/main.rs:100
 msgid "Failed to open link!"
 msgstr ""
 
-#: src/player/mod.rs:136
+#: src/player/mod.rs:139
 msgid "Playback is Temporarily Unavailable"
 msgstr ""
 
@@ -418,6 +717,7 @@ msgstr "Released"
 
 #. Translators: This refers to a number of tracks
 #: src/app/components/pages/details_album/release_details.blp:56
+#: src/app/components/pages/shortcuts/shortcuts.blp:99
 msgid "Tracks"
 msgstr "Tracks"
 
@@ -445,18 +745,37 @@ msgstr ""
 msgid "Your account does not have a Spotify Premium subscription."
 msgstr ""
 
-#. Translators: This error is shown when login fails due to a network or API error.
+#. Translators: This error is shown when login fails. Browser extensions such as ad or privacy blockers can break the login page.
 #: src/app/components/pages/login/login.blp:129
-msgid "Login failed. Please check your connection and try again."
+msgid ""
+"Login failed. Please check your connection and browser extensions before "
+"trying again."
 msgstr ""
 
 #. Translators: Log in button label
-#: src/app/components/pages/login/login.blp:138
+#: src/app/components/pages/login/login.blp:140
 msgid "Log in with Spotify…"
 msgstr ""
 
+#. Translators: Button label. Selects all visible songs.
+#. translators: Button label. Selects all visible songs.
+#. Translators: Button label. Selects all visible songs.
+#. translators: Button label. Selects all visible songs.
+#: src/app/components/pages/queue/queue_page.blp:34
+#: src/app/components/shell/headerbar/headerbar.blp:129
+#: src/app/components/pages/queue/widget.rs:113
+#: src/app/components/shell/headerbar/widget.rs:666
+#: src/app/components/shell/utility_panel/utility_panel.blp:60
+#: src/app/components/shell/utility_panel/widget.rs:94
+msgid "Select All"
+msgstr "Select All"
+
+#. Translators: Shown in place of the queue when nothing plays or is queued.
+#: src/app/components/pages/queue/queue_page.blp:60
+msgid "Nothing Queued"
+msgstr ""
+
 #: src/app/components/pages/search/search.blp:29
-#: src/app/components/widgets/card_list/filter_toggle.blp:33
 msgid "Filter"
 msgstr ""
 
@@ -506,43 +825,43 @@ msgstr ""
 msgid "Lock the equalizer bands to prevent accidental changes"
 msgstr ""
 
-#: src/app/components/pages/settings/equalizer.blp:55
+#: src/app/components/pages/settings/equalizer.blp:60
 msgid "31"
 msgstr ""
 
-#: src/app/components/pages/settings/equalizer.blp:85
+#: src/app/components/pages/settings/equalizer.blp:95
 msgid "62"
 msgstr ""
 
-#: src/app/components/pages/settings/equalizer.blp:115
+#: src/app/components/pages/settings/equalizer.blp:130
 msgid "125"
 msgstr ""
 
-#: src/app/components/pages/settings/equalizer.blp:145
+#: src/app/components/pages/settings/equalizer.blp:165
 msgid "250"
 msgstr ""
 
-#: src/app/components/pages/settings/equalizer.blp:175
+#: src/app/components/pages/settings/equalizer.blp:200
 msgid "500"
 msgstr ""
 
-#: src/app/components/pages/settings/equalizer.blp:205
+#: src/app/components/pages/settings/equalizer.blp:235
 msgid "1k"
 msgstr ""
 
-#: src/app/components/pages/settings/equalizer.blp:235
+#: src/app/components/pages/settings/equalizer.blp:270
 msgid "2k"
 msgstr ""
 
-#: src/app/components/pages/settings/equalizer.blp:265
+#: src/app/components/pages/settings/equalizer.blp:305
 msgid "4k"
 msgstr ""
 
-#: src/app/components/pages/settings/equalizer.blp:295
+#: src/app/components/pages/settings/equalizer.blp:340
 msgid "8k"
 msgstr ""
 
-#: src/app/components/pages/settings/equalizer.blp:325
+#: src/app/components/pages/settings/equalizer.blp:375
 msgid "16k"
 msgstr ""
 
@@ -596,6 +915,7 @@ msgstr ""
 
 #. Translators: Header for a group of preference items regarding the application's appearance and behavior
 #: src/app/components/pages/settings/settings.blp:11
+#: src/app/components/pages/shortcuts/shortcuts.blp:110
 msgid "General"
 msgstr ""
 
@@ -618,238 +938,374 @@ msgstr ""
 
 #. Translators: Title for an item in preferences
 #: src/app/components/pages/settings/settings.blp:29
+msgid "Queue Side Panel"
+msgstr ""
+
+#. Translators: Description for the queue side panel preference
+#: src/app/components/pages/settings/settings.blp:33
+msgid "Show the queue in a panel at the side of the window"
+msgstr ""
+
+#. Translators: Title for an item in preferences
+#: src/app/components/pages/settings/settings.blp:39
 msgid "Close Window Behavior"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:36
+#. Translators: Description for the close window behavior preference
+#: src/app/components/pages/settings/settings.blp:43
+msgid "Riff's behavior when closing the main window"
+msgstr ""
+
+#: src/app/components/pages/settings/settings.blp:46
 msgid "Ask"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:38
-msgid "Stop and Quit"
-msgstr ""
-
 #. Translators: Title for the keep device awake toggle in preferences
-#: src/app/components/pages/settings/settings.blp:46
+#: src/app/components/pages/settings/settings.blp:56
 msgid "Keep Device Awake While Playing"
 msgstr ""
 
 #. Translators: Description for the keep device awake toggle
-#: src/app/components/pages/settings/settings.blp:50
+#: src/app/components/pages/settings/settings.blp:60
 msgid "Prevent the system from automatically suspending while audio is playing"
 msgstr ""
 
 #. Translators: Title for the skip explicit tracks toggle in preferences
-#: src/app/components/pages/settings/settings.blp:56
+#: src/app/components/pages/settings/settings.blp:66
 msgid "Skip Explicit Tracks"
 msgstr ""
 
 #. Translators: Description for the skip explicit tracks toggle
-#: src/app/components/pages/settings/settings.blp:60
+#: src/app/components/pages/settings/settings.blp:70
 msgid "Automatically skip tracks marked as explicit"
 msgstr ""
 
+#. Translators: Title for the shuffle separation preference
+#: src/app/components/pages/settings/settings.blp:76
+msgid "Shuffle Separation"
+msgstr ""
+
 #. Translators: Header for a group of preference items regarding audio
-#: src/app/components/pages/settings/settings.blp:67
+#: src/app/components/pages/settings/settings.blp:92
 msgid "Audio"
 msgstr ""
 
 #. Translators: Title for an item in preferences
-#: src/app/components/pages/settings/settings.blp:72
+#: src/app/components/pages/settings/settings.blp:97
 msgid "Audio Backend"
 msgstr ""
 
 #. Translators: Title for an item in preferences
-#: src/app/components/pages/settings/settings.blp:85
+#: src/app/components/pages/settings/settings.blp:109
 msgid "ALSA Device"
 msgstr ""
 
 #. Translators: Description for the item (ALSA Device) in preferences
-#: src/app/components/pages/settings/settings.blp:89
+#: src/app/components/pages/settings/settings.blp:113
 msgid "Applied only if audio backend is ALSA"
 msgstr ""
 
 #. Translators: Title for an item in preferences
-#: src/app/components/pages/settings/settings.blp:99
+#: src/app/components/pages/settings/settings.blp:123
 msgid "Audio Quality"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:100
+#: src/app/components/pages/settings/settings.blp:124
 msgid "Streaming bitrate from Spotify (higher uses more bandwidth)"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:103
+#: src/app/components/pages/settings/settings.blp:127
 msgid "Normal"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:104
+#: src/app/components/pages/settings/settings.blp:128
 msgid "High"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:105
+#: src/app/components/pages/settings/settings.blp:129
 msgid "Very High"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:106
+#: src/app/components/pages/settings/settings.blp:130
 msgid "Lossless"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:112
+#: src/app/components/pages/settings/settings.blp:136
 msgid "Audio Format"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:113
+#: src/app/components/pages/settings/settings.blp:137
 msgid "Sample bit depth for audio output"
 msgstr ""
 
 #. Translators: Title for an item in preferences
-#: src/app/components/pages/settings/settings.blp:129
+#: src/app/components/pages/settings/settings.blp:153
 msgid "Gapless Playback"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:130
+#: src/app/components/pages/settings/settings.blp:154
 msgid "Eliminates silence between consecutive tracks"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:142
+#: src/app/components/pages/settings/settings.blp:158
 msgid "Volume Curve"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:143
+#: src/app/components/pages/settings/settings.blp:159
 msgid "Controls how the volume slider responds"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:146
+#: src/app/components/pages/settings/settings.blp:162
 msgid "Logarithmic"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:147
+#: src/app/components/pages/settings/settings.blp:163
 msgid "Linear"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:148
+#: src/app/components/pages/settings/settings.blp:164
 msgid "Cubic"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:154
+#: src/app/components/pages/settings/settings.blp:170
 msgid "Mono Audio"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:155
+#: src/app/components/pages/settings/settings.blp:171
 msgid ""
 "Mix left and right channels together so both speakers play the same audio"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:161
+#: src/app/components/pages/settings/settings.blp:177
 msgid "Normalisation"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:162
+#: src/app/components/pages/settings/settings.blp:178
 msgid "Adjust volume levels between tracks for consistent loudness"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:165
+#: src/app/components/pages/settings/settings.blp:181
 msgid "Enable Normalisation"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:166
+#: src/app/components/pages/settings/settings.blp:182
 msgid "Automatically adjust volume between tracks"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:170
+#: src/app/components/pages/settings/settings.blp:186
 msgid "Normalisation Type"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:171
+#: src/app/components/pages/settings/settings.blp:187
 msgid "How gain values are selected"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:175
+#: src/app/components/pages/settings/settings.blp:191
 msgid "Auto"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:176
+#: src/app/components/pages/settings/settings.blp:192
 #, fuzzy
 msgid "Track"
 msgstr "Tracks"
 
-#: src/app/components/pages/settings/settings.blp:177
-#, fuzzy
-msgid "Album"
-msgstr "Albums"
-
-#: src/app/components/pages/settings/settings.blp:183
+#: src/app/components/pages/settings/settings.blp:199
 msgid "Normalisation Method"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:184
+#: src/app/components/pages/settings/settings.blp:200
 msgid "Basic clips peaks, Dynamic uses a limiter"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:188
+#: src/app/components/pages/settings/settings.blp:204
 msgid "Dynamic"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:189
+#: src/app/components/pages/settings/settings.blp:205
 msgid "Basic"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:195
+#: src/app/components/pages/settings/settings.blp:211
 msgid "Pre-gain (dB)"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:196
+#: src/app/components/pages/settings/settings.blp:212
 msgid "Additional gain applied before normalisation"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:208
+#: src/app/components/pages/settings/settings.blp:224
 msgid "Threshold (dBFS)"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:209
+#: src/app/components/pages/settings/settings.blp:225
 msgid "Ceiling for dynamic normalisation"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:221
+#: src/app/components/pages/settings/settings.blp:237
 msgid "Attack (ms)"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:222
+#: src/app/components/pages/settings/settings.blp:238
 msgid "How quickly the limiter reacts to peaks"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:234
+#: src/app/components/pages/settings/settings.blp:250
 #, fuzzy
 msgid "Release (ms)"
 msgstr "Releases"
 
-#: src/app/components/pages/settings/settings.blp:235
+#: src/app/components/pages/settings/settings.blp:251
 msgid "How quickly the limiter recovers after peaks"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:247
+#: src/app/components/pages/settings/settings.blp:263
 msgid "Knee (dB)"
 msgstr ""
 
-#: src/app/components/pages/settings/settings.blp:248
+#: src/app/components/pages/settings/settings.blp:264
 msgid "Width of the soft knee for the limiter"
 msgstr ""
 
 #. Translators: Header for a group of preference items regarding network
-#: src/app/components/pages/settings/settings.blp:269
+#: src/app/components/pages/settings/settings.blp:285
 msgid "Network"
 msgstr ""
 
 #. Translators: Title for an item in preferences
-#: src/app/components/pages/settings/settings.blp:274
+#: src/app/components/pages/settings/settings.blp:290
 msgid "Access Point Port"
 msgstr ""
 
 #. Translators: Longer description for an item (Access Point Port) in preferences
-#: src/app/components/pages/settings/settings.blp:278
+#: src/app/components/pages/settings/settings.blp:294
 msgid ""
 "Port used for connections to Spotify’s Access Point. Set to 0 if any port is "
 "fine."
+msgstr ""
+
+#. Translators: Header for a group of preference items regarding data caching
+#: src/app/components/pages/settings/settings.blp:305
+msgid "Caching"
+msgstr ""
+
+#. Translators: Description under the Caching preferences header
+#: src/app/components/pages/settings/settings.blp:309
+msgid "Control how Riff caches data locally."
+msgstr ""
+
+#. Translators: Title for the in-memory cache size preference
+#: src/app/components/pages/settings/settings.blp:314
+msgid "Memory Cache Size (MB)"
+msgstr ""
+
+#. Translators: Description for the in-memory cache size preference
+#: src/app/components/pages/settings/settings.blp:318
+msgid "Maximum memory allocated for caching data while Riff is running."
+msgstr ""
+
+#. Translators: Title for the on-disk image cache size preference
+#: src/app/components/pages/settings/settings.blp:331
+msgid "Disk Cache Size (MB)"
+msgstr ""
+
+#. Translators: Description for the on-disk image cache size preference
+#: src/app/components/pages/settings/settings.blp:335
+msgid "Maximum disk space allocated for caching data between sessions."
+msgstr ""
+
+#. Translators: Title for the disk audio cache size preference
+#: src/app/components/pages/settings/settings.blp:348
+msgid "Audio Cache Size (MB)"
+msgstr ""
+
+#. Translators: Description for the disk audio cache size preference
+#: src/app/components/pages/settings/settings.blp:352
+msgid "Maximum disk space allocated for caching downloaded audio."
+msgstr ""
+
+#. Translators: Title for the clear cache action row
+#: src/app/components/pages/settings/settings.blp:365
+msgid "Clear Cache"
+msgstr ""
+
+#. Translators: Description for the clear cache action row
+#: src/app/components/pages/settings/settings.blp:369
+msgid "Remove all cached data and images stored on disk"
+msgstr ""
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:7
+#, fuzzy
+msgid "Playback"
+msgstr "Play"
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:10
+#, fuzzy
+msgid "Play/Pause"
+msgstr "Pause"
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:15
+#, fuzzy
+msgid "Previous Track"
+msgstr "Previous"
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:20
+#, fuzzy
+msgid "Next Track"
+msgstr "Tracks"
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:25
+msgid "Seek Backward"
+msgstr ""
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:30
+msgid "Seek Forward"
+msgstr ""
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:35
+msgid "Volume Down"
+msgstr ""
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:40
+msgid "Volume Up"
+msgstr ""
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:45
+msgid "Mute"
+msgstr ""
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:55
+#: src/app/components/shell/playback/playback_controls.blp:67
+msgid "Repeat"
+msgstr "Repeat"
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:61
+msgid "Navigation"
+msgstr ""
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:69
+msgid "Go Back"
+msgstr ""
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:74
+msgid "Go Forward"
+msgstr ""
+
+#. Translators: Tooltip for the button that shows/hides the navigation panel.
+#: src/app/components/pages/shortcuts/shortcuts.blp:104
+#: src/app/components/shell/headerbar/headerbar.blp:34
+msgid "Toggle Sidebar"
+msgstr ""
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:113 src/window.blp:190
+msgid "Main Menu"
+msgstr ""
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:118 src/window.blp:274
+msgid "Preferences"
+msgstr ""
+
+#: src/app/components/pages/shortcuts/shortcuts.blp:123 src/window.blp:279
+msgid "Keyboard Shortcuts"
 msgstr ""
 
 #: src/app/components/shell/device_selector/device_selector.blp:15
@@ -860,26 +1316,15 @@ msgstr ""
 msgid "Refresh Devices"
 msgstr ""
 
-#. Translators: Tooltip for the button that shows/hides the sidebar.
-#: src/app/components/shell/headerbar/headerbar.blp:27
-msgid "Toggle Sidebar"
-msgstr ""
-
 #. Translators: Tooltip for the header bar button that navigates back.
-#: src/app/components/shell/headerbar/headerbar.blp:42
+#: src/app/components/shell/headerbar/headerbar.blp:52
 msgid "Back"
 msgstr ""
 
-#. Translators: Tooltip for the button that enters track selection mode.
-#: src/app/components/shell/headerbar/headerbar.blp:55
-#, fuzzy
-msgid "Select"
-msgstr "Select All"
-
-#. Translators: Button label. Selects all visible songs.
-#: src/app/components/shell/headerbar/headerbar.blp:98
-msgid "Select All"
-msgstr "Select All"
+#. Translators: Tooltip for the header bar button that navigates forward.
+#: src/app/components/shell/headerbar/headerbar.blp:72
+msgid "Forward"
+msgstr ""
 
 #: src/app/components/shell/playback/playback_controls.blp:30
 msgid "Previous"
@@ -889,22 +1334,51 @@ msgstr "Previous"
 msgid "Next"
 msgstr "Next"
 
-#: src/app/components/shell/playback/playback_controls.blp:67
-msgid "Repeat"
-msgstr "Repeat"
-
-#: src/app/components/shell/playback/playback_widget.blp:181
+#: src/app/components/shell/playback/playback_widget.blp:206
 msgid "Volume"
 msgstr ""
 
+#. Translators: tooltip of the button picking the cover image of a new playlist
+#. translators: Title of the dialog picking a playlist's cover.
+#: src/app/components/widgets/playlist_dialog/playlist_dialog.blp:30
+#: src/app/components/widgets/playlist_dialog/widget.rs:238
+msgid "Choose Cover"
+msgstr ""
+
 #. Translators: label for the entry containing the name of a new playlist
-#: src/app/components/shell/sidebar/create_playlist.blp:10
+#: src/app/components/widgets/playlist_dialog/playlist_dialog.blp:67
 msgid "Name"
 msgstr ""
 
+#. Translators: placeholder of the description of a new playlist
+#: src/app/components/widgets/playlist_dialog/playlist_dialog.blp:92
+msgid "Add an optional description"
+msgstr ""
+
+#. Translators: shown in the dialog creating a new playlist when creating it failed
+#: src/app/components/widgets/playlist_dialog/playlist_dialog.blp:112
+msgid "The playlist could not be created."
+msgstr ""
+
+#. Translators: label of the switch making a new playlist public
+#: src/app/components/widgets/playlist_dialog/playlist_dialog.blp:132
+msgid "Make public"
+msgstr ""
+
 #. Translators: Button that creates a new playlist
-#: src/app/components/shell/sidebar/create_playlist.blp:30
+#: src/app/components/widgets/playlist_dialog/playlist_dialog.blp:148
 msgid "Create"
+msgstr ""
+
+#. Translators: placeholder of the search entry of the list of playlists a track can be added to
+#: src/app/components/widgets/playlist_picker/playlist_picker.blp:16
+#, fuzzy
+msgid "Find a playlist"
+msgstr "Add to Playlist"
+
+#. Translators: shown in the list of playlists a track can be added to when the search matches none
+#: src/app/components/widgets/playlist_picker/playlist_picker.blp:26
+msgid "No playlists found"
 msgstr ""
 
 #: src/app/components/widgets/card_list/card_view_menu.blp:17
@@ -923,47 +1397,92 @@ msgstr ""
 msgid "Sort By"
 msgstr ""
 
-#: src/app/components/widgets/details_page/header.blp:57
-msgid "Details"
+#: src/app/components/widgets/card_list/card_view_menu.blp:83
+msgid "Filters"
 msgstr ""
 
-#: src/app/components/widgets/details_page/header.blp:177
-#, fuzzy
-msgid "Add to Library"
-msgstr "Albums"
-
-#: src/app/components/widgets/details_page/header.blp:207
-msgid "Edit"
+#: src/app/components/widgets/details_page/header.blp:196
+msgid "More Options"
 msgstr ""
 
-#: src/app/components/widgets/selection/selection_toolbar.blp:38
-msgid "Move Up"
-msgstr ""
-
-#: src/app/components/widgets/selection/selection_toolbar.blp:43
-msgid "Move Down"
-msgstr ""
-
-#: src/app/components/widgets/selection/selection_toolbar.blp:62
-msgid "Add to Playlist"
-msgstr "Add to Playlist"
-
-#: src/app/components/widgets/selection/selection_toolbar.blp:73
+#: src/app/components/widgets/selection/selection_toolbar.blp:61
 msgid "Remove"
 msgstr "Remove"
 
-#: src/app/components/widgets/selection/selection_toolbar.blp:84
-msgid "Save to Library"
+#: src/window.blp:284
+msgid "Report Issue"
 msgstr ""
 
-#: src/window.blp:77
+#: src/window.blp:289
 #, fuzzy
-msgid "Search"
-msgstr "Search Spotify"
+msgid "About Riff"
+msgstr "About"
 
-#: src/window.blp:90
-msgid "Main Menu"
+#: src/window.blp:296
+msgid "Log Out"
+msgstr "Log Out"
+
+#: src/app/components/pages/details_album/widget.rs:34
+msgid "Details"
 msgstr ""
+
+#. translators: Button label. Deselects all songs, once they are all selected.
+#: src/app/components/pages/queue/widget.rs:110
+#: src/app/components/shell/headerbar/widget.rs:663
+#: src/app/components/shell/utility_panel/widget.rs:91
+#, fuzzy
+msgid "Deselect All"
+msgstr "Select All"
+
+#. Translators: Toast shown after the user clears the cache in settings.
+#: src/app/components/pages/settings/settings_model.rs:42
+msgid "Cache cleared"
+msgstr ""
+
+#. translators: Title of the dialog asking to confirm deleting a playlist.
+#: src/app/components/utils.rs:253
+#, fuzzy
+msgid "Delete Playlist?"
+msgstr "Add to Playlist"
+
+#. translators: Body of the dialog asking to confirm deleting a playlist.
+#: src/app/components/utils.rs:255
+msgid "The playlist will be removed from your library."
+msgstr ""
+
+#. translators: Button of the dialog asking to confirm deleting a playlist: deletes it.
+#: src/app/components/utils.rs:257
+msgid "Delete"
+msgstr ""
+
+#. translators: Title of the dialog editing the details of a playlist.
+#: src/app/components/widgets/playlist_dialog/widget.rs:152
+#, fuzzy
+msgid "Edit Playlist Details"
+msgstr "Add to Playlist"
+
+#. translators: Button of the dialog editing the details of a playlist: saves them.
+#: src/app/components/widgets/playlist_dialog/widget.rs:154
+msgid "Save"
+msgstr ""
+
+#. translators: Shown in the dialog editing the details of a playlist when saving them failed.
+#: src/app/components/widgets/playlist_dialog/widget.rs:157
+msgid "The playlist could not be saved."
+msgstr ""
+
+#. translators: Name of the file filter of the dialog picking a playlist's cover.
+#: src/app/components/widgets/playlist_dialog/widget.rs:230
+msgid "Images"
+msgstr ""
+
+#: src/app/state/app_state.rs:332
+msgid "Queueing isn't available when playing on another device"
+msgstr ""
+
+#, fuzzy
+#~ msgid "Select"
+#~ msgstr "Select All"
 
 #~ msgid "Could not save password. Make sure the session keyring is unlocked."
 #~ msgstr "Could not save password. Make sure the session keyring is unlocked."

@@ -8,7 +8,7 @@
     Riff is a Spotify client that puts your music library front and center. It features a clean, minimal design that lets you listen distraction-free.
 </p>
 
-![Riff Dark](data/appstream/overview-dark.png#gh-dark-mode-only)![Riff Light](data/appstream/overview-light.png#gh-light-mode-only)
+![Riff Dark](data/appstream/albums-image-only-dark.png#gh-dark-mode-only)![Riff Light](data/appstream/albums-image-only-light.png#gh-light-mode-only)
 
 <p align="center">
     <a href="https://flathub.org/apps/details/dev.diegovsky.Riff"><img width="130" alt="Download on Flathub" src="https://flathub.org/api/badge?svg&locale=en"/></a>

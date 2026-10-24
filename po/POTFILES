@@ -1,5 +1,4 @@
 # grep gettext src/**/*.rs | cut -d: -f1 | uniq
-src/app/batch_loader.rs
 src/app/components/labels.rs
 src/app/components/mod.rs
 src/app/components/pages/details_artist/model.rs
@@ -71,3 +70,12 @@ src/app/components/widgets/track_list/track_row.blp
 src/app/components/widgets/selection/selection_toolbar.blp
 src/app/dev_tools/dev_tools.blp
 src/window.blp
+src/app/components/pages/details_album/widget.rs
+src/app/components/pages/queue/widget.rs
+src/app/components/pages/settings/settings_model.rs
+src/app/components/shell/headerbar/widget.rs
+src/app/components/shell/utility_panel/utility_panel.blp
+src/app/components/shell/utility_panel/widget.rs
+src/app/components/utils.rs
+src/app/components/widgets/playlist_dialog/widget.rs
+src/app/state/app_state.rs

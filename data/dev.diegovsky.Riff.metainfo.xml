@@ -42,26 +42,70 @@
       <li>Play, pause, skip, seek, shuffle, and repeat with gapless playback</li>
       <li>Like tracks and follow artists, albums, and playlists</li>
       <li>Browse your saved albums, playlists, liked tracks, and followed artists</li>
+      <li>Create and edit your own playlists and add tracks to them</li>
       <li>Search for albums, artists, tracks, and playlists</li>
       <li>Share and open Spotify links with your friends using automatic link detection</li>
       <li>Fine-tune your sound with a built-in DSP engine featuring a 10-band equalizer, stereo pan, and pitch shift</li>
       <li>Advanced desktop integration: media keys (MPRIS), inhibits session suspend while playing, and secure credential storage</li>
+      <li>Keyboard shortcuts and touch gestures</li>
     </ul>
   </description>
 
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/Diegovsky/riff/master/data/appstream/overview-dark.png</image>
-      <caption>Riff in dark scheme</caption>
+      <image>https://raw.githubusercontent.com/Diegovsky/riff/26.10/data/appstream/albums-image-only-light.png</image>
+      <caption>Saved albums page</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/Diegovsky/riff/master/data/appstream/overview-light.png</image>
-      <caption>Riff in light scheme</caption>
+      <image>https://raw.githubusercontent.com/Diegovsky/riff/26.10/data/appstream/albums-image-only-dark.png</image>
+      <caption>Saved albums page with a dark theme</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/Diegovsky/riff/26.10/data/appstream/artists-light.png</image>
+      <caption>Followed artists in your library</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/Diegovsky/riff/26.10/data/appstream/playlist-light.png</image>
+      <caption>Playlist page</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/Diegovsky/riff/26.10/data/appstream/queue-bottom-sheet-light.png</image>
+      <caption>Play queue as a bottom sheet</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/Diegovsky/riff/26.10/data/appstream/queue-side-sheet-light.png</image>
+      <caption>Navigation and play queue beside the page</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/Diegovsky/riff/26.10/data/appstream/mobile-now-playing-light.png</image>
+      <caption>Now Playing on a phone</caption>
     </screenshot>
   </screenshots>
 
   <releases>
-    <release version="26.10" date="2026-10-30"/>
+    <release version="26.10" date="2026-10-24">
+        <description>
+            <p>This release adds a new play queue, playlist management and more, all while making Riff faster and lighter.</p>
+            <p>New features:</p>
+            <ul>
+                <li>New queue with drag-and-drop reordering, shown as a bottom sheet or a side panel</li>
+                <li>Create, edit, delete, and add tracks to playlists</li>
+                <li>Selection mode for adding multiple tracks to the queue, a playlist or your library</li>
+                <li>Multi-disc albums support with correct labels for Album, Single, EP or Compilation</li>
+                <li>Keyboard shortcuts for playback and navigation</li>
+                <li>Swip gestures for navigating recent page</li>
+                <li>Pin playlists, albums, artists and tracks to the sidebar (experimental)</li>
+            </ul>
+            <p>Improvements:</p>
+            <ul>
+                <li>Pages load faster and are more responsive</li>
+                <li>Riff uses less CPU and memory during playback, navigation, and browsing</li>
+                <li>Reworked back and forward navigation, with a history of recent pages</li>
+                <li>Layout adapts better to small windows and phones</li>
+                <li>Better support for large playlists and albums</li>
+            </ul>
+        </description>
+    </release>
     <release version="26.07.01" date="2026-08-14">
         <description>
             <p>This release fixes a playback issue and adds some polish for Flathub</p>
