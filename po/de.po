@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Riff\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-23 17:09-0700\n"
+"POT-Creation-Date: 2026-11-02 17:28-0800\n"
 "PO-Revision-Date: 2025-07-09 09:28+0200\n"
 "Last-Translator: Sebastian Scherch\n"
 "Language: de\n"
@@ -714,6 +714,29 @@ msgstr "Öffnen des Links fehlgeschlagen!"
 
 #: src/player/mod.rs:139
 msgid "Playback is Temporarily Unavailable"
+msgstr ""
+
+#: crates/riff-api/src/defaults.rs:36
+#, fuzzy
+msgid "Untitled Album"
+msgstr "Album ansehen"
+
+#: crates/riff-api/src/defaults.rs:40
+#, fuzzy
+msgid "Untitled Playlist"
+msgstr "Unbenannte Playlist"
+
+#: crates/riff-api/src/defaults.rs:44
+msgid "Untitled"
+msgstr ""
+
+#: crates/riff-api/src/defaults.rs:48
+#, fuzzy
+msgid "Unknown Artist"
+msgstr "Künstler"
+
+#: crates/riff-api/src/defaults.rs:52
+msgid "Unknown User"
 msgstr ""
 
 #. Translators: This refers to a music label

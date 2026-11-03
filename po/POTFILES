@@ -1,7 +1,6 @@
 # grep gettext src/**/*.rs | cut -d: -f1 | uniq
 src/app/components/labels.rs
 src/app/components/mod.rs
-src/app/components/pages/details_artist/model.rs
 src/app/components/pages/details_artist/widget.rs
 src/app/components/pages/details_playlist/model.rs
 src/app/components/pages/details_user/model.rs
@@ -21,15 +20,11 @@ src/app/components/shell/navigation/factory.rs
 src/app/components/shell/notification/mod.rs
 src/app/components/shell/playback/playback_controls.rs
 src/app/components/shell/playback/playback_info.rs
-src/app/components/shell/navigation_panel/context_menu.rs
 src/app/components/shell/navigation_panel/model.rs
 src/app/components/shell/navigation_panel/navigation_panel_item.rs
 src/app/components/shell/navigation_panel/navigation_panel.rs
-src/app/components/shell/user_menu/user_menu.rs
 src/app/components/shell/window/close_dialog.rs
 src/app/components/shell/window/mod.rs
-src/app/components/widgets/card_list/component.rs
-src/app/components/widgets/details_page/component.rs
 src/app/components/widgets/details_page/header.rs
 src/app/components/widgets/details_page/model.rs
 src/app/components/widgets/track_list/track_row.rs
@@ -37,11 +32,12 @@ src/app/components/widgets/selection/component.rs
 src/app/components/widgets/queue_list/model.rs
 src/app/components/widgets/track_list/track_list.rs
 src/app/models/card_enums.rs
-src/app/models/card_model.rs
 src/connect/player.rs
 src/inhibitor.rs
 src/main.rs
 src/player/mod.rs
+crates/riff-api/src/defaults.rs
+crates/riff-api/src/models.rs
 
 # find src -name "*.blp" -print
 src/app/components/pages/details_album/release_details.blp
@@ -56,19 +52,14 @@ src/app/components/pages/shortcuts/shortcuts.blp
 src/app/components/shell/device_selector/device_selector.blp
 src/app/components/shell/headerbar/headerbar.blp
 src/app/components/shell/playback/playback_controls.blp
-src/app/components/shell/playback/playback_info.blp
 src/app/components/shell/playback/playback_widget.blp
 src/app/components/widgets/playlist_dialog/playlist_dialog.blp
 src/app/components/widgets/playlist_picker/playlist_picker.blp
-src/app/components/shell/navigation_panel/navigation_panel_row.blp
-src/app/components/widgets/card/card.blp
-src/app/components/widgets/card_list/card_list.blp
 src/app/components/widgets/card_list/card_view_menu.blp
 src/app/components/widgets/details_page/header.blp
 src/app/components/widgets/details_page/details_section.blp
 src/app/components/widgets/track_list/track_row.blp
 src/app/components/widgets/selection/selection_toolbar.blp
-src/app/dev_tools/dev_tools.blp
 src/window.blp
 src/app/components/pages/details_album/widget.rs
 src/app/components/pages/queue/widget.rs
