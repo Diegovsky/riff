@@ -292,13 +292,13 @@ See [Creating a New Feature Flag](#creating-a-new-feature-flag) for the flag-spe
 
 ## Translations
 
-Strings live in `.blp` and `.rs` files listed in `po/POTFILES.in`. After adding translatable strings:
+Strings live in `.blp` and `.rs` files listed in `po/POTFILES`. After adding translatable strings:
 
 ```sh
-ninja riff-pot -C target        # regenerate the .pot template
-ninja riff-update-po -C target  # update .po files
-poeditor pull                   # pull translations from POEditor
+ninja riff-pot -C target  # regenerate po/riff.pot
 ```
+
+[Weblate](https://hosted.weblate.org/projects/riff/) manages the `.po` files, so do not edit or regenerate them in your branch.
 
 ## Spotify CLI
 

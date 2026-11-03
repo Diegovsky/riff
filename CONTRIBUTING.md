@@ -26,7 +26,7 @@ Contributors working on code should begin with the [Development Guide](doc/Devel
 
 ### 4. Translating
 
-Translation contributions are temporarily paused while we migrate to a new platform.
+Translations are managed on [Weblate](https://hosted.weblate.org/projects/riff/).
 
 ### 5. Testing Releases
 

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Riff\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-23 17:09-0700\n"
+"POT-Creation-Date: 2026-11-02 17:28-0800\n"
 "Language: ia\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -703,6 +703,29 @@ msgstr "Falleva in aperir ligamine!"
 
 #: src/player/mod.rs:139
 msgid "Playback is Temporarily Unavailable"
+msgstr ""
+
+#: crates/riff-api/src/defaults.rs:36
+#, fuzzy
+msgid "Untitled Album"
+msgstr "Vider album"
+
+#: crates/riff-api/src/defaults.rs:40
+#, fuzzy
+msgid "Untitled Playlist"
+msgstr "Lista de reproduction sin nomine"
+
+#: crates/riff-api/src/defaults.rs:44
+msgid "Untitled"
+msgstr ""
+
+#: crates/riff-api/src/defaults.rs:48
+#, fuzzy
+msgid "Unknown Artist"
+msgstr "Artistas"
+
+#: crates/riff-api/src/defaults.rs:52
+msgid "Unknown User"
 msgstr ""
 
 #. Translators: This refers to a music label
